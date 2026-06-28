@@ -38,18 +38,29 @@
 #include <NsCore/Noesis.h>
 #include <NsCore/Ptr.h>
 #include <NsCore/Reflection.h>
+#include <NsCore/ReflectionImplement.h>
 #include <NsCore/Symbol.h>
+#include <NsGui/BaseBinding.h>
+#include <NsGui/BaseTrigger.h>
+#include <NsGui/Condition.h>
 #include <NsGui/Control.h>
 #include <NsGui/ControlTemplate.h>
 #include <NsGui/DataTemplate.h>
+#include <NsGui/DataTemplateSelector.h>
+#include <NsGui/DataTrigger.h>
 #include <NsGui/DependencyProperty.h>
+#include <NsGui/EventTrigger.h>
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/FrameworkTemplate.h>
 #include <NsGui/IntegrationAPI.h>
 #include <NsGui/IUITreeNode.h>
+#include <NsGui/MultiTrigger.h>
 #include <NsGui/ResourceDictionary.h>
+#include <NsGui/RoutedEvent.h>
 #include <NsGui/Setter.h>
 #include <NsGui/Style.h>
+#include <NsGui/Trigger.h>
+#include <NsGui/TriggerAction.h>
 #include <NsGui/UICollection.h>
 #include <NsGui/Uri.h>
 
@@ -80,6 +91,88 @@ Noesis::FrameworkElement* as_element(void* p) {
     return Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(p));
 }
+
+// Resolve a DependencyProperty by name on a reflection-registered type. Mirrors
+// the resolution dm_noesis_style_add_setter does on the Style's TargetType, but
+// generalised so trigger/condition/setter construction can target an explicit
+// type (a property trigger's Property lives on the templated/styled type, which
+// is not always the Style's own TargetType). Returns null on an unknown type or
+// an unknown DP name on that type.
+const Noesis::DependencyProperty* resolve_dp(const char* type_name, const char* dp_name) {
+    if (!type_name || !dp_name) return nullptr;
+    Noesis::Symbol tsym(type_name, Noesis::Symbol::NullIfNotFound());
+    if (tsym.IsNull()) return nullptr;
+    const Noesis::Type* type = Noesis::Reflection::GetType(tsym);
+    const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(type);
+    if (!tc) return nullptr;
+    return Noesis::FindDependencyProperty(tc, Noesis::Symbol(dp_name));
+}
+
+Noesis::BaseTrigger* as_trigger(void* p) {
+    if (!p) return nullptr;
+    return Noesis::DynamicCast<Noesis::BaseTrigger*>(static_cast<Noesis::BaseComponent*>(p));
+}
+
+// Append a `new Setter{ Property=resolve_dp(type,dp), Value=value }` to a setter
+// collection. Shared by the property/data/multi trigger entrypoints. Returns
+// false on a null collection, an unresolvable DP, or a null value.
+bool add_setter_to(Noesis::BaseSetterCollection* setters, const char* type_name,
+    const char* dp_name, void* value) {
+    if (!setters || !value) return false;
+    const Noesis::DependencyProperty* dp = resolve_dp(type_name, dp_name);
+    if (!dp) return false;
+    Noesis::Ptr<Noesis::Setter> setter = *new Noesis::Setter();
+    setter->SetProperty(dp);
+    setter->SetValue(static_cast<Noesis::BaseComponent*>(value));
+    setters->Add(setter.GetPtr());
+    return true;
+}
+
+// ── RustDataTemplateSelector ─────────────────────────────────────────────────
+//
+// A DataTemplateSelector subclass whose SelectTemplate() virtual trampolines
+// into a Rust callback — the runtime-constructible "selector from Rust" path.
+// Mirrors the RustValueConverter trampoline in noesis_binding.cpp (donated
+// userdata box, freed once when the final reference drops). The callback returns
+// a BORROWED DataTemplate* (the selector keeps its candidate templates alive);
+// null selects no template.
+
+struct dm_noesis_template_selector_vtable {
+    void* (*select)(void* userdata, void* item, void* container);
+};
+
+typedef void (*dm_noesis_template_selector_free_fn)(void* userdata);
+
+class RustDataTemplateSelector final: public Noesis::DataTemplateSelector {
+public:
+    RustDataTemplateSelector(const dm_noesis_template_selector_vtable* vt, void* userdata,
+        dm_noesis_template_selector_free_fn free_handler)
+        : mVtable(*vt), mUserdata(userdata), mFree(free_handler) {}
+
+    ~RustDataTemplateSelector() {
+        void* ud = mUserdata;
+        mUserdata = nullptr;
+        if (mFree && ud) {
+            mFree(ud);
+        }
+    }
+
+    Noesis::DataTemplate* SelectTemplate(Noesis::BaseComponent* item,
+        Noesis::DependencyObject* container) override {
+        if (!mVtable.select) return nullptr;
+        void* result = mVtable.select(mUserdata, item, container);
+        return Noesis::DynamicCast<Noesis::DataTemplate*>(
+            static_cast<Noesis::BaseComponent*>(result));
+    }
+
+    NS_IMPLEMENT_INLINE_REFLECTION(RustDataTemplateSelector, Noesis::DataTemplateSelector,
+                                   "DmNoesis.RustDataTemplateSelector") {}
+
+private:
+    dm_noesis_template_selector_vtable  mVtable;
+    void*                               mUserdata;
+    dm_noesis_template_selector_free_fn mFree;
+};
 
 }  // namespace
 
@@ -367,4 +460,330 @@ extern "C" void* dm_noesis_framework_template_find_name(
     Noesis::FrameworkElement* parent = as_element(templated_parent);
     if (!t || !name || !parent) return nullptr;
     return t->FindName(name, parent);
+}
+
+// ── Style triggers ───────────────────────────────────────────────────────────
+//
+// Construct Trigger / DataTrigger / MultiTrigger / EventTrigger from code and
+// attach them to a Style's Triggers collection (Style::GetTriggers), then read
+// the trigger surface back from the LIVE objects. A property/value/setter-count
+// read on a trigger fetched back out of the collection proves the construction
+// crossed the FFI rather than echoing a Rust cache.
+//
+// OWNERSHIP: *_create returns a +1-owned BaseTrigger* (released via the generic
+// dm_noesis_base_component_release). Adding it to a Style's Triggers takes the
+// collection's own reference, so the create handle may be dropped afterwards.
+
+// ── Property Trigger (Trigger) ───────────────────────────────────────────────
+
+extern "C" void* dm_noesis_templates_trigger_create(void) {
+    auto* t = new Noesis::Trigger();
+    return static_cast<Noesis::BaseComponent*>(t);
+}
+
+// Set the Trigger's Property by name, resolved on `type_name`. Returns false on
+// a non-Trigger handle or an unresolvable DP.
+extern "C" bool dm_noesis_templates_trigger_set_property(
+    void* trigger, const char* type_name, const char* dp_name) {
+    auto* t = Noesis::DynamicCast<Noesis::Trigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return false;
+    const Noesis::DependencyProperty* dp = resolve_dp(type_name, dp_name);
+    if (!dp) return false;
+    t->SetProperty(dp);
+    return true;
+}
+
+// Borrowed name of the Trigger's Property (valid while the DP exists, which is
+// process-lifetime), or null if unset / not a Trigger.
+extern "C" const char* dm_noesis_templates_trigger_get_property_name(void* trigger) {
+    auto* t = Noesis::DynamicCast<Noesis::Trigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    const Noesis::DependencyProperty* dp = t->GetProperty();
+    return dp ? dp->GetName().Str() : nullptr;
+}
+
+extern "C" bool dm_noesis_templates_trigger_set_value(void* trigger, void* value) {
+    auto* t = Noesis::DynamicCast<Noesis::Trigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t || !value) return false;
+    t->SetValue(static_cast<Noesis::BaseComponent*>(value));
+    return true;
+}
+
+// +1-owned (AddRef'd) copy of the Trigger's Value, or null.
+extern "C" void* dm_noesis_templates_trigger_get_value(void* trigger) {
+    auto* t = Noesis::DynamicCast<Noesis::Trigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    return handout(t->GetValue());
+}
+
+extern "C" bool dm_noesis_templates_trigger_add_setter(
+    void* trigger, const char* type_name, const char* dp_name, void* value) {
+    auto* t = Noesis::DynamicCast<Noesis::Trigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return false;
+    return add_setter_to(t->GetSetters(), type_name, dp_name, value);
+}
+
+extern "C" int32_t dm_noesis_templates_trigger_setter_count(void* trigger) {
+    auto* t = Noesis::DynamicCast<Noesis::Trigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::BaseSetterCollection* s = t->GetSetters();
+    return s ? s->Count() : 0;
+}
+
+// ── Data Trigger (DataTrigger) ───────────────────────────────────────────────
+
+extern "C" void* dm_noesis_templates_data_trigger_create(void) {
+    auto* t = new Noesis::DataTrigger();
+    return static_cast<Noesis::BaseComponent*>(t);
+}
+
+// Set the DataTrigger's Binding (any BaseBinding* — e.g. a Binding from
+// noesis_binding.cpp). Returns false on a non-DataTrigger handle or a value that
+// is not a BaseBinding.
+extern "C" bool dm_noesis_templates_data_trigger_set_binding(void* trigger, void* binding) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::DataTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    auto* b = Noesis::DynamicCast<Noesis::BaseBinding*>(static_cast<Noesis::BaseComponent*>(binding));
+    if (!t || !b) return false;
+    t->SetBinding(b);
+    return true;
+}
+
+// +1-owned (AddRef'd) copy of the DataTrigger's Binding, or null.
+extern "C" void* dm_noesis_templates_data_trigger_get_binding(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::DataTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    return handout(t->GetBinding());
+}
+
+extern "C" bool dm_noesis_templates_data_trigger_set_value(void* trigger, void* value) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::DataTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t || !value) return false;
+    t->SetValue(static_cast<Noesis::BaseComponent*>(value));
+    return true;
+}
+
+extern "C" void* dm_noesis_templates_data_trigger_get_value(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::DataTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    return handout(t->GetValue());
+}
+
+extern "C" bool dm_noesis_templates_data_trigger_add_setter(
+    void* trigger, const char* type_name, const char* dp_name, void* value) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::DataTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return false;
+    return add_setter_to(t->GetSetters(), type_name, dp_name, value);
+}
+
+extern "C" int32_t dm_noesis_templates_data_trigger_setter_count(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::DataTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::BaseSetterCollection* s = t->GetSetters();
+    return s ? s->Count() : 0;
+}
+
+// ── Multi Trigger (MultiTrigger) ─────────────────────────────────────────────
+
+extern "C" void* dm_noesis_templates_multi_trigger_create(void) {
+    auto* t = new Noesis::MultiTrigger();
+    return static_cast<Noesis::BaseComponent*>(t);
+}
+
+// Append a Condition{ Property=resolve_dp(type,dp), Value=value } to the
+// MultiTrigger's Conditions. Returns false on a non-MultiTrigger handle, an
+// unresolvable DP, or a null value.
+extern "C" bool dm_noesis_templates_multi_trigger_add_condition(
+    void* trigger, const char* type_name, const char* dp_name, void* value) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::MultiTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t || !value) return false;
+    const Noesis::DependencyProperty* dp = resolve_dp(type_name, dp_name);
+    if (!dp) return false;
+    Noesis::ConditionCollection* conditions = t->GetConditions();
+    if (!conditions) return false;
+    Noesis::Ptr<Noesis::Condition> condition = *new Noesis::Condition();
+    condition->SetProperty(dp);
+    condition->SetValue(static_cast<Noesis::BaseComponent*>(value));
+    conditions->Add(condition.GetPtr());
+    return true;
+}
+
+extern "C" int32_t dm_noesis_templates_multi_trigger_condition_count(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::MultiTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::ConditionCollection* c = t->GetConditions();
+    return c ? c->Count() : 0;
+}
+
+// Borrowed Property name of the condition at `index`, or null.
+extern "C" const char* dm_noesis_templates_multi_trigger_get_condition_property_name(
+    void* trigger, uint32_t index) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::MultiTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    Noesis::ConditionCollection* c = t->GetConditions();
+    if (!c || index >= static_cast<uint32_t>(c->Count())) return nullptr;
+    Noesis::Condition* cond = c->Get(index);
+    if (!cond) return nullptr;
+    const Noesis::DependencyProperty* dp = cond->GetProperty();
+    return dp ? dp->GetName().Str() : nullptr;
+}
+
+// +1-owned (AddRef'd) Value of the condition at `index`, or null.
+extern "C" void* dm_noesis_templates_multi_trigger_get_condition_value(
+    void* trigger, uint32_t index) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::MultiTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    Noesis::ConditionCollection* c = t->GetConditions();
+    if (!c || index >= static_cast<uint32_t>(c->Count())) return nullptr;
+    Noesis::Condition* cond = c->Get(index);
+    return cond ? handout(cond->GetValue()) : nullptr;
+}
+
+extern "C" bool dm_noesis_templates_multi_trigger_add_setter(
+    void* trigger, const char* type_name, const char* dp_name, void* value) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::MultiTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return false;
+    return add_setter_to(t->GetSetters(), type_name, dp_name, value);
+}
+
+extern "C" int32_t dm_noesis_templates_multi_trigger_setter_count(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::MultiTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::BaseSetterCollection* s = t->GetSetters();
+    return s ? s->Count() : 0;
+}
+
+// ── Event Trigger (EventTrigger) ─────────────────────────────────────────────
+
+extern "C" void* dm_noesis_templates_event_trigger_create(void) {
+    auto* t = new Noesis::EventTrigger();
+    return static_cast<Noesis::BaseComponent*>(t);
+}
+
+// Resolve a RoutedEvent named `event_name` registered on `owner_type` and set it
+// as the EventTrigger's RoutedEvent. Returns false on a non-EventTrigger handle,
+// an unknown owner type, or an unknown routed event on that type.
+extern "C" bool dm_noesis_templates_event_trigger_set_routed_event(
+    void* trigger, const char* owner_type, const char* event_name) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::EventTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t || !owner_type || !event_name) return false;
+    Noesis::Symbol tsym(owner_type, Noesis::Symbol::NullIfNotFound());
+    if (tsym.IsNull()) return false;
+    const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(Noesis::Reflection::GetType(tsym));
+    if (!tc) return false;
+    const Noesis::RoutedEvent* ev = Noesis::FindRoutedEvent(tc, Noesis::Symbol(event_name));
+    if (!ev) return false;
+    t->SetRoutedEvent(ev);
+    return true;
+}
+
+// Borrowed name of the EventTrigger's RoutedEvent, or null if unset.
+extern "C" const char* dm_noesis_templates_event_trigger_get_routed_event_name(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::EventTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    const Noesis::RoutedEvent* ev = t->GetRoutedEvent();
+    return ev ? ev->GetName().Str() : nullptr;
+}
+
+extern "C" bool dm_noesis_templates_event_trigger_set_source_name(
+    void* trigger, const char* name) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::EventTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t || !name) return false;
+    t->SetSourceName(name);
+    return true;
+}
+
+// Borrowed SourceName of the EventTrigger (empty string if unset), or null on a
+// non-EventTrigger handle.
+extern "C" const char* dm_noesis_templates_event_trigger_get_source_name(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::EventTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    return t ? t->GetSourceName() : nullptr;
+}
+
+// Number of TriggerAction objects in the EventTrigger's Actions collection.
+extern "C" int32_t dm_noesis_templates_event_trigger_action_count(void* trigger) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::EventTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::TriggerActionCollection* a = t->GetActions();
+    return a ? a->Count() : 0;
+}
+
+// ── Style ⇄ Triggers ─────────────────────────────────────────────────────────
+
+// Append a trigger to a Style's Triggers collection. The collection takes its
+// own reference. Returns false on a non-Style handle or a non-trigger value.
+extern "C" bool dm_noesis_templates_style_add_trigger(void* style, void* trigger) {
+    Noesis::Style* s = as_style(style);
+    Noesis::BaseTrigger* t = as_trigger(trigger);
+    if (!s || !t) return false;
+    Noesis::TriggerCollection* triggers = s->GetTriggers();
+    if (!triggers) return false;
+    triggers->Add(t);
+    return true;
+}
+
+extern "C" int32_t dm_noesis_templates_style_trigger_count(void* style) {
+    Noesis::Style* s = as_style(style);
+    if (!s) return -1;
+    Noesis::TriggerCollection* triggers = s->GetTriggers();
+    return triggers ? triggers->Count() : 0;
+}
+
+// +1-owned (AddRef'd) trigger at `index` in the Style's Triggers, so Rust can
+// re-read its property/value/setter surface from the live object. Null on a
+// non-Style handle or out-of-range index.
+extern "C" void* dm_noesis_templates_style_get_trigger(void* style, uint32_t index) {
+    Noesis::Style* s = as_style(style);
+    if (!s) return nullptr;
+    Noesis::TriggerCollection* triggers = s->GetTriggers();
+    if (!triggers || index >= static_cast<uint32_t>(triggers->Count())) return nullptr;
+    return handout(triggers->Get(index));
+}
+
+// ── DataTemplateSelector from Rust ───────────────────────────────────────────
+
+// Create a DataTemplateSelector whose SelectTemplate() trampolines into Rust.
+// Returns a +1-owned selector (released via dm_noesis_templates_selector_destroy
+// or the generic release). The userdata box is donated and freed once.
+extern "C" void* dm_noesis_templates_selector_create(
+    const dm_noesis_template_selector_vtable* vt, void* userdata,
+    dm_noesis_template_selector_free_fn free_handler) {
+    if (!vt) return nullptr;
+    auto* sel = new RustDataTemplateSelector(vt, userdata, free_handler);
+    return static_cast<Noesis::BaseComponent*>(sel);
+}
+
+extern "C" void dm_noesis_templates_selector_destroy(void* selector) {
+    if (!selector) return;
+    static_cast<Noesis::BaseComponent*>(selector)->Release();
+}
+
+// Drive SelectTemplate(item, container) through the C++ virtual (which dispatches
+// to the Rust callback for a RustDataTemplateSelector, or runs native logic for
+// any other selector). Returns the borrowed DataTemplate* the selector chose, or
+// null. `item` / `container` may be null.
+extern "C" void* dm_noesis_templates_selector_select(
+    void* selector, void* item, void* container) {
+    auto* sel = Noesis::DynamicCast<Noesis::DataTemplateSelector*>(
+        static_cast<Noesis::BaseComponent*>(selector));
+    if (!sel) return nullptr;
+    auto* obj = Noesis::DynamicCast<Noesis::DependencyObject*>(
+        static_cast<Noesis::BaseComponent*>(container));
+    return sel->SelectTemplate(static_cast<Noesis::BaseComponent*>(item), obj);
 }

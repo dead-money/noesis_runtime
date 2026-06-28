@@ -32,28 +32,6 @@ common `Timeline` knobs, and storyboard-less `begin_on` (`ApplyAnimationClock` e
 - **`KeySpline`** (spline key frames) and per-animation `HandoffBehavior` on the `Storyboard` path.
 - **`BeginStoryboard`** trigger-action wrapper (only useful inside a trigger; code-driven `Begin` covers the rest).
 
-## 7. Styles, resources, templates
-
-`ResourceDictionary` access (create/own, key→component add, borrowed lookup,
-merged dictionaries, parse-from-XAML, app-resources set/get, per-element
-`Resources` + non-throwing `FindResource`, `RegisterDefaultStyles`), `Style`
-from code (target type + setters + `BasedOn`, element assign/read-back), and
-template parse+assign (`ControlTemplate` via `SetTemplate`, `DataTemplate` via
-the component-DP path, `FrameworkTemplate::FindName`) are wired (`src/resources.rs`,
-`src/styles.rs`, `cpp/noesis_resources.cpp`).
-
-- **`Style` triggers** from code: `Trigger`, `DataTrigger`, `EventTrigger`,
-  `MultiTrigger` (property triggers + their setters/conditions). The
-  `GetTriggers()` collection is reachable; the per-trigger construction surface
-  is not built yet.
-- **Templates — code-built factories.** `ControlTemplate` / `DataTemplate` /
-  `ItemsPanelTemplate` / `HierarchicalDataTemplate` built from a programmatic
-  `VisualTree` (factory trees), and `DataTemplateSelector` from Rust. The
-  parse-from-XAML + assign path covers the common case today.
-- **Dynamic resources.** `DynamicResourceExtension`, `StaticResourceExtension`
-  (built-ins; we have custom markup extensions but not these). Reachable from
-  XAML already; a code path is low priority.
-
 ## 8. Controls — programmatic access
 
 `Selector` selection (`SelectedIndex`/`SelectedItem`), `ItemsControl.Items` mutation, `RangeBase`
@@ -146,6 +124,8 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **`CollectionView` sort / filter / group (§3).** `ICollectionView` here is current-item navigation only — no `SortDescriptions`, `Filter` delegate, `GroupDescriptions`, or `CollectionViewSource::GetDefaultView` ship. Sort/filter/group in Rust before populating the `ObservableCollection`. (Current-item navigation — `MoveCurrentTo*` — *is* available if ever needed.)
 - **`PriorityBinding` (§3).** Not in 3.2.13 — the class doesn't exist in the SDK (a WPF feature Noesis omits, like `NavigationCommands`). No workaround; restructure so a single binding with a `FallbackValue` covers the priority case.
 - **`TemplateBinding` runtime construction (§3).** `TemplateBindingExtension` exists but is only meaningful inside a `ControlTemplate`; the XAML `{TemplateBinding X}` parse path already works, and the code path is covered by a templated-parent binding (`{Binding RelativeSource={RelativeSource TemplatedParent}}`, already wrapped). A dedicated runtime wrapper would just duplicate that, so it's intentionally not built.
+- **`Dynamic`/`StaticResourceExtension` headless read-back (§7).** Both extensions are runtime-constructible (ctor + `SetResourceKey`), but `GetResourceKey()` reads back `null` until `ProvideValue` resolves the key under a live XAML/binding `ValueTargetProvider` (the key is stored internally as a `FixedString`, not as a readable component). With no observable round-trip headlessly, a fail-if-stubbed wrapper isn't possible, so the code path is not exposed; `{DynamicResource}` / `{StaticResource}` remain fully usable from XAML.
+- **Code-built template factory trees (§7).** Noesis 3.2.13 ships no `FrameworkElementFactory`, so there is no WPF-style API to assemble a `ControlTemplate`/`DataTemplate` visual tree from programmatic factory nodes. `FrameworkTemplate::SetVisualTree` takes a prototype `Visual`, but the supported authoring path is XAML parse + assign (already wrapped); `DataTemplateSelector`-from-Rust and the `Style` trigger construction surface (`Trigger`/`DataTrigger`/`MultiTrigger`/`EventTrigger`) *are* now exposed (`src/styles.rs`).
 - **`CommandManager.RequerySuggested` / `InvalidateRequerySuggested` (§4).** Absent. Use per-command `BaseCommand::RaiseCanExecuteChanged` (already wrapped) to drive enable/disable.
 - **`NavigationCommands` (§4).** Header doesn't ship (`ApplicationCommands`/`ComponentCommands` do).
 - **`GetBaseValue` object form (§2).** No boxed `GetBaseValue`, so the base-value getter covers value/struct/string DPs only, not component/brush DPs.
