@@ -15,7 +15,10 @@
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
 //!   `cargo test -p dm_noesis_runtime --test typography -- --nocapture`
 
+use std::path::PathBuf;
+
 use dm_noesis_runtime::brushes::SolidColorBrush;
+use dm_noesis_runtime::font_provider::{FontProvider, set_font_provider};
 use dm_noesis_runtime::typography::{
     self, CompositionLineStyle, CompositionUnderline, FontCapitals, FontFamily, FontFraction,
     FontNumeralStyle, FontStretch, FontStyle, FontVariants, FontWeight,
@@ -23,6 +26,41 @@ use dm_noesis_runtime::typography::{
 use dm_noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
+
+/// Minimal [`FontProvider`] that serves a single `(folder, filename)` face
+/// from in-memory bytes. Used to make [`FontFamily::num_fonts`] /
+/// [`FontFamily::font_name`] resolve to a real face so the per-family
+/// enumeration getters are exercised with a *positive* result — a stubbed
+/// `get_num_fonts` (→0) or `get_font_name` (→nullptr) then fails the test.
+struct SingleFontProvider {
+    folder: String,
+    filename: String,
+    bytes: Vec<u8>,
+    /// Keeps the most recently opened bytes alive across the borrow that
+    /// `open_font` returns (same pattern as the other providers in-tree).
+    current: Option<Vec<u8>>,
+}
+
+impl FontProvider for SingleFontProvider {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn scan_folder(&mut self, folder_uri: &str, register: &mut dyn FnMut(&str)) {
+        if folder_uri == self.folder {
+            register(&self.filename);
+        }
+    }
+
+    fn open_font(&mut self, folder_uri: &str, filename: &str) -> Option<&[u8]> {
+        if folder_uri == self.folder && filename == self.filename {
+            self.current = Some(self.bytes.clone());
+            self.current.as_deref()
+        } else {
+            None
+        }
+    }
+}
 
 #[test]
 fn typography_round_trips() {
@@ -34,6 +72,26 @@ fn typography_round_trips() {
     }
     dm_noesis_runtime::init();
 
+    // Register a font provider serving the trial SDK's `Bitter-Regular.ttf`
+    // so the per-family enumeration getters can be asserted with a positive
+    // result below. The guard is bound to the function scope so it outlives
+    // `shutdown()` (Noesis may call back into the provider during teardown).
+    let sdk_dir =
+        std::env::var("NOESIS_SDK_DIR").expect("NOESIS_SDK_DIR not set; required for this test");
+    let mut bitter_path = PathBuf::from(&sdk_dir);
+    bitter_path.push("Data/Fonts/Bitter-Regular.ttf");
+    let bitter_bytes = std::fs::read(&bitter_path)
+        .unwrap_or_else(|_| panic!("read failed: {}", bitter_path.display()));
+    let registered = set_font_provider(SingleFontProvider {
+        folder: "Fonts".to_string(),
+        filename: "Bitter-Regular.ttf".to_string(),
+        bytes: bitter_bytes,
+        current: None,
+    });
+    // Eagerly register the face so the `Fonts/#Bitter` lookup below resolves
+    // regardless of lazy `ScanFolder` timing.
+    registered.register_font("Fonts", "Bitter-Regular.ttf");
+
     {
         // ── FontFamily: source round-trip ───────────────────────────────────
         let family = FontFamily::new("Arial, Verdana");
@@ -42,12 +100,27 @@ fn typography_round_trips() {
             Some("Arial, Verdana"),
             "FontFamily source round-trips through the live object"
         );
-        // Per-family enumeration is provider-dependent; with no provider it is 0.
-        // Out-of-range names are None regardless, proving the bound check crosses.
+        // Out-of-range names are None, proving the C-side bound check crosses.
         let n = family.num_fonts();
         assert!(
             family.font_name(n).is_none(),
             "font_name past num_fonts is None"
+        );
+
+        // ── FontFamily: positive per-family enumeration ─────────────────────
+        // `Fonts/#Bitter` resolves through the registered provider to the real
+        // `Bitter` face. This drives a *positive* round-trip: a stubbed
+        // `get_num_fonts` (→0) or `get_font_name` (→nullptr) would fail here.
+        let bitter = FontFamily::new("Fonts/#Bitter");
+        assert!(
+            bitter.num_fonts() >= 1,
+            "registered Bitter face resolves to at least one font (num_fonts = {})",
+            bitter.num_fonts()
+        );
+        assert_eq!(
+            bitter.font_name(0).as_deref(),
+            Some("Bitter"),
+            "font_name(0) reads back the registered family name from the live object"
         );
 
         // ── TextElement attached font properties on a TextBlock ─────────────
