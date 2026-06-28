@@ -206,6 +206,64 @@ impl Style {
         let p = unsafe { dm_noesis_templates_style_get_trigger(self.ptr.as_ptr(), index) };
         NonNull::new(p).map(|ptr| TriggerReadback { ptr })
     }
+
+    /// Start a [`StyleBuilder`] targeting `target_type` (e.g. `"TextBlock"`),
+    /// resolved through Noesis's reflection registry like
+    /// [`set_target_type`](Self::set_target_type). Chain
+    /// [`setter`](StyleBuilder::setter) / [`based_on`](StyleBuilder::based_on) /
+    /// [`trigger`](StyleBuilder::trigger), then [`build`](StyleBuilder::build).
+    pub fn builder(target_type: &str) -> StyleBuilder {
+        let mut style = Style::new();
+        let _ = style.set_target_type(target_type);
+        StyleBuilder { style }
+    }
+}
+
+/// Fluent builder for a [`Style`]: set its target type via
+/// [`Style::builder`], append setters / triggers and an optional based-on style,
+/// then [`build`](Self::build). The longhand
+/// [`Style::new`] + [`set_target_type`](Style::set_target_type) +
+/// [`add_setter`](Style::add_setter) form still works.
+///
+/// ```no_run
+/// # use dm_noesis_runtime::styles::Style;
+/// # use dm_noesis_runtime::binding::box_f64;
+/// let style = Style::builder("TextBlock")
+///     .setter("FontSize", &box_f64(24.0))
+///     .build();
+/// ```
+#[must_use]
+pub struct StyleBuilder {
+    style: Style,
+}
+
+impl StyleBuilder {
+    /// Append a `Setter` for the dependency property `dp_name` (resolved on the
+    /// target type) with the boxed `value`. Like
+    /// [`Style::add_setter`], a setter that fails to resolve is silently dropped;
+    /// read it back with [`Style::get_trigger`] / element application to verify.
+    pub fn setter(mut self, dp_name: &str, value: &Boxed) -> Self {
+        let _ = self.style.add_setter(dp_name, value);
+        self
+    }
+
+    /// Set the `BasedOn` style this style inherits from.
+    pub fn based_on(mut self, base: &Style) -> Self {
+        self.style.set_based_on(base);
+        self
+    }
+
+    /// Append a trigger to the style's `Triggers` collection.
+    pub fn trigger<T: TriggerHandle>(mut self, trigger: &T) -> Self {
+        let _ = self.style.add_trigger(trigger);
+        self
+    }
+
+    /// Finish and return the built [`Style`].
+    #[must_use]
+    pub fn build(self) -> Style {
+        self.style
+    }
 }
 
 impl Drop for Style {

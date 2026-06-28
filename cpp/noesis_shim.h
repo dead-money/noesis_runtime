@@ -2008,6 +2008,13 @@ int32_t dm_noesis_gradient_brush_add_stop(void* brush, float offset, const float
 int32_t dm_noesis_gradient_brush_stop_count(void* brush);
 bool dm_noesis_gradient_brush_get_stop(void* brush, uint32_t index, float* out_offset,
                                        float out_color[4]);
+// SpreadMethod (GradientSpreadMethod {Pad,Reflect,Repeat}) / MappingMode
+// (BrushMappingMode {Absolute,RelativeToBoundingBox}). Getters return -1 on a
+// non-GradientBrush pointer.
+bool dm_noesis_gradient_brush_set_spread_method(void* brush, int32_t method);
+int32_t dm_noesis_gradient_brush_get_spread_method(void* brush);
+bool dm_noesis_gradient_brush_set_mapping_mode(void* brush, int32_t mode);
+int32_t dm_noesis_gradient_brush_get_mapping_mode(void* brush);
 
 // ImageBrush. `image_source` is a borrowed ImageSource* (or null); Noesis takes
 // its own reference. get returns a borrowed ImageSource* (no +1) or null.
@@ -2114,6 +2121,13 @@ void* dm_noesis_drop_shadow_effect_create(const float color[4], float blur_radiu
 bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* out_blur,
                                       float* out_direction, float* out_shadow_depth,
                                       float* out_opacity);
+// Individual setters (mirror BlurEffect::set_radius); each returns false on a
+// non-DropShadowEffect pointer.
+bool dm_noesis_drop_shadow_effect_set_color(void* effect, const float color[4]);
+bool dm_noesis_drop_shadow_effect_set_blur_radius(void* effect, float blur_radius);
+bool dm_noesis_drop_shadow_effect_set_direction(void* effect, float direction);
+bool dm_noesis_drop_shadow_effect_set_shadow_depth(void* effect, float shadow_depth);
+bool dm_noesis_drop_shadow_effect_set_opacity(void* effect, float opacity);
 
 // RenderOptions.BitmapScalingMode attached property (ordinals match
 // Noesis::BitmapScalingMode: 0 Unspecified, 1 LowQuality, 2 HighQuality).

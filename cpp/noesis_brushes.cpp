@@ -215,6 +215,41 @@ extern "C" bool dm_noesis_gradient_brush_get_stop(void* brush, uint32_t index, f
     return true;
 }
 
+// GradientBrush SpreadMethod / MappingMode (works on any LinearGradientBrush /
+// RadialGradientBrush). Ordinals match Noesis::GradientSpreadMethod and
+// Noesis::BrushMappingMode; getters return -1 on a non-GradientBrush pointer.
+static_assert(Noesis::GradientSpreadMethod_Pad == 0, "GradientSpreadMethod ordinal drift");
+static_assert(Noesis::GradientSpreadMethod_Reflect == 1, "GradientSpreadMethod ordinal drift");
+static_assert(Noesis::GradientSpreadMethod_Repeat == 2, "GradientSpreadMethod ordinal drift");
+static_assert(Noesis::BrushMappingMode_Absolute == 0, "BrushMappingMode ordinal drift");
+static_assert(Noesis::BrushMappingMode_RelativeToBoundingBox == 1, "BrushMappingMode ordinal drift");
+
+extern "C" bool dm_noesis_gradient_brush_set_spread_method(void* brush, int32_t method) {
+    auto* b = cast<Noesis::GradientBrush>(brush);
+    if (!b) return false;
+    b->SetSpreadMethod(static_cast<Noesis::GradientSpreadMethod>(method));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_gradient_brush_get_spread_method(void* brush) {
+    auto* b = cast<Noesis::GradientBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetSpreadMethod());
+}
+
+extern "C" bool dm_noesis_gradient_brush_set_mapping_mode(void* brush, int32_t mode) {
+    auto* b = cast<Noesis::GradientBrush>(brush);
+    if (!b) return false;
+    b->SetMappingMode(static_cast<Noesis::BrushMappingMode>(mode));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_gradient_brush_get_mapping_mode(void* brush) {
+    auto* b = cast<Noesis::GradientBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetMappingMode());
+}
+
 // ── ImageBrush ───────────────────────────────────────────────────────────────
 
 // Create an ImageBrush, optionally pointing at a borrowed ImageSource (e.g. a
@@ -746,6 +781,41 @@ extern "C" bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4
     if (out_direction) *out_direction = e->GetDirection();
     if (out_shadow_depth) *out_shadow_depth = e->GetShadowDepth();
     if (out_opacity) *out_opacity = e->GetOpacity();
+    return true;
+}
+
+extern "C" bool dm_noesis_drop_shadow_effect_set_color(void* effect, const float color[4]) {
+    auto* e = cast<Noesis::DropShadowEffect>(effect);
+    if (!e || !color) return false;
+    e->SetColor(Noesis::Color(color[0], color[1], color[2], color[3]));
+    return true;
+}
+
+extern "C" bool dm_noesis_drop_shadow_effect_set_blur_radius(void* effect, float blur_radius) {
+    auto* e = cast<Noesis::DropShadowEffect>(effect);
+    if (!e) return false;
+    e->SetBlurRadius(blur_radius);
+    return true;
+}
+
+extern "C" bool dm_noesis_drop_shadow_effect_set_direction(void* effect, float direction) {
+    auto* e = cast<Noesis::DropShadowEffect>(effect);
+    if (!e) return false;
+    e->SetDirection(direction);
+    return true;
+}
+
+extern "C" bool dm_noesis_drop_shadow_effect_set_shadow_depth(void* effect, float shadow_depth) {
+    auto* e = cast<Noesis::DropShadowEffect>(effect);
+    if (!e) return false;
+    e->SetShadowDepth(shadow_depth);
+    return true;
+}
+
+extern "C" bool dm_noesis_drop_shadow_effect_set_opacity(void* effect, float opacity) {
+    auto* e = cast<Noesis::DropShadowEffect>(effect);
+    if (!e) return false;
+    e->SetOpacity(opacity);
     return true;
 }
 

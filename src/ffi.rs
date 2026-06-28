@@ -1228,6 +1228,10 @@ unsafe extern "C" {
         out_offset: *mut f32,
         out_color: *mut f32,
     ) -> bool;
+    pub fn dm_noesis_gradient_brush_set_spread_method(brush: *mut c_void, method: i32) -> bool;
+    pub fn dm_noesis_gradient_brush_get_spread_method(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_gradient_brush_set_mapping_mode(brush: *mut c_void, mode: i32) -> bool;
+    pub fn dm_noesis_gradient_brush_get_mapping_mode(brush: *mut c_void) -> i32;
 
     // ImageBrush
     pub fn dm_noesis_image_brush_create(image_source: *mut c_void) -> *mut c_void;
@@ -1341,6 +1345,17 @@ unsafe extern "C" {
         out_shadow_depth: *mut f32,
         out_opacity: *mut f32,
     ) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_color(effect: *mut c_void, color: *const f32) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_blur_radius(
+        effect: *mut c_void,
+        blur_radius: f32,
+    ) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_direction(effect: *mut c_void, direction: f32) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_shadow_depth(
+        effect: *mut c_void,
+        shadow_depth: f32,
+    ) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_opacity(effect: *mut c_void, opacity: f32) -> bool;
 
     // RenderOptions
     pub fn dm_noesis_render_options_set_bitmap_scaling_mode(obj: *mut c_void, mode: i32) -> bool;
