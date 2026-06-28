@@ -56,15 +56,25 @@ view models are wrapped; bindings can be authored in XAML against Rust data. Sti
 
 ## 5. Routed events (beyond Click / KeyDown)
 
-We wrap only `Click` and `KeyDown`. The general mechanism and most events are missing.
+The generic name-keyed `AddHandler`/`RemoveHandler` mechanism is wrapped
+(`events::subscribe_event`), covering mouse, keyboard (+`TextInput`), focus,
+lifecycle (`Loaded`/`Unloaded`/`SizeChanged`), and the touch/manipulation/drag
+events, with typed arg accessors for position, button, wheel delta, key, new
+size, and source. Remaining:
 
-- **Generic `AddHandler` / `RemoveHandler`** by `RoutedEvent` (with `handledEventsToo`).
-- **Mouse:** `MouseEnter`/`Leave`, `MouseDown`/`Up`, `MouseMove`, `MouseWheel`, `PreviewMouse*`.
-- **Keyboard:** `KeyUp`, `PreviewKeyDown`/`Up`, `TextInput`.
-- **Focus:** `GotFocus`/`LostFocus`, `GotKeyboardFocus`/`Lost`, `IsKeyboardFocusWithinChanged`.
-- **Lifecycle:** `Loaded`/`Unloaded`, `Initialized`, `SizeChanged`, `LayoutUpdated`.
-- **Touch / manipulation:** `TouchDown`/`Move`/`Up`, `ManipulationStarting`/`Delta`/`Completed`, `Holding`, `Tapped`.
-- **Drag/drop:** `DragEnter`/`Over`/`Leave`/`Drop` (+ `DragDrop` / `DataObject`).
+- **`handledEventsToo` across the route.** This SDK's `AddHandler` has only the
+  2-arg form, so already-handled events aren't re-delivered to a handler as the
+  route bubbles/tunnels; the flag is honoured only within one element's handler
+  chain. True route-wide `handledEventsToo` would need SDK support.
+- **Richer typed arg accessors.** Focus-changed (`old`/`new` element),
+  manipulation (delta/velocity/inertia), and drag (`DataObject`, effects,
+  key-states) args are reachable as base `RoutedEventArgs` (source/handled) but
+  have no dedicated FFI accessors yet.
+- **Non-routed lifecycle events.** `Initialized`, `LayoutUpdated`, and the
+  `Is*Changed` property-changed notifications use `AddEventHandler(Symbol, ...)`
+  (the `Event_` mechanism), not `AddHandler(RoutedEvent, ...)`, so they're
+  outside the routed-event surface above.
+- **`DragDrop` / `DataObject`** construction + the drag-source side (`DoDragDrop`).
 
 ## 6. Animation & timing
 

@@ -512,6 +512,81 @@ void* dm_noesis_subscribe_keydown(
 // Unsubscribe and free the keydown handler. Safe to call with NULL.
 void dm_noesis_unsubscribe_keydown(void* token);
 
+// ── Generic routed-event subscription (TODO §5) ─────────────────────────────
+//
+// One name-keyed mechanism for the whole routed-event surface (mouse, keyboard,
+// focus, lifecycle, touch/manipulation, drag/drop) on top of
+// `UIElement::AddHandler`. Supersedes the bespoke click/keydown wrappers above
+// (which are kept for source compatibility).
+
+// Generic routed-event callback. `args` is an opaque handle to the live event
+// arguments — pass it to the `dm_noesis_*_args_*` accessors below to read typed
+// fields (position, button, key, wheel delta, new size, source). It is valid
+// ONLY for the duration of the call. `out_handled` is a borrowed bool the shim
+// pre-seeds with the event's current handled state; write `true` to mark the
+// routed event handled (stops same-element handlers that opted out of
+// handledEventsToo, and cross-element bubbling/tunneling). Same threading
+// contract as `dm_noesis_click_fn`.
+typedef void (*dm_noesis_routed_event_fn)(void* userdata, const void* args, bool* out_handled);
+
+// Subscribe `cb` to the routed event named `event_name` on `element` (which is
+// DynamicCast to `UIElement*`). Names are the WPF/Noesis event names:
+// "MouseMove", "MouseLeftButtonDown", "MouseWheel", "KeyDown", "KeyUp",
+// "GotFocus", "LostFocus", "Loaded", "Unloaded", "SizeChanged", "TextInput",
+// "Drop", "Tapped", ... A curated table maps the common names to the precise
+// arg shape; any other name falls back to the SDK's `FindRoutedEvent` lookup
+// over the element's class hierarchy (only the source/handled accessors apply).
+//
+// `handled_too`: this SDK's `AddHandler` has no `handledEventsToo` parameter,
+// so already-handled events are not re-routed to the handler regardless. The
+// flag is honoured WITHIN a single element's handler chain: when `false`, the
+// callback is skipped if a prior handler on the same element already set
+// handled. Pass `true` to always run.
+//
+// Returns an opaque token to pass once to `dm_noesis_unsubscribe_event`, or
+// NULL if `element` is not a `UIElement`, `event_name` is unknown, or `cb` is
+// NULL. The token holds a +1 ref on the element so the subscription outlives
+// every other handle the caller drops.
+void* dm_noesis_subscribe_event(
+    void* element, const char* event_name, bool handled_too, dm_noesis_routed_event_fn cb,
+    void* userdata);
+
+// Unsubscribe and free the routed-event handler. Safe to call with NULL.
+void dm_noesis_unsubscribe_event(void* token);
+
+// Event-arg accessors. Each takes the opaque `args` handed to the callback and
+// returns a sentinel when the live event isn't of the matching kind (so one
+// generic callback can probe whatever arrived).
+
+// Mouse pointer position in the source element's coordinate space. Works for
+// mouse, mouse-button and mouse-wheel events. Returns false (writes nothing)
+// for other event kinds or a NULL handle.
+bool dm_noesis_mouse_args_position(const void* args, float* x, float* y);
+
+// Changed mouse button as a `Noesis::MouseButton` ordinal (mirror in
+// `view::MouseButton`). Returns -1 unless the event is a mouse-button event.
+int32_t dm_noesis_mouse_button_args_button(const void* args);
+
+// Mouse wheel rotation delta (signed; ~120 per notch). Returns 0 unless the
+// event is a mouse-wheel event.
+int32_t dm_noesis_mouse_wheel_args_delta(const void* args);
+
+// Pressed/released key as a `Noesis::Key` ordinal (mirror in `view::Key`).
+// Returns -1 unless the event is a key event.
+int32_t dm_noesis_key_args_key(const void* args);
+
+// Input character (UTF-32 code point) for a TextInput event. Returns -1 unless
+// the event is a text-composition event.
+int32_t dm_noesis_text_args_ch(const void* args);
+
+// New size for a SizeChanged event (DIPs). Returns false (writes nothing)
+// unless the event is a SizeChanged event.
+bool dm_noesis_size_changed_args_new_size(const void* args, float* width, float* height);
+
+// Borrowed pointer to the event's originating element (`RoutedEventArgs::source`),
+// or NULL. Not ref-counted — do not release; valid only for the callback.
+void* dm_noesis_routed_args_source(const void* args);
+
 // ── Text + focus helpers ───────────────────────────────────────────────────
 //
 // Read / write the `Text` property of a `TextBox` or `TextBlock`, and move

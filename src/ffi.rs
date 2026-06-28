@@ -203,6 +203,27 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn dm_noesis_unsubscribe_keydown(token: *mut c_void);
 
+    pub fn dm_noesis_subscribe_event(
+        element: *mut c_void,
+        event_name: *const c_char,
+        handled_too: bool,
+        cb: RoutedEventFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_unsubscribe_event(token: *mut c_void);
+
+    pub fn dm_noesis_mouse_args_position(args: *const c_void, x: *mut f32, y: *mut f32) -> bool;
+    pub fn dm_noesis_mouse_button_args_button(args: *const c_void) -> i32;
+    pub fn dm_noesis_mouse_wheel_args_delta(args: *const c_void) -> i32;
+    pub fn dm_noesis_key_args_key(args: *const c_void) -> i32;
+    pub fn dm_noesis_text_args_ch(args: *const c_void) -> i32;
+    pub fn dm_noesis_size_changed_args_new_size(
+        args: *const c_void,
+        width: *mut f32,
+        height: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_routed_args_source(args: *const c_void) -> *mut c_void;
+
     pub fn dm_noesis_text_get(element: *mut c_void) -> *const c_char;
     pub fn dm_noesis_text_set(element: *mut c_void, text: *const c_char) -> bool;
     pub fn dm_noesis_text_caret_to_end(element: *mut c_void) -> bool;
@@ -422,6 +443,17 @@ pub type ClickFn = unsafe extern "C" fn(userdata: *mut c_void);
 /// writing `true` through it sets `KeyEventArgs::handled` so the routed
 /// event stops propagating. Same threading contract as [`ClickFn`].
 pub type KeyDownFn = unsafe extern "C" fn(userdata: *mut c_void, key: i32, out_handled: *mut bool);
+
+/// C callback invoked when a subscribed routed event fires (the generic
+/// `dm_noesis_subscribe_event` path).
+///
+/// `args` is an opaque handle to the live event arguments — pass it to the
+/// `dm_noesis_*_args_*` accessors to read typed fields. It is valid only for
+/// the duration of the call. `out_handled` is pre-seeded with the event's
+/// current handled state; writing `true` marks the routed event handled.
+/// Same threading contract as [`ClickFn`].
+pub type RoutedEventFn =
+    unsafe extern "C" fn(userdata: *mut c_void, args: *const c_void, out_handled: *mut bool);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Custom XAML class registration (Phase 5.C). See cpp/noesis_shim.h for the
