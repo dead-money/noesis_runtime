@@ -602,6 +602,132 @@ unsafe extern "C" {
     ) -> *mut c_void;
 }
 
+// ── Brushes, transforms, effects, RenderOptions (TODO §11) ──────────────────
+//
+// Object construction from Rust. Each `*_create` returns a `+1`-owned
+// `BaseComponent*` (the owning wrapper in src/brushes.rs / src/transforms.rs
+// releases it on Drop). Colors are `[f32; 4]` = `{r, g, b, a}` in `0..=1`.
+unsafe extern "C" {
+    // SolidColorBrush
+    pub fn dm_noesis_solid_color_brush_create(color: *const f32) -> *mut c_void;
+    pub fn dm_noesis_solid_color_brush_set_color(brush: *mut c_void, color: *const f32) -> bool;
+    pub fn dm_noesis_solid_color_brush_get_color(brush: *mut c_void, out: *mut f32) -> bool;
+
+    // LinearGradientBrush
+    pub fn dm_noesis_linear_gradient_brush_create() -> *mut c_void;
+    pub fn dm_noesis_linear_gradient_brush_set_start_point(
+        brush: *mut c_void,
+        x: f32,
+        y: f32,
+    ) -> bool;
+    pub fn dm_noesis_linear_gradient_brush_set_end_point(
+        brush: *mut c_void,
+        x: f32,
+        y: f32,
+    ) -> bool;
+    pub fn dm_noesis_linear_gradient_brush_get_points(brush: *mut c_void, out: *mut f32) -> bool;
+
+    // RadialGradientBrush
+    pub fn dm_noesis_radial_gradient_brush_create() -> *mut c_void;
+    pub fn dm_noesis_radial_gradient_brush_set_center(brush: *mut c_void, x: f32, y: f32) -> bool;
+    pub fn dm_noesis_radial_gradient_brush_set_gradient_origin(
+        brush: *mut c_void,
+        x: f32,
+        y: f32,
+    ) -> bool;
+    pub fn dm_noesis_radial_gradient_brush_set_radius(brush: *mut c_void, rx: f32, ry: f32)
+    -> bool;
+    pub fn dm_noesis_radial_gradient_brush_get_radius(
+        brush: *mut c_void,
+        rx: *mut f32,
+        ry: *mut f32,
+    ) -> bool;
+
+    // GradientBrush stops
+    pub fn dm_noesis_gradient_brush_add_stop(
+        brush: *mut c_void,
+        offset: f32,
+        color: *const f32,
+    ) -> i32;
+    pub fn dm_noesis_gradient_brush_stop_count(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_gradient_brush_get_stop(
+        brush: *mut c_void,
+        index: u32,
+        out_offset: *mut f32,
+        out_color: *mut f32,
+    ) -> bool;
+
+    // ImageBrush
+    pub fn dm_noesis_image_brush_create(image_source: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_image_brush_set_image_source(
+        brush: *mut c_void,
+        image_source: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_image_brush_get_image_source(brush: *mut c_void) -> *mut c_void;
+
+    // Transforms
+    pub fn dm_noesis_translate_transform_create(x: f32, y: f32) -> *mut c_void;
+    pub fn dm_noesis_translate_transform_set(transform: *mut c_void, x: f32, y: f32) -> bool;
+    pub fn dm_noesis_translate_transform_get(
+        transform: *mut c_void,
+        x: *mut f32,
+        y: *mut f32,
+    ) -> bool;
+
+    pub fn dm_noesis_scale_transform_create(sx: f32, sy: f32, cx: f32, cy: f32) -> *mut c_void;
+    pub fn dm_noesis_scale_transform_set(
+        transform: *mut c_void,
+        sx: f32,
+        sy: f32,
+        cx: f32,
+        cy: f32,
+    ) -> bool;
+    pub fn dm_noesis_scale_transform_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_rotate_transform_create(angle: f32, cx: f32, cy: f32) -> *mut c_void;
+    pub fn dm_noesis_rotate_transform_set_angle(transform: *mut c_void, angle: f32) -> bool;
+    pub fn dm_noesis_rotate_transform_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_skew_transform_create(ax: f32, ay: f32, cx: f32, cy: f32) -> *mut c_void;
+    pub fn dm_noesis_skew_transform_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_matrix_transform_create(matrix: *const f32) -> *mut c_void;
+    pub fn dm_noesis_matrix_transform_set(transform: *mut c_void, matrix: *const f32) -> bool;
+    pub fn dm_noesis_matrix_transform_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_transform_group_create() -> *mut c_void;
+    pub fn dm_noesis_transform_group_add_child(group: *mut c_void, child: *mut c_void) -> bool;
+    pub fn dm_noesis_transform_group_child_count(group: *mut c_void) -> i32;
+
+    pub fn dm_noesis_composite_transform_create(fields: *const f32) -> *mut c_void;
+    pub fn dm_noesis_composite_transform_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    // Effects
+    pub fn dm_noesis_blur_effect_create(radius: f32) -> *mut c_void;
+    pub fn dm_noesis_blur_effect_set_radius(effect: *mut c_void, radius: f32) -> bool;
+    pub fn dm_noesis_blur_effect_get_radius(effect: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_drop_shadow_effect_create(
+        color: *const f32,
+        blur_radius: f32,
+        direction: f32,
+        shadow_depth: f32,
+        opacity: f32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_drop_shadow_effect_get(
+        effect: *mut c_void,
+        out_color: *mut f32,
+        out_blur: *mut f32,
+        out_direction: *mut f32,
+        out_shadow_depth: *mut f32,
+        out_opacity: *mut f32,
+    ) -> bool;
+
+    // RenderOptions
+    pub fn dm_noesis_render_options_set_bitmap_scaling_mode(obj: *mut c_void, mode: i32) -> bool;
+    pub fn dm_noesis_render_options_get_bitmap_scaling_mode(obj: *mut c_void) -> i32;
+}
+
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
 /// pointers receive the `userdata` passed to [`dm_noesis_value_converter_create`],
 /// the borrowed boxed `value` / `parameter` (`BaseComponent*`, may be null), an

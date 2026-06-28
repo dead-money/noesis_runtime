@@ -1434,6 +1434,101 @@ bool dm_noesis_set_binding(void* element, const char* dp_name, void* binding);
 bool dm_noesis_framework_element_add_resource(
     void* element, const char* key, void* object);
 
+// ── Brushes, transforms, effects, RenderOptions (TODO §11) ──────────────────
+//
+// Object construction from Rust. Every `*_create` returns a freshly-built
+// BaseComponent* with a single owned reference (the caller releases it via
+// dm_noesis_base_component_release, mirrored by the owning Rust handle's Drop).
+// Colors are float[4] = {r, g, b, a} in 0..=1 (NsDrawing/Color.h). `cast`-style
+// type checks make every setter/getter a no-op (false / -1) on a wrong-type
+// pointer. Assign a built object to an element via the generic
+// dm_noesis_*_set_property BASE_COMPONENT path (FrameworkElement::set_component);
+// Noesis then takes its own reference, so the Rust handle may drop afterwards.
+
+// SolidColorBrush
+void* dm_noesis_solid_color_brush_create(const float color[4]);
+bool dm_noesis_solid_color_brush_set_color(void* brush, const float color[4]);
+bool dm_noesis_solid_color_brush_get_color(void* brush, float out[4]);
+
+// LinearGradientBrush
+void* dm_noesis_linear_gradient_brush_create(void);
+bool dm_noesis_linear_gradient_brush_set_start_point(void* brush, float x, float y);
+bool dm_noesis_linear_gradient_brush_set_end_point(void* brush, float x, float y);
+// out = {startX, startY, endX, endY}
+bool dm_noesis_linear_gradient_brush_get_points(void* brush, float out[4]);
+
+// RadialGradientBrush
+void* dm_noesis_radial_gradient_brush_create(void);
+bool dm_noesis_radial_gradient_brush_set_center(void* brush, float x, float y);
+bool dm_noesis_radial_gradient_brush_set_gradient_origin(void* brush, float x, float y);
+bool dm_noesis_radial_gradient_brush_set_radius(void* brush, float rx, float ry);
+bool dm_noesis_radial_gradient_brush_get_radius(void* brush, float* rx, float* ry);
+
+// GradientBrush stops (works on any LinearGradientBrush / RadialGradientBrush).
+// add_stop returns the new stop index or -1; stop_count returns count or -1 on
+// a non-GradientBrush pointer.
+int32_t dm_noesis_gradient_brush_add_stop(void* brush, float offset, const float color[4]);
+int32_t dm_noesis_gradient_brush_stop_count(void* brush);
+bool dm_noesis_gradient_brush_get_stop(void* brush, uint32_t index, float* out_offset,
+                                       float out_color[4]);
+
+// ImageBrush. `image_source` is a borrowed ImageSource* (or null); Noesis takes
+// its own reference. get returns a borrowed ImageSource* (no +1) or null.
+void* dm_noesis_image_brush_create(void* image_source);
+bool dm_noesis_image_brush_set_image_source(void* brush, void* image_source);
+void* dm_noesis_image_brush_get_image_source(void* brush);
+
+// Transforms (NsGui/*Transform.h). Assign via set_component("RenderTransform").
+void* dm_noesis_translate_transform_create(float x, float y);
+bool dm_noesis_translate_transform_set(void* transform, float x, float y);
+bool dm_noesis_translate_transform_get(void* transform, float* x, float* y);
+
+void* dm_noesis_scale_transform_create(float sx, float sy, float cx, float cy);
+bool dm_noesis_scale_transform_set(void* transform, float sx, float sy, float cx, float cy);
+// out = {scaleX, scaleY, centerX, centerY}
+bool dm_noesis_scale_transform_get(void* transform, float out[4]);
+
+void* dm_noesis_rotate_transform_create(float angle, float cx, float cy);
+bool dm_noesis_rotate_transform_set_angle(void* transform, float angle);
+// out = {angle, centerX, centerY}
+bool dm_noesis_rotate_transform_get(void* transform, float out[3]);
+
+void* dm_noesis_skew_transform_create(float ax, float ay, float cx, float cy);
+// out = {angleX, angleY, centerX, centerY}
+bool dm_noesis_skew_transform_get(void* transform, float out[4]);
+
+// matrix = {m00, m01, m10, m11, m20, m21} (Transform2 row-major layout).
+void* dm_noesis_matrix_transform_create(const float matrix[6]);
+bool dm_noesis_matrix_transform_set(void* transform, const float matrix[6]);
+bool dm_noesis_matrix_transform_get(void* transform, float out[6]);
+
+void* dm_noesis_transform_group_create(void);
+bool dm_noesis_transform_group_add_child(void* group, void* child);
+int32_t dm_noesis_transform_group_child_count(void* group);
+
+// fields = {centerX, centerY, scaleX, scaleY, skewX, skewY, rotation,
+//           translateX, translateY}
+void* dm_noesis_composite_transform_create(const float fields[9]);
+bool dm_noesis_composite_transform_get(void* transform, float out[9]);
+
+// Effects (NsGui/BlurEffect.h, DropShadowEffect.h). Assign via
+// set_component("Effect").
+void* dm_noesis_blur_effect_create(float radius);
+bool dm_noesis_blur_effect_set_radius(void* effect, float radius);
+bool dm_noesis_blur_effect_get_radius(void* effect, float* out);
+
+void* dm_noesis_drop_shadow_effect_create(const float color[4], float blur_radius,
+                                          float direction, float shadow_depth, float opacity);
+// out_color = {r,g,b,a}; any out pointer may be null to skip that field.
+bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* out_blur,
+                                      float* out_direction, float* out_shadow_depth,
+                                      float* out_opacity);
+
+// RenderOptions.BitmapScalingMode attached property (ordinals match
+// Noesis::BitmapScalingMode: 0 Unspecified, 1 LowQuality, 2 HighQuality).
+// get returns the ordinal or -1 if `obj` is not a DependencyObject.
+bool dm_noesis_render_options_set_bitmap_scaling_mode(void* obj, int32_t mode);
+int32_t dm_noesis_render_options_get_bitmap_scaling_mode(void* obj);
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //
 // Implemented in cpp/noesis_controls.cpp. Each entrypoint DynamicCasts to the

@@ -109,10 +109,9 @@ Only `Path.set_points` is exposed.
 
 ## 11. Brushes, transforms, visual properties
 
-- **Brushes.** `SolidColorBrush` color set, `LinearGradientBrush`/`RadialGradientBrush` + `GradientStop`s, `ImageBrush`, `VisualBrush`, `TileBrush`, `BrushShader`.
-- **Transforms.** `TranslateTransform`/`ScaleTransform`/`RotateTransform`/`SkewTransform`/`MatrixTransform`/`TransformGroup`/`CompositeTransform`; 3D transforms (`Transform3D`, `CompositeTransform3D`).
-- **Effects.** `BlurEffect`, `DropShadowEffect`, custom `ShaderEffect` (`Batch.pixelShader` path — noted out-of-scope in README).
-- **`RenderOptions`** (per-element bitmap scaling / caching hints).
+- **Brushes.** Remaining: `VisualBrush` (needs a visual source), full `TileBrush` tiling knobs, and `BrushShader`/custom shaders (out-of-scope per README). Done: `SolidColorBrush`, `LinearGradientBrush`/`RadialGradientBrush` + `GradientStop`s, `ImageBrush` (source wiring via an existing `ImageSource*`; building one from pixels needs §12).
+- **Transforms.** Remaining: 3D transforms (`Transform3D`, `CompositeTransform3D`, `MatrixTransform3D`). Done: `TranslateTransform`/`ScaleTransform`/`RotateTransform`/`SkewTransform`/`MatrixTransform`/`TransformGroup`/`CompositeTransform` (code-built in `src/transforms.rs`, assigned via `FrameworkElement::set_render_transform`).
+- **Effects.** Remaining: custom `ShaderEffect` (`Batch.pixelShader` path — out-of-scope per README). Done: `BlurEffect`, `DropShadowEffect` (in `src/brushes.rs`, assigned via `set_effect`).
 
 ## 12. Media, imaging, render targets
 
@@ -172,10 +171,10 @@ primitives first, big rocks once their prerequisites exist. Each phase is a natu
 `BindingExpression` update, §5 non-routed lifecycle events; §1 View timers + typed `RenderFlags` +
 `ViewStats` + tessellation quality + `MouseHWheel`; §15 `ParseXaml`/`LoadComponent`; §17 inspector).
 
-**Phase B — presentation.**
-4. §7 Styles / resources / templates (`FindResource`, `DataTemplate`/`ControlTemplate` from code) — needed to theme and to render bound collections meaningfully.
-5. §8 Controls programmatic access — incremental, per control as screens need it.
-6. §11 Brushes / transforms — needed to drive styled visuals from code.
+**Phase B — presentation.** Core delivered; advanced remainders tracked in §7/§8/§11 above.
+4. ~~§7 Styles / resources / templates~~ ✅ core done — ResourceDictionary access, `Style` from code, template parse+assign, `FindResource`. Remaining: style triggers, code-built template factories, dynamic-resource code path (see §7).
+5. ~~§8 Controls programmatic access~~ ✅ core done — selection, items mutation, ranges, tri-state toggles, popups/expander, scroll offsets + `ScrollTo*`, text/password selection. Remaining: `SelectedValue`/`TreeView`, `ItemContainerGenerator`, `FormattedText`, `ContextMenu`/`ToolTip`, `IScrollInfo`/line-page scroll, image source (see §8).
+6. ~~§11 Brushes / transforms~~ ✅ core done — solid/gradient/image brushes, 2D transforms + group, blur/drop-shadow effects, `RenderOptions`. Remaining: `VisualBrush`/`TileBrush`/shaders, 3D transforms (see §11).
 
 **Phase C — custom types + motion.**
 7. §9 Custom types / reflection (more base classes, custom DPs/events/enums, `MeasureOverride`/`ArrangeOverride`, and **runtime-reflected plain properties**). Foundational; also unblocks §3 plain-VM INPC.
