@@ -21,7 +21,7 @@ const SV: &str = r##"<?xml version="1.0" encoding="utf-8"?>
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               Width="100" Height="100"
               VerticalScrollBarVisibility="Visible"
-              HorizontalScrollBarVisibility="Disabled">
+              HorizontalScrollBarVisibility="Visible">
   <ScrollViewer.Template>
     <ControlTemplate TargetType="ScrollViewer">
       <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
@@ -29,7 +29,7 @@ const SV: &str = r##"<?xml version="1.0" encoding="utf-8"?>
                               CanContentScroll="{TemplateBinding CanContentScroll}"/>
     </ControlTemplate>
   </ScrollViewer.Template>
-  <Border Height="600" Width="80" Background="#FF00AA00"/>
+  <Border Height="600" Width="600" Background="#FF00AA00"/>
 </ScrollViewer>"##;
 
 fn pump(view: &mut View, range: std::ops::RangeInclusive<u32>) {
@@ -91,12 +91,32 @@ fn scrollviewer_offsets_and_methods() {
             "scroll_to_home returns to the top"
         );
 
+        // -- Horizontal axis (content 600 wide vs 100 viewport) --
+        let scrollable_w = sv.scrollable_width().expect("scrollable_width");
+        assert!(
+            scrollable_w > 100.0,
+            "content (600) wider than viewport (100) should be horizontally scrollable, got {scrollable_w}"
+        );
+        assert_eq!(sv.horizontal_offset(), Some(0.0));
+        assert!(sv.scroll_to_horizontal_offset(40.0));
+        pump(&mut view, 41..=50);
+        let hoff = sv.horizontal_offset().expect("horizontal_offset");
+        assert!(
+            (hoff - 40.0).abs() < 1.0,
+            "horizontal_offset should reach ~40, got {hoff}"
+        );
+
         // Negative: the root child Border is not a ScrollViewer.
         let child = sv.visual_child(0).expect("scrollviewer has a visual child");
         assert_eq!(
             child.vertical_offset(),
             None,
             "a non-ScrollViewer reports no offset"
+        );
+        assert_eq!(
+            child.horizontal_offset(),
+            None,
+            "a non-ScrollViewer reports no horizontal offset"
         );
 
         drop(child);

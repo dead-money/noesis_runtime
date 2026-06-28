@@ -21,8 +21,9 @@ const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Width="200" Height="400">
   <StackPanel>
-    <ListBox x:Name="LB" Height="180"/>
-    <ItemsControl x:Name="IC" Height="180"/>
+    <ListBox x:Name="LB" Height="120"/>
+    <ItemsControl x:Name="IC" Height="120"/>
+    <ListBox x:Name="LBD" Height="120"/>
   </StackPanel>
 </Grid>"##;
 
@@ -52,9 +53,10 @@ fn selector_and_items_mutation() {
             view.update(f64::from(i) * 0.016);
         }
 
-        let content = view.content().expect("view content");
+        let mut content = view.content().expect("view content");
         let mut lb = content.find_name("LB").expect("find ListBox");
         let mut ic = content.find_name("IC").expect("find ItemsControl");
+        let mut lbd = content.find_name("LBD").expect("find direct ListBox");
 
         // -- Selector via ItemsSource + selected-item identity --
         // SAFETY: coll outlives lb (dropped at end of scope after the view).
@@ -63,6 +65,35 @@ fn selector_and_items_mutation() {
             view.update(f64::from(i) * 0.016);
         }
         assert_eq!(lb.items_count(), Some(3), "ListBox sees 3 source items");
+
+        // -- set_selected_item drives Noesis selection (genuinely-new entrypoint).
+        // Selecting by item must move SelectedIndex/SelectedItem to that element,
+        // read back THROUGH Noesis. A no-op setter would leave the index at -1.
+        let item0 = coll.get(0).expect("source item 0");
+        // SAFETY: coll outlives lb; item0 is a live element of the bound source.
+        assert!(unsafe { lb.set_selected_item(item0.as_ptr()) });
+        assert_eq!(
+            lb.selected_index(),
+            Some(0),
+            "set_selected_item(item0) selects index 0"
+        );
+        assert_eq!(
+            lb.selected_item(),
+            Some(item0),
+            "selected_item tracks item0 (identity through Noesis)"
+        );
+        // A different element: index + item must follow it, not stay pinned.
+        let item1 = coll.get(1).expect("source item 1");
+        // SAFETY: as above.
+        assert!(unsafe { lb.set_selected_item(item1.as_ptr()) });
+        assert_eq!(lb.selected_index(), Some(1));
+        assert_eq!(lb.selected_item(), Some(item1));
+        // Wrong-type negative: the Grid root is not a Selector.
+        // SAFETY: a null `item` is permitted by the contract.
+        assert!(
+            !unsafe { content.set_selected_item(std::ptr::null_mut()) },
+            "set_selected_item on a non-Selector returns false"
+        );
 
         assert!(lb.set_selected_index(2));
         assert_eq!(lb.selected_index(), Some(2));
@@ -108,6 +139,47 @@ fn selector_and_items_mutation() {
         assert!(ic.items_clear());
         assert_eq!(ic.items_count(), Some(0), "empty after clear");
 
+        // -- items_insert is position-accurate (genuinely-new entrypoint) --
+        // Direct-items ListBox so we can confirm the landing index via selection
+        // identity (a non-Selector ItemsControl can't prove WHERE the item went).
+        assert_eq!(lbd.items_add_string("X"), Some(0));
+        assert_eq!(lbd.items_add_string("Y"), Some(1));
+        let z = dm_noesis_runtime::binding::box_string("Z");
+        // SAFETY: `z` outlives every read below; the ItemCollection takes its own
+        // ref so dropping `z` afterwards is sound.
+        assert!(
+            unsafe { lbd.items_insert(1, z.raw()) },
+            "insert Z at index 1"
+        );
+        assert_eq!(lbd.items_count(), Some(3), "three items after insert");
+        // Out-of-range insert is rejected and leaves the collection untouched.
+        let w = dm_noesis_runtime::binding::box_string("W");
+        // SAFETY: `w` is a live boxed value for the duration of the call.
+        assert!(
+            !unsafe { lbd.items_insert(99, w.raw()) },
+            "out-of-range insert is rejected"
+        );
+        assert_eq!(
+            lbd.items_count(),
+            Some(3),
+            "rejected insert leaves the count unchanged"
+        );
+        drop(w);
+        // Order must now be [X, Z, Y]; selecting index 1 yields exactly the Z we
+        // inserted (pointer-identical through Noesis). A no-op, append-to-end, or
+        // insert-at-0 would select Y or X here and fail this assertion.
+        for i in 17..=22 {
+            view.update(f64::from(i) * 0.016);
+        }
+        assert!(lbd.set_selected_index(1));
+        let mid = lbd.selected_item().expect("item at index 1");
+        assert_eq!(
+            mid.as_ptr(),
+            z.raw(),
+            "the element inserted at index 1 is the one selected -> insert is position-accurate"
+        );
+        drop(z);
+
         // -- Negatives: wrong control type degrades to None --
         assert_eq!(ic.selected_index(), None, "ItemsControl is not a Selector");
         assert_eq!(
@@ -116,6 +188,7 @@ fn selector_and_items_mutation() {
             "the Grid root is not an ItemsControl"
         );
 
+        drop(lbd);
         drop(lb);
         drop(ic);
         drop(content);

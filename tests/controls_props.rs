@@ -85,6 +85,16 @@ fn control_property_round_trips() {
             Some(40.0),
             "value clamped to the lowered Maximum"
         );
+        // set_range_minimum round-trips (symmetric setter coverage). Raising the
+        // floor to 5 (below the current value 40) leaves the value untouched; a
+        // no-op setter would leave Minimum at 0 and fail the read-back.
+        assert!(slider.set_range_minimum(5.0));
+        assert_eq!(slider.range_minimum(), Some(5.0));
+        assert_eq!(
+            slider.range_value(),
+            Some(40.0),
+            "value still within the raised [5, 40] band"
+        );
 
         // -- ToggleButton three-state -- no view needed --
         let mut cb = FrameworkElement::parse(&format!(r#"<CheckBox {NS} IsThreeState="True"/>"#))
@@ -149,6 +159,19 @@ fn control_property_round_trips() {
             tb.selection_length(),
             Some(11),
             "select_all spans the whole text"
+        );
+        // Symmetric selection setters round-trip (set_selection_start / _length).
+        // From the full selection, move the anchor to 2 then shrink to 4 chars:
+        // [2, 6) of "Hello World" == "llo ". A no-op setter would report the old
+        // start/length and fail.
+        assert!(tb.set_selection_start(2));
+        assert_eq!(tb.selection_start(), Some(2));
+        assert!(tb.set_selection_length(4));
+        assert_eq!(tb.selection_length(), Some(4));
+        assert_eq!(
+            tb.selected_text().as_deref(),
+            Some("llo "),
+            "selection [2, 6) of 'Hello World'"
         );
 
         assert_eq!(pb.password().as_deref(), Some(""), "empty initially");
