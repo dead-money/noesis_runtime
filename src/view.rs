@@ -4078,13 +4078,17 @@ pub struct ViewStats {
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
 /// or be moved onto the render thread — same rationale as the event handlers
 /// in [`crate::events`]. Timers fire on the view-driving thread.
+///
+/// Takes `&self` (re-entrant: a tick may call [`View::update`] on the same
+/// view, re-entering this same box; use interior mutability for handler
+/// state).
 pub trait TimerHandler: Send + 'static {
     /// Run one tick; return the next interval in ms (`0` stops the timer).
-    fn on_tick(&mut self) -> u32;
+    fn on_tick(&self) -> u32;
 }
 
-impl<F: FnMut() -> u32 + Send + 'static> TimerHandler for F {
-    fn on_tick(&mut self) -> u32 {
+impl<F: Fn() -> u32 + Send + 'static> TimerHandler for F {
+    fn on_tick(&self) -> u32 {
         self()
     }
 }
@@ -4097,7 +4101,8 @@ unsafe extern "C" fn timer_trampoline(userdata: *mut c_void) -> u32 {
     crate::panic_guard::guard(|| {
         // SAFETY: userdata is the double-boxed handler leaked in create_timer; the
         // RustTimer keeps it alive until cancel, so the deref is valid here.
-        let handler = unsafe { &mut *userdata.cast::<Box<dyn TimerHandler>>() };
+        // Shared `&`: re-entrant handler box (see `TimerHandler`).
+        let handler = unsafe { &*userdata.cast::<Box<dyn TimerHandler>>() };
         handler.on_tick()
     })
 }
@@ -4150,13 +4155,17 @@ impl Drop for TimerSubscription {
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource` or
 /// be moved onto the render thread — same rationale as [`TimerHandler`]. The
 /// event fires on the view-driving thread.
+///
+/// Takes `&self` (re-entrant: the callback may call [`View::update`] on the
+/// same view, re-entering this same box; use interior mutability for handler
+/// state).
 pub trait RenderingHandler: Send + 'static {
     /// Run one frame's rendering callback.
-    fn on_rendering(&mut self);
+    fn on_rendering(&self);
 }
 
-impl<F: FnMut() + Send + 'static> RenderingHandler for F {
-    fn on_rendering(&mut self) {
+impl<F: Fn() + Send + 'static> RenderingHandler for F {
+    fn on_rendering(&self) {
         self();
     }
 }
@@ -4169,7 +4178,8 @@ unsafe extern "C" fn rendering_trampoline(userdata: *mut c_void, _view: *mut c_v
         // SAFETY: userdata is the double-boxed handler leaked in
         // add_rendering_handler; the C++ handler keeps it alive until removal, so
         // the deref is valid here.
-        let handler = unsafe { &mut *userdata.cast::<Box<dyn RenderingHandler>>() };
+        // Shared `&`: re-entrant handler box (see `RenderingHandler`).
+        let handler = unsafe { &*userdata.cast::<Box<dyn RenderingHandler>>() };
         handler.on_rendering();
     })
 }

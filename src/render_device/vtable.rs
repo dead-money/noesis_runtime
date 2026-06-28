@@ -51,12 +51,16 @@ unsafe fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     }
 }
 
-fn texture_format_from_raw(raw: u32) -> TextureFormat {
+/// Decode a `Noesis::TextureFormat::Enum` ordinal. Returns `None` for an
+/// unrecognized ordinal rather than panicking: `raw` is engine-supplied and
+/// reaches this on the render-thread hot path, so an unknown value is treated
+/// as a contained failure by the call sites (no panic across the C ABI).
+fn texture_format_from_raw(raw: u32) -> Option<TextureFormat> {
     match raw {
-        0 => TextureFormat::Rgba8,
-        1 => TextureFormat::Rgbx8,
-        2 => TextureFormat::R8,
-        other => panic!("unknown TextureFormat::Enum from Noesis: {other}"),
+        0 => Some(TextureFormat::Rgba8),
+        1 => Some(TextureFormat::Rgbx8),
+        2 => Some(TextureFormat::R8),
+        _ => None,
     }
 }
 
@@ -113,7 +117,11 @@ unsafe extern "C" fn t_create_texture(
     crate::panic_guard::guard(|| {
         let dev = device(userdata);
         let label = cstr_to_str(label);
-        let format = texture_format_from_raw(format_raw);
+        // Unknown engine-supplied format ordinal: contained failure, leave `out`
+        // unwritten (same as the panic path — the C side sees a null texture).
+        let Some(format) = texture_format_from_raw(format_raw) else {
+            return;
+        };
 
         // Build the per-level slice array; lifetime ends with this fn body.
         let slices: Vec<&[u8]> = if data.is_null() {
@@ -167,7 +175,11 @@ unsafe extern "C" fn t_update_texture(
 ) {
     crate::panic_guard::guard(|| {
         let dev = device(userdata);
-        let format = texture_format_from_raw(format_raw);
+        // Unknown engine-supplied format ordinal: contained failure, skip the
+        // update (same as the panic path).
+        let Some(format) = texture_format_from_raw(format_raw) else {
+            return;
+        };
         let len = (width as usize) * (height as usize) * bytes_per_pixel(format) as usize;
         let bytes = slice::from_raw_parts(data.cast::<u8>(), len);
         dev.update_texture(
