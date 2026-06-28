@@ -1340,6 +1340,47 @@ impl FrameworkElement {
         self.set_current(name, PropType::String, (&ptr as *const *const i8).cast())
     }
 
+    /// Set the current value of a `Point` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_point(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_current(name, PropType::Point, value.as_ptr().cast())
+    }
+
+    /// Set the current value of a `Size` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_size(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_current(name, PropType::Size, value.as_ptr().cast())
+    }
+
+    /// Set the current value of a `Vector` (`Noesis::Vector2`) dependency
+    /// property. See [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_vector(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_current(name, PropType::Vector, value.as_ptr().cast())
+    }
+
+    /// Set the current value of a runtime-enum-typed dependency property (the
+    /// underlying `int32` member value). See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_enum(&mut self, name: &str, value: i32) -> bool {
+        self.set_current(name, PropType::Enum, (&value as *const i32).cast())
+    }
+
     /// Read the base value (pre-animation / pre-coerce) of an `Int32`
     /// dependency property (`GetBaseValue`). `None` on unknown name or tag
     /// mismatch.
@@ -1426,6 +1467,58 @@ impl FrameworkElement {
         // Noesis-owned storage while we hold our element reference; copy out
         // before yielding control.
         Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+    }
+
+    /// Read the base value of a `Point` dependency property as `[x, y]`. See
+    /// [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_point(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_base(name, PropType::Point, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `Size` dependency property as `[width, height]`.
+    /// See [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_size(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_base(name, PropType::Size, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `Vector` (`Noesis::Vector2`) dependency property
+    /// as `[x, y]`. See [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_vector(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_base(name, PropType::Vector, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a runtime-enum-typed dependency property as its
+    /// underlying `int32` member value. See [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_enum(&self, name: &str) -> Option<i32> {
+        let mut out: i32 = 0;
+        self.get_base(name, PropType::Enum, (&mut out as *mut i32).cast())
+            .then_some(out)
     }
 
     // ── Dynamic tag inference (TODO §2.D) ───────────────────────────────────

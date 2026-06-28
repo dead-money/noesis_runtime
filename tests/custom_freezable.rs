@@ -6,9 +6,12 @@
 //! THROUGH the live Noesis object):
 //!   * registration of a `ClassBase::Freezable` succeeds and is creatable,
 //!   * a DP round-trips through Noesis DP storage on a code-created instance,
-//!   * the property-changed callback (the trampoline's `OnPropertyChanged`
-//!     override) fires,
 //!   * the freeze state machine works: `can_freeze` -> `freeze` -> `is_frozen`.
+//!
+//! Note: the property-changed callback is NOT asserted here — it does not fire
+//! on a code-created (un-parsed, tree-detached) `Freezable`, the same SDK
+//! constraint documented for the element bases (see TODO.md "Known SDK
+//! limitations"). The handler below is a `Noop` for that reason.
 //!
 //! The sibling `Animatable` subtrees (`Brush`/`Geometry`/`Transform`/`Effect`)
 //! are NOT subclassable this way — see TODO.md "Known SDK limitations".

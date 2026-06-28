@@ -120,6 +120,47 @@ fn custom_dp_value_types() {
 
         // A type-mismatched access is rejected (Point DP read as a Rect).
         assert_eq!(el.get_rect("Pt"), None, "tag mismatch must be rejected");
+
+        // ── SetCurrentValue / GetBaseValue for the new value types ───────────
+        // Mirrors the scalar pattern: the local value stays the *base* while the
+        // effective getter returns the SetCurrentValue override (TODO §9 —
+        // exercises apply_set(Current)/apply_get(Base) for Point/Size/Vector/Enum).
+        // `el` already has Pt=[1,2], Sz=[10,20], Vec=[-3,4], Mode=5 set locally.
+        assert!(el.set_current_point("Pt", [9.0, 8.0]));
+        assert_eq!(el.get_point("Pt"), Some([9.0, 8.0]), "Point current value");
+        assert_eq!(
+            el.get_base_point("Pt"),
+            Some([1.0, 2.0]),
+            "Point base value unaffected by SetCurrentValue"
+        );
+
+        assert!(el.set_current_size("Sz", [33.0, 44.0]));
+        assert_eq!(el.get_size("Sz"), Some([33.0, 44.0]), "Size current value");
+        assert_eq!(
+            el.get_base_size("Sz"),
+            Some([10.0, 20.0]),
+            "Size base value unaffected by SetCurrentValue"
+        );
+
+        assert!(el.set_current_vector("Vec", [7.0, -7.0]));
+        assert_eq!(
+            el.get_vector("Vec"),
+            Some([7.0, -7.0]),
+            "Vector current value"
+        );
+        assert_eq!(
+            el.get_base_vector("Vec"),
+            Some([-3.0, 4.0]),
+            "Vector base value unaffected by SetCurrentValue"
+        );
+
+        assert!(el.set_current_enum("Mode", 0));
+        assert_eq!(el.get_enum("Mode"), Some(0), "Enum current value");
+        assert_eq!(
+            el.get_base_enum("Mode"),
+            Some(5),
+            "Enum base value unaffected by SetCurrentValue"
+        );
     }
     dm_noesis_runtime::shutdown();
 }

@@ -218,6 +218,21 @@ extern "C" bool dm_noesis_type_set_content_property(
     return true;
 }
 
+extern "C" bool dm_noesis_type_get_content_property(
+    const char* type_name, const char** out_name) {
+    if (!out_name) return false;
+    const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
+    if (!tc) return false;
+
+    // FindMeta is keyed by the metadata TypeClass, so this reads the
+    // ContentPropertyMetaData record independently of any DependsOnMetaData
+    // attached to the same type.
+    const auto* cp = Noesis::FindMeta<Noesis::ContentPropertyMetaData>(tc);
+    if (!cp) return false;
+    *out_name = cp->GetContentProperty().Str();
+    return true;
+}
+
 extern "C" bool dm_noesis_type_add_depends_on(
     const char* type_name, const char* prop_name) {
     if (!prop_name) return false;

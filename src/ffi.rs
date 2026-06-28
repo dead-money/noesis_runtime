@@ -1905,6 +1905,10 @@ unsafe extern "C" {
         type_name: *const c_char,
         prop_name: *const c_char,
     ) -> bool;
+    pub fn dm_noesis_type_get_content_property(
+        type_name: *const c_char,
+        out_name: *mut *const c_char,
+    ) -> bool;
     pub fn dm_noesis_type_add_depends_on(
         type_name: *const c_char,
         prop_name: *const c_char,

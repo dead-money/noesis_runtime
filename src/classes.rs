@@ -248,7 +248,8 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
     /// [`fpm_options::AFFECTS_MEASURE`]), a read-only access flag, and/or
     /// opt-in coercion. Coercion requires a handler installed via
     /// [`Self::set_coerce`] and only applies to scalar / `Thickness` / `Color`
-    /// / `Rect` properties (the first 32 properties of a class).
+    /// / `Rect` / `Point` / `Size` / `Vector` properties (the first 32
+    /// properties of a class; enum / object / string tags are not coercible).
     ///
     /// # Panics
     ///
@@ -1192,7 +1193,8 @@ pub struct PropertyOptions {
     /// [`Instance::set_readonly_int32`] & friends can mutate it.
     pub read_only: bool,
     /// Route this DP through the class coerce handler ([`ClassBuilder::set_coerce`]).
-    /// Only honored for scalar / `Thickness` / `Color` / `Rect` properties.
+    /// Only honored for scalar / `Thickness` / `Color` / `Rect` / `Point` /
+    /// `Size` / `Vector` properties.
     pub coerce: bool,
 }
 
@@ -1226,6 +1228,18 @@ pub enum Coerced {
         y: f32,
         width: f32,
         height: f32,
+    },
+    Point {
+        x: f32,
+        y: f32,
+    },
+    Size {
+        width: f32,
+        height: f32,
+    },
+    Vector {
+        x: f32,
+        y: f32,
     },
 }
 
@@ -1411,6 +1425,54 @@ impl Instance {
             )
         }
     }
+    /// Read-only setter for a `Point` DP. See [`Self::set_readonly_int32`].
+    pub fn set_readonly_point(self, prop_index: u32, x: f32, y: f32) -> bool {
+        let arr = [x, y];
+        // SAFETY: self.0 is a live instance pointer; arr outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                arr.as_ptr().cast(),
+            )
+        }
+    }
+    /// Read-only setter for a `Size` DP. See [`Self::set_readonly_int32`].
+    pub fn set_readonly_size(self, prop_index: u32, width: f32, height: f32) -> bool {
+        let arr = [width, height];
+        // SAFETY: self.0 is a live instance pointer; arr outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                arr.as_ptr().cast(),
+            )
+        }
+    }
+    /// Read-only setter for a `Vector` DP. See [`Self::set_readonly_int32`].
+    pub fn set_readonly_vector(self, prop_index: u32, x: f32, y: f32) -> bool {
+        let arr = [x, y];
+        // SAFETY: self.0 is a live instance pointer; arr outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                arr.as_ptr().cast(),
+            )
+        }
+    }
+    /// Read-only setter for an enum DP (underlying `int32` member value). See
+    /// [`Self::set_readonly_int32`].
+    pub fn set_readonly_enum(self, prop_index: u32, value: i32) -> bool {
+        // SAFETY: self.0 is a live instance pointer; value outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const i32).cast(),
+            )
+        }
+    }
 }
 
 unsafe extern "C" fn coerce_trampoline(
@@ -1497,6 +1559,21 @@ unsafe fn encode_coerced(
             *f.add(1) = y;
             *f.add(2) = width;
             *f.add(3) = height;
+        }
+        (Some(PropType::Point), Coerced::Point { x, y }) => {
+            let f = out_value.cast::<f32>();
+            *f = x;
+            *f.add(1) = y;
+        }
+        (Some(PropType::Size), Coerced::Size { width, height }) => {
+            let f = out_value.cast::<f32>();
+            *f = width;
+            *f.add(1) = height;
+        }
+        (Some(PropType::Vector), Coerced::Vector { x, y }) => {
+            let f = out_value.cast::<f32>();
+            *f = x;
+            *f.add(1) = y;
         }
         // Variant / type mismatch — leave the passthrough copy in place.
         _ => {}
