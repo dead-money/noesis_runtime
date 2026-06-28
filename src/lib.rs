@@ -24,6 +24,7 @@ pub mod gui;
 pub mod markup;
 pub mod multi_binding;
 pub mod plain_vm;
+pub mod reflection;
 pub mod render_device;
 pub mod resources;
 pub mod styles;
