@@ -34,6 +34,7 @@ pub mod resources;
 pub mod shapes;
 pub mod styles;
 pub mod svg;
+pub mod text_inlines;
 pub mod texture_provider;
 pub mod transforms;
 pub mod view;
