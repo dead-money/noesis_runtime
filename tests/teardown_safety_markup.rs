@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::markup::{MarkupExtensionHandler, MarkupExtensionRegistration, MarkupValue};
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::markup::{MarkupExtensionHandler, MarkupExtensionRegistration, MarkupValue};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 struct InMem(HashMap<String, Vec<u8>>);
 impl XamlProvider for InMem {
@@ -57,16 +57,16 @@ fn markup_handler_drops_exactly_once_after_view_teardown() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let drop_count = Arc::new(AtomicU32::new(0));
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), MARKUP_XAML.as_bytes().to_vec());
-        let _xaml = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _xaml = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let registration = {
             let handler = MarkupDropProbe {
@@ -98,5 +98,5 @@ fn markup_handler_drops_exactly_once_after_view_teardown() {
         "markup handler must drop exactly once across the teardown sequence"
     );
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

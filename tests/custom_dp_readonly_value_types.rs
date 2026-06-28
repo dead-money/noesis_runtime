@@ -6,11 +6,11 @@
 //! key-path setter writes and reads back. Proves `apply_set_readonly` reaches
 //! the `Point` / enum arms (read back THROUGH Noesis on a code-created instance).
 
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyDefault, PropertyOptions, PropertyValue,
 };
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::reflection::register_enum;
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::reflection::register_enum;
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
@@ -23,9 +23,9 @@ fn custom_dp_readonly_value_types() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
     {
         // The enum type must exist when the class is registered.
         register_enum("Meta.RoMode", &[("A", 0), ("B", 7)]).expect("register_enum failed");
@@ -92,5 +92,5 @@ fn custom_dp_readonly_value_types() {
         drop(inst);
         drop(reg);
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

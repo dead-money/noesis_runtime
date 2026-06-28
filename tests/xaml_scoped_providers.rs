@@ -24,12 +24,12 @@
 //! back to the global provider.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test xaml_scoped_providers -- --nocapture`
+//!   `cargo test -p noesis_runtime --test xaml_scoped_providers -- --nocapture`
 
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::view::FrameworkElement;
-use dm_noesis_runtime::xaml_provider::{
+use noesis_runtime::view::FrameworkElement;
+use noesis_runtime::xaml_provider::{
     XamlProvider, set_assembly_xaml_provider, set_scheme_assembly_xaml_provider,
     set_scheme_xaml_provider, set_xaml_provider,
 };
@@ -76,9 +76,9 @@ fn scoped_providers_route_by_scheme_and_assembly() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let log: Arc<Mutex<Vec<(&'static str, String)>>> = Arc::default();
@@ -220,5 +220,5 @@ fn scoped_providers_route_by_scheme_and_assembly() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

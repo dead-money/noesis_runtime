@@ -30,12 +30,12 @@ use std::ffi::{CString, c_void};
 
 use crate::binding::Boxed;
 use crate::ffi::{
-    dm_noesis_gui_get_application_resources, dm_noesis_gui_register_default_styles,
-    dm_noesis_gui_set_application_resources, dm_noesis_resource_dictionary_add,
-    dm_noesis_resource_dictionary_add_merged, dm_noesis_resource_dictionary_contains,
-    dm_noesis_resource_dictionary_count, dm_noesis_resource_dictionary_create,
-    dm_noesis_resource_dictionary_destroy, dm_noesis_resource_dictionary_find,
-    dm_noesis_resource_dictionary_parse,
+    noesis_gui_get_application_resources, noesis_gui_register_default_styles,
+    noesis_gui_set_application_resources, noesis_resource_dictionary_add,
+    noesis_resource_dictionary_add_merged, noesis_resource_dictionary_contains,
+    noesis_resource_dictionary_count, noesis_resource_dictionary_create,
+    noesis_resource_dictionary_destroy, noesis_resource_dictionary_find,
+    noesis_resource_dictionary_parse,
 };
 
 /// A Rust handle to a `Noesis::ResourceDictionary`. Owns a `+1` reference
@@ -68,9 +68,9 @@ impl ResourceDictionary {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: no preconditions beyond a live Noesis runtime.
-        let ptr = unsafe { dm_noesis_resource_dictionary_create() };
+        let ptr = unsafe { noesis_resource_dictionary_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_resource_dictionary_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_resource_dictionary_create returned null"),
         }
     }
 
@@ -86,7 +86,7 @@ impl ResourceDictionary {
         let c = CString::new(xaml).expect("xaml contained interior NUL");
         // SAFETY: c.as_ptr() lives for the call; the C side only reads it while
         // parsing. The result is a freshly-created +1-owned dictionary.
-        let ptr = unsafe { dm_noesis_resource_dictionary_parse(c.as_ptr()) };
+        let ptr = unsafe { noesis_resource_dictionary_parse(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -113,7 +113,7 @@ impl ResourceDictionary {
     #[must_use]
     pub fn len(&self) -> usize {
         // SAFETY: self.ptr is a live ResourceDictionary*.
-        unsafe { dm_noesis_resource_dictionary_count(self.ptr.as_ptr()) as usize }
+        unsafe { noesis_resource_dictionary_count(self.ptr.as_ptr()) as usize }
     }
 
     /// Whether the base dictionary is empty (ignores merged dictionaries).
@@ -138,7 +138,7 @@ impl ResourceDictionary {
         let c = CString::new(key).expect("resource key contained interior NUL");
         // SAFETY: self.ptr live; c lives for the call; value is the caller's
         // responsibility per the # Safety contract. The dictionary AddRefs.
-        unsafe { dm_noesis_resource_dictionary_add(self.ptr.as_ptr(), c.as_ptr(), value) }
+        unsafe { noesis_resource_dictionary_add(self.ptr.as_ptr(), c.as_ptr(), value) }
     }
 
     /// Convenience: box `value` as a `BoxedValue<String>` and add it under
@@ -175,7 +175,7 @@ impl ResourceDictionary {
     pub fn contains(&self, key: &str) -> bool {
         let c = CString::new(key).expect("resource key contained interior NUL");
         // SAFETY: self.ptr live; c lives for the call.
-        unsafe { dm_noesis_resource_dictionary_contains(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_resource_dictionary_contains(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Borrowed (no `+1`) pointer to the value stored under `key`, or `None` if
@@ -191,7 +191,7 @@ impl ResourceDictionary {
         let c = CString::new(key).expect("resource key contained interior NUL");
         // SAFETY: self.ptr live; c lives for the call. The returned pointer is
         // borrowed (owned by the dictionary).
-        let p = unsafe { dm_noesis_resource_dictionary_find(self.ptr.as_ptr(), c.as_ptr()) };
+        let p = unsafe { noesis_resource_dictionary_find(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -202,14 +202,14 @@ impl ResourceDictionary {
     pub fn add_merged(&mut self, other: &ResourceDictionary) -> bool {
         // SAFETY: both pointers are live ResourceDictionary*; the collection
         // AddRefs `other`.
-        unsafe { dm_noesis_resource_dictionary_add_merged(self.ptr.as_ptr(), other.raw()) }
+        unsafe { noesis_resource_dictionary_add_merged(self.ptr.as_ptr(), other.raw()) }
     }
 }
 
 impl Drop for ResourceDictionary {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref (create / parse / from_owned).
-        unsafe { dm_noesis_resource_dictionary_destroy(self.ptr.as_ptr()) }
+        unsafe { noesis_resource_dictionary_destroy(self.ptr.as_ptr()) }
     }
 }
 
@@ -224,7 +224,7 @@ impl Drop for ResourceDictionary {
 /// through the XAML provider).
 pub fn set_application_resources(dict: &ResourceDictionary) {
     // SAFETY: dict.raw() is a live ResourceDictionary*; Noesis AddRefs it.
-    unsafe { dm_noesis_gui_set_application_resources(dict.raw()) }
+    unsafe { noesis_gui_set_application_resources(dict.raw()) }
 }
 
 /// Whether any application resources dictionary is currently installed
@@ -232,7 +232,7 @@ pub fn set_application_resources(dict: &ResourceDictionary) {
 #[must_use]
 pub fn application_resources_present() -> bool {
     // SAFETY: borrowed getter; the pointer is only compared against null.
-    !unsafe { dm_noesis_gui_get_application_resources() }.is_null()
+    !unsafe { noesis_gui_get_application_resources() }.is_null()
 }
 
 /// Whether the installed application resources contain `key` (including its
@@ -245,13 +245,13 @@ pub fn application_resources_present() -> bool {
 pub fn application_resources_contains(key: &str) -> bool {
     // SAFETY: borrowed app-resources pointer, valid for this call; we forward
     // it (without releasing) to the dictionary `contains` query.
-    let app = unsafe { dm_noesis_gui_get_application_resources() };
+    let app = unsafe { noesis_gui_get_application_resources() };
     if app.is_null() {
         return false;
     }
     let c = CString::new(key).expect("resource key contained interior NUL");
     // SAFETY: `app` is a live (borrowed) ResourceDictionary*; c lives for the call.
-    unsafe { dm_noesis_resource_dictionary_contains(app, c.as_ptr()) }
+    unsafe { noesis_resource_dictionary_contains(app, c.as_ptr()) }
 }
 
 /// Register `uri`'s `ResourceDictionary` into the internal theme
@@ -266,5 +266,5 @@ pub fn application_resources_contains(key: &str) -> bool {
 pub fn register_default_styles(uri: &str) -> bool {
     let c = CString::new(uri).expect("uri contained interior NUL");
     // SAFETY: c lives for the call; the C side copies into Noesis::Uri.
-    unsafe { dm_noesis_gui_register_default_styles(c.as_ptr()) }
+    unsafe { noesis_gui_register_default_styles(c.as_ptr()) }
 }

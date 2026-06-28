@@ -14,11 +14,11 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, Instance, LayoutHandler, PropertyChangeHandler, PropertyValue, Size,
 };
-use dm_noesis_runtime::ffi::ClassBase;
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::ffi::ClassBase;
+use noesis_runtime::view::{FrameworkElement, View};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
@@ -78,9 +78,9 @@ fn custom_panel_layout() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let counters = Counters::default();
@@ -136,5 +136,5 @@ fn custom_panel_layout() {
         drop(reg);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

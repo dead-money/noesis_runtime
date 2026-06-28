@@ -5,7 +5,7 @@
 //! a live owned handle reports `>= 1`; `clone_ref` (an `AddReference`) bumps it
 //! `+1`; dropping that clone (a `Release`) drops it `-1`.
 
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::view::FrameworkElement;
 
 const XAML: &str = r##"<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -18,9 +18,9 @@ fn num_references_tracks_add_and_release() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let el = FrameworkElement::parse(XAML).expect("parse failed");
@@ -55,5 +55,5 @@ fn num_references_tracks_add_and_release() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

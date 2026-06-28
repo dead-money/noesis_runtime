@@ -11,7 +11,7 @@
 //! runtime (verified: a synthetic converter type registers in the Factory yet
 //! `Get` still returns null). See TODO.md "Known SDK limitations".
 
-use dm_noesis_runtime::reflection::convert_from_string;
+use noesis_runtime::reflection::convert_from_string;
 
 #[test]
 fn type_converter_string_coercion_round_trips() {
@@ -19,9 +19,9 @@ fn type_converter_string_coercion_round_trips() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // bool: "true" -> boxed bool true.
@@ -51,10 +51,10 @@ fn type_converter_string_coercion_round_trips() {
 
         // An unregistered type name resolves no converter.
         assert!(
-            convert_from_string("DmTest.NoSuchType", "x").is_none(),
+            convert_from_string("NzTest.NoSuchType", "x").is_none(),
             "unknown type should resolve no converter"
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

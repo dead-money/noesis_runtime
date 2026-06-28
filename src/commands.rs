@@ -45,14 +45,12 @@ use std::ffi::{CString, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    CommandVTable, dm_noesis_application_command, dm_noesis_base_component_release,
-    dm_noesis_command_binding_attach, dm_noesis_command_binding_create,
-    dm_noesis_command_binding_destroy, dm_noesis_command_create, dm_noesis_command_destroy,
-    dm_noesis_command_raise_can_execute_changed, dm_noesis_component_command,
-    dm_noesis_routed_command_can_execute, dm_noesis_routed_command_create,
-    dm_noesis_routed_command_execute, dm_noesis_routed_command_get_name,
-    dm_noesis_routed_ui_command_create, dm_noesis_routed_ui_command_get_text,
-    dm_noesis_routed_ui_command_set_text,
+    CommandVTable, noesis_application_command, noesis_base_component_release,
+    noesis_command_binding_attach, noesis_command_binding_create, noesis_command_binding_destroy,
+    noesis_command_create, noesis_command_destroy, noesis_command_raise_can_execute_changed,
+    noesis_component_command, noesis_routed_command_can_execute, noesis_routed_command_create,
+    noesis_routed_command_execute, noesis_routed_command_get_name, noesis_routed_ui_command_create,
+    noesis_routed_ui_command_get_text, noesis_routed_ui_command_set_text,
 };
 use crate::view::FrameworkElement;
 
@@ -174,7 +172,7 @@ impl Command {
         // SAFETY: vtable is a 'static valid pointer; userdata is freshly
         // leaked and ownership transfers to C++; free trampoline is extern "C".
         let ptr = unsafe {
-            dm_noesis_command_create(&COMMAND_VTABLE, userdata.cast(), command_free_trampoline)
+            noesis_command_create(&COMMAND_VTABLE, userdata.cast(), command_free_trampoline)
         };
 
         match NonNull::new(ptr) {
@@ -186,7 +184,7 @@ impl Command {
                 // SAFETY: userdata came from Box::into_raw above; C++ never
                 // stored it (null return = nothing took ownership).
                 unsafe { drop(Box::from_raw(userdata)) };
-                unreachable!("dm_noesis_command_create returned null for a non-null vtable");
+                unreachable!("noesis_command_create returned null for a non-null vtable");
             }
         }
     }
@@ -207,16 +205,16 @@ impl Command {
     /// logic changes.
     pub fn raise_can_execute_changed(&self) {
         // SAFETY: self.ptr is a live RustCommand* for the lifetime of self.
-        unsafe { dm_noesis_command_raise_can_execute_changed(self.ptr.as_ptr()) }
+        unsafe { noesis_command_raise_can_execute_changed(self.ptr.as_ptr()) }
     }
 }
 
 impl Drop for Command {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_command_create with +1 ref; this
+        // SAFETY: produced by noesis_command_create with +1 ref; this
         // releases exactly that ref. The handler box is freed by the C++
         // destructor once the last reference (possibly a binding) drops.
-        unsafe { dm_noesis_command_destroy(self.ptr.as_ptr()) }
+        unsafe { noesis_command_destroy(self.ptr.as_ptr()) }
     }
 }
 
@@ -262,7 +260,7 @@ impl RoutedCommand {
         let cn = CString::new(name).expect("name contained interior NUL");
         let co = CString::new(owner_type).expect("owner_type contained interior NUL");
         // SAFETY: both C strings live for the call; C returns +1 or NULL.
-        let ptr = unsafe { dm_noesis_routed_command_create(cn.as_ptr(), co.as_ptr()) };
+        let ptr = unsafe { noesis_routed_command_create(cn.as_ptr(), co.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -271,7 +269,7 @@ impl RoutedCommand {
     pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedCommand*; target.raw() a live element.
         unsafe {
-            dm_noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
         }
     }
 
@@ -281,7 +279,7 @@ impl RoutedCommand {
     pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
         unsafe {
-            dm_noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
         }
     }
 
@@ -290,7 +288,7 @@ impl RoutedCommand {
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedCommand*; returns a borrowed interned
         // string we copy immediately.
-        unsafe { cstr_opt(dm_noesis_routed_command_get_name(self.ptr.as_ptr())) }
+        unsafe { cstr_opt(noesis_routed_command_get_name(self.ptr.as_ptr())) }
     }
 
     /// Raw `Noesis::ICommand*`, borrowed for the lifetime of `self`.
@@ -309,7 +307,7 @@ impl AsCommand for RoutedCommand {
 impl Drop for RoutedCommand {
     fn drop(&mut self) {
         // SAFETY: +1 from create, released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -336,8 +334,7 @@ impl RoutedUICommand {
         let ct = CString::new(text).expect("text contained interior NUL");
         let co = CString::new(owner_type).expect("owner_type contained interior NUL");
         // SAFETY: all C strings live for the call; C returns +1 or NULL.
-        let ptr =
-            unsafe { dm_noesis_routed_ui_command_create(cn.as_ptr(), ct.as_ptr(), co.as_ptr()) };
+        let ptr = unsafe { noesis_routed_ui_command_create(cn.as_ptr(), ct.as_ptr(), co.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -345,7 +342,7 @@ impl RoutedUICommand {
     pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedUICommand* (a RoutedCommand).
         unsafe {
-            dm_noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
         }
     }
 
@@ -354,7 +351,7 @@ impl RoutedUICommand {
     pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
         unsafe {
-            dm_noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
         }
     }
 
@@ -362,7 +359,7 @@ impl RoutedUICommand {
     #[must_use]
     pub fn text(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedUICommand*; borrowed string copied.
-        unsafe { cstr_opt(dm_noesis_routed_ui_command_get_text(self.ptr.as_ptr())) }
+        unsafe { cstr_opt(noesis_routed_ui_command_get_text(self.ptr.as_ptr())) }
     }
 
     /// Set the display text.
@@ -373,14 +370,14 @@ impl RoutedUICommand {
     pub fn set_text(&mut self, text: &str) {
         let c = CString::new(text).expect("text contained interior NUL");
         // SAFETY: self.ptr is a live RoutedUICommand*; c lives for the call.
-        unsafe { dm_noesis_routed_ui_command_set_text(self.ptr.as_ptr(), c.as_ptr()) };
+        unsafe { noesis_routed_ui_command_set_text(self.ptr.as_ptr(), c.as_ptr()) };
     }
 
     /// The command's registered name (`RoutedCommand::GetName`).
     #[must_use]
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedCommand*; borrowed string copied.
-        unsafe { cstr_opt(dm_noesis_routed_command_get_name(self.ptr.as_ptr())) }
+        unsafe { cstr_opt(noesis_routed_command_get_name(self.ptr.as_ptr())) }
     }
 
     /// Raw `Noesis::ICommand*`, borrowed for the lifetime of `self`.
@@ -399,7 +396,7 @@ impl AsCommand for RoutedUICommand {
 impl Drop for RoutedUICommand {
     fn drop(&mut self) {
         // SAFETY: +1 from create, released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -434,14 +431,14 @@ impl BorrowedCommand {
     #[must_use]
     pub fn text(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedUICommand*; borrowed string copied.
-        unsafe { cstr_opt(dm_noesis_routed_ui_command_get_text(self.ptr.as_ptr())) }
+        unsafe { cstr_opt(noesis_routed_ui_command_get_text(self.ptr.as_ptr())) }
     }
 
     /// The command's registered name.
     #[must_use]
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedCommand*; borrowed string copied.
-        unsafe { cstr_opt(dm_noesis_routed_command_get_name(self.ptr.as_ptr())) }
+        unsafe { cstr_opt(noesis_routed_command_get_name(self.ptr.as_ptr())) }
     }
 
     /// Execute this command against `target` (a `UIElement`), routing to its
@@ -450,7 +447,7 @@ impl BorrowedCommand {
     pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedCommand*; target.raw() a live element.
         unsafe {
-            dm_noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
         }
     }
 
@@ -460,7 +457,7 @@ impl BorrowedCommand {
     pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
         unsafe {
-            dm_noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
         }
     }
 }
@@ -512,7 +509,7 @@ impl ApplicationCommand {
     #[must_use]
     pub fn command(self) -> BorrowedCommand {
         // SAFETY: returns a borrowed framework singleton (valid after init()).
-        let ptr = unsafe { dm_noesis_application_command(self as u32) };
+        let ptr = unsafe { noesis_application_command(self as u32) };
         BorrowedCommand {
             ptr: NonNull::new(ptr.cast_mut())
                 .expect("ApplicationCommands singleton was null (runtime not initialized?)"),
@@ -564,7 +561,7 @@ impl ComponentCommand {
     #[must_use]
     pub fn command(self) -> BorrowedCommand {
         // SAFETY: returns a borrowed framework singleton (valid after init()).
-        let ptr = unsafe { dm_noesis_component_command(self as u32) };
+        let ptr = unsafe { noesis_component_command(self as u32) };
         BorrowedCommand {
             ptr: NonNull::new(ptr.cast_mut())
                 .expect("ComponentCommands singleton was null (runtime not initialized?)"),
@@ -653,7 +650,7 @@ impl CommandBinding {
         // donated to the C++ bridge (freed via cb_free on destroy); the command
         // pointer is borrowed for the call only.
         let token = unsafe {
-            dm_noesis_command_binding_create(
+            noesis_command_binding_create(
                 command.command_ptr(),
                 cb_executed_trampoline,
                 Some(cb_can_execute_trampoline),
@@ -677,7 +674,7 @@ impl CommandBinding {
     /// if `element` is not a `UIElement`.
     pub fn attach(&self, element: &FrameworkElement) -> bool {
         // SAFETY: token is a live bridge; element.raw() a live element.
-        unsafe { dm_noesis_command_binding_attach(self.token.as_ptr(), element.raw()) }
+        unsafe { noesis_command_binding_attach(self.token.as_ptr(), element.raw()) }
     }
 }
 
@@ -685,6 +682,6 @@ impl Drop for CommandBinding {
     fn drop(&mut self) {
         // SAFETY: token from new(); destroy detaches the delegates and frees the
         // donated handler box exactly once.
-        unsafe { dm_noesis_command_binding_destroy(self.token.as_ptr()) }
+        unsafe { noesis_command_binding_destroy(self.token.as_ptr()) }
     }
 }

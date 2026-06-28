@@ -42,14 +42,14 @@ T* cast(void* p) {
 
 // ── MeshData ─────────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_mesh_data_create(void) {
+extern "C" void* noesis_mesh_data_create(void) {
     Noesis::Ptr<Noesis::MeshData> md = *new Noesis::MeshData();
     return handout(md.GetPtr());
 }
 
 // Set the vertex buffer from `count` interleaved (x, y) pairs (2*count floats).
 // Resizes the buffer to `count` and notifies the change.
-extern "C" bool dm_noesis_mesh_data_set_vertices(void* mesh, const float* xy, uint32_t count) {
+extern "C" bool noesis_mesh_data_set_vertices(void* mesh, const float* xy, uint32_t count) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || (count != 0 && !xy)) return false;
     md->SetNumVertices(count);
@@ -63,7 +63,7 @@ extern "C" bool dm_noesis_mesh_data_set_vertices(void* mesh, const float* xy, ui
 
 // Read `count` (x, y) pairs back from the vertex buffer into `out_xy`
 // (2*count floats). The caller must pass the same count it set.
-extern "C" bool dm_noesis_mesh_data_get_vertices(void* mesh, float* out_xy, uint32_t count) {
+extern "C" bool noesis_mesh_data_get_vertices(void* mesh, float* out_xy, uint32_t count) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || (count != 0 && !out_xy)) return false;
     const Noesis::Point* verts = md->GetVertices();
@@ -75,7 +75,7 @@ extern "C" bool dm_noesis_mesh_data_get_vertices(void* mesh, float* out_xy, uint
 }
 
 // Set the texture-coordinate buffer from `count` interleaved (u, v) pairs.
-extern "C" bool dm_noesis_mesh_data_set_uvs(void* mesh, const float* uv, uint32_t count) {
+extern "C" bool noesis_mesh_data_set_uvs(void* mesh, const float* uv, uint32_t count) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || (count != 0 && !uv)) return false;
     md->SetNumUVs(count);
@@ -87,7 +87,7 @@ extern "C" bool dm_noesis_mesh_data_set_uvs(void* mesh, const float* uv, uint32_
     return true;
 }
 
-extern "C" bool dm_noesis_mesh_data_get_uvs(void* mesh, float* out_uv, uint32_t count) {
+extern "C" bool noesis_mesh_data_get_uvs(void* mesh, float* out_uv, uint32_t count) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || (count != 0 && !out_uv)) return false;
     const Noesis::Point* uvs = md->GetUVs();
@@ -99,7 +99,7 @@ extern "C" bool dm_noesis_mesh_data_get_uvs(void* mesh, float* out_uv, uint32_t 
 }
 
 // Set the (16-bit) triangle index buffer from `count` indices.
-extern "C" bool dm_noesis_mesh_data_set_indices(void* mesh, const uint16_t* indices,
+extern "C" bool noesis_mesh_data_set_indices(void* mesh, const uint16_t* indices,
                                                 uint32_t count) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || (count != 0 && !indices)) return false;
@@ -112,7 +112,7 @@ extern "C" bool dm_noesis_mesh_data_set_indices(void* mesh, const uint16_t* indi
     return true;
 }
 
-extern "C" bool dm_noesis_mesh_data_get_indices(void* mesh, uint16_t* out_indices, uint32_t count) {
+extern "C" bool noesis_mesh_data_get_indices(void* mesh, uint16_t* out_indices, uint32_t count) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || (count != 0 && !out_indices)) return false;
     const uint16_t* src = md->GetIndices();
@@ -122,7 +122,7 @@ extern "C" bool dm_noesis_mesh_data_get_indices(void* mesh, uint16_t* out_indice
     return true;
 }
 
-extern "C" bool dm_noesis_mesh_data_set_bounds(void* mesh, float x, float y, float w, float h) {
+extern "C" bool noesis_mesh_data_set_bounds(void* mesh, float x, float y, float w, float h) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md) return false;
     md->SetBounds(Noesis::Rect(x, y, x + w, y + h));
@@ -130,7 +130,7 @@ extern "C" bool dm_noesis_mesh_data_set_bounds(void* mesh, float x, float y, flo
 }
 
 // out = {x, y, w, h}
-extern "C" bool dm_noesis_mesh_data_get_bounds(void* mesh, float out[4]) {
+extern "C" bool noesis_mesh_data_get_bounds(void* mesh, float out[4]) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || !out) return false;
     const Noesis::Rect& r = md->GetBounds();
@@ -143,12 +143,12 @@ extern "C" bool dm_noesis_mesh_data_get_bounds(void* mesh, float out[4]) {
 
 // ── Mesh element ─────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_mesh_create(void) {
+extern "C" void* noesis_mesh_create(void) {
     Noesis::Ptr<Noesis::Mesh> mesh = *new Noesis::Mesh();
     return handout(mesh.GetPtr());
 }
 
-extern "C" bool dm_noesis_mesh_set_data(void* mesh, void* data) {
+extern "C" bool noesis_mesh_set_data(void* mesh, void* data) {
     auto* m = cast<Noesis::Mesh>(mesh);
     if (!m) return false;
     m->SetData(cast<Noesis::MeshData>(data));
@@ -156,13 +156,13 @@ extern "C" bool dm_noesis_mesh_set_data(void* mesh, void* data) {
 }
 
 // Borrowed MeshData* (no +1 reference; do not release).
-extern "C" void* dm_noesis_mesh_get_data(void* mesh) {
+extern "C" void* noesis_mesh_get_data(void* mesh) {
     auto* m = cast<Noesis::Mesh>(mesh);
     if (!m) return nullptr;
     return m->GetData();
 }
 
-extern "C" bool dm_noesis_mesh_set_brush(void* mesh, void* brush) {
+extern "C" bool noesis_mesh_set_brush(void* mesh, void* brush) {
     auto* m = cast<Noesis::Mesh>(mesh);
     if (!m) return false;
     m->SetBrush(cast<Noesis::Brush>(brush));
@@ -170,7 +170,7 @@ extern "C" bool dm_noesis_mesh_set_brush(void* mesh, void* brush) {
 }
 
 // Borrowed Brush* (no +1 reference; do not release).
-extern "C" void* dm_noesis_mesh_get_brush(void* mesh) {
+extern "C" void* noesis_mesh_get_brush(void* mesh) {
     auto* m = cast<Noesis::Mesh>(mesh);
     if (!m) return nullptr;
     return m->GetBrush();

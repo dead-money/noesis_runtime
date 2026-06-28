@@ -13,17 +13,17 @@
 //! all owning wrappers drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test typography -- --nocapture`
+//!   `cargo test -p noesis_runtime --test typography -- --nocapture`
 
 use std::path::PathBuf;
 
-use dm_noesis_runtime::brushes::SolidColorBrush;
-use dm_noesis_runtime::font_provider::{FontProvider, set_font_provider};
-use dm_noesis_runtime::typography::{
+use noesis_runtime::brushes::SolidColorBrush;
+use noesis_runtime::font_provider::{FontProvider, set_font_provider};
+use noesis_runtime::typography::{
     self, CompositionLineStyle, CompositionUnderline, FontCapitals, FontFamily, FontFraction,
     FontNumeralStyle, FontStretch, FontStyle, FontVariants, FontWeight,
 };
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
@@ -68,9 +68,9 @@ fn typography_round_trips() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // Register a font provider serving the trial SDK's `Bitter-Regular.ttf`
     // so the per-family enumeration getters can be asserted with a positive
@@ -328,5 +328,5 @@ fn typography_round_trips() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

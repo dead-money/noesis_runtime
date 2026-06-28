@@ -19,19 +19,17 @@ use core::ptr::NonNull;
 use std::ffi::c_void;
 
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_composite_transform_create,
-    dm_noesis_composite_transform_get, dm_noesis_composite_transform3d_create,
-    dm_noesis_composite_transform3d_get, dm_noesis_composite_transform3d_set,
-    dm_noesis_matrix_transform_create, dm_noesis_matrix_transform_get,
-    dm_noesis_matrix_transform_set, dm_noesis_matrix_transform3d_create,
-    dm_noesis_matrix_transform3d_get, dm_noesis_matrix_transform3d_set,
-    dm_noesis_rotate_transform_create, dm_noesis_rotate_transform_get,
-    dm_noesis_rotate_transform_set_angle, dm_noesis_scale_transform_create,
-    dm_noesis_scale_transform_get, dm_noesis_scale_transform_set, dm_noesis_skew_transform_create,
-    dm_noesis_skew_transform_get, dm_noesis_transform_group_add_child,
-    dm_noesis_transform_group_child_count, dm_noesis_transform_group_create,
-    dm_noesis_translate_transform_create, dm_noesis_translate_transform_get,
-    dm_noesis_translate_transform_set,
+    noesis_base_component_release, noesis_composite_transform_create,
+    noesis_composite_transform_get, noesis_composite_transform3d_create,
+    noesis_composite_transform3d_get, noesis_composite_transform3d_set,
+    noesis_matrix_transform_create, noesis_matrix_transform_get, noesis_matrix_transform_set,
+    noesis_matrix_transform3d_create, noesis_matrix_transform3d_get, noesis_matrix_transform3d_set,
+    noesis_rotate_transform_create, noesis_rotate_transform_get, noesis_rotate_transform_set_angle,
+    noesis_scale_transform_create, noesis_scale_transform_get, noesis_scale_transform_set,
+    noesis_skew_transform_create, noesis_skew_transform_get, noesis_transform_group_add_child,
+    noesis_transform_group_child_count, noesis_transform_group_create,
+    noesis_translate_transform_create, noesis_translate_transform_get,
+    noesis_translate_transform_set,
 };
 
 /// A handle to a Noesis `Transform`. Implemented by every transform type here so
@@ -66,7 +64,7 @@ macro_rules! transform_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref we
                 // own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -112,16 +110,16 @@ impl TranslateTransform {
     /// Panics if Noesis fails to allocate the transform.
     #[must_use]
     pub fn new(x: f32, y: f32) -> Self {
-        let ptr = unsafe { dm_noesis_translate_transform_create(x, y) };
+        let ptr = unsafe { noesis_translate_transform_create(x, y) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_translate_transform_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_translate_transform_create returned null"),
         }
     }
 
     /// Set the translation offset.
     pub fn set(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live TranslateTransform*.
-        unsafe { dm_noesis_translate_transform_set(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_translate_transform_set(self.ptr.as_ptr(), x, y) };
     }
 
     /// Read `(x, y)` back from the live object.
@@ -131,7 +129,7 @@ impl TranslateTransform {
         let mut y = 0.0f32;
         // SAFETY: self.ptr is a live TranslateTransform*; out params valid.
         unsafe {
-            dm_noesis_translate_transform_get(
+            noesis_translate_transform_get(
                 self.ptr.as_ptr(),
                 &mut x as *mut f32,
                 &mut y as *mut f32,
@@ -158,9 +156,9 @@ impl ScaleTransform {
     /// Panics if Noesis fails to allocate the transform.
     #[must_use]
     pub fn new(scale_x: f32, scale_y: f32, center_x: f32, center_y: f32) -> Self {
-        let ptr = unsafe { dm_noesis_scale_transform_create(scale_x, scale_y, center_x, center_y) };
+        let ptr = unsafe { noesis_scale_transform_create(scale_x, scale_y, center_x, center_y) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_scale_transform_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_scale_transform_create returned null"),
         }
     }
 
@@ -168,7 +166,7 @@ impl ScaleTransform {
     pub fn set(&mut self, scale_x: f32, scale_y: f32, center_x: f32, center_y: f32) {
         // SAFETY: self.ptr is a live ScaleTransform*.
         unsafe {
-            dm_noesis_scale_transform_set(self.ptr.as_ptr(), scale_x, scale_y, center_x, center_y)
+            noesis_scale_transform_set(self.ptr.as_ptr(), scale_x, scale_y, center_x, center_y)
         };
     }
 
@@ -177,7 +175,7 @@ impl ScaleTransform {
     pub fn get(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live ScaleTransform*; `out` is 4 floats.
-        unsafe { dm_noesis_scale_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_scale_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 }
@@ -199,16 +197,16 @@ impl RotateTransform {
     /// Panics if Noesis fails to allocate the transform.
     #[must_use]
     pub fn new(angle: f32, center_x: f32, center_y: f32) -> Self {
-        let ptr = unsafe { dm_noesis_rotate_transform_create(angle, center_x, center_y) };
+        let ptr = unsafe { noesis_rotate_transform_create(angle, center_x, center_y) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_rotate_transform_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_rotate_transform_create returned null"),
         }
     }
 
     /// Set the rotation angle (degrees).
     pub fn set_angle(&mut self, angle: f32) {
         // SAFETY: self.ptr is a live RotateTransform*.
-        unsafe { dm_noesis_rotate_transform_set_angle(self.ptr.as_ptr(), angle) };
+        unsafe { noesis_rotate_transform_set_angle(self.ptr.as_ptr(), angle) };
     }
 
     /// Read `[angle, centerX, centerY]` back from the live object.
@@ -216,7 +214,7 @@ impl RotateTransform {
     pub fn get(&self) -> [f32; 3] {
         let mut out = [0.0f32; 3];
         // SAFETY: self.ptr is a live RotateTransform*; `out` is 3 floats.
-        unsafe { dm_noesis_rotate_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_rotate_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 
@@ -244,9 +242,9 @@ impl SkewTransform {
     /// Panics if Noesis fails to allocate the transform.
     #[must_use]
     pub fn new(angle_x: f32, angle_y: f32, center_x: f32, center_y: f32) -> Self {
-        let ptr = unsafe { dm_noesis_skew_transform_create(angle_x, angle_y, center_x, center_y) };
+        let ptr = unsafe { noesis_skew_transform_create(angle_x, angle_y, center_x, center_y) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_skew_transform_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_skew_transform_create returned null"),
         }
     }
 
@@ -255,7 +253,7 @@ impl SkewTransform {
     pub fn get(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live SkewTransform*; `out` is 4 floats.
-        unsafe { dm_noesis_skew_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_skew_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 }
@@ -279,16 +277,16 @@ impl MatrixTransform {
     #[must_use]
     pub fn new(matrix: [f32; 6]) -> Self {
         // SAFETY: `matrix` outlives the call; the C side copies it.
-        let ptr = unsafe { dm_noesis_matrix_transform_create(matrix.as_ptr()) };
+        let ptr = unsafe { noesis_matrix_transform_create(matrix.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_matrix_transform_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_matrix_transform_create returned null"),
         }
     }
 
     /// Replace the matrix.
     pub fn set(&mut self, matrix: [f32; 6]) {
         // SAFETY: self.ptr is a live MatrixTransform*; `matrix` outlives call.
-        unsafe { dm_noesis_matrix_transform_set(self.ptr.as_ptr(), matrix.as_ptr()) };
+        unsafe { noesis_matrix_transform_set(self.ptr.as_ptr(), matrix.as_ptr()) };
     }
 
     /// Read the 6 matrix coefficients back from the live object.
@@ -296,7 +294,7 @@ impl MatrixTransform {
     pub fn get(&self) -> [f32; 6] {
         let mut out = [0.0f32; 6];
         // SAFETY: self.ptr is a live MatrixTransform*; `out` is 6 floats.
-        unsafe { dm_noesis_matrix_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_matrix_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 }
@@ -324,9 +322,9 @@ impl TransformGroup {
     /// Panics if Noesis fails to allocate the group.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_transform_group_create() };
+        let ptr = unsafe { noesis_transform_group_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_transform_group_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_transform_group_create returned null"),
         }
     }
 
@@ -335,14 +333,14 @@ impl TransformGroup {
     pub fn add_child<T: Transform>(&mut self, child: &T) -> bool {
         // SAFETY: self.ptr is a live TransformGroup*; child.transform_raw() is a
         // live Transform* borrowed for the duration of the call.
-        unsafe { dm_noesis_transform_group_add_child(self.ptr.as_ptr(), child.transform_raw()) }
+        unsafe { noesis_transform_group_add_child(self.ptr.as_ptr(), child.transform_raw()) }
     }
 
     /// Number of child transforms in the group.
     #[must_use]
     pub fn child_count(&self) -> usize {
         // SAFETY: self.ptr is a live TransformGroup*.
-        let n = unsafe { dm_noesis_transform_group_child_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_transform_group_child_count(self.ptr.as_ptr()) };
         n.max(0) as usize
     }
 }
@@ -437,9 +435,9 @@ impl CompositeTransform {
     pub fn new(fields: CompositeFields) -> Self {
         let arr = fields.to_array();
         // SAFETY: `arr` outlives the call; the C side reads 9 floats.
-        let ptr = unsafe { dm_noesis_composite_transform_create(arr.as_ptr()) };
+        let ptr = unsafe { noesis_composite_transform_create(arr.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_composite_transform_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_composite_transform_create returned null"),
         }
     }
 
@@ -448,7 +446,7 @@ impl CompositeTransform {
     pub fn get(&self) -> CompositeFields {
         let mut out = [0.0f32; 9];
         // SAFETY: self.ptr is a live CompositeTransform*; `out` is 9 floats.
-        unsafe { dm_noesis_composite_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_composite_transform_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         CompositeFields::from_array(out)
     }
 }
@@ -488,7 +486,7 @@ macro_rules! transform3d_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref we
                 // own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -618,9 +616,9 @@ impl CompositeTransform3D {
     pub fn new(fields: Composite3DFields) -> Self {
         let arr = fields.to_array();
         // SAFETY: `arr` outlives the call; the C side reads 12 floats.
-        let ptr = unsafe { dm_noesis_composite_transform3d_create(arr.as_ptr()) };
+        let ptr = unsafe { noesis_composite_transform3d_create(arr.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_composite_transform3d_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_composite_transform3d_create returned null"),
         }
     }
 
@@ -628,7 +626,7 @@ impl CompositeTransform3D {
     pub fn set(&mut self, fields: Composite3DFields) {
         let arr = fields.to_array();
         // SAFETY: self.ptr is a live CompositeTransform3D*; `arr` is 12 floats.
-        unsafe { dm_noesis_composite_transform3d_set(self.ptr.as_ptr(), arr.as_ptr()) };
+        unsafe { noesis_composite_transform3d_set(self.ptr.as_ptr(), arr.as_ptr()) };
     }
 
     /// Read all fields back from the live object.
@@ -636,7 +634,7 @@ impl CompositeTransform3D {
     pub fn get(&self) -> Composite3DFields {
         let mut out = [0.0f32; 12];
         // SAFETY: self.ptr is a live CompositeTransform3D*; `out` is 12 floats.
-        unsafe { dm_noesis_composite_transform3d_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_composite_transform3d_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         Composite3DFields::from_array(out)
     }
 }
@@ -659,16 +657,16 @@ impl MatrixTransform3D {
     #[must_use]
     pub fn new(matrix: [f32; 12]) -> Self {
         // SAFETY: `matrix` outlives the call; the C side copies 12 floats.
-        let ptr = unsafe { dm_noesis_matrix_transform3d_create(matrix.as_ptr()) };
+        let ptr = unsafe { noesis_matrix_transform3d_create(matrix.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_matrix_transform3d_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_matrix_transform3d_create returned null"),
         }
     }
 
     /// Replace the matrix.
     pub fn set(&mut self, matrix: [f32; 12]) {
         // SAFETY: self.ptr is a live MatrixTransform3D*; `matrix` is 12 floats.
-        unsafe { dm_noesis_matrix_transform3d_set(self.ptr.as_ptr(), matrix.as_ptr()) };
+        unsafe { noesis_matrix_transform3d_set(self.ptr.as_ptr(), matrix.as_ptr()) };
     }
 
     /// Read the 12 matrix coefficients back from the live object.
@@ -676,7 +674,7 @@ impl MatrixTransform3D {
     pub fn get(&self) -> [f32; 12] {
         let mut out = [0.0f32; 12];
         // SAFETY: self.ptr is a live MatrixTransform3D*; `out` is 12 floats.
-        unsafe { dm_noesis_matrix_transform3d_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_matrix_transform3d_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 }

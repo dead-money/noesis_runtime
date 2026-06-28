@@ -32,7 +32,7 @@
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/VisualStateManager.h>
 
-extern "C" bool dm_noesis_visual_state_go_to_state(
+extern "C" bool noesis_visual_state_go_to_state(
     void* element,
     const char* state,
     bool use_transitions) {

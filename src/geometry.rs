@@ -11,8 +11,8 @@
 //! the generic component DP path, e.g.:
 //!
 //! ```no_run
-//! # use dm_noesis_runtime::geometry::{EllipseGeometry, Geometry};
-//! # use dm_noesis_runtime::view::FrameworkElement;
+//! # use noesis_runtime::geometry::{EllipseGeometry, Geometry};
+//! # use noesis_runtime::view::FrameworkElement;
 //! # let mut path: FrameworkElement = unimplemented!();
 //! let ellipse = EllipseGeometry::new(50.0, 50.0, 40.0, 30.0);
 //! // SAFETY: `path` is a live Path element; the geometry pointer is borrowed.
@@ -30,38 +30,36 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_arc_segment_create, dm_noesis_arc_segment_get, dm_noesis_base_component_release,
-    dm_noesis_bezier_segment_create, dm_noesis_bezier_segment_get,
-    dm_noesis_combined_geometry_create, dm_noesis_combined_geometry_get_geometry1,
-    dm_noesis_combined_geometry_get_geometry2, dm_noesis_combined_geometry_get_mode,
-    dm_noesis_combined_geometry_set_geometry1, dm_noesis_combined_geometry_set_geometry2,
-    dm_noesis_combined_geometry_set_mode, dm_noesis_ellipse_geometry_create,
-    dm_noesis_ellipse_geometry_get, dm_noesis_geometry_get_bounds,
-    dm_noesis_geometry_get_render_bounds, dm_noesis_geometry_get_transform,
-    dm_noesis_geometry_group_add_child, dm_noesis_geometry_group_child_count,
-    dm_noesis_geometry_group_create, dm_noesis_geometry_group_get_fill_rule,
-    dm_noesis_geometry_group_set_fill_rule, dm_noesis_geometry_is_empty,
-    dm_noesis_geometry_set_transform, dm_noesis_line_geometry_create, dm_noesis_line_geometry_get,
-    dm_noesis_line_segment_create, dm_noesis_line_segment_get_point,
-    dm_noesis_path_figure_add_segment, dm_noesis_path_figure_create,
-    dm_noesis_path_figure_get_is_closed, dm_noesis_path_figure_get_is_filled,
-    dm_noesis_path_figure_get_start_point, dm_noesis_path_figure_segment_count,
-    dm_noesis_path_figure_set_is_closed, dm_noesis_path_figure_set_is_filled,
-    dm_noesis_path_figure_set_start_point, dm_noesis_path_geometry_add_figure,
-    dm_noesis_path_geometry_create, dm_noesis_path_geometry_figure_count,
-    dm_noesis_path_geometry_get_fill_rule, dm_noesis_path_geometry_set_fill_rule,
-    dm_noesis_poly_bezier_segment_create, dm_noesis_poly_line_segment_create,
-    dm_noesis_poly_quadratic_bezier_segment_create, dm_noesis_poly_segment_get_point,
-    dm_noesis_poly_segment_point_count, dm_noesis_quadratic_bezier_segment_create,
-    dm_noesis_quadratic_bezier_segment_get, dm_noesis_rectangle_geometry_create,
-    dm_noesis_rectangle_geometry_get, dm_noesis_stream_geometry_context_arc_to,
-    dm_noesis_stream_geometry_context_begin_figure, dm_noesis_stream_geometry_context_close,
-    dm_noesis_stream_geometry_context_cubic_to, dm_noesis_stream_geometry_context_destroy,
-    dm_noesis_stream_geometry_context_line_to, dm_noesis_stream_geometry_context_quadratic_to,
-    dm_noesis_stream_geometry_context_set_is_closed, dm_noesis_stream_geometry_create,
-    dm_noesis_stream_geometry_create_from_data, dm_noesis_stream_geometry_get_fill_rule,
-    dm_noesis_stream_geometry_open, dm_noesis_stream_geometry_set_data,
-    dm_noesis_stream_geometry_set_fill_rule,
+    noesis_arc_segment_create, noesis_arc_segment_get, noesis_base_component_release,
+    noesis_bezier_segment_create, noesis_bezier_segment_get, noesis_combined_geometry_create,
+    noesis_combined_geometry_get_geometry1, noesis_combined_geometry_get_geometry2,
+    noesis_combined_geometry_get_mode, noesis_combined_geometry_set_geometry1,
+    noesis_combined_geometry_set_geometry2, noesis_combined_geometry_set_mode,
+    noesis_ellipse_geometry_create, noesis_ellipse_geometry_get, noesis_geometry_get_bounds,
+    noesis_geometry_get_render_bounds, noesis_geometry_get_transform,
+    noesis_geometry_group_add_child, noesis_geometry_group_child_count,
+    noesis_geometry_group_create, noesis_geometry_group_get_fill_rule,
+    noesis_geometry_group_set_fill_rule, noesis_geometry_is_empty, noesis_geometry_set_transform,
+    noesis_line_geometry_create, noesis_line_geometry_get, noesis_line_segment_create,
+    noesis_line_segment_get_point, noesis_path_figure_add_segment, noesis_path_figure_create,
+    noesis_path_figure_get_is_closed, noesis_path_figure_get_is_filled,
+    noesis_path_figure_get_start_point, noesis_path_figure_segment_count,
+    noesis_path_figure_set_is_closed, noesis_path_figure_set_is_filled,
+    noesis_path_figure_set_start_point, noesis_path_geometry_add_figure,
+    noesis_path_geometry_create, noesis_path_geometry_figure_count,
+    noesis_path_geometry_get_fill_rule, noesis_path_geometry_set_fill_rule,
+    noesis_poly_bezier_segment_create, noesis_poly_line_segment_create,
+    noesis_poly_quadratic_bezier_segment_create, noesis_poly_segment_get_point,
+    noesis_poly_segment_point_count, noesis_quadratic_bezier_segment_create,
+    noesis_quadratic_bezier_segment_get, noesis_rectangle_geometry_create,
+    noesis_rectangle_geometry_get, noesis_stream_geometry_context_arc_to,
+    noesis_stream_geometry_context_begin_figure, noesis_stream_geometry_context_close,
+    noesis_stream_geometry_context_cubic_to, noesis_stream_geometry_context_destroy,
+    noesis_stream_geometry_context_line_to, noesis_stream_geometry_context_quadratic_to,
+    noesis_stream_geometry_context_set_is_closed, noesis_stream_geometry_create,
+    noesis_stream_geometry_create_from_data, noesis_stream_geometry_get_fill_rule,
+    noesis_stream_geometry_open, noesis_stream_geometry_set_data,
+    noesis_stream_geometry_set_fill_rule,
 };
 use crate::transforms::Transform;
 
@@ -192,7 +190,7 @@ pub trait Geometry {
     fn bounds(&self) -> Rect {
         let mut out = [0.0f32; 4];
         // SAFETY: geometry_raw() is a live Geometry*; `out` is 4 floats.
-        unsafe { dm_noesis_geometry_get_bounds(self.geometry_raw(), out.as_mut_ptr()) };
+        unsafe { noesis_geometry_get_bounds(self.geometry_raw(), out.as_mut_ptr()) };
         Rect::from_array(out)
     }
 
@@ -201,7 +199,7 @@ pub trait Geometry {
     fn render_bounds(&self) -> Rect {
         let mut out = [0.0f32; 4];
         // SAFETY: geometry_raw() is a live Geometry*; `out` is 4 floats.
-        unsafe { dm_noesis_geometry_get_render_bounds(self.geometry_raw(), out.as_mut_ptr()) };
+        unsafe { noesis_geometry_get_render_bounds(self.geometry_raw(), out.as_mut_ptr()) };
         Rect::from_array(out)
     }
 
@@ -209,7 +207,7 @@ pub trait Geometry {
     #[must_use]
     fn is_empty(&self) -> bool {
         // SAFETY: geometry_raw() is a live Geometry*.
-        unsafe { dm_noesis_geometry_is_empty(self.geometry_raw()) == 1 }
+        unsafe { noesis_geometry_is_empty(self.geometry_raw()) == 1 }
     }
 
     /// Apply a `Transform` to the geometry. Noesis takes its own reference, so
@@ -223,7 +221,7 @@ pub trait Geometry {
     fn set_transform(&mut self, transform: &dyn Transform) -> bool {
         // SAFETY: geometry_raw() is a live Geometry*; transform_raw() is a live
         // Transform* borrowed for the duration of the call.
-        unsafe { dm_noesis_geometry_set_transform(self.geometry_raw(), transform.transform_raw()) }
+        unsafe { noesis_geometry_set_transform(self.geometry_raw(), transform.transform_raw()) }
     }
 
     /// Borrowed `Noesis::Transform*` currently applied to the geometry (no `+1`),
@@ -231,7 +229,7 @@ pub trait Geometry {
     #[must_use]
     fn transform_raw(&self) -> *mut c_void {
         // SAFETY: geometry_raw() is a live Geometry*.
-        unsafe { dm_noesis_geometry_get_transform(self.geometry_raw()) }
+        unsafe { noesis_geometry_get_transform(self.geometry_raw()) }
     }
 }
 
@@ -259,7 +257,7 @@ macro_rules! base_component_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref that
                 // we own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -315,9 +313,9 @@ impl StreamGeometry {
     /// Panics if Noesis fails to allocate the geometry.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_stream_geometry_create() };
+        let ptr = unsafe { noesis_stream_geometry_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_stream_geometry_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_stream_geometry_create returned null"),
         }
     }
 
@@ -332,10 +330,9 @@ impl StreamGeometry {
     pub fn from_data(data: &str) -> Self {
         let c = CString::new(data).expect("data contains NUL");
         // SAFETY: `c` outlives the call; the C side copies the string.
-        let ptr = unsafe { dm_noesis_stream_geometry_create_from_data(c.as_ptr()) };
+        let ptr = unsafe { noesis_stream_geometry_create_from_data(c.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr)
-                .expect("dm_noesis_stream_geometry_create_from_data returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_stream_geometry_create_from_data returned null"),
         }
     }
 
@@ -347,22 +344,20 @@ impl StreamGeometry {
     pub fn set_data(&mut self, data: &str) {
         let c = CString::new(data).expect("data contains NUL");
         // SAFETY: self.ptr is a live StreamGeometry*; `c` outlives the call.
-        unsafe { dm_noesis_stream_geometry_set_data(self.ptr.as_ptr(), c.as_ptr()) };
+        unsafe { noesis_stream_geometry_set_data(self.ptr.as_ptr(), c.as_ptr()) };
     }
 
     /// Set the fill rule.
     pub fn set_fill_rule(&mut self, rule: FillRule) {
         // SAFETY: self.ptr is a live StreamGeometry*.
-        unsafe { dm_noesis_stream_geometry_set_fill_rule(self.ptr.as_ptr(), rule.to_ordinal()) };
+        unsafe { noesis_stream_geometry_set_fill_rule(self.ptr.as_ptr(), rule.to_ordinal()) };
     }
 
     /// Read the fill rule back from the live object.
     #[must_use]
     pub fn fill_rule(&self) -> FillRule {
         // SAFETY: self.ptr is a live StreamGeometry*.
-        FillRule::from_ordinal(unsafe {
-            dm_noesis_stream_geometry_get_fill_rule(self.ptr.as_ptr())
-        })
+        FillRule::from_ordinal(unsafe { noesis_stream_geometry_get_fill_rule(self.ptr.as_ptr()) })
     }
 
     /// Open a [`StreamGeometryContext`] for defining the geometry with drawing
@@ -377,9 +372,9 @@ impl StreamGeometry {
     pub fn open(&self) -> StreamGeometryContext {
         // SAFETY: self.ptr is a live StreamGeometry*. The returned context keeps
         // its own reference to the geometry alive.
-        let ptr = unsafe { dm_noesis_stream_geometry_open(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_stream_geometry_open(self.ptr.as_ptr()) };
         StreamGeometryContext {
-            ctx: NonNull::new(ptr).expect("dm_noesis_stream_geometry_open returned null"),
+            ctx: NonNull::new(ptr).expect("noesis_stream_geometry_open returned null"),
         }
     }
 }
@@ -400,22 +395,20 @@ impl StreamGeometryContext {
     /// segments.
     pub fn begin_figure(&self, x: f32, y: f32, is_closed: bool) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
-        unsafe {
-            dm_noesis_stream_geometry_context_begin_figure(self.ctx.as_ptr(), x, y, is_closed)
-        };
+        unsafe { noesis_stream_geometry_context_begin_figure(self.ctx.as_ptr(), x, y, is_closed) };
     }
 
     /// Draw a straight line to `(x, y)`.
     pub fn line_to(&self, x: f32, y: f32) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
-        unsafe { dm_noesis_stream_geometry_context_line_to(self.ctx.as_ptr(), x, y) };
+        unsafe { noesis_stream_geometry_context_line_to(self.ctx.as_ptr(), x, y) };
     }
 
     /// Draw a cubic Bézier curve through control points `p1`, `p2` to `p3`.
     pub fn cubic_to(&self, p1: (f32, f32), p2: (f32, f32), p3: (f32, f32)) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
         unsafe {
-            dm_noesis_stream_geometry_context_cubic_to(
+            noesis_stream_geometry_context_cubic_to(
                 self.ctx.as_ptr(),
                 p1.0,
                 p1.1,
@@ -431,13 +424,7 @@ impl StreamGeometryContext {
     pub fn quadratic_to(&self, p1: (f32, f32), p2: (f32, f32)) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
         unsafe {
-            dm_noesis_stream_geometry_context_quadratic_to(
-                self.ctx.as_ptr(),
-                p1.0,
-                p1.1,
-                p2.0,
-                p2.1,
-            )
+            noesis_stream_geometry_context_quadratic_to(self.ctx.as_ptr(), p1.0, p1.1, p2.0, p2.1)
         };
     }
 
@@ -454,7 +441,7 @@ impl StreamGeometryContext {
     ) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
         unsafe {
-            dm_noesis_stream_geometry_context_arc_to(
+            noesis_stream_geometry_context_arc_to(
                 self.ctx.as_ptr(),
                 x,
                 y,
@@ -470,13 +457,13 @@ impl StreamGeometryContext {
     /// Override the `is_closed` flag of the current figure.
     pub fn set_is_closed(&self, is_closed: bool) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
-        unsafe { dm_noesis_stream_geometry_context_set_is_closed(self.ctx.as_ptr(), is_closed) };
+        unsafe { noesis_stream_geometry_context_set_is_closed(self.ctx.as_ptr(), is_closed) };
     }
 
     /// Flush the recorded figures into the geometry and free the context.
     pub fn close(self) {
         // SAFETY: self.ctx is a live StreamGeometryContext*; freed by close().
-        unsafe { dm_noesis_stream_geometry_context_close(self.ctx.as_ptr()) };
+        unsafe { noesis_stream_geometry_context_close(self.ctx.as_ptr()) };
         // Skip Drop so the context is not freed a second time.
         core::mem::forget(self);
     }
@@ -486,7 +473,7 @@ impl Drop for StreamGeometryContext {
     fn drop(&mut self) {
         // SAFETY: not closed — free the heap context without flushing. close()
         // forgets self, so this never double-frees.
-        unsafe { dm_noesis_stream_geometry_context_destroy(self.ctx.as_ptr()) };
+        unsafe { noesis_stream_geometry_context_destroy(self.ctx.as_ptr()) };
     }
 }
 
@@ -513,9 +500,9 @@ impl PathGeometry {
     /// Panics if Noesis fails to allocate the geometry.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_path_geometry_create() };
+        let ptr = unsafe { noesis_path_geometry_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_path_geometry_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_path_geometry_create returned null"),
         }
     }
 
@@ -524,27 +511,27 @@ impl PathGeometry {
     pub fn add_figure(&mut self, figure: &PathFigure) -> i32 {
         // SAFETY: self.ptr is a live PathGeometry*; figure.raw() is a live
         // PathFigure* borrowed for the call.
-        unsafe { dm_noesis_path_geometry_add_figure(self.ptr.as_ptr(), figure.raw()) }
+        unsafe { noesis_path_geometry_add_figure(self.ptr.as_ptr(), figure.raw()) }
     }
 
     /// Number of figures in the geometry.
     #[must_use]
     pub fn figure_count(&self) -> usize {
         // SAFETY: self.ptr is a live PathGeometry*.
-        unsafe { dm_noesis_path_geometry_figure_count(self.ptr.as_ptr()) }.max(0) as usize
+        unsafe { noesis_path_geometry_figure_count(self.ptr.as_ptr()) }.max(0) as usize
     }
 
     /// Set the fill rule.
     pub fn set_fill_rule(&mut self, rule: FillRule) {
         // SAFETY: self.ptr is a live PathGeometry*.
-        unsafe { dm_noesis_path_geometry_set_fill_rule(self.ptr.as_ptr(), rule.to_ordinal()) };
+        unsafe { noesis_path_geometry_set_fill_rule(self.ptr.as_ptr(), rule.to_ordinal()) };
     }
 
     /// Read the fill rule back from the live object.
     #[must_use]
     pub fn fill_rule(&self) -> FillRule {
         // SAFETY: self.ptr is a live PathGeometry*.
-        FillRule::from_ordinal(unsafe { dm_noesis_path_geometry_get_fill_rule(self.ptr.as_ptr()) })
+        FillRule::from_ordinal(unsafe { noesis_path_geometry_get_fill_rule(self.ptr.as_ptr()) })
     }
 }
 
@@ -569,16 +556,16 @@ impl PathFigure {
     /// Panics if Noesis fails to allocate the figure.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_path_figure_create() };
+        let ptr = unsafe { noesis_path_figure_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_path_figure_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_path_figure_create returned null"),
         }
     }
 
     /// Set the figure's start point.
     pub fn set_start_point(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live PathFigure*.
-        unsafe { dm_noesis_path_figure_set_start_point(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_path_figure_set_start_point(self.ptr.as_ptr(), x, y) };
     }
 
     /// Read the start point `(x, y)` back from the live object.
@@ -586,34 +573,34 @@ impl PathFigure {
     pub fn start_point(&self) -> (f32, f32) {
         let mut out = [0.0f32; 2];
         // SAFETY: self.ptr is a live PathFigure*; `out` is 2 floats.
-        unsafe { dm_noesis_path_figure_get_start_point(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_path_figure_get_start_point(self.ptr.as_ptr(), out.as_mut_ptr()) };
         (out[0], out[1])
     }
 
     /// Set whether the figure is closed (first and last segments joined).
     pub fn set_is_closed(&mut self, is_closed: bool) {
         // SAFETY: self.ptr is a live PathFigure*.
-        unsafe { dm_noesis_path_figure_set_is_closed(self.ptr.as_ptr(), is_closed) };
+        unsafe { noesis_path_figure_set_is_closed(self.ptr.as_ptr(), is_closed) };
     }
 
     /// Set whether the figure's contained area is filled.
     pub fn set_is_filled(&mut self, is_filled: bool) {
         // SAFETY: self.ptr is a live PathFigure*.
-        unsafe { dm_noesis_path_figure_set_is_filled(self.ptr.as_ptr(), is_filled) };
+        unsafe { noesis_path_figure_set_is_filled(self.ptr.as_ptr(), is_filled) };
     }
 
     /// Read whether the figure is closed, from the live object.
     #[must_use]
     pub fn is_closed(&self) -> bool {
         // SAFETY: self.ptr is a live PathFigure*.
-        unsafe { dm_noesis_path_figure_get_is_closed(self.ptr.as_ptr()) == 1 }
+        unsafe { noesis_path_figure_get_is_closed(self.ptr.as_ptr()) == 1 }
     }
 
     /// Read whether the figure is filled, from the live object.
     #[must_use]
     pub fn is_filled(&self) -> bool {
         // SAFETY: self.ptr is a live PathFigure*.
-        unsafe { dm_noesis_path_figure_get_is_filled(self.ptr.as_ptr()) == 1 }
+        unsafe { noesis_path_figure_get_is_filled(self.ptr.as_ptr()) == 1 }
     }
 
     /// Append a segment. The figure takes its own reference, so `segment` may be
@@ -621,14 +608,14 @@ impl PathFigure {
     pub fn add_segment<S: PathSegment>(&mut self, segment: &S) -> i32 {
         // SAFETY: self.ptr is a live PathFigure*; segment_raw() is a live
         // PathSegment* borrowed for the call.
-        unsafe { dm_noesis_path_figure_add_segment(self.ptr.as_ptr(), segment.segment_raw()) }
+        unsafe { noesis_path_figure_add_segment(self.ptr.as_ptr(), segment.segment_raw()) }
     }
 
     /// Number of segments in the figure.
     #[must_use]
     pub fn segment_count(&self) -> usize {
         // SAFETY: self.ptr is a live PathFigure*.
-        unsafe { dm_noesis_path_figure_segment_count(self.ptr.as_ptr()) }.max(0) as usize
+        unsafe { noesis_path_figure_segment_count(self.ptr.as_ptr()) }.max(0) as usize
     }
 }
 
@@ -649,9 +636,9 @@ impl LineSegment {
     /// Panics if Noesis fails to allocate the segment.
     #[must_use]
     pub fn new(x: f32, y: f32) -> Self {
-        let ptr = unsafe { dm_noesis_line_segment_create(x, y) };
+        let ptr = unsafe { noesis_line_segment_create(x, y) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_line_segment_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_line_segment_create returned null"),
         }
     }
 
@@ -660,7 +647,7 @@ impl LineSegment {
     pub fn point(&self) -> (f32, f32) {
         let mut out = [0.0f32; 2];
         // SAFETY: self.ptr is a live LineSegment*; `out` is 2 floats.
-        unsafe { dm_noesis_line_segment_get_point(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_line_segment_get_point(self.ptr.as_ptr(), out.as_mut_ptr()) };
         (out[0], out[1])
     }
 }
@@ -680,9 +667,9 @@ impl BezierSegment {
     /// Panics if Noesis fails to allocate the segment.
     #[must_use]
     pub fn new(p1: (f32, f32), p2: (f32, f32), p3: (f32, f32)) -> Self {
-        let ptr = unsafe { dm_noesis_bezier_segment_create(p1.0, p1.1, p2.0, p2.1, p3.0, p3.1) };
+        let ptr = unsafe { noesis_bezier_segment_create(p1.0, p1.1, p2.0, p2.1, p3.0, p3.1) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_bezier_segment_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_bezier_segment_create returned null"),
         }
     }
 
@@ -691,7 +678,7 @@ impl BezierSegment {
     pub fn points(&self) -> [(f32, f32); 3] {
         let mut out = [0.0f32; 6];
         // SAFETY: self.ptr is a live BezierSegment*; `out` is 6 floats.
-        unsafe { dm_noesis_bezier_segment_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_bezier_segment_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         [(out[0], out[1]), (out[2], out[3]), (out[4], out[5])]
     }
 }
@@ -711,10 +698,9 @@ impl QuadraticBezierSegment {
     /// Panics if Noesis fails to allocate the segment.
     #[must_use]
     pub fn new(p1: (f32, f32), p2: (f32, f32)) -> Self {
-        let ptr = unsafe { dm_noesis_quadratic_bezier_segment_create(p1.0, p1.1, p2.0, p2.1) };
+        let ptr = unsafe { noesis_quadratic_bezier_segment_create(p1.0, p1.1, p2.0, p2.1) };
         Self {
-            ptr: NonNull::new(ptr)
-                .expect("dm_noesis_quadratic_bezier_segment_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_quadratic_bezier_segment_create returned null"),
         }
     }
 
@@ -723,7 +709,7 @@ impl QuadraticBezierSegment {
     pub fn points(&self) -> [(f32, f32); 2] {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live QuadraticBezierSegment*; `out` is 4 floats.
-        unsafe { dm_noesis_quadratic_bezier_segment_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_quadratic_bezier_segment_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         [(out[0], out[1]), (out[2], out[3])]
     }
 }
@@ -767,7 +753,7 @@ impl ArcSegment {
         sweep: SweepDirection,
     ) -> Self {
         let ptr = unsafe {
-            dm_noesis_arc_segment_create(
+            noesis_arc_segment_create(
                 x,
                 y,
                 width,
@@ -778,7 +764,7 @@ impl ArcSegment {
             )
         };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_arc_segment_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_arc_segment_create returned null"),
         }
     }
 
@@ -812,7 +798,7 @@ impl ArcSegment {
         let mut sweep = 0i32;
         // SAFETY: self.ptr is a live ArcSegment*; all out params are valid.
         unsafe {
-            dm_noesis_arc_segment_get(
+            noesis_arc_segment_get(
                 self.ptr.as_ptr(),
                 point.as_mut_ptr(),
                 size.as_mut_ptr(),
@@ -860,7 +846,7 @@ macro_rules! poly_segment {
             #[must_use]
             pub fn point_count(&self) -> usize {
                 // SAFETY: self.ptr is a live poly segment*.
-                unsafe { dm_noesis_poly_segment_point_count(self.ptr.as_ptr()) }.max(0) as usize
+                unsafe { noesis_poly_segment_point_count(self.ptr.as_ptr()) }.max(0) as usize
             }
 
             /// Read the point at `index` back from the live object, or `None`.
@@ -869,11 +855,7 @@ macro_rules! poly_segment {
                 let mut out = [0.0f32; 2];
                 // SAFETY: self.ptr is a live poly segment*; `out` is 2 floats.
                 let ok = unsafe {
-                    dm_noesis_poly_segment_get_point(
-                        self.ptr.as_ptr(),
-                        index as u32,
-                        out.as_mut_ptr(),
-                    )
+                    noesis_poly_segment_get_point(self.ptr.as_ptr(), index as u32, out.as_mut_ptr())
                 };
                 ok.then_some((out[0], out[1]))
             }
@@ -883,17 +865,17 @@ macro_rules! poly_segment {
 
 poly_segment!(
     PolyLineSegment,
-    dm_noesis_poly_line_segment_create,
+    noesis_poly_line_segment_create,
     "A `PolyLineSegment`: a run of straight lines through a point list."
 );
 poly_segment!(
     PolyBezierSegment,
-    dm_noesis_poly_bezier_segment_create,
+    noesis_poly_bezier_segment_create,
     "A `PolyBezierSegment`: a run of cubic Béziers (points in groups of three)."
 );
 poly_segment!(
     PolyQuadraticBezierSegment,
-    dm_noesis_poly_quadratic_bezier_segment_create,
+    noesis_poly_quadratic_bezier_segment_create,
     "A `PolyQuadraticBezierSegment`: a run of quadratic Béziers (points in pairs)."
 );
 
@@ -914,9 +896,9 @@ impl EllipseGeometry {
     /// Panics if Noesis fails to allocate the geometry.
     #[must_use]
     pub fn new(cx: f32, cy: f32, rx: f32, ry: f32) -> Self {
-        let ptr = unsafe { dm_noesis_ellipse_geometry_create(cx, cy, rx, ry) };
+        let ptr = unsafe { noesis_ellipse_geometry_create(cx, cy, rx, ry) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_ellipse_geometry_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_ellipse_geometry_create returned null"),
         }
     }
 
@@ -925,7 +907,7 @@ impl EllipseGeometry {
     pub fn get(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live EllipseGeometry*; `out` is 4 floats.
-        unsafe { dm_noesis_ellipse_geometry_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_ellipse_geometry_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 }
@@ -945,9 +927,9 @@ impl RectangleGeometry {
     /// Panics if Noesis fails to allocate the geometry.
     #[must_use]
     pub fn new(x: f32, y: f32, width: f32, height: f32, rx: f32, ry: f32) -> Self {
-        let ptr = unsafe { dm_noesis_rectangle_geometry_create(x, y, width, height, rx, ry) };
+        let ptr = unsafe { noesis_rectangle_geometry_create(x, y, width, height, rx, ry) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_rectangle_geometry_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_rectangle_geometry_create returned null"),
         }
     }
 
@@ -969,7 +951,7 @@ impl RectangleGeometry {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live RectangleGeometry*; `out` is 4 floats.
         unsafe {
-            dm_noesis_rectangle_geometry_get(
+            noesis_rectangle_geometry_get(
                 self.ptr.as_ptr(),
                 out.as_mut_ptr(),
                 core::ptr::null_mut(),
@@ -984,7 +966,7 @@ impl RectangleGeometry {
         let mut out = [0.0f32; 2];
         // SAFETY: self.ptr is a live RectangleGeometry*; `out` is 2 floats.
         unsafe {
-            dm_noesis_rectangle_geometry_get(
+            noesis_rectangle_geometry_get(
                 self.ptr.as_ptr(),
                 core::ptr::null_mut(),
                 out.as_mut_ptr(),
@@ -1009,9 +991,9 @@ impl LineGeometry {
     /// Panics if Noesis fails to allocate the geometry.
     #[must_use]
     pub fn new(x1: f32, y1: f32, x2: f32, y2: f32) -> Self {
-        let ptr = unsafe { dm_noesis_line_geometry_create(x1, y1, x2, y2) };
+        let ptr = unsafe { noesis_line_geometry_create(x1, y1, x2, y2) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_line_geometry_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_line_geometry_create returned null"),
         }
     }
 
@@ -1020,7 +1002,7 @@ impl LineGeometry {
     pub fn get(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live LineGeometry*; `out` is 4 floats.
-        unsafe { dm_noesis_line_geometry_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_line_geometry_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 }
@@ -1050,14 +1032,14 @@ impl CombinedGeometry {
     ) -> Self {
         // SAFETY: the operand pointers are live Geometry*; Noesis AddRefs them.
         let ptr = unsafe {
-            dm_noesis_combined_geometry_create(
+            noesis_combined_geometry_create(
                 mode.to_ordinal(),
                 geometry1.geometry_raw(),
                 geometry2.geometry_raw(),
             )
         };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_combined_geometry_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_combined_geometry_create returned null"),
         }
     }
 
@@ -1065,7 +1047,7 @@ impl CombinedGeometry {
     pub fn set_geometry1<A: Geometry>(&mut self, geometry: &A) {
         // SAFETY: self.ptr is live; geometry_raw() is a live Geometry*.
         unsafe {
-            dm_noesis_combined_geometry_set_geometry1(self.ptr.as_ptr(), geometry.geometry_raw())
+            noesis_combined_geometry_set_geometry1(self.ptr.as_ptr(), geometry.geometry_raw())
         };
     }
 
@@ -1073,7 +1055,7 @@ impl CombinedGeometry {
     pub fn set_geometry2<B: Geometry>(&mut self, geometry: &B) {
         // SAFETY: self.ptr is live; geometry_raw() is a live Geometry*.
         unsafe {
-            dm_noesis_combined_geometry_set_geometry2(self.ptr.as_ptr(), geometry.geometry_raw())
+            noesis_combined_geometry_set_geometry2(self.ptr.as_ptr(), geometry.geometry_raw())
         };
     }
 
@@ -1081,20 +1063,20 @@ impl CombinedGeometry {
     #[must_use]
     pub fn geometry1_raw(&self) -> *mut c_void {
         // SAFETY: self.ptr is a live CombinedGeometry*.
-        unsafe { dm_noesis_combined_geometry_get_geometry1(self.ptr.as_ptr()) }
+        unsafe { noesis_combined_geometry_get_geometry1(self.ptr.as_ptr()) }
     }
 
     /// Borrowed `Noesis::Geometry*` of the second operand (no `+1`), or null.
     #[must_use]
     pub fn geometry2_raw(&self) -> *mut c_void {
         // SAFETY: self.ptr is a live CombinedGeometry*.
-        unsafe { dm_noesis_combined_geometry_get_geometry2(self.ptr.as_ptr()) }
+        unsafe { noesis_combined_geometry_get_geometry2(self.ptr.as_ptr()) }
     }
 
     /// Set the combine mode.
     pub fn set_mode(&mut self, mode: GeometryCombineMode) {
         // SAFETY: self.ptr is a live CombinedGeometry*.
-        unsafe { dm_noesis_combined_geometry_set_mode(self.ptr.as_ptr(), mode.to_ordinal()) };
+        unsafe { noesis_combined_geometry_set_mode(self.ptr.as_ptr(), mode.to_ordinal()) };
     }
 
     /// Read the combine mode back from the live object.
@@ -1102,7 +1084,7 @@ impl CombinedGeometry {
     pub fn mode(&self) -> Option<GeometryCombineMode> {
         // SAFETY: self.ptr is a live CombinedGeometry*.
         GeometryCombineMode::from_ordinal(unsafe {
-            dm_noesis_combined_geometry_get_mode(self.ptr.as_ptr())
+            noesis_combined_geometry_get_mode(self.ptr.as_ptr())
         })
     }
 }
@@ -1130,9 +1112,9 @@ impl GeometryGroup {
     /// Panics if Noesis fails to allocate the group.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_geometry_group_create() };
+        let ptr = unsafe { noesis_geometry_group_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_geometry_group_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_geometry_group_create returned null"),
         }
     }
 
@@ -1141,26 +1123,26 @@ impl GeometryGroup {
     pub fn add_child<G: Geometry>(&mut self, child: &G) -> i32 {
         // SAFETY: self.ptr is a live GeometryGroup*; geometry_raw() is a live
         // Geometry* borrowed for the call.
-        unsafe { dm_noesis_geometry_group_add_child(self.ptr.as_ptr(), child.geometry_raw()) }
+        unsafe { noesis_geometry_group_add_child(self.ptr.as_ptr(), child.geometry_raw()) }
     }
 
     /// Number of child geometries in the group.
     #[must_use]
     pub fn child_count(&self) -> usize {
         // SAFETY: self.ptr is a live GeometryGroup*.
-        unsafe { dm_noesis_geometry_group_child_count(self.ptr.as_ptr()) }.max(0) as usize
+        unsafe { noesis_geometry_group_child_count(self.ptr.as_ptr()) }.max(0) as usize
     }
 
     /// Set the fill rule.
     pub fn set_fill_rule(&mut self, rule: FillRule) {
         // SAFETY: self.ptr is a live GeometryGroup*.
-        unsafe { dm_noesis_geometry_group_set_fill_rule(self.ptr.as_ptr(), rule.to_ordinal()) };
+        unsafe { noesis_geometry_group_set_fill_rule(self.ptr.as_ptr(), rule.to_ordinal()) };
     }
 
     /// Read the fill rule back from the live object.
     #[must_use]
     pub fn fill_rule(&self) -> FillRule {
         // SAFETY: self.ptr is a live GeometryGroup*.
-        FillRule::from_ordinal(unsafe { dm_noesis_geometry_group_get_fill_rule(self.ptr.as_ptr()) })
+        FillRule::from_ordinal(unsafe { noesis_geometry_group_get_fill_rule(self.ptr.as_ptr()) })
     }
 }

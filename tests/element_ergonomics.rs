@@ -12,8 +12,8 @@
 //! Single `#[test]` per the harness convention (one Noesis init per process);
 //! all owning handles drop inside the inner scope before `shutdown()`.
 
-use dm_noesis_runtime::commands::Command;
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::commands::Command;
+use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
@@ -23,9 +23,9 @@ fn element_ergonomics_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── ContentControl.Content: set / read / clear from code ──────────────
@@ -60,7 +60,7 @@ fn element_ergonomics_round_trip() {
         assert!(panel.add_child(&c1), "add second child");
 
         let children =
-            dm_noesis_runtime::element_tree::panel_children(&panel).expect("panel children");
+            noesis_runtime::element_tree::panel_children(&panel).expect("panel children");
         assert_eq!(children.count(), 2, "add_child grew the panel to 2");
         assert_eq!(children.get_raw(0), c0.raw(), "child[0] is c0 by identity");
         assert_eq!(children.get_raw(1), c1.raw(), "child[1] is c1 by identity");
@@ -110,5 +110,5 @@ fn element_ergonomics_round_trip() {
         drop(command);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

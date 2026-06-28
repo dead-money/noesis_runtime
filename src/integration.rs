@@ -213,7 +213,7 @@ impl Drop for CursorCallback {
             .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
-            unsafe { ffi::dm_noesis_set_cursor_callback(core::ptr::null_mut(), None) };
+            unsafe { ffi::noesis_set_cursor_callback(core::ptr::null_mut(), None) };
         }
         unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
@@ -235,7 +235,7 @@ where
     let user = Box::into_raw(boxed);
     let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
-    unsafe { ffi::dm_noesis_set_cursor_callback(user.cast(), Some(cursor_tramp)) };
+    unsafe { ffi::noesis_set_cursor_callback(user.cast(), Some(cursor_tramp)) };
     CURSOR_ACTIVE.store(id, Ordering::Release);
     CursorCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
@@ -276,7 +276,7 @@ impl Drop for SoftwareKeyboardCallback {
             .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
-            unsafe { ffi::dm_noesis_set_software_keyboard_callback(core::ptr::null_mut(), None) };
+            unsafe { ffi::noesis_set_software_keyboard_callback(core::ptr::null_mut(), None) };
         }
         unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
@@ -296,7 +296,7 @@ where
     let user = Box::into_raw(boxed);
     let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
-    unsafe { ffi::dm_noesis_set_software_keyboard_callback(user.cast(), Some(keyboard_tramp)) };
+    unsafe { ffi::noesis_set_software_keyboard_callback(user.cast(), Some(keyboard_tramp)) };
     KEYBOARD_ACTIVE.store(id, Ordering::Release);
     SoftwareKeyboardCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
@@ -336,7 +336,7 @@ impl Drop for OpenUrlCallback {
             .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
-            unsafe { ffi::dm_noesis_set_open_url_callback(core::ptr::null_mut(), None) };
+            unsafe { ffi::noesis_set_open_url_callback(core::ptr::null_mut(), None) };
         }
         unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
@@ -356,7 +356,7 @@ where
     let user = Box::into_raw(boxed);
     let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
-    unsafe { ffi::dm_noesis_set_open_url_callback(user.cast(), Some(open_url_tramp)) };
+    unsafe { ffi::noesis_set_open_url_callback(user.cast(), Some(open_url_tramp)) };
     OPEN_URL_ACTIVE.store(id, Ordering::Release);
     OpenUrlCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
@@ -373,7 +373,7 @@ where
 pub fn open_url(url: &str) {
     let c = CString::new(url).expect("url contained interior NUL");
     // SAFETY: pointer is valid for the duration of the synchronous call.
-    unsafe { ffi::dm_noesis_open_url(c.as_ptr()) };
+    unsafe { ffi::noesis_open_url(c.as_ptr()) };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -408,7 +408,7 @@ impl Drop for PlayAudioCallback {
             .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
-            unsafe { ffi::dm_noesis_set_play_audio_callback(core::ptr::null_mut(), None) };
+            unsafe { ffi::noesis_set_play_audio_callback(core::ptr::null_mut(), None) };
         }
         unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
@@ -428,7 +428,7 @@ where
     let user = Box::into_raw(boxed);
     let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
-    unsafe { ffi::dm_noesis_set_play_audio_callback(user.cast(), Some(play_audio_tramp)) };
+    unsafe { ffi::noesis_set_play_audio_callback(user.cast(), Some(play_audio_tramp)) };
     PLAY_AUDIO_ACTIVE.store(id, Ordering::Release);
     PlayAudioCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
@@ -445,7 +445,7 @@ where
 pub fn play_audio(uri: &str, volume: f32) {
     let c = CString::new(uri).expect("uri contained interior NUL");
     // SAFETY: pointer is valid for the duration of the synchronous call.
-    unsafe { ffi::dm_noesis_play_audio(c.as_ptr(), volume) };
+    unsafe { ffi::noesis_play_audio(c.as_ptr(), volume) };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -463,7 +463,7 @@ pub fn play_audio(uri: &str, volume: f32) {
 pub fn set_culture(name: &str) {
     let c = CString::new(name).expect("culture name contained interior NUL");
     // SAFETY: the shim copies the name into process-static storage.
-    unsafe { ffi::dm_noesis_set_culture(c.as_ptr()) };
+    unsafe { ffi::noesis_set_culture(c.as_ptr()) };
 }
 
 /// Return the active default culture's BCP-47 name. Defaults to `"en-US"`
@@ -471,7 +471,7 @@ pub fn set_culture(name: &str) {
 #[must_use]
 pub fn get_culture() -> String {
     // SAFETY: the returned pointer is borrowed and stays valid; we copy out.
-    let p = unsafe { ffi::dm_noesis_get_culture() };
+    let p = unsafe { ffi::noesis_get_culture() };
     if p.is_null() {
         String::new()
     } else {

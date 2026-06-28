@@ -49,9 +49,9 @@ struct MarkupClassData {
     Noesis::String                 name;
     Noesis::Symbol                 sym;
     Noesis::TypeClassBuilder*      typeClass; // owned by Reflection registry
-    dm_noesis_markup_provide_fn    cb;
+    noesis_markup_provide_fn    cb;
     void*                          userdata;
-    dm_noesis_markup_free_fn       free_handler;
+    noesis_markup_free_fn       free_handler;
     std::atomic<int>               ref_count;
 
     MarkupClassData(): ref_count(1) {}
@@ -226,11 +226,11 @@ Noesis::BaseComponent* markup_creator(Noesis::Symbol name) {
 
 // ── C ABI surface ──────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_markup_extension_register(
+extern "C" void* noesis_markup_extension_register(
     const char* name,
-    dm_noesis_markup_provide_fn cb,
+    noesis_markup_provide_fn cb,
     void* userdata,
-    dm_noesis_markup_free_fn free_handler) {
+    noesis_markup_free_fn free_handler) {
     if (!name || !cb) return nullptr;
 
     Noesis::Symbol sym = Noesis::Symbol(name);
@@ -270,7 +270,7 @@ extern "C" void* dm_noesis_markup_extension_register(
     return cd;
 }
 
-extern "C" void dm_noesis_markup_extension_unregister(void* token) {
+extern "C" void noesis_markup_extension_unregister(void* token) {
     if (!token) return;
     auto* cd = static_cast<MarkupClassData*>(token);
 
@@ -288,8 +288,8 @@ extern "C" void dm_noesis_markup_extension_unregister(void* token) {
 }
 
 // Process-shutdown sweep — see noesis_classes.cpp's
-// `dm_noesis_classes_force_free_at_shutdown` for the rationale.
-extern "C" void dm_noesis_markup_extensions_force_free_at_shutdown(void) {
+// `noesis_classes_force_free_at_shutdown` for the rationale.
+extern "C" void noesis_markup_extensions_force_free_at_shutdown(void) {
     std::vector<MarkupClassData*> all;
     {
         std::lock_guard<std::mutex> lock(g_all_markup_data_mutex);

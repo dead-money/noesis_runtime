@@ -23,24 +23,22 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-use dm_noesis_runtime::brushes::SolidColorBrush;
-use dm_noesis_runtime::classes::{
+use noesis_runtime::brushes::SolidColorBrush;
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyValue, RenderHandler,
 };
-use dm_noesis_runtime::drawing::{
+use noesis_runtime::drawing::{
     BlendingMode, DrawingContext, Pen, PenLineCap, PenLineJoin, RectangleGeometry,
 };
-use dm_noesis_runtime::ffi::ClassBase;
-use dm_noesis_runtime::geometry::{
-    EllipseGeometry, Geometry, LineSegment, PathFigure, PathGeometry,
-};
-use dm_noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
-use dm_noesis_runtime::render_device::{
+use noesis_runtime::ffi::ClassBase;
+use noesis_runtime::geometry::{EllipseGeometry, Geometry, LineSegment, PathFigure, PathGeometry};
+use noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
+use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
     TextureDesc, TextureHandle, TextureRect, register,
 };
-use dm_noesis_runtime::transforms::TranslateTransform;
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::transforms::TranslateTransform;
+use noesis_runtime::view::{FrameworkElement, View};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
@@ -202,9 +200,9 @@ fn on_render_fires_and_draws() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Pen read-back round-trip (proves the create + setters crossed FFI).
@@ -273,7 +271,7 @@ fn on_render_fires_and_draws() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }
 
 // ────────────────────────────────────────────────────────────────────────────

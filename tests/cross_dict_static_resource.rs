@@ -51,14 +51,14 @@
 //! installer.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test cross_dict_static_resource -- --nocapture`
+//!   `cargo test -p noesis_runtime --test cross_dict_static_resource -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 /// Colors.xaml — defines a single `Color` resource the sibling brushes
 /// dictionary references. `#FFFF0000` = pure opaque red.
@@ -117,9 +117,9 @@ fn cross_dict_static_resource_resolves_at_install_time() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // Register `Test.ColorProbe` with two Color DPs. Black initial
@@ -140,13 +140,13 @@ fn cross_dict_static_resource_resolves_at_install_time() {
         bytes.insert("Colors.xaml".to_string(), COLORS_XAML.as_bytes().to_vec());
         bytes.insert("Brushes.xaml".to_string(), BRUSHES_XAML.as_bytes().to_vec());
         bytes.insert("Scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _provider_guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _provider_guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         // Build the merged-dictionary chain leaf-by-leaf so each leaf
         // parses with the parent + previously-loaded siblings already
         // visible. Equivalent to Theme.xaml's MergedDictionaries entries.
         assert!(
-            dm_noesis_runtime::gui::install_app_resources_chain(&["Colors.xaml", "Brushes.xaml"]),
+            noesis_runtime::gui::install_app_resources_chain(&["Colors.xaml", "Brushes.xaml"]),
             "install_app_resources_chain returned false",
         );
 
@@ -203,7 +203,7 @@ fn cross_dict_static_resource_resolves_at_install_time() {
         drop(registration);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }
 
 fn assert_color_eq(actual: (f32, f32, f32, f32), expected: (f32, f32, f32, f32), label: &str) {

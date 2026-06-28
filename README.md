@@ -1,8 +1,8 @@
-# dm_noesis_runtime
+# noesis_runtime
 
 Rust bindings for the [Noesis GUI Native SDK](https://www.noesisengine.com/), which brings XAML-driven UI to game engines. You load `.xaml` scenes, drive the View and renderer, implement a `RenderDevice` against your own GPU, and write Rust-backed custom controls and markup extensions that XAML can use by name.
 
-The crate is renderer-agnostic; Bevy 0.18 integration lives in the sibling crate [`dm_noesis_bevy`](https://github.com/dead-money/dm_noesis_bevy). It's built for Dead Money's own game projects and was mostly written by AI agents under human direction, so expect interfaces to change.
+The crate is renderer-agnostic. It's built for Dead Money's own game projects and was mostly written by AI agents under human direction.
 
 ## You need a Noesis license
 
@@ -14,12 +14,12 @@ Set `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to apply your license. Withou
 
 ```toml
 [dependencies]
-dm_noesis_runtime = { git = "https://github.com/dead-money/dm_noesis_runtime" }
+noesis_runtime = { git = "https://github.com/dead-money/noesis_runtime" }
 ```
 
 ```rust
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::{set_xaml_provider, XamlProvider};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::{set_xaml_provider, XamlProvider};
 
 // Implement a XAML provider against your asset pipeline.
 struct MyXaml(std::collections::HashMap<String, Vec<u8>>);
@@ -31,7 +31,7 @@ impl XamlProvider for MyXaml {
 }
 
 // Once per process.
-dm_noesis_runtime::init();
+noesis_runtime::init();
 
 // Install the provider. The returned guard owns the registration;
 // drop it to clear the global slot.
@@ -48,21 +48,18 @@ loop {
     // Forward input to view.mouse_*, view.key_*, view.touch_*
     let _changed = view.update(time_seconds);
     // Your renderer drives view.renderer().
-    // See dm_noesis_bevy for a complete integration.
 }
 
-dm_noesis_runtime::shutdown();
+noesis_runtime::shutdown();
 ```
-
-For the full pipeline (XAML, font, and texture providers, the render device, and input) wired against Bevy 0.18, see [`dm_noesis_bevy`](https://github.com/dead-money/dm_noesis_bevy).
 
 ### Custom controls
 
 ```rust
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyValue,
 };
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::ffi::{ClassBase, PropType};
 
 struct NineSlicerHandler { source_idx: u32, /* ... */ }
 impl PropertyChangeHandler for NineSlicerHandler {
@@ -87,7 +84,7 @@ let _registration = b.register().expect("class registration failed");
 ### Custom markup extensions
 
 ```rust
-use dm_noesis_runtime::markup::MarkupExtensionRegistration;
+use noesis_runtime::markup::MarkupExtensionRegistration;
 
 let table = std::collections::HashMap::from([
     ("menu.greeting", "Hello, world!"),

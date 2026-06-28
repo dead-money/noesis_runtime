@@ -17,12 +17,12 @@
 //! cross-checked two independent ways (name + width) — a stubbed impl that
 //! handed back the wrong element, or the root, would be caught.
 //!
-//!   `cargo test -p dm_noesis_runtime --test element_tree -- --nocapture`
+//!   `cargo test -p noesis_runtime --test element_tree -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // Root Grid "Root" with three Borders. Each Border has a Background (so it is
 // hit-testable) and a distinct Width so identity is checkable independently of
@@ -63,14 +63,14 @@ fn element_tree_traversal() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -253,5 +253,5 @@ fn element_tree_traversal() {
         drop(_registered);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

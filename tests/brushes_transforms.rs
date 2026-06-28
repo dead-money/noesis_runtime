@@ -12,17 +12,17 @@
 //! all owning wrappers drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test brushes_transforms -- --nocapture`
+//!   `cargo test -p noesis_runtime --test brushes_transforms -- --nocapture`
 
-use dm_noesis_runtime::brushes::{
+use noesis_runtime::brushes::{
     BlurEffect, DropShadowEffect, GradientStop, ImageBrush, LinearGradientBrush,
     RadialGradientBrush, SolidColorBrush,
 };
-use dm_noesis_runtime::transforms::{
+use noesis_runtime::transforms::{
     CompositeFields, CompositeTransform, MatrixTransform, RotateTransform, ScaleTransform,
     SkewTransform, TransformGroup, TranslateTransform,
 };
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
@@ -40,9 +40,9 @@ fn brushes_transforms_effects_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── SolidColorBrush ─────────────────────────────────────────────────
@@ -288,5 +288,5 @@ fn brushes_transforms_effects_round_trip() {
         assert_eq!(panel.bitmap_scaling_mode(), Some(1));
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

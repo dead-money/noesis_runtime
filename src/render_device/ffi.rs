@@ -13,7 +13,7 @@ use crate::render_device::types::DeviceCaps;
 // FFI binding structs — mirror the C definitions in noesis_shim.h.
 // ────────────────────────────────────────────────────────────────────────────
 
-/// Mirror of `dm_noesis_texture_binding`. `handle == 0` is reserved invalid;
+/// Mirror of `noesis_texture_binding`. `handle == 0` is reserved invalid;
 /// the trampoline panics on zero on the way back up to a Rust [`TextureHandle`].
 ///
 /// [`TextureHandle`]: crate::render_device::TextureHandle
@@ -29,7 +29,7 @@ pub struct TextureBindingFfi {
     pub pad: u8,
 }
 
-/// Mirror of `dm_noesis_render_target_binding`.
+/// Mirror of `noesis_render_target_binding`.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct RenderTargetBindingFfi {
@@ -43,7 +43,7 @@ const _: () = assert!(size_of::<RenderTargetBindingFfi>() == 32);
 const _: () = assert!(align_of::<RenderTargetBindingFfi>() == 8);
 
 // ────────────────────────────────────────────────────────────────────────────
-// vtable — mirror of `dm_noesis_render_device_vtable`. Every fn pointer is an
+// vtable — mirror of `noesis_render_device_vtable`. Every fn pointer is an
 // `unsafe extern "C"` because trampolines deref raw `userdata` and assume
 // Noesis honors the frame protocol (no nesting of Map/Unmap, etc).
 //
@@ -138,44 +138,40 @@ pub struct RenderDeviceVTable {
 unsafe extern "C" {
     /// Create a `RustRenderDevice` with refcount = 1. Returns
     /// `Noesis::RenderDevice*` cast to `*mut c_void`. Pair with
-    /// [`dm_noesis_render_device_destroy`] exactly once.
-    pub fn dm_noesis_render_device_create(
+    /// [`noesis_render_device_destroy`] exactly once.
+    pub fn noesis_render_device_create(
         vtable: *const RenderDeviceVTable,
         userdata: *mut c_void,
     ) -> *mut c_void;
 
-    pub fn dm_noesis_render_device_destroy(device: *mut c_void);
+    pub fn noesis_render_device_destroy(device: *mut c_void);
 
-    pub fn dm_noesis_texture_get_handle(texture: *const c_void) -> u64;
-    pub fn dm_noesis_render_target_get_handle(surface: *const c_void) -> u64;
+    pub fn noesis_texture_get_handle(texture: *const c_void) -> u64;
+    pub fn noesis_render_target_get_handle(surface: *const c_void) -> u64;
 
     // ── Offscreen / glyph-cache tuning (TODO §1) ─────────────────────────────
     // Resource sizing on the `Noesis::RenderDevice` base; set before the first
     // frame. Offscreen 0 == automatic; glyph cache defaults to 1024×1024.
-    pub fn dm_noesis_render_device_set_offscreen_width(device: *mut c_void, width: u32);
-    pub fn dm_noesis_render_device_set_offscreen_height(device: *mut c_void, height: u32);
-    pub fn dm_noesis_render_device_set_offscreen_sample_count(device: *mut c_void, count: u32);
-    pub fn dm_noesis_render_device_set_offscreen_default_num_surfaces(
-        device: *mut c_void,
-        num: u32,
-    );
-    pub fn dm_noesis_render_device_set_offscreen_max_num_surfaces(device: *mut c_void, num: u32);
-    pub fn dm_noesis_render_device_set_glyph_cache_width(device: *mut c_void, width: u32);
-    pub fn dm_noesis_render_device_set_glyph_cache_height(device: *mut c_void, height: u32);
+    pub fn noesis_render_device_set_offscreen_width(device: *mut c_void, width: u32);
+    pub fn noesis_render_device_set_offscreen_height(device: *mut c_void, height: u32);
+    pub fn noesis_render_device_set_offscreen_sample_count(device: *mut c_void, count: u32);
+    pub fn noesis_render_device_set_offscreen_default_num_surfaces(device: *mut c_void, num: u32);
+    pub fn noesis_render_device_set_offscreen_max_num_surfaces(device: *mut c_void, num: u32);
+    pub fn noesis_render_device_set_glyph_cache_width(device: *mut c_void, width: u32);
+    pub fn noesis_render_device_set_glyph_cache_height(device: *mut c_void, height: u32);
 
-    pub fn dm_noesis_render_device_get_offscreen_width(device: *const c_void) -> u32;
-    pub fn dm_noesis_render_device_get_offscreen_height(device: *const c_void) -> u32;
-    pub fn dm_noesis_render_device_get_offscreen_sample_count(device: *const c_void) -> u32;
-    pub fn dm_noesis_render_device_get_offscreen_default_num_surfaces(device: *const c_void)
-    -> u32;
-    pub fn dm_noesis_render_device_get_offscreen_max_num_surfaces(device: *const c_void) -> u32;
-    pub fn dm_noesis_render_device_get_glyph_cache_width(device: *const c_void) -> u32;
-    pub fn dm_noesis_render_device_get_glyph_cache_height(device: *const c_void) -> u32;
+    pub fn noesis_render_device_get_offscreen_width(device: *const c_void) -> u32;
+    pub fn noesis_render_device_get_offscreen_height(device: *const c_void) -> u32;
+    pub fn noesis_render_device_get_offscreen_sample_count(device: *const c_void) -> u32;
+    pub fn noesis_render_device_get_offscreen_default_num_surfaces(device: *const c_void) -> u32;
+    pub fn noesis_render_device_get_offscreen_max_num_surfaces(device: *const c_void) -> u32;
+    pub fn noesis_render_device_get_glyph_cache_width(device: *const c_void) -> u32;
+    pub fn noesis_render_device_get_glyph_cache_height(device: *const c_void) -> u32;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // Test-only entrypoints — gated by the `test-utils` Cargo feature, which
-// defines `DM_NOESIS_TEST_UTILS` for the C++ build.
+// defines `NOESIS_TEST_UTILS` for the C++ build.
 // ────────────────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "test-utils")]
@@ -185,5 +181,5 @@ unsafe extern "C" {
     /// passes with map/draw/unmap, RT clone) then let every `Ptr<>` die so
     /// `drop_texture` / `drop_render_target` fire on the way out. Used by
     /// `tests/render_device.rs` to assert the recorded op sequence.
-    pub fn dm_noesis_test_run_frame_scenario(device: *mut c_void);
+    pub fn noesis_test_run_frame_scenario(device: *mut c_void);
 }

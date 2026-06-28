@@ -23,19 +23,18 @@ use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_text_inlines_bold_create,
-    dm_noesis_text_inlines_collection_add, dm_noesis_text_inlines_collection_count,
-    dm_noesis_text_inlines_collection_get, dm_noesis_text_inlines_hyperlink_create,
-    dm_noesis_text_inlines_hyperlink_get_navigate_uri,
-    dm_noesis_text_inlines_hyperlink_set_navigate_uri,
-    dm_noesis_text_inlines_inline_get_text_decorations,
-    dm_noesis_text_inlines_inline_set_text_decorations, dm_noesis_text_inlines_italic_create,
-    dm_noesis_text_inlines_line_break_create, dm_noesis_text_inlines_run_create,
-    dm_noesis_text_inlines_run_get_text, dm_noesis_text_inlines_run_set_text,
-    dm_noesis_text_inlines_span_create, dm_noesis_text_inlines_span_get_inlines,
-    dm_noesis_text_inlines_text_block_get_inlines, dm_noesis_text_inlines_ui_container_create,
-    dm_noesis_text_inlines_ui_container_get_child, dm_noesis_text_inlines_ui_container_set_child,
-    dm_noesis_text_inlines_underline_create,
+    noesis_base_component_release, noesis_text_inlines_bold_create,
+    noesis_text_inlines_collection_add, noesis_text_inlines_collection_count,
+    noesis_text_inlines_collection_get, noesis_text_inlines_hyperlink_create,
+    noesis_text_inlines_hyperlink_get_navigate_uri, noesis_text_inlines_hyperlink_set_navigate_uri,
+    noesis_text_inlines_inline_get_text_decorations,
+    noesis_text_inlines_inline_set_text_decorations, noesis_text_inlines_italic_create,
+    noesis_text_inlines_line_break_create, noesis_text_inlines_run_create,
+    noesis_text_inlines_run_get_text, noesis_text_inlines_run_set_text,
+    noesis_text_inlines_span_create, noesis_text_inlines_span_get_inlines,
+    noesis_text_inlines_text_block_get_inlines, noesis_text_inlines_ui_container_create,
+    noesis_text_inlines_ui_container_get_child, noesis_text_inlines_ui_container_set_child,
+    noesis_text_inlines_underline_create,
 };
 use crate::view::FrameworkElement;
 
@@ -84,10 +83,7 @@ pub trait Inline {
     fn set_text_decorations(&self, decorations: TextDecorations) -> bool {
         // SAFETY: `inline_raw()` is a live Inline* for `self`'s lifetime.
         unsafe {
-            dm_noesis_text_inlines_inline_set_text_decorations(
-                self.inline_raw(),
-                decorations as i32,
-            )
+            noesis_text_inlines_inline_set_text_decorations(self.inline_raw(), decorations as i32)
         }
     }
 
@@ -95,7 +91,7 @@ pub trait Inline {
     /// the value is outside the known enum (not expected for a live inline).
     fn text_decorations(&self) -> Option<TextDecorations> {
         // SAFETY: `inline_raw()` is a live Inline* for `self`'s lifetime.
-        let v = unsafe { dm_noesis_text_inlines_inline_get_text_decorations(self.inline_raw()) };
+        let v = unsafe { noesis_text_inlines_inline_get_text_decorations(self.inline_raw()) };
         TextDecorations::from_raw(v)
     }
 }
@@ -128,7 +124,7 @@ macro_rules! inline_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref that
                 // we own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -185,9 +181,9 @@ impl Run {
     pub fn new(text: &str) -> Self {
         let c = CString::new(text).expect("run text contained interior NUL");
         // SAFETY: `c` outlives the call; the C side copies the bytes.
-        let ptr = unsafe { dm_noesis_text_inlines_run_create(c.as_ptr()) };
+        let ptr = unsafe { noesis_text_inlines_run_create(c.as_ptr()) };
         Self {
-            ptr: new_handle(ptr, "dm_noesis_text_inlines_run_create"),
+            ptr: new_handle(ptr, "noesis_text_inlines_run_create"),
         }
     }
 
@@ -200,7 +196,7 @@ impl Run {
     pub fn set_text(&mut self, text: &str) -> bool {
         let c = CString::new(text).expect("run text contained interior NUL");
         // SAFETY: self.ptr is a live Run*; `c` outlives the call.
-        unsafe { dm_noesis_text_inlines_run_set_text(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_text_inlines_run_set_text(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Read the Run's text back from the live Noesis object.
@@ -208,7 +204,7 @@ impl Run {
     pub fn text(&self) -> Option<String> {
         // SAFETY: self.ptr is a live Run*; the returned pointer is borrowed
         // storage we copy out before any mutation.
-        let p = unsafe { dm_noesis_text_inlines_run_get_text(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_text_inlines_run_get_text(self.ptr.as_ptr()) };
         if p.is_null() {
             return None;
         }
@@ -226,9 +222,9 @@ impl Span {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: hands out a +1 Span*.
-        let ptr = unsafe { dm_noesis_text_inlines_span_create() };
+        let ptr = unsafe { noesis_text_inlines_span_create() };
         Self {
-            ptr: new_handle(ptr, "dm_noesis_text_inlines_span_create"),
+            ptr: new_handle(ptr, "noesis_text_inlines_span_create"),
         }
     }
 
@@ -236,7 +232,7 @@ impl Span {
     #[must_use]
     pub fn inlines(&self) -> Option<InlineCollection> {
         // SAFETY: self.ptr is a live Span*; the C side hands out a +1 collection.
-        let ptr = unsafe { dm_noesis_text_inlines_span_get_inlines(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_text_inlines_span_get_inlines(self.ptr.as_ptr()) };
         InlineCollection::from_raw(ptr)
     }
 }
@@ -268,7 +264,7 @@ macro_rules! span_subclass {
             #[must_use]
             pub fn inlines(&self) -> Option<InlineCollection> {
                 // SAFETY: self.ptr is a live Span subclass*; +1 collection out.
-                let ptr = unsafe { dm_noesis_text_inlines_span_get_inlines(self.ptr.as_ptr()) };
+                let ptr = unsafe { noesis_text_inlines_span_get_inlines(self.ptr.as_ptr()) };
                 InlineCollection::from_raw(ptr)
             }
         }
@@ -283,23 +279,23 @@ macro_rules! span_subclass {
 
 span_subclass!(
     Bold,
-    dm_noesis_text_inlines_bold_create,
-    "dm_noesis_text_inlines_bold_create"
+    noesis_text_inlines_bold_create,
+    "noesis_text_inlines_bold_create"
 );
 span_subclass!(
     Italic,
-    dm_noesis_text_inlines_italic_create,
-    "dm_noesis_text_inlines_italic_create"
+    noesis_text_inlines_italic_create,
+    "noesis_text_inlines_italic_create"
 );
 span_subclass!(
     Underline,
-    dm_noesis_text_inlines_underline_create,
-    "dm_noesis_text_inlines_underline_create"
+    noesis_text_inlines_underline_create,
+    "noesis_text_inlines_underline_create"
 );
 span_subclass!(
     Hyperlink,
-    dm_noesis_text_inlines_hyperlink_create,
-    "dm_noesis_text_inlines_hyperlink_create"
+    noesis_text_inlines_hyperlink_create,
+    "noesis_text_inlines_hyperlink_create"
 );
 
 impl Hyperlink {
@@ -312,7 +308,7 @@ impl Hyperlink {
     pub fn set_navigate_uri(&mut self, uri: &str) -> bool {
         let c = CString::new(uri).expect("navigate uri contained interior NUL");
         // SAFETY: self.ptr is a live Hyperlink*; `c` outlives the call.
-        unsafe { dm_noesis_text_inlines_hyperlink_set_navigate_uri(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_text_inlines_hyperlink_set_navigate_uri(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Read the `NavigateUri` back from the live Noesis object. `None` if unset
@@ -320,7 +316,7 @@ impl Hyperlink {
     #[must_use]
     pub fn navigate_uri(&self) -> Option<String> {
         // SAFETY: self.ptr is a live Hyperlink*; borrowed storage copied out.
-        let p = unsafe { dm_noesis_text_inlines_hyperlink_get_navigate_uri(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_text_inlines_hyperlink_get_navigate_uri(self.ptr.as_ptr()) };
         if p.is_null() {
             return None;
         }
@@ -339,9 +335,9 @@ impl LineBreak {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: hands out a +1 LineBreak*.
-        let ptr = unsafe { dm_noesis_text_inlines_line_break_create() };
+        let ptr = unsafe { noesis_text_inlines_line_break_create() };
         Self {
-            ptr: new_handle(ptr, "dm_noesis_text_inlines_line_break_create"),
+            ptr: new_handle(ptr, "noesis_text_inlines_line_break_create"),
         }
     }
 }
@@ -361,9 +357,9 @@ impl InlineUIContainer {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: hands out a +1 InlineUIContainer*.
-        let ptr = unsafe { dm_noesis_text_inlines_ui_container_create() };
+        let ptr = unsafe { noesis_text_inlines_ui_container_create() };
         Self {
-            ptr: new_handle(ptr, "dm_noesis_text_inlines_ui_container_create"),
+            ptr: new_handle(ptr, "noesis_text_inlines_ui_container_create"),
         }
     }
 
@@ -374,7 +370,7 @@ impl InlineUIContainer {
     pub fn set_child(&mut self, child: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InlineUIContainer*; child.raw() is a live
         // UIElement* (FrameworkElement derives from UIElement).
-        unsafe { dm_noesis_text_inlines_ui_container_set_child(self.ptr.as_ptr(), child.raw()) }
+        unsafe { noesis_text_inlines_ui_container_set_child(self.ptr.as_ptr(), child.raw()) }
     }
 
     /// Borrowed raw `BaseComponent*` of the hosted child, or null. The address
@@ -383,7 +379,7 @@ impl InlineUIContainer {
     #[must_use]
     pub fn child_raw(&self) -> *mut c_void {
         // SAFETY: self.ptr is a live InlineUIContainer*.
-        unsafe { dm_noesis_text_inlines_ui_container_get_child(self.ptr.as_ptr()) }
+        unsafe { noesis_text_inlines_ui_container_get_child(self.ptr.as_ptr()) }
     }
 
     /// Whether the container currently hosts a child.
@@ -421,9 +417,8 @@ impl InlineCollection {
     pub fn add<I: Inline>(&mut self, inline: &I) -> Option<usize> {
         // SAFETY: self.ptr is a live InlineCollection*; inline_raw() is a live
         // Inline* for the call.
-        let idx = unsafe {
-            dm_noesis_text_inlines_collection_add(self.ptr.as_ptr(), inline.inline_raw())
-        };
+        let idx =
+            unsafe { noesis_text_inlines_collection_add(self.ptr.as_ptr(), inline.inline_raw()) };
         (idx >= 0).then_some(idx as usize)
     }
 
@@ -431,7 +426,7 @@ impl InlineCollection {
     #[must_use]
     pub fn count(&self) -> usize {
         // SAFETY: self.ptr is a live InlineCollection*.
-        let n = unsafe { dm_noesis_text_inlines_collection_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_text_inlines_collection_count(self.ptr.as_ptr()) };
         n.max(0) as usize
     }
 
@@ -441,7 +436,7 @@ impl InlineCollection {
     #[must_use]
     pub fn get_raw(&self, index: usize) -> *mut c_void {
         // SAFETY: self.ptr is a live InlineCollection*; bounds checked C-side.
-        unsafe { dm_noesis_text_inlines_collection_get(self.ptr.as_ptr(), index as u32) }
+        unsafe { noesis_text_inlines_collection_get(self.ptr.as_ptr(), index as u32) }
     }
 }
 
@@ -449,7 +444,7 @@ impl Drop for InlineCollection {
     fn drop(&mut self) {
         // SAFETY: produced by a get-inlines entrypoint with a +1 ref we own;
         // released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -459,6 +454,6 @@ impl Drop for InlineCollection {
 pub fn text_block_inlines(element: &FrameworkElement) -> Option<InlineCollection> {
     // SAFETY: element.raw() is a live FrameworkElement*; the C side DynamicCasts
     // to TextBlock and hands out a +1 collection (or null).
-    let ptr = unsafe { dm_noesis_text_inlines_text_block_get_inlines(element.raw()) };
+    let ptr = unsafe { noesis_text_inlines_text_block_get_inlines(element.raw()) };
     InlineCollection::from_raw(ptr)
 }

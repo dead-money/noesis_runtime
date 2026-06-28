@@ -5,15 +5,15 @@
 //! pump, and asserts the callback fired exactly once.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test events -- --nocapture`
+//!   `cargo test -p noesis_runtime --test events -- --nocapture`
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::events::subscribe_click;
-use dm_noesis_runtime::view::{FrameworkElement, MouseButton, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::events::subscribe_click;
+use noesis_runtime::view::{FrameworkElement, MouseButton, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const BUTTON_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -42,9 +42,9 @@ fn click_event_fires_callback() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let counter = Arc::new(AtomicU32::new(0));
 
@@ -53,7 +53,7 @@ fn click_event_fires_callback() {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), BUTTON_XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -115,7 +115,7 @@ fn click_event_fires_callback() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 
     assert_eq!(
         counter.load(Ordering::SeqCst),

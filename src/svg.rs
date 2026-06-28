@@ -24,13 +24,12 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_svg_image_destroy, dm_noesis_svg_image_get_size, dm_noesis_svg_image_parse,
-    dm_noesis_svg_image_shape_count, dm_noesis_svg_image_shape_fill_type,
-    dm_noesis_svg_path_add_ellipse, dm_noesis_svg_path_add_rect,
-    dm_noesis_svg_path_calculate_bounds, dm_noesis_svg_path_close,
-    dm_noesis_svg_path_command_count, dm_noesis_svg_path_create, dm_noesis_svg_path_destroy,
-    dm_noesis_svg_path_fill_contains, dm_noesis_svg_path_line_to, dm_noesis_svg_path_move_to,
-    dm_noesis_svg_path_parse, dm_noesis_svg_path_stroke_contains,
+    noesis_svg_image_destroy, noesis_svg_image_get_size, noesis_svg_image_parse,
+    noesis_svg_image_shape_count, noesis_svg_image_shape_fill_type, noesis_svg_path_add_ellipse,
+    noesis_svg_path_add_rect, noesis_svg_path_calculate_bounds, noesis_svg_path_close,
+    noesis_svg_path_command_count, noesis_svg_path_create, noesis_svg_path_destroy,
+    noesis_svg_path_fill_contains, noesis_svg_path_line_to, noesis_svg_path_move_to,
+    noesis_svg_path_parse, noesis_svg_path_stroke_contains,
 };
 
 /// The fill (winding) rule used by [`SvgPath::fill_contains`].
@@ -113,7 +112,7 @@ impl SvgPath {
         let c = CString::new(path_data).ok()?;
         // SAFETY: `c` is a valid NUL-terminated string for the call; the C side
         // copies what it needs.
-        let ptr = unsafe { dm_noesis_svg_path_parse(c.as_ptr()) };
+        let ptr = unsafe { noesis_svg_path_parse(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -124,9 +123,9 @@ impl SvgPath {
     /// Panics if Noesis fails to allocate the path.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_svg_path_create() };
+        let ptr = unsafe { noesis_svg_path_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_svg_path_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_svg_path_create returned null"),
         }
     }
 
@@ -135,37 +134,37 @@ impl SvgPath {
     #[must_use]
     pub fn command_count(&self) -> u32 {
         // SAFETY: self.ptr is a live SVGPath*.
-        unsafe { dm_noesis_svg_path_command_count(self.ptr.as_ptr()) }
+        unsafe { noesis_svg_path_command_count(self.ptr.as_ptr()) }
     }
 
     /// Start a new sub-path at `(x, y)`.
     pub fn move_to(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live SVGPath*.
-        unsafe { dm_noesis_svg_path_move_to(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_svg_path_move_to(self.ptr.as_ptr(), x, y) };
     }
 
     /// Add a straight line segment to `(x, y)`.
     pub fn line_to(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live SVGPath*.
-        unsafe { dm_noesis_svg_path_line_to(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_svg_path_line_to(self.ptr.as_ptr(), x, y) };
     }
 
     /// Close the current sub-path.
     pub fn close(&mut self) {
         // SAFETY: self.ptr is a live SVGPath*.
-        unsafe { dm_noesis_svg_path_close(self.ptr.as_ptr()) };
+        unsafe { noesis_svg_path_close(self.ptr.as_ptr()) };
     }
 
     /// Append a rectangle with its top-left corner at `(x, y)`.
     pub fn add_rect(&mut self, x: f32, y: f32, width: f32, height: f32) {
         // SAFETY: self.ptr is a live SVGPath*.
-        unsafe { dm_noesis_svg_path_add_rect(self.ptr.as_ptr(), x, y, width, height) };
+        unsafe { noesis_svg_path_add_rect(self.ptr.as_ptr(), x, y, width, height) };
     }
 
     /// Append an ellipse centered at `(x, y)` with radii `rx`, `ry`.
     pub fn add_ellipse(&mut self, x: f32, y: f32, rx: f32, ry: f32) {
         // SAFETY: self.ptr is a live SVGPath*.
-        unsafe { dm_noesis_svg_path_add_ellipse(self.ptr.as_ptr(), x, y, rx, ry) };
+        unsafe { noesis_svg_path_add_ellipse(self.ptr.as_ptr(), x, y, rx, ry) };
     }
 
     /// Tight axis-aligned bounding box `[x, y, width, height]` of the path
@@ -174,7 +173,7 @@ impl SvgPath {
     pub fn bounds(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live SVGPath*; `out` holds 4 floats.
-        unsafe { dm_noesis_svg_path_calculate_bounds(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_svg_path_calculate_bounds(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 
@@ -182,7 +181,7 @@ impl SvgPath {
     #[must_use]
     pub fn fill_contains(&self, x: f32, y: f32, rule: FillRule) -> bool {
         // SAFETY: self.ptr is a live SVGPath*.
-        unsafe { dm_noesis_svg_path_fill_contains(self.ptr.as_ptr(), x, y, rule as i32) }
+        unsafe { noesis_svg_path_fill_contains(self.ptr.as_ptr(), x, y, rule as i32) }
     }
 
     /// Whether `(x, y)` falls within the stroked outline for `pen`.
@@ -190,7 +189,7 @@ impl SvgPath {
     pub fn stroke_contains(&self, x: f32, y: f32, pen: Pen) -> bool {
         // SAFETY: self.ptr is a live SVGPath*.
         unsafe {
-            dm_noesis_svg_path_stroke_contains(
+            noesis_svg_path_stroke_contains(
                 self.ptr.as_ptr(),
                 x,
                 y,
@@ -219,7 +218,7 @@ impl Default for SvgPath {
 impl Drop for SvgPath {
     fn drop(&mut self) {
         // SAFETY: produced by a parse/create entrypoint we own; freed once here.
-        unsafe { dm_noesis_svg_path_destroy(self.ptr.as_ptr()) };
+        unsafe { noesis_svg_path_destroy(self.ptr.as_ptr()) };
     }
 }
 
@@ -269,7 +268,7 @@ impl SvgImage {
     pub fn parse(document: &str) -> Option<Self> {
         let c = CString::new(document).ok()?;
         // SAFETY: `c` is a valid NUL-terminated string for the call.
-        let ptr = unsafe { dm_noesis_svg_image_parse(c.as_ptr()) };
+        let ptr = unsafe { noesis_svg_image_parse(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -279,7 +278,7 @@ impl SvgImage {
         let mut w = 0.0f32;
         let mut h = 0.0f32;
         // SAFETY: self.ptr is a live SVG::Image*; out params valid.
-        unsafe { dm_noesis_svg_image_get_size(self.ptr.as_ptr(), &mut w, &mut h) };
+        unsafe { noesis_svg_image_get_size(self.ptr.as_ptr(), &mut w, &mut h) };
         (w, h)
     }
 
@@ -287,14 +286,14 @@ impl SvgImage {
     #[must_use]
     pub fn shape_count(&self) -> u32 {
         // SAFETY: self.ptr is a live SVG::Image*.
-        unsafe { dm_noesis_svg_image_shape_count(self.ptr.as_ptr()) }
+        unsafe { noesis_svg_image_shape_count(self.ptr.as_ptr()) }
     }
 
     /// Fill-brush type of shape `index`, or `None` if the index is out of range.
     #[must_use]
     pub fn shape_fill_type(&self, index: u32) -> Option<SvgBrushType> {
         // SAFETY: self.ptr is a live SVG::Image*.
-        let v = unsafe { dm_noesis_svg_image_shape_fill_type(self.ptr.as_ptr(), index) };
+        let v = unsafe { noesis_svg_image_shape_fill_type(self.ptr.as_ptr(), index) };
         SvgBrushType::from_raw(v)
     }
 
@@ -307,7 +306,7 @@ impl SvgImage {
 
 impl Drop for SvgImage {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_svg_image_parse; freed once here.
-        unsafe { dm_noesis_svg_image_destroy(self.ptr.as_ptr()) };
+        // SAFETY: produced by noesis_svg_image_parse; freed once here.
+        unsafe { noesis_svg_image_destroy(self.ptr.as_ptr()) };
     }
 }

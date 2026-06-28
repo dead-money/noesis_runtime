@@ -5,7 +5,7 @@
 //
 // Ownership mirrors cpp/noesis_binding.cpp / cpp/noesis_brushes.cpp: every
 // `*_create` hands out exactly one owned reference (the owning Rust handle in
-// src/animation.rs releases it on Drop via dm_noesis_base_component_release).
+// src/animation.rs releases it on Drop via noesis_base_component_release).
 // Adding a timeline to a Storyboard's TimelineCollection, or assigning a key
 // frame / easing function to its parent, makes Noesis take its own reference,
 // so the Rust builder handle can be dropped after wiring.
@@ -215,7 +215,7 @@ Noesis::Ptr<KF> makeKeyFrame(int32_t kind, double key_time_seconds, void* extra)
 
 // ── Storyboard ───────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_storyboard_create() {
+extern "C" void* noesis_storyboard_create() {
     Noesis::Ptr<Noesis::Storyboard> sb = *new Noesis::Storyboard();
     return handout(sb.GetPtr());
 }
@@ -223,7 +223,7 @@ extern "C" void* dm_noesis_storyboard_create() {
 // Append a child Timeline (an animation) to the Storyboard's children
 // collection, creating it if absent. The collection takes its own reference;
 // the caller keeps ownership of `timeline`. Returns false on type mismatch.
-extern "C" bool dm_noesis_storyboard_add_child(void* sb, void* timeline) {
+extern "C" bool noesis_storyboard_add_child(void* sb, void* timeline) {
     auto* s = cast<Noesis::Storyboard>(sb);
     auto* t = cast<Noesis::Timeline>(timeline);
     if (!s || !t) return false;
@@ -237,7 +237,7 @@ extern "C" bool dm_noesis_storyboard_add_child(void* sb, void* timeline) {
     return true;
 }
 
-extern "C" int32_t dm_noesis_storyboard_child_count(void* sb) {
+extern "C" int32_t noesis_storyboard_child_count(void* sb) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return -1;
     Noesis::TimelineCollection* children = s->GetChildren();
@@ -247,7 +247,7 @@ extern "C" int32_t dm_noesis_storyboard_child_count(void* sb) {
 // Storyboard.TargetName attached property — names the element a child animation
 // targets, resolved against the namescope passed to Begin. `timeline` is the
 // child animation (a DependencyObject).
-extern "C" bool dm_noesis_storyboard_set_target_name(void* timeline, const char* name) {
+extern "C" bool noesis_storyboard_set_target_name(void* timeline, const char* name) {
     auto* d = cast<Noesis::DependencyObject>(timeline);
     if (!d || !name) return false;
     Noesis::Storyboard::SetTargetName(d, name);
@@ -256,7 +256,7 @@ extern "C" bool dm_noesis_storyboard_set_target_name(void* timeline, const char*
 
 // Storyboard.TargetProperty attached property — the property path the child
 // animation drives (e.g. "Opacity", "(UIElement.RenderTransform).(ScaleX)").
-extern "C" bool dm_noesis_storyboard_set_target_property(void* timeline, const char* path) {
+extern "C" bool noesis_storyboard_set_target_property(void* timeline, const char* path) {
     auto* d = cast<Noesis::DependencyObject>(timeline);
     if (!d || !path) return false;
     Noesis::Ptr<Noesis::PropertyPath> pp = *new Noesis::PropertyPath(path);
@@ -266,7 +266,7 @@ extern "C" bool dm_noesis_storyboard_set_target_property(void* timeline, const c
 
 // Storyboard.Target attached property — a direct object reference, an
 // alternative to TargetName when the target isn't in a namescope.
-extern "C" bool dm_noesis_storyboard_set_target(void* timeline, void* target) {
+extern "C" bool noesis_storyboard_set_target(void* timeline, void* target) {
     auto* d = cast<Noesis::DependencyObject>(timeline);
     auto* tg = cast<Noesis::DependencyObject>(target);
     if (!d) return false;
@@ -277,7 +277,7 @@ extern "C" bool dm_noesis_storyboard_set_target(void* timeline, void* target) {
 // Begin the storyboard. `fe` (nullable) is both the target root and namescope
 // used to resolve TargetName. `controllable` must be true for the
 // Pause/Resume/Stop/Seek actions to have any effect.
-extern "C" bool dm_noesis_storyboard_begin(void* sb, void* fe, bool controllable) {
+extern "C" bool noesis_storyboard_begin(void* sb, void* fe, bool controllable) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
     auto* f = cast<Noesis::FrameworkElement>(fe);
@@ -293,7 +293,7 @@ extern "C" bool dm_noesis_storyboard_begin(void* sb, void* fe, bool controllable
 // interact with animations already running on the same properties). `fe` is the
 // target root + namescope and is required for this overload. handoff: matches
 // Noesis::HandoffBehavior (0 SnapshotAndReplace, 1 Compose).
-extern "C" bool dm_noesis_storyboard_begin_handoff(void* sb, void* fe, int32_t handoff,
+extern "C" bool noesis_storyboard_begin_handoff(void* sb, void* fe, int32_t handoff,
                                                    bool controllable) {
     auto* s = cast<Noesis::Storyboard>(sb);
     auto* f = cast<Noesis::FrameworkElement>(fe);
@@ -302,7 +302,7 @@ extern "C" bool dm_noesis_storyboard_begin_handoff(void* sb, void* fe, int32_t h
     return true;
 }
 
-extern "C" bool dm_noesis_storyboard_pause(void* sb, void* fe) {
+extern "C" bool noesis_storyboard_pause(void* sb, void* fe) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
     auto* f = cast<Noesis::FrameworkElement>(fe);
@@ -314,7 +314,7 @@ extern "C" bool dm_noesis_storyboard_pause(void* sb, void* fe) {
     return true;
 }
 
-extern "C" bool dm_noesis_storyboard_resume(void* sb, void* fe) {
+extern "C" bool noesis_storyboard_resume(void* sb, void* fe) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
     auto* f = cast<Noesis::FrameworkElement>(fe);
@@ -326,7 +326,7 @@ extern "C" bool dm_noesis_storyboard_resume(void* sb, void* fe) {
     return true;
 }
 
-extern "C" bool dm_noesis_storyboard_stop(void* sb, void* fe) {
+extern "C" bool noesis_storyboard_stop(void* sb, void* fe) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
     auto* f = cast<Noesis::FrameworkElement>(fe);
@@ -338,7 +338,7 @@ extern "C" bool dm_noesis_storyboard_stop(void* sb, void* fe) {
     return true;
 }
 
-extern "C" bool dm_noesis_storyboard_seek(void* sb, void* fe, double seconds) {
+extern "C" bool noesis_storyboard_seek(void* sb, void* fe, double seconds) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
     Noesis::TimeSpan offset(seconds);
@@ -351,14 +351,14 @@ extern "C" bool dm_noesis_storyboard_seek(void* sb, void* fe, double seconds) {
     return true;
 }
 
-extern "C" bool dm_noesis_storyboard_is_playing(void* sb, void* fe) {
+extern "C" bool noesis_storyboard_is_playing(void* sb, void* fe) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
     auto* f = cast<Noesis::FrameworkElement>(fe);
     return f ? s->IsPlaying(f) : s->IsPlaying();
 }
 
-extern "C" bool dm_noesis_storyboard_is_paused(void* sb, void* fe) {
+extern "C" bool noesis_storyboard_is_paused(void* sb, void* fe) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
     auto* f = cast<Noesis::FrameworkElement>(fe);
@@ -367,21 +367,21 @@ extern "C" bool dm_noesis_storyboard_is_paused(void* sb, void* fe) {
 
 // ── Timeline common knobs (apply to any Timeline / animation) ────────────────
 
-extern "C" bool dm_noesis_timeline_set_duration_seconds(void* tl, double seconds) {
+extern "C" bool noesis_timeline_set_duration_seconds(void* tl, double seconds) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetDuration(Noesis::Duration(Noesis::TimeSpan(seconds)));
     return true;
 }
 
-extern "C" bool dm_noesis_timeline_set_duration_auto(void* tl) {
+extern "C" bool noesis_timeline_set_duration_auto(void* tl) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetDuration(Noesis::Duration::Automatic());
     return true;
 }
 
-extern "C" bool dm_noesis_timeline_set_duration_forever(void* tl) {
+extern "C" bool noesis_timeline_set_duration_forever(void* tl) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetDuration(Noesis::Duration::Forever());
@@ -390,7 +390,7 @@ extern "C" bool dm_noesis_timeline_set_duration_forever(void* tl) {
 
 // Returns the duration in seconds, or -1.0 if the duration is not a resolved
 // TimeSpan (Automatic / Forever / not a Timeline).
-extern "C" double dm_noesis_timeline_get_duration_seconds(void* tl) {
+extern "C" double noesis_timeline_get_duration_seconds(void* tl) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return -1.0;
     const Noesis::Duration& d = t->GetDuration();
@@ -398,21 +398,21 @@ extern "C" double dm_noesis_timeline_get_duration_seconds(void* tl) {
     return d.GetTimeSpan().GetTotalSeconds();
 }
 
-extern "C" bool dm_noesis_timeline_set_begin_time_seconds(void* tl, double seconds) {
+extern "C" bool noesis_timeline_set_begin_time_seconds(void* tl, double seconds) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetBeginTime(Noesis::TimeSpan(seconds));
     return true;
 }
 
-extern "C" bool dm_noesis_timeline_set_auto_reverse(void* tl, bool value) {
+extern "C" bool noesis_timeline_set_auto_reverse(void* tl, bool value) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetAutoReverse(value);
     return true;
 }
 
-extern "C" bool dm_noesis_timeline_set_speed_ratio(void* tl, float value) {
+extern "C" bool noesis_timeline_set_speed_ratio(void* tl, float value) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetSpeedRatio(value);
@@ -420,28 +420,28 @@ extern "C" bool dm_noesis_timeline_set_speed_ratio(void* tl, float value) {
 }
 
 // behavior: 0 = HoldEnd, 1 = Stop (matches Noesis::FillBehavior).
-extern "C" bool dm_noesis_timeline_set_fill_behavior(void* tl, int32_t behavior) {
+extern "C" bool noesis_timeline_set_fill_behavior(void* tl, int32_t behavior) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetFillBehavior(static_cast<Noesis::FillBehavior>(behavior));
     return true;
 }
 
-extern "C" bool dm_noesis_timeline_set_repeat_count(void* tl, float count) {
+extern "C" bool noesis_timeline_set_repeat_count(void* tl, float count) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetRepeatBehavior(Noesis::RepeatBehavior(count));
     return true;
 }
 
-extern "C" bool dm_noesis_timeline_set_repeat_duration(void* tl, double seconds) {
+extern "C" bool noesis_timeline_set_repeat_duration(void* tl, double seconds) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetRepeatBehavior(Noesis::RepeatBehavior(Noesis::TimeSpan(seconds)));
     return true;
 }
 
-extern "C" bool dm_noesis_timeline_set_repeat_forever(void* tl) {
+extern "C" bool noesis_timeline_set_repeat_forever(void* tl) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
     t->SetRepeatBehavior(Noesis::RepeatBehavior::Forever());
@@ -450,38 +450,38 @@ extern "C" bool dm_noesis_timeline_set_repeat_forever(void* tl) {
 
 // ── From/To/By animations ────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_double_animation_create() {
+extern "C" void* noesis_double_animation_create() {
     Noesis::Ptr<Noesis::DoubleAnimation> a = *new Noesis::DoubleAnimation();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_double_animation_set_from(void* anim, bool has, float v) {
+extern "C" bool noesis_double_animation_set_from(void* anim, bool has, float v) {
     auto* a = cast<Noesis::DoubleAnimation>(anim);
     if (!a) return false;
     a->SetFrom(has ? Noesis::Nullable<float>(v) : Noesis::Nullable<float>());
     return true;
 }
 
-extern "C" bool dm_noesis_double_animation_set_to(void* anim, bool has, float v) {
+extern "C" bool noesis_double_animation_set_to(void* anim, bool has, float v) {
     auto* a = cast<Noesis::DoubleAnimation>(anim);
     if (!a) return false;
     a->SetTo(has ? Noesis::Nullable<float>(v) : Noesis::Nullable<float>());
     return true;
 }
 
-extern "C" bool dm_noesis_double_animation_set_by(void* anim, bool has, float v) {
+extern "C" bool noesis_double_animation_set_by(void* anim, bool has, float v) {
     auto* a = cast<Noesis::DoubleAnimation>(anim);
     if (!a) return false;
     a->SetBy(has ? Noesis::Nullable<float>(v) : Noesis::Nullable<float>());
     return true;
 }
 
-extern "C" void* dm_noesis_color_animation_create() {
+extern "C" void* noesis_color_animation_create() {
     Noesis::Ptr<Noesis::ColorAnimation> a = *new Noesis::ColorAnimation();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_color_animation_set_from(void* anim, bool has, const float color[4]) {
+extern "C" bool noesis_color_animation_set_from(void* anim, bool has, const float color[4]) {
     auto* a = cast<Noesis::ColorAnimation>(anim);
     if (!a) return false;
     a->SetFrom(has && color ? Noesis::Nullable<Noesis::Color>(
@@ -490,7 +490,7 @@ extern "C" bool dm_noesis_color_animation_set_from(void* anim, bool has, const f
     return true;
 }
 
-extern "C" bool dm_noesis_color_animation_set_to(void* anim, bool has, const float color[4]) {
+extern "C" bool noesis_color_animation_set_to(void* anim, bool has, const float color[4]) {
     auto* a = cast<Noesis::ColorAnimation>(anim);
     if (!a) return false;
     a->SetTo(has && color ? Noesis::Nullable<Noesis::Color>(
@@ -499,7 +499,7 @@ extern "C" bool dm_noesis_color_animation_set_to(void* anim, bool has, const flo
     return true;
 }
 
-extern "C" bool dm_noesis_color_animation_set_by(void* anim, bool has, const float color[4]) {
+extern "C" bool noesis_color_animation_set_by(void* anim, bool has, const float color[4]) {
     auto* a = cast<Noesis::ColorAnimation>(anim);
     if (!a) return false;
     a->SetBy(has && color ? Noesis::Nullable<Noesis::Color>(
@@ -508,12 +508,12 @@ extern "C" bool dm_noesis_color_animation_set_by(void* anim, bool has, const flo
     return true;
 }
 
-extern "C" void* dm_noesis_thickness_animation_create() {
+extern "C" void* noesis_thickness_animation_create() {
     Noesis::Ptr<Noesis::ThicknessAnimation> a = *new Noesis::ThicknessAnimation();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_thickness_animation_set_from(void* anim, bool has, const float t[4]) {
+extern "C" bool noesis_thickness_animation_set_from(void* anim, bool has, const float t[4]) {
     auto* a = cast<Noesis::ThicknessAnimation>(anim);
     if (!a) return false;
     a->SetFrom(has && t ? Noesis::Nullable<Noesis::Thickness>(
@@ -522,7 +522,7 @@ extern "C" bool dm_noesis_thickness_animation_set_from(void* anim, bool has, con
     return true;
 }
 
-extern "C" bool dm_noesis_thickness_animation_set_to(void* anim, bool has, const float t[4]) {
+extern "C" bool noesis_thickness_animation_set_to(void* anim, bool has, const float t[4]) {
     auto* a = cast<Noesis::ThicknessAnimation>(anim);
     if (!a) return false;
     a->SetTo(has && t ? Noesis::Nullable<Noesis::Thickness>(
@@ -531,7 +531,7 @@ extern "C" bool dm_noesis_thickness_animation_set_to(void* anim, bool has, const
     return true;
 }
 
-extern "C" bool dm_noesis_thickness_animation_set_by(void* anim, bool has, const float t[4]) {
+extern "C" bool noesis_thickness_animation_set_by(void* anim, bool has, const float t[4]) {
     auto* a = cast<Noesis::ThicknessAnimation>(anim);
     if (!a) return false;
     a->SetBy(has && t ? Noesis::Nullable<Noesis::Thickness>(
@@ -540,12 +540,12 @@ extern "C" bool dm_noesis_thickness_animation_set_by(void* anim, bool has, const
     return true;
 }
 
-extern "C" void* dm_noesis_point_animation_create() {
+extern "C" void* noesis_point_animation_create() {
     Noesis::Ptr<Noesis::PointAnimation> a = *new Noesis::PointAnimation();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_point_animation_set_from(void* anim, bool has, float x, float y) {
+extern "C" bool noesis_point_animation_set_from(void* anim, bool has, float x, float y) {
     auto* a = cast<Noesis::PointAnimation>(anim);
     if (!a) return false;
     a->SetFrom(has ? Noesis::Nullable<Noesis::Point>(Noesis::Point(x, y))
@@ -553,7 +553,7 @@ extern "C" bool dm_noesis_point_animation_set_from(void* anim, bool has, float x
     return true;
 }
 
-extern "C" bool dm_noesis_point_animation_set_to(void* anim, bool has, float x, float y) {
+extern "C" bool noesis_point_animation_set_to(void* anim, bool has, float x, float y) {
     auto* a = cast<Noesis::PointAnimation>(anim);
     if (!a) return false;
     a->SetTo(has ? Noesis::Nullable<Noesis::Point>(Noesis::Point(x, y))
@@ -561,7 +561,7 @@ extern "C" bool dm_noesis_point_animation_set_to(void* anim, bool has, float x, 
     return true;
 }
 
-extern "C" bool dm_noesis_point_animation_set_by(void* anim, bool has, float x, float y) {
+extern "C" bool noesis_point_animation_set_by(void* anim, bool has, float x, float y) {
     auto* a = cast<Noesis::PointAnimation>(anim);
     if (!a) return false;
     a->SetBy(has ? Noesis::Nullable<Noesis::Point>(Noesis::Point(x, y))
@@ -571,7 +571,7 @@ extern "C" bool dm_noesis_point_animation_set_by(void* anim, bool has, float x, 
 
 // Attach an easing function to a From/To animation. DynamicCasts across the
 // supported animation types. Noesis takes its own reference to `easing`.
-extern "C" bool dm_noesis_animation_set_easing_function(void* anim, void* easing) {
+extern "C" bool noesis_animation_set_easing_function(void* anim, void* easing) {
     auto* e = cast<Noesis::EasingFunctionBase>(easing);  // may be null to clear
     if (auto* d = cast<Noesis::DoubleAnimation>(anim)) {
         d->SetEasingFunction(e);
@@ -617,7 +617,7 @@ extern "C" bool dm_noesis_animation_set_easing_function(void* anim, void* easing
 // kind: 0 Quadratic, 1 Cubic, 2 Quartic, 3 Quintic, 4 Sine, 5 Circle, 6 Back,
 //       7 Bounce, 8 Elastic, 9 Exponential, 10 Power.
 // mode: matches Noesis::EasingMode (0 EaseOut, 1 EaseIn, 2 EaseInOut).
-extern "C" void* dm_noesis_easing_function_create(int32_t kind, int32_t mode) {
+extern "C" void* noesis_easing_function_create(int32_t kind, int32_t mode) {
     Noesis::Ptr<Noesis::EasingFunctionBase> e;
     switch (kind) {
         case 0: e = *new Noesis::QuadraticEase(); break;
@@ -638,7 +638,7 @@ extern "C" void* dm_noesis_easing_function_create(int32_t kind, int32_t mode) {
 }
 
 // BackEase.Amplitude.
-extern "C" bool dm_noesis_easing_function_set_amplitude(void* easing, float value) {
+extern "C" bool noesis_easing_function_set_amplitude(void* easing, float value) {
     auto* b = cast<Noesis::BackEase>(easing);
     if (!b) return false;
     b->SetAmplitude(value);
@@ -646,7 +646,7 @@ extern "C" bool dm_noesis_easing_function_set_amplitude(void* easing, float valu
 }
 
 // PowerEase.Power.
-extern "C" bool dm_noesis_easing_function_set_power(void* easing, float value) {
+extern "C" bool noesis_easing_function_set_power(void* easing, float value) {
     auto* p = cast<Noesis::PowerEase>(easing);
     if (!p) return false;
     p->SetPower(value);
@@ -654,7 +654,7 @@ extern "C" bool dm_noesis_easing_function_set_power(void* easing, float value) {
 }
 
 // ExponentialEase.Exponent.
-extern "C" bool dm_noesis_easing_function_set_exponent(void* easing, float value) {
+extern "C" bool noesis_easing_function_set_exponent(void* easing, float value) {
     auto* e = cast<Noesis::ExponentialEase>(easing);
     if (!e) return false;
     e->SetExponent(value);
@@ -662,7 +662,7 @@ extern "C" bool dm_noesis_easing_function_set_exponent(void* easing, float value
 }
 
 // ElasticEase.Oscillations / BounceEase.Bounces (both integer counts).
-extern "C" bool dm_noesis_easing_function_set_oscillations(void* easing, int32_t value) {
+extern "C" bool noesis_easing_function_set_oscillations(void* easing, int32_t value) {
     if (auto* el = cast<Noesis::ElasticEase>(easing)) {
         el->SetOscillations(value);
         return true;
@@ -675,7 +675,7 @@ extern "C" bool dm_noesis_easing_function_set_oscillations(void* easing, int32_t
 }
 
 // ElasticEase.Springiness / BounceEase.Bounciness.
-extern "C" bool dm_noesis_easing_function_set_springiness(void* easing, float value) {
+extern "C" bool noesis_easing_function_set_springiness(void* easing, float value) {
     if (auto* el = cast<Noesis::ElasticEase>(easing)) {
         el->SetSpringiness(value);
         return true;
@@ -689,7 +689,7 @@ extern "C" bool dm_noesis_easing_function_set_springiness(void* easing, float va
 
 // ── Key-frame animations ─────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_double_animation_keyframes_create() {
+extern "C" void* noesis_double_animation_keyframes_create() {
     Noesis::Ptr<Noesis::DoubleAnimationUsingKeyFrames> a =
         *new Noesis::DoubleAnimationUsingKeyFrames();
     return handout(a.GetPtr());
@@ -697,7 +697,7 @@ extern "C" void* dm_noesis_double_animation_keyframes_create() {
 
 // kind: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3 Spline
 // (`extra` = KeySpline*).
-extern "C" bool dm_noesis_double_animation_add_keyframe(void* anim, int32_t kind,
+extern "C" bool noesis_double_animation_add_keyframe(void* anim, int32_t kind,
                                                         double key_time_seconds, float value,
                                                         void* extra) {
     auto* a = cast<Noesis::DoubleAnimationUsingKeyFrames>(anim);
@@ -714,7 +714,7 @@ extern "C" bool dm_noesis_double_animation_add_keyframe(void* anim, int32_t kind
     return true;
 }
 
-extern "C" void* dm_noesis_color_animation_keyframes_create() {
+extern "C" void* noesis_color_animation_keyframes_create() {
     Noesis::Ptr<Noesis::ColorAnimationUsingKeyFrames> a =
         *new Noesis::ColorAnimationUsingKeyFrames();
     return handout(a.GetPtr());
@@ -722,7 +722,7 @@ extern "C" void* dm_noesis_color_animation_keyframes_create() {
 
 // kind: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3 Spline
 // (`extra` = KeySpline*).
-extern "C" bool dm_noesis_color_animation_add_keyframe(void* anim, int32_t kind,
+extern "C" bool noesis_color_animation_add_keyframe(void* anim, int32_t kind,
                                                        double key_time_seconds,
                                                        const float color[4], void* extra) {
     auto* a = cast<Noesis::ColorAnimationUsingKeyFrames>(anim);
@@ -747,7 +747,7 @@ extern "C" bool dm_noesis_color_animation_add_keyframe(void* anim, int32_t kind,
 // TimeManager). handoff: matches Noesis::HandoffBehavior (0 SnapshotAndReplace,
 // 1 Compose). Returns false on null/type mismatch, unknown property, or no
 // TimeManager (target not connected to a view).
-extern "C" bool dm_noesis_animation_begin_on(void* anim, void* target, const char* dp_name,
+extern "C" bool noesis_animation_begin_on(void* anim, void* target, const char* dp_name,
                                              int32_t handoff) {
     auto* a = cast<Noesis::AnimationTimeline>(anim);
     auto* fe = cast<Noesis::FrameworkElement>(target);
@@ -770,33 +770,33 @@ extern "C" bool dm_noesis_animation_begin_on(void* anim, void* target, const cha
 // a {width, height} float[2]. Each setter takes a `has` flag (false clears the
 // Nullable); each getter fills `out` and returns whether the Nullable was set.
 
-extern "C" void* dm_noesis_animation_rect_animation_create() {
+extern "C" void* noesis_animation_rect_animation_create() {
     Noesis::Ptr<Noesis::RectAnimation> a = *new Noesis::RectAnimation();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_rect_animation_set_from(void* anim, bool has, const float r[4]) {
+extern "C" bool noesis_animation_rect_animation_set_from(void* anim, bool has, const float r[4]) {
     auto* a = cast<Noesis::RectAnimation>(anim);
     if (!a) return false;
     a->SetFrom(has && r ? Noesis::Nullable<Noesis::Rect>(makeRect(r)) : Noesis::Nullable<Noesis::Rect>());
     return true;
 }
 
-extern "C" bool dm_noesis_animation_rect_animation_set_to(void* anim, bool has, const float r[4]) {
+extern "C" bool noesis_animation_rect_animation_set_to(void* anim, bool has, const float r[4]) {
     auto* a = cast<Noesis::RectAnimation>(anim);
     if (!a) return false;
     a->SetTo(has && r ? Noesis::Nullable<Noesis::Rect>(makeRect(r)) : Noesis::Nullable<Noesis::Rect>());
     return true;
 }
 
-extern "C" bool dm_noesis_animation_rect_animation_set_by(void* anim, bool has, const float r[4]) {
+extern "C" bool noesis_animation_rect_animation_set_by(void* anim, bool has, const float r[4]) {
     auto* a = cast<Noesis::RectAnimation>(anim);
     if (!a) return false;
     a->SetBy(has && r ? Noesis::Nullable<Noesis::Rect>(makeRect(r)) : Noesis::Nullable<Noesis::Rect>());
     return true;
 }
 
-extern "C" bool dm_noesis_animation_rect_animation_get_from(void* anim, float out[4]) {
+extern "C" bool noesis_animation_rect_animation_get_from(void* anim, float out[4]) {
     auto* a = cast<Noesis::RectAnimation>(anim);
     if (!a || !out) return false;
     const Noesis::Nullable<Noesis::Rect>& n = a->GetFrom();
@@ -805,7 +805,7 @@ extern "C" bool dm_noesis_animation_rect_animation_get_from(void* anim, float ou
     return true;
 }
 
-extern "C" bool dm_noesis_animation_rect_animation_get_to(void* anim, float out[4]) {
+extern "C" bool noesis_animation_rect_animation_get_to(void* anim, float out[4]) {
     auto* a = cast<Noesis::RectAnimation>(anim);
     if (!a || !out) return false;
     const Noesis::Nullable<Noesis::Rect>& n = a->GetTo();
@@ -814,7 +814,7 @@ extern "C" bool dm_noesis_animation_rect_animation_get_to(void* anim, float out[
     return true;
 }
 
-extern "C" bool dm_noesis_animation_rect_animation_get_by(void* anim, float out[4]) {
+extern "C" bool noesis_animation_rect_animation_get_by(void* anim, float out[4]) {
     auto* a = cast<Noesis::RectAnimation>(anim);
     if (!a || !out) return false;
     const Noesis::Nullable<Noesis::Rect>& n = a->GetBy();
@@ -823,12 +823,12 @@ extern "C" bool dm_noesis_animation_rect_animation_get_by(void* anim, float out[
     return true;
 }
 
-extern "C" void* dm_noesis_animation_size_animation_create() {
+extern "C" void* noesis_animation_size_animation_create() {
     Noesis::Ptr<Noesis::SizeAnimation> a = *new Noesis::SizeAnimation();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_size_animation_set_from(void* anim, bool has, const float s[2]) {
+extern "C" bool noesis_animation_size_animation_set_from(void* anim, bool has, const float s[2]) {
     auto* a = cast<Noesis::SizeAnimation>(anim);
     if (!a) return false;
     a->SetFrom(has && s ? Noesis::Nullable<Noesis::Size>(Noesis::Size(s[0], s[1]))
@@ -836,7 +836,7 @@ extern "C" bool dm_noesis_animation_size_animation_set_from(void* anim, bool has
     return true;
 }
 
-extern "C" bool dm_noesis_animation_size_animation_set_to(void* anim, bool has, const float s[2]) {
+extern "C" bool noesis_animation_size_animation_set_to(void* anim, bool has, const float s[2]) {
     auto* a = cast<Noesis::SizeAnimation>(anim);
     if (!a) return false;
     a->SetTo(has && s ? Noesis::Nullable<Noesis::Size>(Noesis::Size(s[0], s[1]))
@@ -844,7 +844,7 @@ extern "C" bool dm_noesis_animation_size_animation_set_to(void* anim, bool has, 
     return true;
 }
 
-extern "C" bool dm_noesis_animation_size_animation_set_by(void* anim, bool has, const float s[2]) {
+extern "C" bool noesis_animation_size_animation_set_by(void* anim, bool has, const float s[2]) {
     auto* a = cast<Noesis::SizeAnimation>(anim);
     if (!a) return false;
     a->SetBy(has && s ? Noesis::Nullable<Noesis::Size>(Noesis::Size(s[0], s[1]))
@@ -852,7 +852,7 @@ extern "C" bool dm_noesis_animation_size_animation_set_by(void* anim, bool has, 
     return true;
 }
 
-extern "C" bool dm_noesis_animation_size_animation_get_from(void* anim, float out[2]) {
+extern "C" bool noesis_animation_size_animation_get_from(void* anim, float out[2]) {
     auto* a = cast<Noesis::SizeAnimation>(anim);
     if (!a || !out) return false;
     const Noesis::Nullable<Noesis::Size>& n = a->GetFrom();
@@ -862,7 +862,7 @@ extern "C" bool dm_noesis_animation_size_animation_get_from(void* anim, float ou
     return true;
 }
 
-extern "C" bool dm_noesis_animation_size_animation_get_to(void* anim, float out[2]) {
+extern "C" bool noesis_animation_size_animation_get_to(void* anim, float out[2]) {
     auto* a = cast<Noesis::SizeAnimation>(anim);
     if (!a || !out) return false;
     const Noesis::Nullable<Noesis::Size>& n = a->GetTo();
@@ -872,7 +872,7 @@ extern "C" bool dm_noesis_animation_size_animation_get_to(void* anim, float out[
     return true;
 }
 
-extern "C" bool dm_noesis_animation_size_animation_get_by(void* anim, float out[2]) {
+extern "C" bool noesis_animation_size_animation_get_by(void* anim, float out[2]) {
     auto* a = cast<Noesis::SizeAnimation>(anim);
     if (!a || !out) return false;
     const Noesis::Nullable<Noesis::Size>& n = a->GetBy();
@@ -887,33 +887,33 @@ extern "C" bool dm_noesis_animation_size_animation_get_by(void* anim, float out[
 // Int16/Int32 cross the ABI as int32_t (narrowed on the C++ side); Int64 as
 // int64_t. Setters take a `has` flag; getters fill `*out` and return HasValue.
 
-#define DM_INT_FROMTO(SUFFIX, CLASS, T, ABIT)                                                 \
-    extern "C" void* dm_noesis_animation_##SUFFIX##_animation_create() {                      \
+#define INT_FROMTO(SUFFIX, CLASS, T, ABIT)                                                 \
+    extern "C" void* noesis_animation_##SUFFIX##_animation_create() {                      \
         Noesis::Ptr<Noesis::CLASS> a = *new Noesis::CLASS();                                  \
         return handout(a.GetPtr());                                                           \
     }                                                                                         \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_animation_set_from(void* anim, bool has,   \
+    extern "C" bool noesis_animation_##SUFFIX##_animation_set_from(void* anim, bool has,   \
                                                                       ABIT v) {               \
         auto* a = cast<Noesis::CLASS>(anim);                                                  \
         if (!a) return false;                                                                 \
         a->SetFrom(has ? Noesis::Nullable<T>(static_cast<T>(v)) : Noesis::Nullable<T>());     \
         return true;                                                                          \
     }                                                                                         \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_animation_set_to(void* anim, bool has,     \
+    extern "C" bool noesis_animation_##SUFFIX##_animation_set_to(void* anim, bool has,     \
                                                                     ABIT v) {                 \
         auto* a = cast<Noesis::CLASS>(anim);                                                  \
         if (!a) return false;                                                                 \
         a->SetTo(has ? Noesis::Nullable<T>(static_cast<T>(v)) : Noesis::Nullable<T>());       \
         return true;                                                                          \
     }                                                                                         \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_animation_set_by(void* anim, bool has,     \
+    extern "C" bool noesis_animation_##SUFFIX##_animation_set_by(void* anim, bool has,     \
                                                                     ABIT v) {                 \
         auto* a = cast<Noesis::CLASS>(anim);                                                  \
         if (!a) return false;                                                                 \
         a->SetBy(has ? Noesis::Nullable<T>(static_cast<T>(v)) : Noesis::Nullable<T>());       \
         return true;                                                                          \
     }                                                                                         \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_animation_get_from(void* anim, ABIT* out) {\
+    extern "C" bool noesis_animation_##SUFFIX##_animation_get_from(void* anim, ABIT* out) {\
         auto* a = cast<Noesis::CLASS>(anim);                                                  \
         if (!a || !out) return false;                                                         \
         const Noesis::Nullable<T>& n = a->GetFrom();                                          \
@@ -921,7 +921,7 @@ extern "C" bool dm_noesis_animation_size_animation_get_by(void* anim, float out[
         *out = static_cast<ABIT>(n.GetValue());                                               \
         return true;                                                                          \
     }                                                                                         \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_animation_get_to(void* anim, ABIT* out) {  \
+    extern "C" bool noesis_animation_##SUFFIX##_animation_get_to(void* anim, ABIT* out) {  \
         auto* a = cast<Noesis::CLASS>(anim);                                                  \
         if (!a || !out) return false;                                                         \
         const Noesis::Nullable<T>& n = a->GetTo();                                            \
@@ -929,7 +929,7 @@ extern "C" bool dm_noesis_animation_size_animation_get_by(void* anim, float out[
         *out = static_cast<ABIT>(n.GetValue());                                               \
         return true;                                                                          \
     }                                                                                         \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_animation_get_by(void* anim, ABIT* out) {  \
+    extern "C" bool noesis_animation_##SUFFIX##_animation_get_by(void* anim, ABIT* out) {  \
         auto* a = cast<Noesis::CLASS>(anim);                                                  \
         if (!a || !out) return false;                                                         \
         const Noesis::Nullable<T>& n = a->GetBy();                                            \
@@ -938,11 +938,11 @@ extern "C" bool dm_noesis_animation_size_animation_get_by(void* anim, float out[
         return true;                                                                          \
     }
 
-DM_INT_FROMTO(int16, Int16Animation, int16_t, int32_t)
-DM_INT_FROMTO(int32, Int32Animation, int32_t, int32_t)
-DM_INT_FROMTO(int64, Int64Animation, int64_t, int64_t)
+INT_FROMTO(int16, Int16Animation, int16_t, int32_t)
+INT_FROMTO(int32, Int32Animation, int32_t, int32_t)
+INT_FROMTO(int64, Int64Animation, int64_t, int64_t)
 
-#undef DM_INT_FROMTO
+#undef INT_FROMTO
 
 // ── Rect / Size key-frame animations ─────────────────────────────────────────
 //
@@ -950,12 +950,12 @@ DM_INT_FROMTO(int64, Int64Animation, int64_t, int64_t)
 // Spline (`extra` = KeySpline*). Read-back exposes the key-frame count, value,
 // and key time so a test can prove each frame crossed.
 
-extern "C" void* dm_noesis_animation_rect_keyframes_create() {
+extern "C" void* noesis_animation_rect_keyframes_create() {
     Noesis::Ptr<Noesis::RectAnimationUsingKeyFrames> a = *new Noesis::RectAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_rect_keyframes_add(void* anim, int32_t kind,
+extern "C" bool noesis_animation_rect_keyframes_add(void* anim, int32_t kind,
                                                        double key_time_seconds, const float r[4],
                                                        void* extra) {
     auto* a = cast<Noesis::RectAnimationUsingKeyFrames>(anim);
@@ -972,14 +972,14 @@ extern "C" bool dm_noesis_animation_rect_keyframes_add(void* anim, int32_t kind,
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_rect_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_rect_keyframes_count(void* anim) {
     auto* a = cast<Noesis::RectAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::RectKeyFrameCollection* frames = a->GetKeyFrames();
     return frames ? frames->Count() : 0;
 }
 
-extern "C" bool dm_noesis_animation_rect_keyframes_get_value(void* anim, int32_t index,
+extern "C" bool noesis_animation_rect_keyframes_get_value(void* anim, int32_t index,
                                                              float out[4]) {
     auto* a = cast<Noesis::RectAnimationUsingKeyFrames>(anim);
     if (!a || !out) return false;
@@ -989,7 +989,7 @@ extern "C" bool dm_noesis_animation_rect_keyframes_get_value(void* anim, int32_t
     return true;
 }
 
-extern "C" double dm_noesis_animation_rect_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_rect_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::RectAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::RectKeyFrameCollection* frames = a->GetKeyFrames();
@@ -997,12 +997,12 @@ extern "C" double dm_noesis_animation_rect_keyframes_get_key_time(void* anim, in
     return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
 }
 
-extern "C" void* dm_noesis_animation_size_keyframes_create() {
+extern "C" void* noesis_animation_size_keyframes_create() {
     Noesis::Ptr<Noesis::SizeAnimationUsingKeyFrames> a = *new Noesis::SizeAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_size_keyframes_add(void* anim, int32_t kind,
+extern "C" bool noesis_animation_size_keyframes_add(void* anim, int32_t kind,
                                                        double key_time_seconds, const float s[2],
                                                        void* extra) {
     auto* a = cast<Noesis::SizeAnimationUsingKeyFrames>(anim);
@@ -1019,14 +1019,14 @@ extern "C" bool dm_noesis_animation_size_keyframes_add(void* anim, int32_t kind,
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_size_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_size_keyframes_count(void* anim) {
     auto* a = cast<Noesis::SizeAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::SizeKeyFrameCollection* frames = a->GetKeyFrames();
     return frames ? frames->Count() : 0;
 }
 
-extern "C" bool dm_noesis_animation_size_keyframes_get_value(void* anim, int32_t index,
+extern "C" bool noesis_animation_size_keyframes_get_value(void* anim, int32_t index,
                                                              float out[2]) {
     auto* a = cast<Noesis::SizeAnimationUsingKeyFrames>(anim);
     if (!a || !out) return false;
@@ -1038,7 +1038,7 @@ extern "C" bool dm_noesis_animation_size_keyframes_get_value(void* anim, int32_t
     return true;
 }
 
-extern "C" double dm_noesis_animation_size_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_size_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::SizeAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::SizeKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1051,13 +1051,13 @@ extern "C" double dm_noesis_animation_size_keyframes_get_key_time(void* anim, in
 // `kind`: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3
 // Spline (`extra` = KeySpline*). Points cross the ABI as {x, y} float[2].
 
-extern "C" void* dm_noesis_animation_point_keyframes_create() {
+extern "C" void* noesis_animation_point_keyframes_create() {
     Noesis::Ptr<Noesis::PointAnimationUsingKeyFrames> a =
         *new Noesis::PointAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_point_keyframes_add(void* anim, int32_t kind,
+extern "C" bool noesis_animation_point_keyframes_add(void* anim, int32_t kind,
                                                         double key_time_seconds, const float p[2],
                                                         void* extra) {
     auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
@@ -1074,14 +1074,14 @@ extern "C" bool dm_noesis_animation_point_keyframes_add(void* anim, int32_t kind
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_point_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_point_keyframes_count(void* anim) {
     auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::PointKeyFrameCollection* frames = a->GetKeyFrames();
     return frames ? frames->Count() : 0;
 }
 
-extern "C" bool dm_noesis_animation_point_keyframes_get_value(void* anim, int32_t index,
+extern "C" bool noesis_animation_point_keyframes_get_value(void* anim, int32_t index,
                                                               float out[2]) {
     auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
     if (!a || !out) return false;
@@ -1093,7 +1093,7 @@ extern "C" bool dm_noesis_animation_point_keyframes_get_value(void* anim, int32_
     return true;
 }
 
-extern "C" double dm_noesis_animation_point_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_point_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::PointKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1107,13 +1107,13 @@ extern "C" double dm_noesis_animation_point_keyframes_get_key_time(void* anim, i
 // Spline (`extra` = KeySpline*). Thicknesses cross as {left, top, right, bottom}
 // float[4].
 
-extern "C" void* dm_noesis_animation_thickness_keyframes_create() {
+extern "C" void* noesis_animation_thickness_keyframes_create() {
     Noesis::Ptr<Noesis::ThicknessAnimationUsingKeyFrames> a =
         *new Noesis::ThicknessAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_thickness_keyframes_add(void* anim, int32_t kind,
+extern "C" bool noesis_animation_thickness_keyframes_add(void* anim, int32_t kind,
                                                             double key_time_seconds,
                                                             const float t[4], void* extra) {
     auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
@@ -1130,14 +1130,14 @@ extern "C" bool dm_noesis_animation_thickness_keyframes_add(void* anim, int32_t 
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_thickness_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_thickness_keyframes_count(void* anim) {
     auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::ThicknessKeyFrameCollection* frames = a->GetKeyFrames();
     return frames ? frames->Count() : 0;
 }
 
-extern "C" bool dm_noesis_animation_thickness_keyframes_get_value(void* anim, int32_t index,
+extern "C" bool noesis_animation_thickness_keyframes_get_value(void* anim, int32_t index,
                                                                   float out[4]) {
     auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
     if (!a || !out) return false;
@@ -1151,7 +1151,7 @@ extern "C" bool dm_noesis_animation_thickness_keyframes_get_value(void* anim, in
     return true;
 }
 
-extern "C" double dm_noesis_animation_thickness_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_thickness_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::ThicknessKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1161,12 +1161,12 @@ extern "C" double dm_noesis_animation_thickness_keyframes_get_key_time(void* ani
 
 // ── Int16 / Int32 / Int64 key-frame animations ───────────────────────────────
 
-#define DM_INT_KEYFRAMES(SUFFIX, ANIM, COLL, KF, DISC, LIN, EAS, SPL, T, ABIT)                  \
-    extern "C" void* dm_noesis_animation_##SUFFIX##_keyframes_create() {                        \
+#define INT_KEYFRAMES(SUFFIX, ANIM, COLL, KF, DISC, LIN, EAS, SPL, T, ABIT)                  \
+    extern "C" void* noesis_animation_##SUFFIX##_keyframes_create() {                        \
         Noesis::Ptr<Noesis::ANIM> a = *new Noesis::ANIM();                                      \
         return handout(a.GetPtr());                                                             \
     }                                                                                           \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_keyframes_add(                               \
+    extern "C" bool noesis_animation_##SUFFIX##_keyframes_add(                               \
         void* anim, int32_t kind, double key_time_seconds, ABIT value, void* extra) {           \
         auto* a = cast<Noesis::ANIM>(anim);                                                     \
         if (!a) return false;                                                                   \
@@ -1180,13 +1180,13 @@ extern "C" double dm_noesis_animation_thickness_keyframes_get_key_time(void* ani
         frames->Add(kf.GetPtr());                                                               \
         return true;                                                                            \
     }                                                                                           \
-    extern "C" int32_t dm_noesis_animation_##SUFFIX##_keyframes_count(void* anim) {             \
+    extern "C" int32_t noesis_animation_##SUFFIX##_keyframes_count(void* anim) {             \
         auto* a = cast<Noesis::ANIM>(anim);                                                     \
         if (!a) return -1;                                                                      \
         Noesis::COLL* frames = a->GetKeyFrames();                                               \
         return frames ? frames->Count() : 0;                                                    \
     }                                                                                           \
-    extern "C" bool dm_noesis_animation_##SUFFIX##_keyframes_get_value(void* anim, int32_t idx, \
+    extern "C" bool noesis_animation_##SUFFIX##_keyframes_get_value(void* anim, int32_t idx, \
                                                                        ABIT* out) {             \
         auto* a = cast<Noesis::ANIM>(anim);                                                     \
         if (!a || !out) return false;                                                           \
@@ -1195,7 +1195,7 @@ extern "C" double dm_noesis_animation_thickness_keyframes_get_key_time(void* ani
         *out = static_cast<ABIT>(frames->Get(static_cast<uint32_t>(idx))->GetValue());          \
         return true;                                                                            \
     }                                                                                           \
-    extern "C" double dm_noesis_animation_##SUFFIX##_keyframes_get_key_time(void* anim,         \
+    extern "C" double noesis_animation_##SUFFIX##_keyframes_get_key_time(void* anim,         \
                                                                            int32_t idx) {       \
         auto* a = cast<Noesis::ANIM>(anim);                                                     \
         if (!a) return -1.0;                                                                    \
@@ -1207,17 +1207,17 @@ extern "C" double dm_noesis_animation_thickness_keyframes_get_key_time(void* ani
             .GetTotalSeconds();                                                                 \
     }
 
-DM_INT_KEYFRAMES(int16, Int16AnimationUsingKeyFrames, Int16KeyFrameCollection, Int16KeyFrame,
+INT_KEYFRAMES(int16, Int16AnimationUsingKeyFrames, Int16KeyFrameCollection, Int16KeyFrame,
                  DiscreteInt16KeyFrame, LinearInt16KeyFrame, EasingInt16KeyFrame,
                  SplineInt16KeyFrame, int16_t, int32_t)
-DM_INT_KEYFRAMES(int32, Int32AnimationUsingKeyFrames, Int32KeyFrameCollection, Int32KeyFrame,
+INT_KEYFRAMES(int32, Int32AnimationUsingKeyFrames, Int32KeyFrameCollection, Int32KeyFrame,
                  DiscreteInt32KeyFrame, LinearInt32KeyFrame, EasingInt32KeyFrame,
                  SplineInt32KeyFrame, int32_t, int32_t)
-DM_INT_KEYFRAMES(int64, Int64AnimationUsingKeyFrames, Int64KeyFrameCollection, Int64KeyFrame,
+INT_KEYFRAMES(int64, Int64AnimationUsingKeyFrames, Int64KeyFrameCollection, Int64KeyFrame,
                  DiscreteInt64KeyFrame, LinearInt64KeyFrame, EasingInt64KeyFrame,
                  SplineInt64KeyFrame, int64_t, int64_t)
 
-#undef DM_INT_KEYFRAMES
+#undef INT_KEYFRAMES
 
 // ── Object key-frame animation ───────────────────────────────────────────────
 //
@@ -1226,13 +1226,13 @@ DM_INT_KEYFRAMES(int64, Int64AnimationUsingKeyFrames, Int64KeyFrameCollection, I
 // borrowed BaseComponent*; the collection takes its own reference. The value
 // getter hands out a +1 reference (released by the caller).
 
-extern "C" void* dm_noesis_animation_object_keyframes_create() {
+extern "C" void* noesis_animation_object_keyframes_create() {
     Noesis::Ptr<Noesis::ObjectAnimationUsingKeyFrames> a =
         *new Noesis::ObjectAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_object_keyframes_add(void* anim, double key_time_seconds,
+extern "C" bool noesis_animation_object_keyframes_add(void* anim, double key_time_seconds,
                                                          void* value) {
     auto* a = cast<Noesis::ObjectAnimationUsingKeyFrames>(anim);
     if (!a) return false;
@@ -1245,14 +1245,14 @@ extern "C" bool dm_noesis_animation_object_keyframes_add(void* anim, double key_
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_object_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_object_keyframes_count(void* anim) {
     auto* a = cast<Noesis::ObjectAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::ObjectKeyFrameCollection* frames = a->GetKeyFrames();
     return frames ? frames->Count() : 0;
 }
 
-extern "C" void* dm_noesis_animation_object_keyframes_get_value(void* anim, int32_t index) {
+extern "C" void* noesis_animation_object_keyframes_get_value(void* anim, int32_t index) {
     auto* a = cast<Noesis::ObjectAnimationUsingKeyFrames>(anim);
     if (!a) return nullptr;
     Noesis::ObjectKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1260,7 +1260,7 @@ extern "C" void* dm_noesis_animation_object_keyframes_get_value(void* anim, int3
     return handout(frames->Get(static_cast<uint32_t>(index))->GetValue());
 }
 
-extern "C" double dm_noesis_animation_object_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_object_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::ObjectAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::ObjectKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1273,13 +1273,13 @@ extern "C" double dm_noesis_animation_object_keyframes_get_key_time(void* anim, 
 // BooleanAnimationUsingKeyFrames has no From-To form and only discrete frames (a
 // bool can't be interpolated). The value crosses the ABI as a C bool.
 
-extern "C" void* dm_noesis_animation_boolean_keyframes_create() {
+extern "C" void* noesis_animation_boolean_keyframes_create() {
     Noesis::Ptr<Noesis::BooleanAnimationUsingKeyFrames> a =
         *new Noesis::BooleanAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_boolean_keyframes_add(void* anim, double key_time_seconds,
+extern "C" bool noesis_animation_boolean_keyframes_add(void* anim, double key_time_seconds,
                                                           bool value) {
     auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
     if (!a) return false;
@@ -1292,7 +1292,7 @@ extern "C" bool dm_noesis_animation_boolean_keyframes_add(void* anim, double key
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_boolean_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_boolean_keyframes_count(void* anim) {
     auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::BooleanKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1300,7 +1300,7 @@ extern "C" int32_t dm_noesis_animation_boolean_keyframes_count(void* anim) {
 }
 
 // Returns the frame value into *out; returns false on a bad handle / index.
-extern "C" bool dm_noesis_animation_boolean_keyframes_get_value(void* anim, int32_t index,
+extern "C" bool noesis_animation_boolean_keyframes_get_value(void* anim, int32_t index,
                                                                 bool* out) {
     auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
     if (!a || !out) return false;
@@ -1310,7 +1310,7 @@ extern "C" bool dm_noesis_animation_boolean_keyframes_get_value(void* anim, int3
     return true;
 }
 
-extern "C" double dm_noesis_animation_boolean_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_boolean_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::BooleanKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1325,13 +1325,13 @@ extern "C" double dm_noesis_animation_boolean_keyframes_get_key_time(void* anim,
 // the getter returns a pointer borrowed from the live key frame (copy it
 // immediately) or NULL on a bad handle / index.
 
-extern "C" void* dm_noesis_animation_string_keyframes_create() {
+extern "C" void* noesis_animation_string_keyframes_create() {
     Noesis::Ptr<Noesis::StringAnimationUsingKeyFrames> a =
         *new Noesis::StringAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_string_keyframes_add(void* anim, double key_time_seconds,
+extern "C" bool noesis_animation_string_keyframes_add(void* anim, double key_time_seconds,
                                                          const char* value) {
     auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
     if (!a || !value) return false;
@@ -1344,14 +1344,14 @@ extern "C" bool dm_noesis_animation_string_keyframes_add(void* anim, double key_
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_string_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_string_keyframes_count(void* anim) {
     auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
     return frames ? frames->Count() : 0;
 }
 
-extern "C" const char* dm_noesis_animation_string_keyframes_get_value(void* anim, int32_t index) {
+extern "C" const char* noesis_animation_string_keyframes_get_value(void* anim, int32_t index) {
     auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
     if (!a) return nullptr;
     Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1359,7 +1359,7 @@ extern "C" const char* dm_noesis_animation_string_keyframes_get_value(void* anim
     return frames->Get(static_cast<uint32_t>(index))->GetValue();
 }
 
-extern "C" double dm_noesis_animation_string_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_string_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1373,13 +1373,13 @@ extern "C" double dm_noesis_animation_string_keyframes_get_key_time(void* anim, 
 // matrix is not componentwise-interpolated). The matrix crosses as a 6-float
 // {m00, m01, m10, m11, m20, m21} array (Noesis::Transform2 row layout).
 
-extern "C" void* dm_noesis_animation_matrix_keyframes_create() {
+extern "C" void* noesis_animation_matrix_keyframes_create() {
     Noesis::Ptr<Noesis::MatrixAnimationUsingKeyFrames> a =
         *new Noesis::MatrixAnimationUsingKeyFrames();
     return handout(a.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_matrix_keyframes_add(void* anim, double key_time_seconds,
+extern "C" bool noesis_animation_matrix_keyframes_add(void* anim, double key_time_seconds,
                                                          const float m[6]) {
     auto* a = cast<Noesis::MatrixAnimationUsingKeyFrames>(anim);
     if (!a || !m) return false;
@@ -1392,14 +1392,14 @@ extern "C" bool dm_noesis_animation_matrix_keyframes_add(void* anim, double key_
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_matrix_keyframes_count(void* anim) {
+extern "C" int32_t noesis_animation_matrix_keyframes_count(void* anim) {
     auto* a = cast<Noesis::MatrixAnimationUsingKeyFrames>(anim);
     if (!a) return -1;
     Noesis::MatrixKeyFrameCollection* frames = a->GetKeyFrames();
     return frames ? frames->Count() : 0;
 }
 
-extern "C" bool dm_noesis_animation_matrix_keyframes_get_value(void* anim, int32_t index,
+extern "C" bool noesis_animation_matrix_keyframes_get_value(void* anim, int32_t index,
                                                                float out[6]) {
     auto* a = cast<Noesis::MatrixAnimationUsingKeyFrames>(anim);
     if (!a || !out) return false;
@@ -1411,7 +1411,7 @@ extern "C" bool dm_noesis_animation_matrix_keyframes_get_value(void* anim, int32
     return true;
 }
 
-extern "C" double dm_noesis_animation_matrix_keyframes_get_key_time(void* anim, int32_t index) {
+extern "C" double noesis_animation_matrix_keyframes_get_key_time(void* anim, int32_t index) {
     auto* a = cast<Noesis::MatrixAnimationUsingKeyFrames>(anim);
     if (!a) return -1.0;
     Noesis::MatrixKeyFrameCollection* frames = a->GetKeyFrames();
@@ -1424,26 +1424,26 @@ extern "C" double dm_noesis_animation_matrix_keyframes_get_key_time(void* anim, 
 // The two Bezier control points that shape a spline key frame's progress curve.
 // Points cross as {x, y} float[2].
 
-extern "C" void* dm_noesis_animation_keyspline_create(float c1x, float c1y, float c2x, float c2y) {
+extern "C" void* noesis_animation_keyspline_create(float c1x, float c1y, float c2x, float c2y) {
     Noesis::Ptr<Noesis::KeySpline> k = *new Noesis::KeySpline(c1x, c1y, c2x, c2y);
     return handout(k.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_keyspline_set_control_point1(void* ks, float x, float y) {
+extern "C" bool noesis_animation_keyspline_set_control_point1(void* ks, float x, float y) {
     auto* k = cast<Noesis::KeySpline>(ks);
     if (!k) return false;
     k->SetControlPoint1(Noesis::Point(x, y));
     return true;
 }
 
-extern "C" bool dm_noesis_animation_keyspline_set_control_point2(void* ks, float x, float y) {
+extern "C" bool noesis_animation_keyspline_set_control_point2(void* ks, float x, float y) {
     auto* k = cast<Noesis::KeySpline>(ks);
     if (!k) return false;
     k->SetControlPoint2(Noesis::Point(x, y));
     return true;
 }
 
-extern "C" bool dm_noesis_animation_keyspline_get_control_point1(void* ks, float out[2]) {
+extern "C" bool noesis_animation_keyspline_get_control_point1(void* ks, float out[2]) {
     auto* k = cast<Noesis::KeySpline>(ks);
     if (!k || !out) return false;
     const Noesis::Point& p = k->GetControlPoint1();
@@ -1452,7 +1452,7 @@ extern "C" bool dm_noesis_animation_keyspline_get_control_point1(void* ks, float
     return true;
 }
 
-extern "C" bool dm_noesis_animation_keyspline_get_control_point2(void* ks, float out[2]) {
+extern "C" bool noesis_animation_keyspline_get_control_point2(void* ks, float out[2]) {
     auto* k = cast<Noesis::KeySpline>(ks);
     if (!k || !out) return false;
     const Noesis::Point& p = k->GetControlPoint2();
@@ -1468,12 +1468,12 @@ extern "C" bool dm_noesis_animation_keyspline_get_control_point2(void* ks, float
 // The children collection takes its own reference; the caller keeps ownership of
 // each added child.
 
-extern "C" void* dm_noesis_animation_parallel_timeline_create() {
+extern "C" void* noesis_animation_parallel_timeline_create() {
     Noesis::Ptr<Noesis::ParallelTimeline> p = *new Noesis::ParallelTimeline();
     return handout(p.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_parallel_timeline_add_child(void* group, void* timeline) {
+extern "C" bool noesis_animation_parallel_timeline_add_child(void* group, void* timeline) {
     auto* g = cast<Noesis::TimelineGroup>(group);
     auto* t = cast<Noesis::Timeline>(timeline);
     if (!g || !t) return false;
@@ -1487,7 +1487,7 @@ extern "C" bool dm_noesis_animation_parallel_timeline_add_child(void* group, voi
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_parallel_timeline_child_count(void* group) {
+extern "C" int32_t noesis_animation_parallel_timeline_child_count(void* group) {
     auto* g = cast<Noesis::TimelineGroup>(group);
     if (!g) return -1;
     Noesis::TimelineCollection* children = g->GetChildren();
@@ -1499,46 +1499,46 @@ extern "C" int32_t dm_noesis_animation_parallel_timeline_child_count(void* group
 // A TriggerAction that begins a Storyboard with a chosen HandoffBehavior. Useful
 // inside a trigger's actions; code-driven Storyboard::Begin covers the rest.
 
-extern "C" void* dm_noesis_animation_begin_storyboard_create() {
+extern "C" void* noesis_animation_begin_storyboard_create() {
     Noesis::Ptr<Noesis::BeginStoryboard> b = *new Noesis::BeginStoryboard();
     return handout(b.GetPtr());
 }
 
-extern "C" bool dm_noesis_animation_begin_storyboard_set_storyboard(void* bs, void* sb) {
+extern "C" bool noesis_animation_begin_storyboard_set_storyboard(void* bs, void* sb) {
     auto* b = cast<Noesis::BeginStoryboard>(bs);
     if (!b) return false;
     b->SetStoryboard(cast<Noesis::Storyboard>(sb));
     return true;
 }
 
-extern "C" void* dm_noesis_animation_begin_storyboard_get_storyboard(void* bs) {
+extern "C" void* noesis_animation_begin_storyboard_get_storyboard(void* bs) {
     auto* b = cast<Noesis::BeginStoryboard>(bs);
     if (!b) return nullptr;
     return handout(b->GetStoryboard());
 }
 
 // behavior: matches Noesis::HandoffBehavior (0 SnapshotAndReplace, 1 Compose).
-extern "C" bool dm_noesis_animation_begin_storyboard_set_handoff(void* bs, int32_t behavior) {
+extern "C" bool noesis_animation_begin_storyboard_set_handoff(void* bs, int32_t behavior) {
     auto* b = cast<Noesis::BeginStoryboard>(bs);
     if (!b) return false;
     b->SetHandoffBehavior(static_cast<Noesis::HandoffBehavior>(behavior));
     return true;
 }
 
-extern "C" int32_t dm_noesis_animation_begin_storyboard_get_handoff(void* bs) {
+extern "C" int32_t noesis_animation_begin_storyboard_get_handoff(void* bs) {
     auto* b = cast<Noesis::BeginStoryboard>(bs);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetHandoffBehavior());
 }
 
-extern "C" bool dm_noesis_animation_begin_storyboard_set_name(void* bs, const char* name) {
+extern "C" bool noesis_animation_begin_storyboard_set_name(void* bs, const char* name) {
     auto* b = cast<Noesis::BeginStoryboard>(bs);
     if (!b || !name) return false;
     b->SetName(name);
     return true;
 }
 
-extern "C" const char* dm_noesis_animation_begin_storyboard_get_name(void* bs) {
+extern "C" const char* noesis_animation_begin_storyboard_get_name(void* bs) {
     auto* b = cast<Noesis::BeginStoryboard>(bs);
     if (!b) return nullptr;
     return b->GetName();

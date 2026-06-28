@@ -17,12 +17,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use dm_noesis_runtime::commands::Command;
-use dm_noesis_runtime::input::{
-    InputBinding, ModifierKeys, MouseAction, MouseBinding, MouseGesture,
-};
-use dm_noesis_runtime::view::{FrameworkElement, MouseButton, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::commands::Command;
+use noesis_runtime::input::{InputBinding, ModifierKeys, MouseAction, MouseBinding, MouseGesture};
+use noesis_runtime::view::{FrameworkElement, MouseButton, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // A button that fully fills the 200x200 view, so a click at its centre (100,100)
 // is guaranteed to hit-test onto it.
@@ -53,15 +51,15 @@ fn mouse_bindings_fire_bound_commands() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // ── Case 1: LeftClick MouseBinding ──────────────────────────────────────
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let root = FrameworkElement::load("scene.xaml").expect("load scene");
         let target = root.find_name("Target").expect("find Target");
@@ -114,7 +112,7 @@ fn mouse_bindings_fire_bound_commands() {
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let root = FrameworkElement::load("scene.xaml").expect("load scene");
         let target = root.find_name("Target").expect("find Target");
@@ -167,5 +165,5 @@ fn mouse_bindings_fire_bound_commands() {
         drop(command);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

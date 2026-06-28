@@ -9,15 +9,15 @@
 //!     successfully resolves `<sample:NineSlicer>` to our trampoline
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test classes -- --nocapture`
+//!   `cargo test -p noesis_runtime --test classes -- --nocapture`
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SLICER_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -78,9 +78,9 @@ fn class_registration_roundtrip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let recorder = Recorder::default();
 
@@ -109,7 +109,7 @@ fn class_registration_roundtrip() {
 
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SLICER_XAML.as_bytes().to_vec());
-        let _provider_guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _provider_guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -168,5 +168,5 @@ fn class_registration_roundtrip() {
         drop(registration);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

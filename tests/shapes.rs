@@ -11,12 +11,10 @@
 //! all owning wrappers drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test shapes -- --nocapture`
+//!   `cargo test -p noesis_runtime --test shapes -- --nocapture`
 
-use dm_noesis_runtime::brushes::SolidColorBrush;
-use dm_noesis_runtime::shapes::{
-    Ellipse, Line, PenLineCap, PenLineJoin, Rectangle, Shape, Stretch,
-};
+use noesis_runtime::brushes::SolidColorBrush;
+use noesis_runtime::shapes::{Ellipse, Line, PenLineCap, PenLineJoin, Rectangle, Shape, Stretch};
 
 fn approx(a: f32, b: f32) -> bool {
     (a - b).abs() < 1.0e-4
@@ -101,9 +99,9 @@ fn shapes_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Rectangle: shared surface + RadiusX/RadiusY ─────────────────────
@@ -139,5 +137,5 @@ fn shapes_round_trip() {
         assert_ne!(rect.raw(), line.raw());
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

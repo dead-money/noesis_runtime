@@ -15,7 +15,7 @@
 //
 // The returned FormattedText* is handed out with a single owned +1 reference
 // (handout() idiom shared with cpp/noesis_brushes.cpp); the Rust handle's Drop
-// calls dm_noesis_base_component_release.
+// calls noesis_base_component_release.
 //
 // Read-back getters (GetBounds / GetNumLines / GetLineInfo / Measure / …) let
 // tests prove metrics genuinely crossed into the live Noesis object: a stub
@@ -61,9 +61,9 @@ Noesis::FormattedText* cast(void* p) {
 // `max_width`/`max_height` (negative ⇒ unconstrained / FLT_MAX), `line_height`
 // (0 ⇒ natural), `text_alignment` (TextAlignment), `text_trimming`
 // (TextTrimming). `foreground` is an optional [r,g,b,a]; null ⇒ opaque black.
-// Returns a +1 FormattedText* (release with dm_noesis_base_component_release),
+// Returns a +1 FormattedText* (release with noesis_base_component_release),
 // or null on allocation failure.
-extern "C" void* dm_noesis_formatted_text_create(
+extern "C" void* noesis_formatted_text_create(
     const char* text, const char* font_family, int32_t weight, int32_t stretch, int32_t style,
     float font_size, int32_t flow_direction, float max_width, float max_height, float line_height,
     int32_t text_alignment, int32_t text_trimming, const float foreground[4]) {
@@ -91,7 +91,7 @@ extern "C" void* dm_noesis_formatted_text_create(
 }
 
 // Text bounds from the last layout: out = {x, y, width, height} in DIPs.
-extern "C" bool dm_noesis_formatted_text_get_bounds(void* ft, float out[4]) {
+extern "C" bool noesis_formatted_text_get_bounds(void* ft, float out[4]) {
     auto* f = cast(ft);
     if (!f || !out) return false;
     Noesis::Rect r = f->GetBounds();
@@ -103,7 +103,7 @@ extern "C" bool dm_noesis_formatted_text_get_bounds(void* ft, float out[4]) {
 }
 
 // Number of laid-out lines, or -1 if `ft` is not a FormattedText.
-extern "C" int32_t dm_noesis_formatted_text_get_num_lines(void* ft) {
+extern "C" int32_t noesis_formatted_text_get_num_lines(void* ft) {
     auto* f = cast(ft);
     if (!f) return -1;
     return static_cast<int32_t>(f->GetNumLines());
@@ -112,7 +112,7 @@ extern "C" int32_t dm_noesis_formatted_text_get_num_lines(void* ft) {
 // Per-line metrics for `index` (< GetNumLines): glyph count, height, baseline.
 // Any out pointer may be null. Returns false on null/not-a-FormattedText or an
 // out-of-range index.
-extern "C" bool dm_noesis_formatted_text_get_line_info(void* ft, uint32_t index,
+extern "C" bool noesis_formatted_text_get_line_info(void* ft, uint32_t index,
                                                        uint32_t* out_num_glyphs, float* out_height,
                                                        float* out_baseline) {
     auto* f = cast(ft);
@@ -127,7 +127,7 @@ extern "C" bool dm_noesis_formatted_text_get_line_info(void* ft, uint32_t index,
 
 // Whether the FormattedText holds no text. Writes the flag to `out`; returns
 // false (and leaves `out` untouched) if `ft` is not a FormattedText.
-extern "C" bool dm_noesis_formatted_text_is_empty(void* ft, bool* out) {
+extern "C" bool noesis_formatted_text_is_empty(void* ft, bool* out) {
     auto* f = cast(ft);
     if (!f || !out) return false;
     *out = f->IsEmpty();
@@ -136,7 +136,7 @@ extern "C" bool dm_noesis_formatted_text_is_empty(void* ft, bool* out) {
 
 // Whether the FormattedText paints with any VisualBrush. Same out/return
 // contract as is_empty.
-extern "C" bool dm_noesis_formatted_text_has_visual_brush(void* ft, bool* out) {
+extern "C" bool noesis_formatted_text_has_visual_brush(void* ft, bool* out) {
     auto* f = cast(ft);
     if (!f || !out) return false;
     *out = f->HasVisualBrush();
@@ -147,7 +147,7 @@ extern "C" bool dm_noesis_formatted_text_has_visual_brush(void* ft, bool* out) {
 // Size to out_w/out_h (DIPs). `alignment`/`wrapping`/`trimming`/`line_stacking`/
 // `flow_direction` are the matching enum ordinals; negative max_* ⇒ FLT_MAX.
 // This is an independent read-back of the same metrics the ctor computes.
-extern "C" bool dm_noesis_formatted_text_measure(void* ft, int32_t alignment, int32_t wrapping,
+extern "C" bool noesis_formatted_text_measure(void* ft, int32_t alignment, int32_t wrapping,
                                                  int32_t trimming, float max_width, float max_height,
                                                  float line_height, int32_t line_stacking,
                                                  int32_t flow_direction, float* out_w,
@@ -168,7 +168,7 @@ extern "C" bool dm_noesis_formatted_text_measure(void* ft, int32_t alignment, in
 
 // x/y position of the glyph at character index `ch_index` (after the char when
 // `after_char`). Noesis returns -10/-10 when the index is outside layout limits.
-extern "C" bool dm_noesis_formatted_text_get_glyph_position(void* ft, uint32_t ch_index,
+extern "C" bool noesis_formatted_text_get_glyph_position(void* ft, uint32_t ch_index,
                                                             bool after_char, float* out_x,
                                                             float* out_y) {
     auto* f = cast(ft);
@@ -184,7 +184,7 @@ extern "C" bool dm_noesis_formatted_text_get_glyph_position(void* ft, uint32_t c
 // Glyph index under the point (x, y) in layout DIPs. `out_is_inside` /
 // `out_is_trailing` (either may be null) report whether the point fell inside a
 // glyph and on its trailing half. Returns false on null/not-a-FormattedText.
-extern "C" bool dm_noesis_formatted_text_hit_test(void* ft, float x, float y, uint32_t* out_index,
+extern "C" bool noesis_formatted_text_hit_test(void* ft, float x, float y, uint32_t* out_index,
                                                   bool* out_is_inside, bool* out_is_trailing) {
     auto* f = cast(ft);
     if (!f) return false;

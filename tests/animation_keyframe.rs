@@ -3,10 +3,10 @@
 //! interpolates between frames (linear midpoint ~50) and reaches the final frame
 //! value. A stubbed key-frame animation leaves the value at its base.
 
-use dm_noesis_runtime::animation::{
+use noesis_runtime::animation::{
     Animation, DoubleAnimationUsingKeyFrames, KeyFrameInterp, KeyFrameKind, Storyboard,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -21,9 +21,9 @@ fn keyframe_animation_interpolates_and_reaches_end() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let element = FrameworkElement::parse(XAML).expect("parse");
@@ -77,5 +77,5 @@ fn keyframe_animation_interpolates_and_reaches_end() {
         drop(content);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

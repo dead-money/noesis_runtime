@@ -10,9 +10,9 @@
 //! all owning handles drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test svg -- --nocapture`
+//!   `cargo test -p noesis_runtime --test svg -- --nocapture`
 
-use dm_noesis_runtime::svg::{FillRule, Pen, StrokeJoin, SvgImage, SvgPath};
+use noesis_runtime::svg::{FillRule, Pen, StrokeJoin, SvgImage, SvgPath};
 
 fn approx(a: f32, b: f32) -> bool {
     (a - b).abs() < 1.0e-3
@@ -24,9 +24,9 @@ fn svg_path_and_document_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── SVGPath::TryParse + CalculateBounds ─────────────────────────────
@@ -151,5 +151,5 @@ fn svg_path_and_document_round_trip() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

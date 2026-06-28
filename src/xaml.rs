@@ -20,8 +20,8 @@ use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_base_component_type_name,
-    dm_noesis_get_xaml_dependencies, dm_noesis_gui_load_xaml_component,
+    noesis_base_component_release, noesis_base_component_type_name, noesis_get_xaml_dependencies,
+    noesis_gui_load_xaml_component,
 };
 
 /// Classifies a dependency reported by [`get_xaml_dependencies`]. Mirrors
@@ -63,7 +63,7 @@ pub struct XamlDependency {
 
 /// Trampoline target for the C callback. `user` points at the `Vec` being
 /// filled. SAFETY: invoked synchronously from inside
-/// `dm_noesis_get_xaml_dependencies`, once per dependency; `user` is the
+/// `noesis_get_xaml_dependencies`, once per dependency; `user` is the
 /// `&mut Vec<XamlDependency>` we passed in, valid for that whole call.
 unsafe extern "C" fn collect(user: *mut c_void, uri: *const c_char, kind: i32) {
     crate::panic_guard::guard(|| {
@@ -107,7 +107,7 @@ pub fn get_xaml_dependencies(xaml: &[u8], base_uri: &str) -> Vec<XamlDependency>
     // MemoryStream and reads it before returning). `collect` only touches
     // `out` through `out_ptr`, which stays valid for the duration of the call.
     unsafe {
-        dm_noesis_get_xaml_dependencies(
+        noesis_get_xaml_dependencies(
             xaml.as_ptr(),
             u32::try_from(xaml.len()).expect("XAML > 4 GiB"),
             base.as_ptr(),
@@ -142,7 +142,7 @@ impl LoadedComponent {
     #[must_use]
     pub fn type_name(&self) -> String {
         // SAFETY: `self.ptr` is a live BaseComponent* for the lifetime of self.
-        let name = unsafe { dm_noesis_base_component_type_name(self.ptr.as_ptr()) };
+        let name = unsafe { noesis_base_component_type_name(self.ptr.as_ptr()) };
         if name.is_null() {
             String::new()
         } else {
@@ -159,7 +159,7 @@ impl Drop for LoadedComponent {
     fn drop(&mut self) {
         // SAFETY: ptr carries the +1 ref handed out by load_xaml_component;
         // released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) };
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) };
     }
 }
 
@@ -180,6 +180,6 @@ pub fn load_xaml_component(uri: &str) -> Option<LoadedComponent> {
     let c = CString::new(uri).expect("uri contained interior NUL");
     // SAFETY: c.as_ptr() is valid for the call; the result is a fresh +1
     // BaseComponent* (or null), which LoadedComponent's Drop releases.
-    let ptr = unsafe { dm_noesis_gui_load_xaml_component(c.as_ptr()) };
+    let ptr = unsafe { noesis_gui_load_xaml_component(c.as_ptr()) };
     NonNull::new(ptr).map(|ptr| LoadedComponent { ptr })
 }

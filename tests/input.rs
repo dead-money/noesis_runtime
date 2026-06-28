@@ -10,12 +10,12 @@
 //! proves the event reached the render tree.
 //!
 //! Run with `NOESIS_SDK_DIR` set, e.g.
-//!   cargo test -p `dm_noesis_runtime` --test input -- --nocapture
+//!   cargo test -p `noesis_runtime` --test input -- --nocapture
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::view::{FrameworkElement, Key, MouseButton, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, Key, MouseButton, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const BUTTON_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -44,16 +44,16 @@ fn view_input_ffi_smoke() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // Every owning wrapper must drop before shutdown().
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), BUTTON_XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -107,5 +107,5 @@ fn view_input_ffi_smoke() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

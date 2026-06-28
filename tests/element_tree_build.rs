@@ -14,13 +14,13 @@
 //! all owning handles drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test element_tree_build -- --nocapture`
+//!   `cargo test -p noesis_runtime --test element_tree_build -- --nocapture`
 
-use dm_noesis_runtime::element_tree::{
+use noesis_runtime::element_tree::{
     ColumnDefinition, GridLength, GridUnitType, RowDefinition, column_definitions, panel_children,
     row_definitions,
 };
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
@@ -30,9 +30,9 @@ fn element_tree_build_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Panel.Children: a parsed StackPanel grows/shrinks from code ───────
@@ -166,5 +166,5 @@ fn element_tree_build_round_trip() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

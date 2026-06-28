@@ -8,7 +8,7 @@
 //!
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 
-use dm_noesis_runtime::animation::{
+use noesis_runtime::animation::{
     ColorAnimation, DoubleAnimation, FillBehavior, Int16Animation, Int32Animation, Int64Animation,
     PointAnimation, RectAnimation, SizeAnimation, ThicknessAnimation, Timeline,
 };
@@ -23,9 +23,9 @@ fn builder_animation_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── RectAnimation: full from/to/by + knobs read-back ─────────────────
@@ -125,5 +125,5 @@ fn builder_animation_round_trip() {
         assert!(approx(pt.duration_secs().expect("point duration"), 0.9));
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

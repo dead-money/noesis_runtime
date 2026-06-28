@@ -15,13 +15,13 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
-use dm_noesis_runtime::render_device::{
+use noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
+use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
     TextureDesc, TextureHandle, TextureRect, register,
 };
-use dm_noesis_runtime::view::{FrameworkElement, Quality, RenderFlag, RenderFlags, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, Quality, RenderFlag, RenderFlags, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // A ScrollViewer with horizontally-overflowing content (so MouseHWheel has
 // something to handle) plus a TextBlock (so a render pass produces glyph
@@ -160,9 +160,9 @@ fn view_timers_flags_stats_quality_hwheel() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let const_ticks = Arc::new(AtomicU32::new(0));
     let once_ticks = Arc::new(AtomicU32::new(0));
@@ -175,7 +175,7 @@ fn view_timers_flags_stats_quality_hwheel() {
         bytes.insert("scroll.xaml".to_string(), SCROLL_XAML.as_bytes().to_vec());
         bytes.insert("grid.xaml".to_string(), GRID_XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
         // ── (E) MouseHWheel negative control: a plain Grid does not scroll, so
         //        the horizontal wheel bubbles unhandled. ─────────────────────
@@ -401,5 +401,5 @@ fn view_timers_flags_stats_quality_hwheel() {
         drop(device);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

@@ -20,11 +20,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::commands::{Command, CommandHandler, CommandParameter};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::{FrameworkElement, MouseButton, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::commands::{Command, CommandHandler, CommandParameter};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::{FrameworkElement, MouseButton, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // A Button bound to the VM's `Go` command, with a constant CommandParameter so
 // we can assert the parameter reaches Rust. Centered 100x40 in a 200x200 grid.
@@ -91,9 +91,9 @@ fn rust_command_drives_button() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let executes = Arc::new(AtomicU32::new(0));
     let saw_param = Arc::new(AtomicU32::new(0));
@@ -145,7 +145,7 @@ fn rust_command_drives_button() {
         // ── Wire the scene. ─────────────────────────────────────────────────
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), XAML.as_bytes().to_vec());
-        let _guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let element = FrameworkElement::load("scene.xaml").expect("load_xaml returned None");
         let mut view = View::create(element);
@@ -226,7 +226,7 @@ fn rust_command_drives_button() {
         drop(_guard);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 
     // The bound command's free handler is covered by the no-leak/no-double-free
     // refcount contract; the explicit Drop-counter assertion above proves the

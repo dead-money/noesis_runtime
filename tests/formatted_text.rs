@@ -14,8 +14,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use dm_noesis_runtime::font_provider::{FontProvider, set_font_fallbacks, set_font_provider};
-use dm_noesis_runtime::formatted_text::{
+use noesis_runtime::font_provider::{FontProvider, set_font_fallbacks, set_font_provider};
+use noesis_runtime::formatted_text::{
     FormattedText, flow_direction, font_weight, line_stacking_strategy, text_alignment,
     text_trimming, text_wrapping,
 };
@@ -54,9 +54,9 @@ fn formatted_text_measures_real_glyphs() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let sdk_dir =
         std::env::var("NOESIS_SDK_DIR").expect("NOESIS_SDK_DIR not set; required for this test");
@@ -172,5 +172,5 @@ fn formatted_text_measures_real_glyphs() {
     drop(wrapped);
     drop(registered);
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

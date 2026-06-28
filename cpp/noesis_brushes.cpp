@@ -5,7 +5,7 @@
 // idioms already used by cpp/noesis_binding.cpp (handout() + `*new T` adopt) and
 // cpp/noesis_collections.cpp. The Rust side (src/brushes.rs / src/transforms.rs)
 // wraps each pointer in an owning handle whose Drop calls
-// dm_noesis_base_component_release; assigning the object to an element (via the
+// noesis_base_component_release; assigning the object to an element (via the
 // generic FrameworkElement::set_component) makes Noesis take its own reference,
 // so the Rust builder handle can be dropped afterwards.
 //
@@ -74,21 +74,21 @@ T* cast(void* p) {
 
 // ── SolidColorBrush ──────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_solid_color_brush_create(const float color[4]) {
+extern "C" void* noesis_solid_color_brush_create(const float color[4]) {
     Noesis::Color c = color ? Noesis::Color(color[0], color[1], color[2], color[3])
                             : Noesis::Color(0.0f, 0.0f, 0.0f, 1.0f);
     Noesis::Ptr<Noesis::SolidColorBrush> brush = *new Noesis::SolidColorBrush(c);
     return handout(brush.GetPtr());
 }
 
-extern "C" bool dm_noesis_solid_color_brush_set_color(void* brush, const float color[4]) {
+extern "C" bool noesis_solid_color_brush_set_color(void* brush, const float color[4]) {
     auto* b = cast<Noesis::SolidColorBrush>(brush);
     if (!b || !color) return false;
     b->SetColor(Noesis::Color(color[0], color[1], color[2], color[3]));
     return true;
 }
 
-extern "C" bool dm_noesis_solid_color_brush_get_color(void* brush, float out[4]) {
+extern "C" bool noesis_solid_color_brush_get_color(void* brush, float out[4]) {
     auto* b = cast<Noesis::SolidColorBrush>(brush);
     if (!b || !out) return false;
     const Noesis::Color& c = b->GetColor();
@@ -101,26 +101,26 @@ extern "C" bool dm_noesis_solid_color_brush_get_color(void* brush, float out[4])
 
 // ── Gradient brushes ─────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_linear_gradient_brush_create() {
+extern "C" void* noesis_linear_gradient_brush_create() {
     Noesis::Ptr<Noesis::LinearGradientBrush> brush = *new Noesis::LinearGradientBrush();
     return handout(brush.GetPtr());
 }
 
-extern "C" bool dm_noesis_linear_gradient_brush_set_start_point(void* brush, float x, float y) {
+extern "C" bool noesis_linear_gradient_brush_set_start_point(void* brush, float x, float y) {
     auto* b = cast<Noesis::LinearGradientBrush>(brush);
     if (!b) return false;
     b->SetStartPoint(Noesis::Point(x, y));
     return true;
 }
 
-extern "C" bool dm_noesis_linear_gradient_brush_set_end_point(void* brush, float x, float y) {
+extern "C" bool noesis_linear_gradient_brush_set_end_point(void* brush, float x, float y) {
     auto* b = cast<Noesis::LinearGradientBrush>(brush);
     if (!b) return false;
     b->SetEndPoint(Noesis::Point(x, y));
     return true;
 }
 
-extern "C" bool dm_noesis_linear_gradient_brush_get_points(void* brush, float out[4]) {
+extern "C" bool noesis_linear_gradient_brush_get_points(void* brush, float out[4]) {
     auto* b = cast<Noesis::LinearGradientBrush>(brush);
     if (!b || !out) return false;
     const Noesis::Point& s = b->GetStartPoint();
@@ -132,26 +132,26 @@ extern "C" bool dm_noesis_linear_gradient_brush_get_points(void* brush, float ou
     return true;
 }
 
-extern "C" void* dm_noesis_radial_gradient_brush_create() {
+extern "C" void* noesis_radial_gradient_brush_create() {
     Noesis::Ptr<Noesis::RadialGradientBrush> brush = *new Noesis::RadialGradientBrush();
     return handout(brush.GetPtr());
 }
 
-extern "C" bool dm_noesis_radial_gradient_brush_set_center(void* brush, float x, float y) {
+extern "C" bool noesis_radial_gradient_brush_set_center(void* brush, float x, float y) {
     auto* b = cast<Noesis::RadialGradientBrush>(brush);
     if (!b) return false;
     b->SetCenter(Noesis::Point(x, y));
     return true;
 }
 
-extern "C" bool dm_noesis_radial_gradient_brush_set_gradient_origin(void* brush, float x, float y) {
+extern "C" bool noesis_radial_gradient_brush_set_gradient_origin(void* brush, float x, float y) {
     auto* b = cast<Noesis::RadialGradientBrush>(brush);
     if (!b) return false;
     b->SetGradientOrigin(Noesis::Point(x, y));
     return true;
 }
 
-extern "C" bool dm_noesis_radial_gradient_brush_set_radius(void* brush, float rx, float ry) {
+extern "C" bool noesis_radial_gradient_brush_set_radius(void* brush, float rx, float ry) {
     auto* b = cast<Noesis::RadialGradientBrush>(brush);
     if (!b) return false;
     b->SetRadiusX(rx);
@@ -159,7 +159,7 @@ extern "C" bool dm_noesis_radial_gradient_brush_set_radius(void* brush, float rx
     return true;
 }
 
-extern "C" bool dm_noesis_radial_gradient_brush_get_radius(void* brush, float* rx, float* ry) {
+extern "C" bool noesis_radial_gradient_brush_get_radius(void* brush, float* rx, float* ry) {
     auto* b = cast<Noesis::RadialGradientBrush>(brush);
     if (!b || !rx || !ry) return false;
     *rx = b->GetRadiusX();
@@ -170,7 +170,7 @@ extern "C" bool dm_noesis_radial_gradient_brush_get_radius(void* brush, float* r
 // Add a gradient stop (offset in 0..=1, color rgba) to any GradientBrush. The
 // brush owns a GradientStopCollection by default; we create one if it is null.
 // Returns the new stop's index, or -1 on failure.
-extern "C" int32_t dm_noesis_gradient_brush_add_stop(void* brush, float offset,
+extern "C" int32_t noesis_gradient_brush_add_stop(void* brush, float offset,
                                                      const float color[4]) {
     auto* b = cast<Noesis::GradientBrush>(brush);
     if (!b || !color) return -1;
@@ -189,14 +189,14 @@ extern "C" int32_t dm_noesis_gradient_brush_add_stop(void* brush, float offset,
     return stops->Add(stop.GetPtr());
 }
 
-extern "C" int32_t dm_noesis_gradient_brush_stop_count(void* brush) {
+extern "C" int32_t noesis_gradient_brush_stop_count(void* brush) {
     auto* b = cast<Noesis::GradientBrush>(brush);
     if (!b) return -1;
     Noesis::GradientStopCollection* stops = b->GetGradientStops();
     return stops ? stops->Count() : 0;
 }
 
-extern "C" bool dm_noesis_gradient_brush_get_stop(void* brush, uint32_t index, float* out_offset,
+extern "C" bool noesis_gradient_brush_get_stop(void* brush, uint32_t index, float* out_offset,
                                                   float out_color[4]) {
     auto* b = cast<Noesis::GradientBrush>(brush);
     if (!b) return false;
@@ -224,27 +224,27 @@ static_assert(Noesis::GradientSpreadMethod_Repeat == 2, "GradientSpreadMethod or
 static_assert(Noesis::BrushMappingMode_Absolute == 0, "BrushMappingMode ordinal drift");
 static_assert(Noesis::BrushMappingMode_RelativeToBoundingBox == 1, "BrushMappingMode ordinal drift");
 
-extern "C" bool dm_noesis_gradient_brush_set_spread_method(void* brush, int32_t method) {
+extern "C" bool noesis_gradient_brush_set_spread_method(void* brush, int32_t method) {
     auto* b = cast<Noesis::GradientBrush>(brush);
     if (!b) return false;
     b->SetSpreadMethod(static_cast<Noesis::GradientSpreadMethod>(method));
     return true;
 }
 
-extern "C" int32_t dm_noesis_gradient_brush_get_spread_method(void* brush) {
+extern "C" int32_t noesis_gradient_brush_get_spread_method(void* brush) {
     auto* b = cast<Noesis::GradientBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetSpreadMethod());
 }
 
-extern "C" bool dm_noesis_gradient_brush_set_mapping_mode(void* brush, int32_t mode) {
+extern "C" bool noesis_gradient_brush_set_mapping_mode(void* brush, int32_t mode) {
     auto* b = cast<Noesis::GradientBrush>(brush);
     if (!b) return false;
     b->SetMappingMode(static_cast<Noesis::BrushMappingMode>(mode));
     return true;
 }
 
-extern "C" int32_t dm_noesis_gradient_brush_get_mapping_mode(void* brush) {
+extern "C" int32_t noesis_gradient_brush_get_mapping_mode(void* brush) {
     auto* b = cast<Noesis::GradientBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetMappingMode());
@@ -255,14 +255,14 @@ extern "C" int32_t dm_noesis_gradient_brush_get_mapping_mode(void* brush) {
 // Create an ImageBrush, optionally pointing at a borrowed ImageSource (e.g. a
 // pointer from FrameworkElement::get_component on a loaded image, or null to
 // wire the source later). Noesis takes its own reference to the source.
-extern "C" void* dm_noesis_image_brush_create(void* image_source) {
+extern "C" void* noesis_image_brush_create(void* image_source) {
     auto* src = cast<Noesis::ImageSource>(image_source);
     Noesis::Ptr<Noesis::ImageBrush> brush =
         src ? *new Noesis::ImageBrush(src) : *new Noesis::ImageBrush();
     return handout(brush.GetPtr());
 }
 
-extern "C" bool dm_noesis_image_brush_set_image_source(void* brush, void* image_source) {
+extern "C" bool noesis_image_brush_set_image_source(void* brush, void* image_source) {
     auto* b = cast<Noesis::ImageBrush>(brush);
     if (!b) return false;
     b->SetImageSource(cast<Noesis::ImageSource>(image_source));
@@ -270,7 +270,7 @@ extern "C" bool dm_noesis_image_brush_set_image_source(void* brush, void* image_
 }
 
 // Borrowed (no +1) ImageSource currently set on the brush, or null.
-extern "C" void* dm_noesis_image_brush_get_image_source(void* brush) {
+extern "C" void* noesis_image_brush_get_image_source(void* brush) {
     auto* b = cast<Noesis::ImageBrush>(brush);
     if (!b) return nullptr;
     return b->GetImageSource();
@@ -283,7 +283,7 @@ extern "C" void* dm_noesis_image_brush_get_image_source(void* brush) {
 // to the visual. NOTE: VisualBrush only renders when the visual is part of the
 // logical tree (header comment), but the property assignment + read-back is
 // fully headless-verifiable via GetVisual pointer identity.
-extern "C" void* dm_noesis_visual_brush_create(void* visual) {
+extern "C" void* noesis_visual_brush_create(void* visual) {
     Noesis::Ptr<Noesis::VisualBrush> brush = *new Noesis::VisualBrush();
     if (visual) {
         brush->SetVisual(cast<Noesis::Visual>(visual));
@@ -291,7 +291,7 @@ extern "C" void* dm_noesis_visual_brush_create(void* visual) {
     return handout(brush.GetPtr());
 }
 
-extern "C" bool dm_noesis_visual_brush_set_visual(void* brush, void* visual) {
+extern "C" bool noesis_visual_brush_set_visual(void* brush, void* visual) {
     auto* b = cast<Noesis::VisualBrush>(brush);
     if (!b) return false;
     b->SetVisual(cast<Noesis::Visual>(visual));
@@ -299,7 +299,7 @@ extern "C" bool dm_noesis_visual_brush_set_visual(void* brush, void* visual) {
 }
 
 // Borrowed (no +1) Visual currently set on the brush, or null.
-extern "C" void* dm_noesis_visual_brush_get_visual(void* brush) {
+extern "C" void* noesis_visual_brush_get_visual(void* brush) {
     auto* b = cast<Noesis::VisualBrush>(brush);
     if (!b) return nullptr;
     return b->GetVisual();
@@ -312,86 +312,86 @@ extern "C" void* dm_noesis_visual_brush_get_visual(void* brush) {
 // -1 if `brush` is not a TileBrush (every enum's minimum ordinal is 0).
 // Viewport/Viewbox are Rects passed as {x, y, width, height}.
 
-extern "C" bool dm_noesis_tile_brush_set_alignment_x(void* brush, int32_t value) {
+extern "C" bool noesis_tile_brush_set_alignment_x(void* brush, int32_t value) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     b->SetAlignmentX(static_cast<Noesis::AlignmentX>(value));
     return true;
 }
 
-extern "C" int32_t dm_noesis_tile_brush_get_alignment_x(void* brush) {
+extern "C" int32_t noesis_tile_brush_get_alignment_x(void* brush) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetAlignmentX());
 }
 
-extern "C" bool dm_noesis_tile_brush_set_alignment_y(void* brush, int32_t value) {
+extern "C" bool noesis_tile_brush_set_alignment_y(void* brush, int32_t value) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     b->SetAlignmentY(static_cast<Noesis::AlignmentY>(value));
     return true;
 }
 
-extern "C" int32_t dm_noesis_tile_brush_get_alignment_y(void* brush) {
+extern "C" int32_t noesis_tile_brush_get_alignment_y(void* brush) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetAlignmentY());
 }
 
-extern "C" bool dm_noesis_tile_brush_set_stretch(void* brush, int32_t value) {
+extern "C" bool noesis_tile_brush_set_stretch(void* brush, int32_t value) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     b->SetStretch(static_cast<Noesis::Stretch>(value));
     return true;
 }
 
-extern "C" int32_t dm_noesis_tile_brush_get_stretch(void* brush) {
+extern "C" int32_t noesis_tile_brush_get_stretch(void* brush) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetStretch());
 }
 
-extern "C" bool dm_noesis_tile_brush_set_tile_mode(void* brush, int32_t value) {
+extern "C" bool noesis_tile_brush_set_tile_mode(void* brush, int32_t value) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     b->SetTileMode(static_cast<Noesis::TileMode>(value));
     return true;
 }
 
-extern "C" int32_t dm_noesis_tile_brush_get_tile_mode(void* brush) {
+extern "C" int32_t noesis_tile_brush_get_tile_mode(void* brush) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetTileMode());
 }
 
-extern "C" bool dm_noesis_tile_brush_set_viewport_units(void* brush, int32_t value) {
+extern "C" bool noesis_tile_brush_set_viewport_units(void* brush, int32_t value) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     b->SetViewportUnits(static_cast<Noesis::BrushMappingMode>(value));
     return true;
 }
 
-extern "C" int32_t dm_noesis_tile_brush_get_viewport_units(void* brush) {
+extern "C" int32_t noesis_tile_brush_get_viewport_units(void* brush) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetViewportUnits());
 }
 
-extern "C" bool dm_noesis_tile_brush_set_viewbox_units(void* brush, int32_t value) {
+extern "C" bool noesis_tile_brush_set_viewbox_units(void* brush, int32_t value) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     b->SetViewboxUnits(static_cast<Noesis::BrushMappingMode>(value));
     return true;
 }
 
-extern "C" int32_t dm_noesis_tile_brush_get_viewbox_units(void* brush) {
+extern "C" int32_t noesis_tile_brush_get_viewbox_units(void* brush) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return -1;
     return static_cast<int32_t>(b->GetViewboxUnits());
 }
 
 // rect = {x, y, width, height}
-extern "C" bool dm_noesis_tile_brush_set_viewport(void* brush, float x, float y, float w, float h) {
+extern "C" bool noesis_tile_brush_set_viewport(void* brush, float x, float y, float w, float h) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     Noesis::Rect r;
@@ -403,7 +403,7 @@ extern "C" bool dm_noesis_tile_brush_set_viewport(void* brush, float x, float y,
     return true;
 }
 
-extern "C" bool dm_noesis_tile_brush_get_viewport(void* brush, float out[4]) {
+extern "C" bool noesis_tile_brush_get_viewport(void* brush, float out[4]) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b || !out) return false;
     const Noesis::Rect& r = b->GetViewport();
@@ -414,7 +414,7 @@ extern "C" bool dm_noesis_tile_brush_get_viewport(void* brush, float out[4]) {
     return true;
 }
 
-extern "C" bool dm_noesis_tile_brush_set_viewbox(void* brush, float x, float y, float w, float h) {
+extern "C" bool noesis_tile_brush_set_viewbox(void* brush, float x, float y, float w, float h) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b) return false;
     Noesis::Rect r;
@@ -426,7 +426,7 @@ extern "C" bool dm_noesis_tile_brush_set_viewbox(void* brush, float x, float y, 
     return true;
 }
 
-extern "C" bool dm_noesis_tile_brush_get_viewbox(void* brush, float out[4]) {
+extern "C" bool noesis_tile_brush_get_viewbox(void* brush, float out[4]) {
     auto* b = cast<Noesis::TileBrush>(brush);
     if (!b || !out) return false;
     const Noesis::Rect& r = b->GetViewbox();
@@ -439,12 +439,12 @@ extern "C" bool dm_noesis_tile_brush_get_viewbox(void* brush, float out[4]) {
 
 // ── Transforms ───────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_translate_transform_create(float x, float y) {
+extern "C" void* noesis_translate_transform_create(float x, float y) {
     Noesis::Ptr<Noesis::TranslateTransform> t = *new Noesis::TranslateTransform(x, y);
     return handout(t.GetPtr());
 }
 
-extern "C" bool dm_noesis_translate_transform_set(void* transform, float x, float y) {
+extern "C" bool noesis_translate_transform_set(void* transform, float x, float y) {
     auto* t = cast<Noesis::TranslateTransform>(transform);
     if (!t) return false;
     t->SetX(x);
@@ -452,7 +452,7 @@ extern "C" bool dm_noesis_translate_transform_set(void* transform, float x, floa
     return true;
 }
 
-extern "C" bool dm_noesis_translate_transform_get(void* transform, float* x, float* y) {
+extern "C" bool noesis_translate_transform_get(void* transform, float* x, float* y) {
     auto* t = cast<Noesis::TranslateTransform>(transform);
     if (!t || !x || !y) return false;
     *x = t->GetX();
@@ -460,14 +460,14 @@ extern "C" bool dm_noesis_translate_transform_get(void* transform, float* x, flo
     return true;
 }
 
-extern "C" void* dm_noesis_scale_transform_create(float sx, float sy, float cx, float cy) {
+extern "C" void* noesis_scale_transform_create(float sx, float sy, float cx, float cy) {
     Noesis::Ptr<Noesis::ScaleTransform> t = *new Noesis::ScaleTransform(sx, sy);
     t->SetCenterX(cx);
     t->SetCenterY(cy);
     return handout(t.GetPtr());
 }
 
-extern "C" bool dm_noesis_scale_transform_set(void* transform, float sx, float sy, float cx,
+extern "C" bool noesis_scale_transform_set(void* transform, float sx, float sy, float cx,
                                               float cy) {
     auto* t = cast<Noesis::ScaleTransform>(transform);
     if (!t) return false;
@@ -479,7 +479,7 @@ extern "C" bool dm_noesis_scale_transform_set(void* transform, float sx, float s
 }
 
 // out = [scaleX, scaleY, centerX, centerY]
-extern "C" bool dm_noesis_scale_transform_get(void* transform, float out[4]) {
+extern "C" bool noesis_scale_transform_get(void* transform, float out[4]) {
     auto* t = cast<Noesis::ScaleTransform>(transform);
     if (!t || !out) return false;
     out[0] = t->GetScaleX();
@@ -489,14 +489,14 @@ extern "C" bool dm_noesis_scale_transform_get(void* transform, float out[4]) {
     return true;
 }
 
-extern "C" void* dm_noesis_rotate_transform_create(float angle, float cx, float cy) {
+extern "C" void* noesis_rotate_transform_create(float angle, float cx, float cy) {
     Noesis::Ptr<Noesis::RotateTransform> t = *new Noesis::RotateTransform(angle);
     t->SetCenterX(cx);
     t->SetCenterY(cy);
     return handout(t.GetPtr());
 }
 
-extern "C" bool dm_noesis_rotate_transform_set_angle(void* transform, float angle) {
+extern "C" bool noesis_rotate_transform_set_angle(void* transform, float angle) {
     auto* t = cast<Noesis::RotateTransform>(transform);
     if (!t) return false;
     t->SetAngle(angle);
@@ -504,7 +504,7 @@ extern "C" bool dm_noesis_rotate_transform_set_angle(void* transform, float angl
 }
 
 // out = [angle, centerX, centerY]
-extern "C" bool dm_noesis_rotate_transform_get(void* transform, float out[3]) {
+extern "C" bool noesis_rotate_transform_get(void* transform, float out[3]) {
     auto* t = cast<Noesis::RotateTransform>(transform);
     if (!t || !out) return false;
     out[0] = t->GetAngle();
@@ -513,7 +513,7 @@ extern "C" bool dm_noesis_rotate_transform_get(void* transform, float out[3]) {
     return true;
 }
 
-extern "C" void* dm_noesis_skew_transform_create(float ax, float ay, float cx, float cy) {
+extern "C" void* noesis_skew_transform_create(float ax, float ay, float cx, float cy) {
     Noesis::Ptr<Noesis::SkewTransform> t = *new Noesis::SkewTransform(ax, ay);
     t->SetCenterX(cx);
     t->SetCenterY(cy);
@@ -521,7 +521,7 @@ extern "C" void* dm_noesis_skew_transform_create(float ax, float ay, float cx, f
 }
 
 // out = [angleX, angleY, centerX, centerY]
-extern "C" bool dm_noesis_skew_transform_get(void* transform, float out[4]) {
+extern "C" bool noesis_skew_transform_get(void* transform, float out[4]) {
     auto* t = cast<Noesis::SkewTransform>(transform);
     if (!t || !out) return false;
     out[0] = t->GetAngleX();
@@ -532,20 +532,20 @@ extern "C" bool dm_noesis_skew_transform_get(void* transform, float out[4]) {
 }
 
 // matrix = [m00, m01, m10, m11, m20, m21] (Transform2 row-major layout).
-extern "C" void* dm_noesis_matrix_transform_create(const float matrix[6]) {
+extern "C" void* noesis_matrix_transform_create(const float matrix[6]) {
     Noesis::Transform2 m = matrix ? Noesis::Transform2(matrix) : Noesis::Transform2();
     Noesis::Ptr<Noesis::MatrixTransform> t = *new Noesis::MatrixTransform(m);
     return handout(t.GetPtr());
 }
 
-extern "C" bool dm_noesis_matrix_transform_set(void* transform, const float matrix[6]) {
+extern "C" bool noesis_matrix_transform_set(void* transform, const float matrix[6]) {
     auto* t = cast<Noesis::MatrixTransform>(transform);
     if (!t || !matrix) return false;
     t->SetMatrix(Noesis::Transform2(matrix));
     return true;
 }
 
-extern "C" bool dm_noesis_matrix_transform_get(void* transform, float out[6]) {
+extern "C" bool noesis_matrix_transform_get(void* transform, float out[6]) {
     auto* t = cast<Noesis::MatrixTransform>(transform);
     if (!t || !out) return false;
     const Noesis::Transform2& m = t->GetMatrix();
@@ -554,7 +554,7 @@ extern "C" bool dm_noesis_matrix_transform_get(void* transform, float out[6]) {
     return true;
 }
 
-extern "C" void* dm_noesis_transform_group_create() {
+extern "C" void* noesis_transform_group_create() {
     Noesis::Ptr<Noesis::TransformGroup> g = *new Noesis::TransformGroup();
     // Ensure a children collection exists so add_child never has to create one.
     if (!g->GetChildren()) {
@@ -567,7 +567,7 @@ extern "C" void* dm_noesis_transform_group_create() {
 // Append a child transform to a TransformGroup. The group's collection takes its
 // own reference; the caller keeps ownership of `child`. Returns false if `group`
 // is not a TransformGroup or `child` is not a Transform.
-extern "C" bool dm_noesis_transform_group_add_child(void* group, void* child) {
+extern "C" bool noesis_transform_group_add_child(void* group, void* child) {
     auto* g = cast<Noesis::TransformGroup>(group);
     auto* c = cast<Noesis::Transform>(child);
     if (!g || !c) return false;
@@ -581,7 +581,7 @@ extern "C" bool dm_noesis_transform_group_add_child(void* group, void* child) {
     return true;
 }
 
-extern "C" int32_t dm_noesis_transform_group_child_count(void* group) {
+extern "C" int32_t noesis_transform_group_child_count(void* group) {
     auto* g = cast<Noesis::TransformGroup>(group);
     if (!g) return -1;
     return static_cast<int32_t>(g->GetNumChildren());
@@ -589,7 +589,7 @@ extern "C" int32_t dm_noesis_transform_group_child_count(void* group) {
 
 // fields = [centerX, centerY, scaleX, scaleY, skewX, skewY, rotation,
 //           translateX, translateY]
-extern "C" void* dm_noesis_composite_transform_create(const float fields[9]) {
+extern "C" void* noesis_composite_transform_create(const float fields[9]) {
     Noesis::Ptr<Noesis::CompositeTransform> t = *new Noesis::CompositeTransform();
     if (fields) {
         t->SetCenterX(fields[0]);
@@ -605,7 +605,7 @@ extern "C" void* dm_noesis_composite_transform_create(const float fields[9]) {
     return handout(t.GetPtr());
 }
 
-extern "C" bool dm_noesis_composite_transform_get(void* transform, float out[9]) {
+extern "C" bool noesis_composite_transform_get(void* transform, float out[9]) {
     auto* t = cast<Noesis::CompositeTransform>(transform);
     if (!t || !out) return false;
     out[0] = t->GetCenterX();
@@ -624,11 +624,11 @@ extern "C" bool dm_noesis_composite_transform_get(void* transform, float out[9])
 //
 // Transform3D objects are assigned to an element via UIElement::SetTransform3D
 // (the Transform3DProperty), NOT via RenderTransform. See the element accessors
-// dm_noesis_element_set_transform3d / _get_transform3d below.
+// noesis_element_set_transform3d / _get_transform3d below.
 
 // fields = {centerX, centerY, centerZ, rotationX, rotationY, rotationZ,
 //           scaleX, scaleY, scaleZ, translateX, translateY, translateZ}
-extern "C" void* dm_noesis_composite_transform3d_create(const float fields[12]) {
+extern "C" void* noesis_composite_transform3d_create(const float fields[12]) {
     Noesis::Ptr<Noesis::CompositeTransform3D> t = *new Noesis::CompositeTransform3D();
     if (fields) {
         t->SetCenterX(fields[0]);
@@ -647,7 +647,7 @@ extern "C" void* dm_noesis_composite_transform3d_create(const float fields[12]) 
     return handout(t.GetPtr());
 }
 
-extern "C" bool dm_noesis_composite_transform3d_set(void* transform, const float fields[12]) {
+extern "C" bool noesis_composite_transform3d_set(void* transform, const float fields[12]) {
     auto* t = cast<Noesis::CompositeTransform3D>(transform);
     if (!t || !fields) return false;
     t->SetCenterX(fields[0]);
@@ -665,7 +665,7 @@ extern "C" bool dm_noesis_composite_transform3d_set(void* transform, const float
     return true;
 }
 
-extern "C" bool dm_noesis_composite_transform3d_get(void* transform, float out[12]) {
+extern "C" bool noesis_composite_transform3d_get(void* transform, float out[12]) {
     auto* t = cast<Noesis::CompositeTransform3D>(transform);
     if (!t || !out) return false;
     out[0] = t->GetCenterX();
@@ -684,20 +684,20 @@ extern "C" bool dm_noesis_composite_transform3d_get(void* transform, float out[1
 }
 
 // matrix = 12 floats = Noesis::Transform3 (4 rows of Vector3, row-major).
-extern "C" void* dm_noesis_matrix_transform3d_create(const float matrix[12]) {
+extern "C" void* noesis_matrix_transform3d_create(const float matrix[12]) {
     Noesis::Transform3 m = matrix ? Noesis::Transform3(matrix) : Noesis::Transform3::Identity();
     Noesis::Ptr<Noesis::MatrixTransform3D> t = *new Noesis::MatrixTransform3D(m);
     return handout(t.GetPtr());
 }
 
-extern "C" bool dm_noesis_matrix_transform3d_set(void* transform, const float matrix[12]) {
+extern "C" bool noesis_matrix_transform3d_set(void* transform, const float matrix[12]) {
     auto* t = cast<Noesis::MatrixTransform3D>(transform);
     if (!t || !matrix) return false;
     t->SetMatrix(Noesis::Transform3(matrix));
     return true;
 }
 
-extern "C" bool dm_noesis_matrix_transform3d_get(void* transform, float out[12]) {
+extern "C" bool noesis_matrix_transform3d_get(void* transform, float out[12]) {
     auto* t = cast<Noesis::MatrixTransform3D>(transform);
     if (!t || !out) return false;
     const Noesis::Transform3& m = t->GetMatrix();
@@ -710,7 +710,7 @@ extern "C" bool dm_noesis_matrix_transform3d_get(void* transform, float out[12])
 // a borrowed Transform3D* (or null to clear); Noesis takes its own reference.
 // Returns false if `element` is not a UIElement or `transform` is non-null but
 // not a Transform3D.
-extern "C" bool dm_noesis_element_set_transform3d(void* element, void* transform) {
+extern "C" bool noesis_element_set_transform3d(void* element, void* transform) {
     auto* e = cast<Noesis::UIElement>(element);
     if (!e) return false;
     if (transform) {
@@ -724,7 +724,7 @@ extern "C" bool dm_noesis_element_set_transform3d(void* element, void* transform
 }
 
 // Borrowed (no +1) Transform3D currently set on the element, or null.
-extern "C" void* dm_noesis_element_get_transform3d(void* element) {
+extern "C" void* noesis_element_get_transform3d(void* element) {
     auto* e = cast<Noesis::UIElement>(element);
     if (!e) return nullptr;
     return e->GetTransform3D();
@@ -732,27 +732,27 @@ extern "C" void* dm_noesis_element_get_transform3d(void* element) {
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_blur_effect_create(float radius) {
+extern "C" void* noesis_blur_effect_create(float radius) {
     Noesis::Ptr<Noesis::BlurEffect> e = *new Noesis::BlurEffect();
     e->SetRadius(radius);
     return handout(e.GetPtr());
 }
 
-extern "C" bool dm_noesis_blur_effect_set_radius(void* effect, float radius) {
+extern "C" bool noesis_blur_effect_set_radius(void* effect, float radius) {
     auto* e = cast<Noesis::BlurEffect>(effect);
     if (!e) return false;
     e->SetRadius(radius);
     return true;
 }
 
-extern "C" bool dm_noesis_blur_effect_get_radius(void* effect, float* out) {
+extern "C" bool noesis_blur_effect_get_radius(void* effect, float* out) {
     auto* e = cast<Noesis::BlurEffect>(effect);
     if (!e || !out) return false;
     *out = e->GetRadius();
     return true;
 }
 
-extern "C" void* dm_noesis_drop_shadow_effect_create(const float color[4], float blur_radius,
+extern "C" void* noesis_drop_shadow_effect_create(const float color[4], float blur_radius,
                                                      float direction, float shadow_depth,
                                                      float opacity) {
     Noesis::Ptr<Noesis::DropShadowEffect> e = *new Noesis::DropShadowEffect();
@@ -765,7 +765,7 @@ extern "C" void* dm_noesis_drop_shadow_effect_create(const float color[4], float
 }
 
 // out_color = [r,g,b,a]; any out pointer may be null to skip that field.
-extern "C" bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* out_blur,
+extern "C" bool noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* out_blur,
                                                  float* out_direction, float* out_shadow_depth,
                                                  float* out_opacity) {
     auto* e = cast<Noesis::DropShadowEffect>(effect);
@@ -784,35 +784,35 @@ extern "C" bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4
     return true;
 }
 
-extern "C" bool dm_noesis_drop_shadow_effect_set_color(void* effect, const float color[4]) {
+extern "C" bool noesis_drop_shadow_effect_set_color(void* effect, const float color[4]) {
     auto* e = cast<Noesis::DropShadowEffect>(effect);
     if (!e || !color) return false;
     e->SetColor(Noesis::Color(color[0], color[1], color[2], color[3]));
     return true;
 }
 
-extern "C" bool dm_noesis_drop_shadow_effect_set_blur_radius(void* effect, float blur_radius) {
+extern "C" bool noesis_drop_shadow_effect_set_blur_radius(void* effect, float blur_radius) {
     auto* e = cast<Noesis::DropShadowEffect>(effect);
     if (!e) return false;
     e->SetBlurRadius(blur_radius);
     return true;
 }
 
-extern "C" bool dm_noesis_drop_shadow_effect_set_direction(void* effect, float direction) {
+extern "C" bool noesis_drop_shadow_effect_set_direction(void* effect, float direction) {
     auto* e = cast<Noesis::DropShadowEffect>(effect);
     if (!e) return false;
     e->SetDirection(direction);
     return true;
 }
 
-extern "C" bool dm_noesis_drop_shadow_effect_set_shadow_depth(void* effect, float shadow_depth) {
+extern "C" bool noesis_drop_shadow_effect_set_shadow_depth(void* effect, float shadow_depth) {
     auto* e = cast<Noesis::DropShadowEffect>(effect);
     if (!e) return false;
     e->SetShadowDepth(shadow_depth);
     return true;
 }
 
-extern "C" bool dm_noesis_drop_shadow_effect_set_opacity(void* effect, float opacity) {
+extern "C" bool noesis_drop_shadow_effect_set_opacity(void* effect, float opacity) {
     auto* e = cast<Noesis::DropShadowEffect>(effect);
     if (!e) return false;
     e->SetOpacity(opacity);
@@ -826,7 +826,7 @@ extern "C" bool dm_noesis_drop_shadow_effect_set_opacity(void* effect, float opa
 // path (whose type check demands TypeOf<int32_t>). These wrap the static
 // accessors directly. `mode` ordinals match Noesis::BitmapScalingMode.
 
-extern "C" bool dm_noesis_render_options_set_bitmap_scaling_mode(void* obj, int32_t mode) {
+extern "C" bool noesis_render_options_set_bitmap_scaling_mode(void* obj, int32_t mode) {
     auto* d = cast<Noesis::DependencyObject>(obj);
     if (!d) return false;
     Noesis::RenderOptions::SetBitmapScalingMode(d, static_cast<Noesis::BitmapScalingMode>(mode));
@@ -834,7 +834,7 @@ extern "C" bool dm_noesis_render_options_set_bitmap_scaling_mode(void* obj, int3
 }
 
 // Returns the BitmapScalingMode ordinal, or -1 if `obj` is not a DependencyObject.
-extern "C" int32_t dm_noesis_render_options_get_bitmap_scaling_mode(void* obj) {
+extern "C" int32_t noesis_render_options_get_bitmap_scaling_mode(void* obj) {
     auto* d = cast<Noesis::DependencyObject>(obj);
     if (!d) return -1;
     return static_cast<int32_t>(Noesis::RenderOptions::GetBitmapScalingMode(d));

@@ -10,17 +10,17 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::events::subscribe_event_by_name;
-use dm_noesis_runtime::ffi::ClassBase;
-use dm_noesis_runtime::reflection::{RoutingStrategy, raise_event, register_routed_event};
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::events::subscribe_event_by_name;
+use noesis_runtime::ffi::ClassBase;
+use noesis_runtime::reflection::{RoutingStrategy, raise_event, register_routed_event};
+use noesis_runtime::view::FrameworkElement;
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:dm="clr-namespace:DmTest">
-  <dm:Eventful x:Name="Target"/>
+      xmlns:nz="clr-namespace:NzTest">
+  <nz:Eventful x:Name="Target"/>
 </Grid>"##;
 
 struct NoopHandler;
@@ -34,31 +34,31 @@ fn custom_routed_event_fires() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let counter = Arc::new(AtomicU32::new(0));
 
     {
         // Register the Rust-backed type, then a routed event on it, BEFORE the
         // XAML that references it is parsed.
-        let _reg = ClassBuilder::new("DmTest.Eventful", ClassBase::ContentControl, NoopHandler)
+        let _reg = ClassBuilder::new("NzTest.Eventful", ClassBase::ContentControl, NoopHandler)
             .register()
             .expect("class registration failed");
 
         assert!(
-            register_routed_event("DmTest.Eventful", "MyEvent", RoutingStrategy::Bubble),
+            register_routed_event("NzTest.Eventful", "MyEvent", RoutingStrategy::Bubble),
             "register_routed_event returned false"
         );
         // Duplicate registration on the same type must be rejected.
         assert!(
-            !register_routed_event("DmTest.Eventful", "MyEvent", RoutingStrategy::Bubble),
+            !register_routed_event("NzTest.Eventful", "MyEvent", RoutingStrategy::Bubble),
             "duplicate routed-event registration should be rejected"
         );
         // Registering on an unknown type must fail.
         assert!(
-            !register_routed_event("DmTest.NoSuchType", "MyEvent", RoutingStrategy::Bubble),
+            !register_routed_event("NzTest.NoSuchType", "MyEvent", RoutingStrategy::Bubble),
             "routed event on unknown type should be rejected"
         );
 
@@ -111,5 +111,5 @@ fn custom_routed_event_fires() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

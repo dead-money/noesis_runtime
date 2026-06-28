@@ -12,20 +12,20 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyOptions, PropertyValue,
 };
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::reflection::register_enum;
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::reflection::register_enum;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:dm="clr-namespace:DmCb"
+      xmlns:nz="clr-namespace:NzCb"
       Width="100" Height="100">
-  <dm:Widget x:Name="W"/>
+  <nz:Widget x:Name="W"/>
 </Grid>"##;
 
 struct InMem(HashMap<String, Vec<u8>>);
@@ -74,17 +74,17 @@ fn custom_dp_value_type_callbacks() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let recorder = Recorder::default();
     {
-        register_enum("DmCb.Mode", &[("Off", 0), ("On", 1), ("Auto", 2)])
+        register_enum("NzCb.Mode", &[("Off", 0), ("On", 1), ("Auto", 2)])
             .expect("register_enum failed");
 
         let mut b = ClassBuilder::new(
-            "DmCb.Widget",
+            "NzCb.Widget",
             ClassBase::FrameworkElement,
             Handler {
                 recorder: recorder.clone(),
@@ -93,12 +93,12 @@ fn custom_dp_value_type_callbacks() {
         let pt = b.add_property("Pt", PropType::Point);
         let sz = b.add_property("Sz", PropType::Size);
         let vec = b.add_property("Vec", PropType::Vector);
-        let mode = b.add_enum_property("Mode", "DmCb.Mode", 0, PropertyOptions::default());
+        let mode = b.add_enum_property("Mode", "NzCb.Mode", 0, PropertyOptions::default());
         let reg = b.register().expect("class registration failed");
 
         let mut bytes = HashMap::new();
         bytes.insert("cb.xaml".to_string(), XAML.as_bytes().to_vec());
-        let _guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let element = FrameworkElement::load("cb.xaml").expect("load_xaml returned None");
         let mut view = View::create(element);
@@ -143,5 +143,5 @@ fn custom_dp_value_type_callbacks() {
         drop(view);
         drop(reg);
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

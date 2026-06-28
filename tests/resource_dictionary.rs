@@ -11,12 +11,12 @@
 //! merged one). A no-op stub of any entrypoint would flip one of these.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test resource_dictionary -- --nocapture`
+//!   `cargo test -p noesis_runtime --test resource_dictionary -- --nocapture`
 
 use std::ffi::CStr;
 
-use dm_noesis_runtime::ffi::dm_noesis_unbox_string;
-use dm_noesis_runtime::resources::{
+use noesis_runtime::ffi::noesis_unbox_string;
+use noesis_runtime::resources::{
     ResourceDictionary, application_resources_contains, application_resources_present,
     set_application_resources,
 };
@@ -38,8 +38,8 @@ const PARSED_XAML: &str = r##"<ResourceDictionary
 /// Unbox a borrowed `BaseComponent*` known to hold a `BoxedValue<String>`.
 fn unbox(ptr: *mut std::ffi::c_void) -> Option<String> {
     // SAFETY: `ptr` is a live boxed value borrowed from a dictionary entry;
-    // dm_noesis_unbox_string returns a borrowed C string (or null on mismatch).
-    let s = unsafe { dm_noesis_unbox_string(ptr) };
+    // noesis_unbox_string returns a borrowed C string (or null on mismatch).
+    let s = unsafe { noesis_unbox_string(ptr) };
     if s.is_null() {
         return None;
     }
@@ -52,9 +52,9 @@ fn resource_dictionary_roundtrips() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Build a dictionary + key→boxed-string, look it up ────────────────
@@ -140,10 +140,8 @@ fn resource_dictionary_roundtrips() {
 
         // Clear app resources before teardown so nothing dangles past shutdown.
         // SAFETY: passing null clears the installed dictionary (documented).
-        unsafe {
-            dm_noesis_runtime::ffi::dm_noesis_gui_set_application_resources(std::ptr::null_mut())
-        };
+        unsafe { noesis_runtime::ffi::noesis_gui_set_application_resources(std::ptr::null_mut()) };
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

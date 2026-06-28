@@ -65,7 +65,7 @@ class RustPlainVm;
 
 struct PlainProp {
     Noesis::TypeProperty* prop;  // owned by the TypeClass once added
-    dm_noesis_plain_type  type;
+    noesis_plain_type  type;
 };
 
 // Per-registered-class state. Refcount + free-handler lifetime model copied
@@ -77,9 +77,9 @@ struct PlainClassData {
     Noesis::Symbol              sym;
     Noesis::TypeClassBuilder*   typeClass;
     std::vector<PlainProp>      properties;
-    dm_noesis_plain_set_fn      on_set;
+    noesis_plain_set_fn      on_set;
     void*                       userdata;
-    dm_noesis_plain_free_fn     free_handler;
+    noesis_plain_free_fn     free_handler;
     bool                        hasInstances;
     std::atomic<int>            ref_count;
 
@@ -100,7 +100,7 @@ struct PlainClassData {
 };
 
 // Every successfully-registered PlainClassData, ever — for the shutdown sweep
-// (see dm_noesis_classes_force_free_at_shutdown for the rationale). Unlike the
+// (see noesis_classes_force_free_at_shutdown for the rationale). Unlike the
 // synthetic-control registry in noesis_classes.cpp, plain VMs are never created
 // by name through the Factory (they're instantiated directly from the Rust
 // token), so no Symbol→ClassData lookup map is needed.
@@ -112,14 +112,14 @@ void track(PlainClassData* cd) {
     g_all.push_back(cd);
 }
 
-const Noesis::Type* plain_content_type(dm_noesis_plain_type t) {
+const Noesis::Type* plain_content_type(noesis_plain_type t) {
     using namespace Noesis;
     switch (t) {
-        case DM_NOESIS_PLAIN_INT32:          return TypeOf<int32_t>();
-        case DM_NOESIS_PLAIN_DOUBLE:         return TypeOf<double>();
-        case DM_NOESIS_PLAIN_BOOL:           return TypeOf<bool>();
-        case DM_NOESIS_PLAIN_STRING:         return TypeOf<String>();
-        case DM_NOESIS_PLAIN_BASE_COMPONENT: return TypeOf<BaseComponent>();
+        case NOESIS_PLAIN_INT32:          return TypeOf<int32_t>();
+        case NOESIS_PLAIN_DOUBLE:         return TypeOf<double>();
+        case NOESIS_PLAIN_BOOL:           return TypeOf<bool>();
+        case NOESIS_PLAIN_STRING:         return TypeOf<String>();
+        case NOESIS_PLAIN_BASE_COMPONENT: return TypeOf<BaseComponent>();
     }
     return nullptr;
 }
@@ -163,7 +163,7 @@ public:
     }
 
     // Store a boxed value WITHOUT firing the Rust callback. Used by the Rust
-    // push path (dm_noesis_plain_vm_set_value) and internally by the binding
+    // push path (noesis_plain_vm_set_value) and internally by the binding
     // writeback path (after which we additionally notify Rust).
     bool StoreBoxed(uint32_t index, Noesis::BaseComponent* value) {
         if (index >= mValues.size()) return false;
@@ -272,8 +272,8 @@ private:
 
 class RustMultiValueConverter final: public Noesis::BaseMultiValueConverter {
 public:
-    RustMultiValueConverter(const dm_noesis_multi_value_converter_vtable* vt, void* userdata,
-                            dm_noesis_multi_value_converter_free_fn free_handler)
+    RustMultiValueConverter(const noesis_multi_value_converter_vtable* vt, void* userdata,
+                            noesis_multi_value_converter_free_fn free_handler)
         : mVtable(*vt), mUserdata(userdata), mFree(free_handler) {}
 
     ~RustMultiValueConverter() {
@@ -311,9 +311,9 @@ public:
                                    "DmNoesis.RustMultiValueConverter") {}
 
 private:
-    dm_noesis_multi_value_converter_vtable  mVtable;
+    noesis_multi_value_converter_vtable  mVtable;
     void*                                   mUserdata;
-    dm_noesis_multi_value_converter_free_fn mFree;
+    noesis_multi_value_converter_free_fn mFree;
 };
 
 Noesis::MultiBinding* as_multi_binding(void* p) {
@@ -325,11 +325,11 @@ Noesis::MultiBinding* as_multi_binding(void* p) {
 
 // ── C ABI: plain VM registration ────────────────────────────────────────────
 
-extern "C" void* dm_noesis_plain_vm_register(
+extern "C" void* noesis_plain_vm_register(
     const char* name,
-    dm_noesis_plain_set_fn on_set,
+    noesis_plain_set_fn on_set,
     void* userdata,
-    dm_noesis_plain_free_fn free_handler) {
+    noesis_plain_free_fn free_handler) {
     if (!name) return nullptr;
 
     Noesis::Symbol sym = Noesis::Symbol(name);
@@ -353,7 +353,7 @@ extern "C" void* dm_noesis_plain_vm_register(
     return cd;
 }
 
-extern "C" uint32_t dm_noesis_plain_vm_register_property(
+extern "C" uint32_t noesis_plain_vm_register_property(
     void* token, const char* prop_name, uint32_t content_type) {
     if (!token || !prop_name) return UINT32_MAX;
     auto* cd = static_cast<PlainClassData*>(token);
@@ -361,7 +361,7 @@ extern "C" uint32_t dm_noesis_plain_vm_register_property(
     // value store from the property count at BindClassData time).
     if (cd->hasInstances) return UINT32_MAX;
 
-    auto type = static_cast<dm_noesis_plain_type>(content_type);
+    auto type = static_cast<noesis_plain_type>(content_type);
     const Noesis::Type* ct = plain_content_type(type);
     if (!ct) return UINT32_MAX;
 
@@ -372,7 +372,7 @@ extern "C" uint32_t dm_noesis_plain_vm_register_property(
     return index;
 }
 
-extern "C" void* dm_noesis_plain_vm_create_instance(void* token) {
+extern "C" void* noesis_plain_vm_create_instance(void* token) {
     if (!token) return nullptr;
     auto* cd = static_cast<PlainClassData*>(token);
     cd->hasInstances = true;
@@ -382,14 +382,14 @@ extern "C" void* dm_noesis_plain_vm_create_instance(void* token) {
     return static_cast<Noesis::BaseComponent*>(instance);
 }
 
-extern "C" bool dm_noesis_plain_vm_set_value(
+extern "C" bool noesis_plain_vm_set_value(
     void* instance, uint32_t prop_index, void* boxed_value) {
     if (!instance) return false;
     auto* vm = static_cast<RustPlainVm*>(static_cast<Noesis::BaseComponent*>(instance));
     return vm->StoreBoxed(prop_index, static_cast<Noesis::BaseComponent*>(boxed_value));
 }
 
-extern "C" void* dm_noesis_plain_vm_get_value(void* instance, uint32_t prop_index) {
+extern "C" void* noesis_plain_vm_get_value(void* instance, uint32_t prop_index) {
     if (!instance) return nullptr;
     auto* vm = static_cast<RustPlainVm*>(static_cast<Noesis::BaseComponent*>(instance));
     Noesis::Ptr<Noesis::BaseComponent> v = vm->GetBoxed(prop_index);
@@ -398,20 +398,20 @@ extern "C" void* dm_noesis_plain_vm_get_value(void* instance, uint32_t prop_inde
     return v.GetPtr();
 }
 
-extern "C" bool dm_noesis_plain_vm_notify(void* instance, const char* prop_name) {
+extern "C" bool noesis_plain_vm_notify(void* instance, const char* prop_name) {
     if (!instance || !prop_name) return false;
     auto* vm = static_cast<RustPlainVm*>(static_cast<Noesis::BaseComponent*>(instance));
     vm->Raise(Noesis::Symbol(prop_name));
     return true;
 }
 
-extern "C" void dm_noesis_plain_vm_unregister(void* token) {
+extern "C" void noesis_plain_vm_unregister(void* token) {
     if (!token) return;
     auto* cd = static_cast<PlainClassData*>(token);
     cd->Release();
 }
 
-extern "C" void dm_noesis_plain_vm_force_free_at_shutdown(void) {
+extern "C" void noesis_plain_vm_force_free_at_shutdown(void) {
     std::vector<PlainClassData*> all;
     {
         std::lock_guard<std::mutex> lock(g_all_mutex);
@@ -428,31 +428,31 @@ extern "C" void dm_noesis_plain_vm_force_free_at_shutdown(void) {
 
 // ── C ABI: IMultiValueConverter + MultiBinding ──────────────────────────────
 
-extern "C" void* dm_noesis_multi_value_converter_create(
-    const dm_noesis_multi_value_converter_vtable* vt,
+extern "C" void* noesis_multi_value_converter_create(
+    const noesis_multi_value_converter_vtable* vt,
     void* userdata,
-    dm_noesis_multi_value_converter_free_fn free_handler) {
+    noesis_multi_value_converter_free_fn free_handler) {
     if (!vt) return nullptr;
     auto* conv = new RustMultiValueConverter(vt, userdata, free_handler);
     return static_cast<Noesis::BaseComponent*>(conv);
 }
 
-extern "C" void dm_noesis_multi_value_converter_destroy(void* converter) {
+extern "C" void noesis_multi_value_converter_destroy(void* converter) {
     if (!converter) return;
     static_cast<Noesis::BaseComponent*>(converter)->Release();
 }
 
-extern "C" void* dm_noesis_multi_binding_create(void) {
+extern "C" void* noesis_multi_binding_create(void) {
     auto* mb = new Noesis::MultiBinding();
     return static_cast<Noesis::BaseComponent*>(mb);
 }
 
-extern "C" void dm_noesis_multi_binding_destroy(void* multi_binding) {
+extern "C" void noesis_multi_binding_destroy(void* multi_binding) {
     if (!multi_binding) return;
     static_cast<Noesis::BaseComponent*>(multi_binding)->Release();
 }
 
-extern "C" bool dm_noesis_multi_binding_add_binding(void* multi_binding, void* binding) {
+extern "C" bool noesis_multi_binding_add_binding(void* multi_binding, void* binding) {
     Noesis::MultiBinding* mb = as_multi_binding(multi_binding);
     if (!mb || !binding) return false;
     auto* child = Noesis::DynamicCast<Noesis::BaseBinding*>(
@@ -464,7 +464,7 @@ extern "C" bool dm_noesis_multi_binding_add_binding(void* multi_binding, void* b
     return true;
 }
 
-extern "C" void dm_noesis_multi_binding_set_converter(void* multi_binding, void* converter) {
+extern "C" void noesis_multi_binding_set_converter(void* multi_binding, void* converter) {
     Noesis::MultiBinding* mb = as_multi_binding(multi_binding);
     if (!mb) return;
     auto* conv = converter
@@ -474,18 +474,18 @@ extern "C" void dm_noesis_multi_binding_set_converter(void* multi_binding, void*
     mb->SetConverter(conv);
 }
 
-extern "C" void dm_noesis_multi_binding_set_converter_parameter(
+extern "C" void noesis_multi_binding_set_converter_parameter(
     void* multi_binding, void* parameter) {
     Noesis::MultiBinding* mb = as_multi_binding(multi_binding);
     if (mb) mb->SetConverterParameter(static_cast<Noesis::BaseComponent*>(parameter));
 }
 
-extern "C" void dm_noesis_multi_binding_set_mode(void* multi_binding, int32_t mode) {
+extern "C" void noesis_multi_binding_set_mode(void* multi_binding, int32_t mode) {
     Noesis::MultiBinding* mb = as_multi_binding(multi_binding);
     if (mb) mb->SetMode(static_cast<Noesis::BindingMode>(mode));
 }
 
-extern "C" bool dm_noesis_set_multi_binding(
+extern "C" bool noesis_set_multi_binding(
     void* element, const char* dp_name, void* multi_binding) {
     if (!element || !dp_name || !multi_binding) return false;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(

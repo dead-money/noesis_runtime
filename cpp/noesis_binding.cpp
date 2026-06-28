@@ -7,7 +7,7 @@
 //     TryConvert / TryConvertBack forward into a Rust vtable. Binding values
 //     cross the FFI as boxed `BaseComponent*` (the same boxing the rest of the
 //     data-binding bridge uses); the Rust side unboxes the input with the
-//     dm_noesis_unbox_* helpers below and boxes its result with dm_noesis_box_*.
+//     noesis_unbox_* helpers below and boxes its result with noesis_box_*.
 //     Lifetime is modelled on RustCommand (noesis_commands.cpp): the converter
 //     is an ordinary BaseComponent, so Noesis's intrusive refcount runs the
 //     destructor — and the donated Rust free handler — exactly once after the
@@ -23,7 +23,7 @@
 //
 // Plus value boxing/unboxing helpers (bool/int32/double) so Rust can move
 // primitive values across as BaseComponent* — the currency every binding /
-// converter speaks. `dm_noesis_box_string` already lives in
+// converter speaks. `noesis_box_string` already lives in
 // noesis_collections.cpp; the string *unbox* helper is here next to its peers.
 
 #include "noesis_shim.h"
@@ -67,8 +67,8 @@ void* handout(Noesis::BaseComponent* c) {
 
 class RustValueConverter final: public Noesis::BaseValueConverter {
 public:
-    RustValueConverter(const dm_noesis_value_converter_vtable* vt, void* userdata,
-                       dm_noesis_value_converter_free_fn free_handler)
+    RustValueConverter(const noesis_value_converter_vtable* vt, void* userdata,
+                       noesis_value_converter_free_fn free_handler)
         : mVtable(*vt), mUserdata(userdata), mFree(free_handler) {}
 
     ~RustValueConverter() {
@@ -121,9 +121,9 @@ private:
         return true;
     }
 
-    dm_noesis_value_converter_vtable  mVtable;
+    noesis_value_converter_vtable  mVtable;
     void*                             mUserdata;
-    dm_noesis_value_converter_free_fn mFree;
+    noesis_value_converter_free_fn mFree;
 };
 
 Noesis::Binding* as_binding(void* p) {
@@ -135,22 +135,22 @@ Noesis::Binding* as_binding(void* p) {
 
 // ── Boxing / unboxing primitives ────────────────────────────────────────────
 
-extern "C" void* dm_noesis_box_bool(bool value) {
+extern "C" void* noesis_box_bool(bool value) {
     Noesis::Ptr<Noesis::BoxedValue> boxed = Noesis::Boxing::Box<bool>(value);
     return handout(boxed.GetPtr());
 }
 
-extern "C" void* dm_noesis_box_int32(int32_t value) {
+extern "C" void* noesis_box_int32(int32_t value) {
     Noesis::Ptr<Noesis::BoxedValue> boxed = Noesis::Boxing::Box<int32_t>(value);
     return handout(boxed.GetPtr());
 }
 
-extern "C" void* dm_noesis_box_double(double value) {
+extern "C" void* noesis_box_double(double value) {
     Noesis::Ptr<Noesis::BoxedValue> boxed = Noesis::Boxing::Box<double>(value);
     return handout(boxed.GetPtr());
 }
 
-extern "C" bool dm_noesis_unbox_bool(void* boxed, bool* out) {
+extern "C" bool noesis_unbox_bool(void* boxed, bool* out) {
     if (!boxed || !out) return false;
     auto* b = static_cast<Noesis::BaseComponent*>(boxed);
     if (!Noesis::Boxing::CanUnbox<bool>(b)) return false;
@@ -158,7 +158,7 @@ extern "C" bool dm_noesis_unbox_bool(void* boxed, bool* out) {
     return true;
 }
 
-extern "C" bool dm_noesis_unbox_int32(void* boxed, int32_t* out) {
+extern "C" bool noesis_unbox_int32(void* boxed, int32_t* out) {
     if (!boxed || !out) return false;
     auto* b = static_cast<Noesis::BaseComponent*>(boxed);
     if (!Noesis::Boxing::CanUnbox<int32_t>(b)) return false;
@@ -166,7 +166,7 @@ extern "C" bool dm_noesis_unbox_int32(void* boxed, int32_t* out) {
     return true;
 }
 
-extern "C" bool dm_noesis_unbox_double(void* boxed, double* out) {
+extern "C" bool noesis_unbox_double(void* boxed, double* out) {
     if (!boxed || !out) return false;
     auto* b = static_cast<Noesis::BaseComponent*>(boxed);
     if (!Noesis::Boxing::CanUnbox<double>(b)) return false;
@@ -176,7 +176,7 @@ extern "C" bool dm_noesis_unbox_double(void* boxed, double* out) {
 
 // Borrowed (no +1) view of a boxed string's bytes, valid while `boxed` is alive.
 // NULL if `boxed` is not a BoxedValue<String>.
-extern "C" const char* dm_noesis_unbox_string(void* boxed) {
+extern "C" const char* noesis_unbox_string(void* boxed) {
     if (!boxed) return nullptr;
     auto* b = static_cast<Noesis::BaseComponent*>(boxed);
     if (!Noesis::Boxing::CanUnbox<Noesis::String>(b)) return nullptr;
@@ -186,54 +186,54 @@ extern "C" const char* dm_noesis_unbox_string(void* boxed) {
 
 // ── Value converter ─────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_value_converter_create(
-    const dm_noesis_value_converter_vtable* vt,
+extern "C" void* noesis_value_converter_create(
+    const noesis_value_converter_vtable* vt,
     void* userdata,
-    dm_noesis_value_converter_free_fn free_handler) {
+    noesis_value_converter_free_fn free_handler) {
     if (!vt) return nullptr;
     // BaseComponent starts at refcount 1 — that initial reference IS the
-    // caller's +1, balanced by dm_noesis_value_converter_destroy. A Binding
+    // caller's +1, balanced by noesis_value_converter_destroy. A Binding
     // that later stores the converter (SetConverter) takes its own ref, so the
     // handler box outlives our destroy until that ref also drops.
     auto* conv = new RustValueConverter(vt, userdata, free_handler);
     return static_cast<Noesis::BaseComponent*>(conv);
 }
 
-extern "C" void dm_noesis_value_converter_destroy(void* converter) {
+extern "C" void noesis_value_converter_destroy(void* converter) {
     if (!converter) return;
     static_cast<Noesis::BaseComponent*>(converter)->Release();
 }
 
 // ── Binding construction ────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_binding_create(const char* path) {
+extern "C" void* noesis_binding_create(const char* path) {
     // new Binding starts at refcount 1 (the caller's +1), balanced by
-    // dm_noesis_binding_destroy. SetBinding takes its own reference.
+    // noesis_binding_destroy. SetBinding takes its own reference.
     auto* b = path ? new Noesis::Binding(path) : new Noesis::Binding();
     return static_cast<Noesis::BaseComponent*>(b);
 }
 
-extern "C" void dm_noesis_binding_destroy(void* binding) {
+extern "C" void noesis_binding_destroy(void* binding) {
     if (!binding) return;
     static_cast<Noesis::BaseComponent*>(binding)->Release();
 }
 
-extern "C" void dm_noesis_binding_set_source(void* binding, void* source) {
+extern "C" void noesis_binding_set_source(void* binding, void* source) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetSource(static_cast<Noesis::BaseComponent*>(source));
 }
 
-extern "C" void dm_noesis_binding_set_element_name(void* binding, const char* name) {
+extern "C" void noesis_binding_set_element_name(void* binding, const char* name) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetElementName(name ? name : "");
 }
 
-extern "C" void dm_noesis_binding_set_mode(void* binding, int32_t mode) {
+extern "C" void noesis_binding_set_mode(void* binding, int32_t mode) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetMode(static_cast<Noesis::BindingMode>(mode));
 }
 
-extern "C" void dm_noesis_binding_set_converter(void* binding, void* converter) {
+extern "C" void noesis_binding_set_converter(void* binding, void* converter) {
     Noesis::Binding* b = as_binding(binding);
     if (!b) return;
     auto* conv = converter
@@ -243,27 +243,27 @@ extern "C" void dm_noesis_binding_set_converter(void* binding, void* converter) 
     b->SetConverter(conv);
 }
 
-extern "C" void dm_noesis_binding_set_converter_parameter(void* binding, void* parameter) {
+extern "C" void noesis_binding_set_converter_parameter(void* binding, void* parameter) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetConverterParameter(static_cast<Noesis::BaseComponent*>(parameter));
 }
 
-extern "C" void dm_noesis_binding_set_string_format(void* binding, const char* format) {
+extern "C" void noesis_binding_set_string_format(void* binding, const char* format) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetStringFormat(format ? format : "");
 }
 
-extern "C" void dm_noesis_binding_set_fallback_value(void* binding, void* value) {
+extern "C" void noesis_binding_set_fallback_value(void* binding, void* value) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetFallbackValue(static_cast<Noesis::BaseComponent*>(value));
 }
 
-extern "C" void dm_noesis_binding_set_update_source_trigger(void* binding, int32_t trigger) {
+extern "C" void noesis_binding_set_update_source_trigger(void* binding, int32_t trigger) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetUpdateSourceTrigger(static_cast<Noesis::UpdateSourceTrigger>(trigger));
 }
 
-extern "C" void dm_noesis_binding_set_relative_source_self(void* binding) {
+extern "C" void noesis_binding_set_relative_source_self(void* binding) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetSelf());
 }
@@ -273,7 +273,7 @@ extern "C" void dm_noesis_binding_set_relative_source_self(void* binding) {
 // be registered with Reflection (referencing it from XAML forces registration);
 // an unknown name fails gracefully (no-op, returns false) rather than crashing.
 // `level` is the 1-based ancestor index (0 is coerced to 1, the nearest match).
-extern "C" bool dm_noesis_binding_set_relative_source_find_ancestor(
+extern "C" bool noesis_binding_set_relative_source_find_ancestor(
     void* binding, const char* type_name, uint32_t level) {
     Noesis::Binding* b = as_binding(binding);
     if (!b || !type_name) return false;
@@ -295,7 +295,7 @@ extern "C" bool dm_noesis_binding_set_relative_source_find_ancestor(
 
 // PreviousData: bind to the previous item in a data-bound collection (the
 // idiom behind delta columns). Uses the shared static RelativeSource singleton.
-extern "C" void dm_noesis_binding_set_relative_source_previous_data(void* binding) {
+extern "C" void noesis_binding_set_relative_source_previous_data(void* binding) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetPreviousData());
 }
@@ -303,7 +303,7 @@ extern "C" void dm_noesis_binding_set_relative_source_previous_data(void* bindin
 // TemplatedParent: bind to the control a ControlTemplate is applied to (the
 // code-built equivalent of `{Binding RelativeSource={RelativeSource
 // TemplatedParent}}`). Shared static singleton.
-extern "C" void dm_noesis_binding_set_relative_source_templated_parent(void* binding) {
+extern "C" void noesis_binding_set_relative_source_templated_parent(void* binding) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetTemplatedParent());
 }
@@ -317,7 +317,7 @@ extern "C" void dm_noesis_binding_set_relative_source_templated_parent(void* bin
 // DependencyObject, the DP name is unknown, or no binding is set on it. The
 // pointer is returned as the BaseBindingExpression base (upcast) so the
 // update entrypoints below can call the virtuals uniformly.
-extern "C" void* dm_noesis_get_binding_expression(void* element, const char* dp_name) {
+extern "C" void* noesis_get_binding_expression(void* element, const char* dp_name) {
     if (!element || !dp_name) return nullptr;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -334,7 +334,7 @@ extern "C" void* dm_noesis_get_binding_expression(void* element, const char* dp_
 }
 
 // Force a source -> target data transfer (re-pull the source value).
-extern "C" void dm_noesis_binding_expression_update_target(void* expr) {
+extern "C" void noesis_binding_expression_update_target(void* expr) {
     if (!expr) return;
     static_cast<Noesis::BaseBindingExpression*>(expr)->UpdateTarget();
 }
@@ -342,12 +342,12 @@ extern "C" void dm_noesis_binding_expression_update_target(void* expr) {
 // Push the current target value back to the source. No-op (per Noesis) unless
 // the binding's Mode is TwoWay / OneWayToSource — this is what commits a binding
 // whose UpdateSourceTrigger is Explicit.
-extern "C" void dm_noesis_binding_expression_update_source(void* expr) {
+extern "C" void noesis_binding_expression_update_source(void* expr) {
     if (!expr) return;
     static_cast<Noesis::BaseBindingExpression*>(expr)->UpdateSource();
 }
 
-extern "C" bool dm_noesis_set_binding(void* element, const char* dp_name, void* binding) {
+extern "C" bool noesis_set_binding(void* element, const char* dp_name, void* binding) {
     if (!element || !dp_name || !binding) return false;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -366,7 +366,7 @@ extern "C" bool dm_noesis_set_binding(void* element, const char* dp_name, void* 
 // ── ResourceDictionary insertion (so XAML {StaticResource} can reach a Rust
 //    converter / value) ─────────────────────────────────────────────────────
 
-extern "C" bool dm_noesis_framework_element_add_resource(
+extern "C" bool noesis_framework_element_add_resource(
     void* element, const char* key, void* object) {
     if (!element || !key || !object) return false;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(

@@ -8,12 +8,12 @@
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test mouse_position -- --nocapture`
+//!   `cargo test -p noesis_runtime --test mouse_position -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SCENE: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -43,14 +43,14 @@ fn framework_element_mouse_position() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element = FrameworkElement::load("scene.xaml").expect("scene load");
         // Keep an owning handle to the root so we can query it after the element
@@ -80,5 +80,5 @@ fn framework_element_mouse_position() {
         drop(root);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

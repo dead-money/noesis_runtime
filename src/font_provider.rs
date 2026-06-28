@@ -34,10 +34,9 @@ use std::ffi::{CStr, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    FontProviderVTable, RegisterFontFn, dm_noesis_font_provider_create,
-    dm_noesis_font_provider_destroy, dm_noesis_set_font_provider,
-    dm_noesis_set_font_provider_assembly, dm_noesis_set_font_provider_scheme,
-    dm_noesis_set_font_provider_scheme_assembly,
+    FontProviderVTable, RegisterFontFn, noesis_font_provider_create, noesis_font_provider_destroy,
+    noesis_set_font_provider, noesis_set_font_provider_assembly, noesis_set_font_provider_scheme,
+    noesis_set_font_provider_scheme_assembly,
 };
 
 /// Rust-side font provider. `scan_folder` registers every font Noesis
@@ -195,11 +194,11 @@ impl Registered {
         let folder = CString::new(folder_uri).expect("folder_uri contained interior NUL");
         let name = CString::new(filename).expect("filename contained interior NUL");
         // SAFETY: `self.handle` was returned by
-        // `dm_noesis_font_provider_create` and points at a `RustFontProvider`
+        // `noesis_font_provider_create` and points at a `RustFontProvider`
         // that's live for the lifetime of `self`. The two CStrings outlive
         // the synchronous FFI call.
         unsafe {
-            crate::ffi::dm_noesis_font_provider_register_font(
+            crate::ffi::noesis_font_provider_register_font(
                 self.handle.as_ptr(),
                 folder.as_ptr(),
                 name.as_ptr(),
@@ -213,7 +212,7 @@ impl Drop for Registered {
         // SAFETY: handle + userdata produced together by set_font_provider;
         // both freed exactly once here.
         unsafe {
-            dm_noesis_font_provider_destroy(self.handle.as_ptr());
+            noesis_font_provider_destroy(self.handle.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -229,7 +228,7 @@ impl Drop for Registered {
 pub fn set_font_provider<P: FontProvider>(provider: P) -> Registered {
     // SAFETY: install globally — Noesis retains its own +1.
     register_with(provider, |handle| unsafe {
-        dm_noesis_set_font_provider(handle)
+        noesis_set_font_provider(handle)
     })
 }
 
@@ -241,8 +240,8 @@ fn register_with<P: FontProvider>(provider: P, install: impl FnOnce(*mut c_void)
     let outer: Box<Box<dyn FontProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);
     // SAFETY: VTABLE is 'static; userdata is freshly leaked.
-    let handle = unsafe { dm_noesis_font_provider_create(&raw const VTABLE, userdata.cast()) };
-    let handle = NonNull::new(handle).expect("dm_noesis_font_provider_create returned null");
+    let handle = unsafe { noesis_font_provider_create(&raw const VTABLE, userdata.cast()) };
+    let handle = NonNull::new(handle).expect("noesis_font_provider_create returned null");
     install(handle.as_ptr());
 
     Registered {
@@ -264,7 +263,7 @@ pub fn set_scheme_font_provider<P: FontProvider>(scheme: &str, provider: P) -> R
     let scheme = std::ffi::CString::new(scheme).expect("scheme contained interior NUL");
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustFontProvider*; `scheme` outlives the call.
-        unsafe { dm_noesis_set_font_provider_scheme(scheme.as_ptr(), handle) }
+        unsafe { noesis_set_font_provider_scheme(scheme.as_ptr(), handle) }
     })
 }
 
@@ -280,7 +279,7 @@ pub fn set_assembly_font_provider<P: FontProvider>(assembly: &str, provider: P) 
     let assembly = std::ffi::CString::new(assembly).expect("assembly contained interior NUL");
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustFontProvider*; `assembly` outlives the call.
-        unsafe { dm_noesis_set_font_provider_assembly(assembly.as_ptr(), handle) }
+        unsafe { noesis_set_font_provider_assembly(assembly.as_ptr(), handle) }
     })
 }
 
@@ -302,7 +301,7 @@ pub fn set_scheme_assembly_font_provider<P: FontProvider>(
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustFontProvider*; both CStrings outlive the call.
         unsafe {
-            dm_noesis_set_font_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
+            noesis_set_font_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
         }
     })
 }
@@ -327,7 +326,7 @@ pub fn set_font_fallbacks<S: AsRef<str>>(families: &[S]) {
     use std::os::raw::c_char;
 
     if families.is_empty() {
-        unsafe { crate::ffi::dm_noesis_set_font_fallbacks(core::ptr::null(), 0) };
+        unsafe { crate::ffi::noesis_set_font_fallbacks(core::ptr::null(), 0) };
         return;
     }
 
@@ -339,7 +338,7 @@ pub fn set_font_fallbacks<S: AsRef<str>>(families: &[S]) {
     // SAFETY: Noesis copies the names into its own storage; `ptrs` only
     // needs to be valid for the call's duration.
     unsafe {
-        crate::ffi::dm_noesis_set_font_fallbacks(ptrs.as_ptr(), ptrs.len() as u32);
+        crate::ffi::noesis_set_font_fallbacks(ptrs.as_ptr(), ptrs.len() as u32);
     }
 }
 
@@ -348,6 +347,6 @@ pub fn set_font_fallbacks<S: AsRef<str>>(families: &[S]) {
 /// a WPF-normal default is `(15.0, 400, 5, 0)`.
 pub fn set_font_default_properties(size: f32, weight: i32, stretch: i32, style: i32) {
     unsafe {
-        crate::ffi::dm_noesis_set_font_default_properties(size, weight, stretch, style);
+        crate::ffi::noesis_set_font_default_properties(size, weight, stretch, style);
     }
 }

@@ -11,8 +11,8 @@
 //! built programmatically:
 //!
 //! ```no_run
-//! # use dm_noesis_runtime::styles::Style;
-//! # use dm_noesis_runtime::binding::box_f64;
+//! # use noesis_runtime::styles::Style;
+//! # use noesis_runtime::binding::box_f64;
 //! let mut style = Style::new();
 //! style.set_target_type("TextBlock");
 //! style.add_setter("FontSize", &box_f64(24.0));
@@ -44,38 +44,37 @@ use std::ffi::{CStr, CString, c_void};
 use crate::animation::BeginStoryboard;
 use crate::binding::{Binding, Boxed};
 use crate::ffi::{
-    TemplateSelectorVTable, dm_noesis_base_component_release, dm_noesis_control_template_parse,
-    dm_noesis_data_template_parse, dm_noesis_framework_template_find_name,
-    dm_noesis_style_add_setter, dm_noesis_style_create, dm_noesis_style_destroy,
-    dm_noesis_style_set_based_on, dm_noesis_style_set_target_type,
-    dm_noesis_templates_data_trigger_add_setter, dm_noesis_templates_data_trigger_create,
-    dm_noesis_templates_data_trigger_get_binding, dm_noesis_templates_data_trigger_get_value,
-    dm_noesis_templates_data_trigger_set_binding, dm_noesis_templates_data_trigger_set_value,
-    dm_noesis_templates_data_trigger_setter_count, dm_noesis_templates_event_trigger_action_count,
-    dm_noesis_templates_event_trigger_add_action, dm_noesis_templates_event_trigger_create,
-    dm_noesis_templates_event_trigger_get_routed_event_name,
-    dm_noesis_templates_event_trigger_get_source_name,
-    dm_noesis_templates_event_trigger_set_routed_event,
-    dm_noesis_templates_event_trigger_set_source_name,
-    dm_noesis_templates_multi_data_trigger_add_condition,
-    dm_noesis_templates_multi_data_trigger_add_setter,
-    dm_noesis_templates_multi_data_trigger_condition_count,
-    dm_noesis_templates_multi_data_trigger_condition_has_binding,
-    dm_noesis_templates_multi_data_trigger_create,
-    dm_noesis_templates_multi_data_trigger_get_condition_value,
-    dm_noesis_templates_multi_data_trigger_setter_count,
-    dm_noesis_templates_multi_trigger_add_condition, dm_noesis_templates_multi_trigger_add_setter,
-    dm_noesis_templates_multi_trigger_condition_count, dm_noesis_templates_multi_trigger_create,
-    dm_noesis_templates_multi_trigger_get_condition_property_name,
-    dm_noesis_templates_multi_trigger_get_condition_value,
-    dm_noesis_templates_multi_trigger_setter_count, dm_noesis_templates_selector_create,
-    dm_noesis_templates_selector_destroy, dm_noesis_templates_selector_select,
-    dm_noesis_templates_style_add_trigger, dm_noesis_templates_style_get_trigger,
-    dm_noesis_templates_style_trigger_count, dm_noesis_templates_trigger_add_setter,
-    dm_noesis_templates_trigger_create, dm_noesis_templates_trigger_get_property_name,
-    dm_noesis_templates_trigger_get_value, dm_noesis_templates_trigger_set_property,
-    dm_noesis_templates_trigger_set_value, dm_noesis_templates_trigger_setter_count,
-    dm_noesis_unbox_bool, dm_noesis_unbox_int32, dm_noesis_unbox_string,
+    TemplateSelectorVTable, noesis_base_component_release, noesis_control_template_parse,
+    noesis_data_template_parse, noesis_framework_template_find_name, noesis_style_add_setter,
+    noesis_style_create, noesis_style_destroy, noesis_style_set_based_on,
+    noesis_style_set_target_type, noesis_templates_data_trigger_add_setter,
+    noesis_templates_data_trigger_create, noesis_templates_data_trigger_get_binding,
+    noesis_templates_data_trigger_get_value, noesis_templates_data_trigger_set_binding,
+    noesis_templates_data_trigger_set_value, noesis_templates_data_trigger_setter_count,
+    noesis_templates_event_trigger_action_count, noesis_templates_event_trigger_add_action,
+    noesis_templates_event_trigger_create, noesis_templates_event_trigger_get_routed_event_name,
+    noesis_templates_event_trigger_get_source_name,
+    noesis_templates_event_trigger_set_routed_event,
+    noesis_templates_event_trigger_set_source_name,
+    noesis_templates_multi_data_trigger_add_condition,
+    noesis_templates_multi_data_trigger_add_setter,
+    noesis_templates_multi_data_trigger_condition_count,
+    noesis_templates_multi_data_trigger_condition_has_binding,
+    noesis_templates_multi_data_trigger_create,
+    noesis_templates_multi_data_trigger_get_condition_value,
+    noesis_templates_multi_data_trigger_setter_count, noesis_templates_multi_trigger_add_condition,
+    noesis_templates_multi_trigger_add_setter, noesis_templates_multi_trigger_condition_count,
+    noesis_templates_multi_trigger_create,
+    noesis_templates_multi_trigger_get_condition_property_name,
+    noesis_templates_multi_trigger_get_condition_value,
+    noesis_templates_multi_trigger_setter_count, noesis_templates_selector_create,
+    noesis_templates_selector_destroy, noesis_templates_selector_select,
+    noesis_templates_style_add_trigger, noesis_templates_style_get_trigger,
+    noesis_templates_style_trigger_count, noesis_templates_trigger_add_setter,
+    noesis_templates_trigger_create, noesis_templates_trigger_get_property_name,
+    noesis_templates_trigger_get_value, noesis_templates_trigger_set_property,
+    noesis_templates_trigger_set_value, noesis_templates_trigger_setter_count, noesis_unbox_bool,
+    noesis_unbox_int32, noesis_unbox_string,
 };
 use crate::view::FrameworkElement;
 
@@ -111,9 +110,9 @@ impl Style {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: no preconditions beyond a live Noesis runtime.
-        let ptr = unsafe { dm_noesis_style_create() };
+        let ptr = unsafe { noesis_style_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_style_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_style_create returned null"),
         }
     }
 
@@ -150,7 +149,7 @@ impl Style {
         };
         // SAFETY: self.ptr live; c lives for the call. The C side returns false
         // (no-op) on an unknown type name.
-        unsafe { dm_noesis_style_set_target_type(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_style_set_target_type(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Append a `Setter` for the dependency property named `dp_name` (resolved
@@ -176,14 +175,14 @@ impl Style {
             return false;
         };
         // SAFETY: self.ptr live; c lives for the call; value per # Safety.
-        unsafe { dm_noesis_style_add_setter(self.ptr.as_ptr(), c.as_ptr(), value) }
+        unsafe { noesis_style_add_setter(self.ptr.as_ptr(), c.as_ptr(), value) }
     }
 
     /// Set the `BasedOn` style this style inherits setters/triggers from
     /// (`Style.BasedOn`). Noesis takes its own reference to `base`.
     pub fn set_based_on(&mut self, base: &Style) {
         // SAFETY: both pointers are live Style*; Noesis AddRefs `base`.
-        unsafe { dm_noesis_style_set_based_on(self.ptr.as_ptr(), base.raw()) }
+        unsafe { noesis_style_set_based_on(self.ptr.as_ptr(), base.raw()) }
     }
 
     /// Append `trigger` to this style's `Triggers` collection
@@ -193,14 +192,14 @@ impl Style {
     /// only if the underlying handles are invalid.
     pub fn add_trigger<T: TriggerHandle>(&mut self, trigger: &T) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the trigger.
-        unsafe { dm_noesis_templates_style_add_trigger(self.ptr.as_ptr(), trigger.trigger_ptr()) }
+        unsafe { noesis_templates_style_add_trigger(self.ptr.as_ptr(), trigger.trigger_ptr()) }
     }
 
     /// Number of triggers in this style's `Triggers` collection.
     #[must_use]
     pub fn trigger_count(&self) -> u32 {
         // SAFETY: self.ptr is a live Style*.
-        let n = unsafe { dm_noesis_templates_style_trigger_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_templates_style_trigger_count(self.ptr.as_ptr()) };
         u32::try_from(n.max(0)).unwrap_or(0)
     }
 
@@ -211,7 +210,7 @@ impl Style {
     #[must_use]
     pub fn get_trigger(&self, index: u32) -> Option<TriggerReadback> {
         // SAFETY: self.ptr is a live Style*; the result is a +1-owned trigger.
-        let p = unsafe { dm_noesis_templates_style_get_trigger(self.ptr.as_ptr(), index) };
+        let p = unsafe { noesis_templates_style_get_trigger(self.ptr.as_ptr(), index) };
         NonNull::new(p).map(|ptr| TriggerReadback { ptr })
     }
 
@@ -234,8 +233,8 @@ impl Style {
 /// [`add_setter`](Style::add_setter) form still works.
 ///
 /// ```no_run
-/// # use dm_noesis_runtime::styles::Style;
-/// # use dm_noesis_runtime::binding::box_f64;
+/// # use noesis_runtime::styles::Style;
+/// # use noesis_runtime::binding::box_f64;
 /// let style = Style::builder("TextBlock")
 ///     .setter("FontSize", &box_f64(24.0))
 ///     .build();
@@ -277,7 +276,7 @@ impl StyleBuilder {
 impl Drop for Style {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref (create / from_owned).
-        unsafe { dm_noesis_style_destroy(self.ptr.as_ptr()) }
+        unsafe { noesis_style_destroy(self.ptr.as_ptr()) }
     }
 }
 
@@ -307,7 +306,7 @@ impl ControlTemplate {
     pub fn parse(xaml: &str) -> Option<Self> {
         let c = CString::new(xaml).expect("xaml contained interior NUL");
         // SAFETY: c lives for the call; the result is a +1-owned ControlTemplate.
-        let ptr = unsafe { dm_noesis_control_template_parse(c.as_ptr()) };
+        let ptr = unsafe { noesis_control_template_parse(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -348,7 +347,7 @@ impl ControlTemplate {
         // SAFETY: self.ptr live; c lives for the call; templated_parent.raw() is
         // a live FrameworkElement*. The returned pointer is borrowed.
         let p = unsafe {
-            dm_noesis_framework_template_find_name(
+            noesis_framework_template_find_name(
                 self.ptr.as_ptr(),
                 c.as_ptr(),
                 templated_parent.raw(),
@@ -361,7 +360,7 @@ impl ControlTemplate {
 impl Drop for ControlTemplate {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref (parse / from_owned).
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -389,7 +388,7 @@ impl DataTemplate {
     pub fn parse(xaml: &str) -> Option<Self> {
         let c = CString::new(xaml).expect("xaml contained interior NUL");
         // SAFETY: c lives for the call; the result is a +1-owned DataTemplate.
-        let ptr = unsafe { dm_noesis_data_template_parse(c.as_ptr()) };
+        let ptr = unsafe { noesis_data_template_parse(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -419,7 +418,7 @@ impl DataTemplate {
         // SAFETY: self.ptr live; c lives for the call; templated_parent.raw() is
         // a live FrameworkElement*. The returned pointer is borrowed.
         let p = unsafe {
-            dm_noesis_framework_template_find_name(
+            noesis_framework_template_find_name(
                 self.ptr.as_ptr(),
                 c.as_ptr(),
                 templated_parent.raw(),
@@ -432,7 +431,7 @@ impl DataTemplate {
 impl Drop for DataTemplate {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref (parse).
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -460,7 +459,7 @@ impl OwnedValue {
     pub fn as_bool(&self) -> Option<bool> {
         let mut out = false;
         // SAFETY: self.ptr is a live boxed BaseComponent*.
-        let ok = unsafe { dm_noesis_unbox_bool(self.ptr.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_bool(self.ptr.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -469,7 +468,7 @@ impl OwnedValue {
     pub fn as_i32(&self) -> Option<i32> {
         let mut out = 0;
         // SAFETY: self.ptr is a live boxed BaseComponent*.
-        let ok = unsafe { dm_noesis_unbox_int32(self.ptr.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_int32(self.ptr.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -479,7 +478,7 @@ impl OwnedValue {
     pub fn as_string(&self) -> Option<String> {
         // SAFETY: self.ptr is a live boxed BaseComponent*; the returned pointer
         // (if non-null) is valid while self is alive.
-        let p = unsafe { dm_noesis_unbox_string(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_unbox_string(self.ptr.as_ptr()) };
         if p.is_null() {
             return None;
         }
@@ -491,7 +490,7 @@ impl OwnedValue {
 impl Drop for OwnedValue {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref by a *_get_value getter.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -551,7 +550,7 @@ macro_rules! owned_trigger {
         impl Drop for $name {
             fn drop(&mut self) {
                 // SAFETY: produced with a +1 ref (create).
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
 
@@ -566,27 +565,27 @@ macro_rules! owned_trigger {
 
 owned_trigger!(
     Trigger,
-    dm_noesis_templates_trigger_create,
+    noesis_templates_trigger_create,
     "A property `Trigger` — applies its setters while a dependency property on the\ntargeted element equals the trigger `Value` (`Noesis::Trigger`)."
 );
 owned_trigger!(
     DataTrigger,
-    dm_noesis_templates_data_trigger_create,
+    noesis_templates_data_trigger_create,
     "A `DataTrigger` — applies its setters while a bound value equals the trigger\n`Value` (`Noesis::DataTrigger`)."
 );
 owned_trigger!(
     MultiTrigger,
-    dm_noesis_templates_multi_trigger_create,
+    noesis_templates_multi_trigger_create,
     "A `MultiTrigger` — applies its setters while **all** of its property\nconditions are met (`Noesis::MultiTrigger`)."
 );
 owned_trigger!(
     MultiDataTrigger,
-    dm_noesis_templates_multi_data_trigger_create,
+    noesis_templates_multi_data_trigger_create,
     "A `MultiDataTrigger` — applies its setters while **all** of its\nbinding-value conditions are met (`Noesis::MultiDataTrigger`). The\nbinding-condition sibling of [`MultiTrigger`]."
 );
 owned_trigger!(
     EventTrigger,
-    dm_noesis_templates_event_trigger_create,
+    noesis_templates_event_trigger_create,
     "An `EventTrigger` — runs its actions in response to a routed event\n(`Noesis::EventTrigger`)."
 );
 
@@ -601,16 +600,14 @@ impl Trigger {
             return false;
         };
         // SAFETY: self.ptr live; the CStrings live for the call.
-        unsafe {
-            dm_noesis_templates_trigger_set_property(self.ptr.as_ptr(), t.as_ptr(), d.as_ptr())
-        }
+        unsafe { noesis_templates_trigger_set_property(self.ptr.as_ptr(), t.as_ptr(), d.as_ptr()) }
     }
 
     /// Name of the trigger's `Property`, read back from the live object, or
     /// `None` if unset.
     #[must_use]
     pub fn property_name(&self) -> Option<String> {
-        read_name(unsafe { dm_noesis_templates_trigger_get_property_name(self.ptr.as_ptr()) })
+        read_name(unsafe { noesis_templates_trigger_get_property_name(self.ptr.as_ptr()) })
     }
 
     /// Set the `Value` the property is compared against (Noesis stores its own
@@ -618,13 +615,13 @@ impl Trigger {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_value(&mut self, value: &Boxed) -> bool {
         // SAFETY: self.ptr live; value.raw() is a live boxed BaseComponent*.
-        unsafe { dm_noesis_templates_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
+        unsafe { noesis_templates_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
     }
 
     /// The trigger's `Value`, `AddRef`'d back out of the live object.
     #[must_use]
     pub fn value(&self) -> Option<OwnedValue> {
-        owned_value(unsafe { dm_noesis_templates_trigger_get_value(self.ptr.as_ptr()) })
+        owned_value(unsafe { noesis_templates_trigger_get_value(self.ptr.as_ptr()) })
     }
 
     /// Append a setter (`dp_name` resolved on `type_name`) applied while the
@@ -635,7 +632,7 @@ impl Trigger {
         };
         // SAFETY: self.ptr live; CStrings + value live for the call.
         unsafe {
-            dm_noesis_templates_trigger_add_setter(
+            noesis_templates_trigger_add_setter(
                 self.ptr.as_ptr(),
                 t.as_ptr(),
                 d.as_ptr(),
@@ -647,7 +644,7 @@ impl Trigger {
     /// Number of setters attached to this trigger.
     #[must_use]
     pub fn setter_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_trigger_setter_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_trigger_setter_count(self.ptr.as_ptr()) })
     }
 }
 
@@ -658,7 +655,7 @@ impl DataTrigger {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_binding(&mut self, binding: &Binding) -> bool {
         // SAFETY: self.ptr live; binding.raw() is a live BaseBinding*.
-        unsafe { dm_noesis_templates_data_trigger_set_binding(self.ptr.as_ptr(), binding.raw()) }
+        unsafe { noesis_templates_data_trigger_set_binding(self.ptr.as_ptr(), binding.raw()) }
     }
 
     /// Whether a `Binding` is set, observed by reading it back from the live
@@ -666,12 +663,12 @@ impl DataTrigger {
     #[must_use]
     pub fn has_binding(&self) -> bool {
         // SAFETY: self.ptr live; the +1 result is released here if present.
-        let p = unsafe { dm_noesis_templates_data_trigger_get_binding(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_templates_data_trigger_get_binding(self.ptr.as_ptr()) };
         if p.is_null() {
             false
         } else {
             // SAFETY: p is a +1-owned handout we own and must release.
-            unsafe { dm_noesis_base_component_release(p) };
+            unsafe { noesis_base_component_release(p) };
             true
         }
     }
@@ -680,13 +677,13 @@ impl DataTrigger {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_value(&mut self, value: &Boxed) -> bool {
         // SAFETY: self.ptr live; value.raw() is a live boxed BaseComponent*.
-        unsafe { dm_noesis_templates_data_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
+        unsafe { noesis_templates_data_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
     }
 
     /// The trigger's `Value`, `AddRef`'d back out of the live object.
     #[must_use]
     pub fn value(&self) -> Option<OwnedValue> {
-        owned_value(unsafe { dm_noesis_templates_data_trigger_get_value(self.ptr.as_ptr()) })
+        owned_value(unsafe { noesis_templates_data_trigger_get_value(self.ptr.as_ptr()) })
     }
 
     /// Append a setter (`dp_name` resolved on `type_name`).
@@ -696,7 +693,7 @@ impl DataTrigger {
         };
         // SAFETY: self.ptr live; CStrings + value live for the call.
         unsafe {
-            dm_noesis_templates_data_trigger_add_setter(
+            noesis_templates_data_trigger_add_setter(
                 self.ptr.as_ptr(),
                 t.as_ptr(),
                 d.as_ptr(),
@@ -708,7 +705,7 @@ impl DataTrigger {
     /// Number of setters attached to this trigger.
     #[must_use]
     pub fn setter_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_data_trigger_setter_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_data_trigger_setter_count(self.ptr.as_ptr()) })
     }
 }
 
@@ -722,7 +719,7 @@ impl MultiTrigger {
         };
         // SAFETY: self.ptr live; CStrings + value live for the call.
         unsafe {
-            dm_noesis_templates_multi_trigger_add_condition(
+            noesis_templates_multi_trigger_add_condition(
                 self.ptr.as_ptr(),
                 t.as_ptr(),
                 d.as_ptr(),
@@ -734,7 +731,7 @@ impl MultiTrigger {
     /// Number of conditions.
     #[must_use]
     pub fn condition_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_multi_trigger_condition_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_multi_trigger_condition_count(self.ptr.as_ptr()) })
     }
 
     /// Property name of the condition at `index`, read back from the live
@@ -742,7 +739,7 @@ impl MultiTrigger {
     #[must_use]
     pub fn condition_property_name(&self, index: u32) -> Option<String> {
         read_name(unsafe {
-            dm_noesis_templates_multi_trigger_get_condition_property_name(self.ptr.as_ptr(), index)
+            noesis_templates_multi_trigger_get_condition_property_name(self.ptr.as_ptr(), index)
         })
     }
 
@@ -751,7 +748,7 @@ impl MultiTrigger {
     #[must_use]
     pub fn condition_value(&self, index: u32) -> Option<OwnedValue> {
         owned_value(unsafe {
-            dm_noesis_templates_multi_trigger_get_condition_value(self.ptr.as_ptr(), index)
+            noesis_templates_multi_trigger_get_condition_value(self.ptr.as_ptr(), index)
         })
     }
 
@@ -762,7 +759,7 @@ impl MultiTrigger {
         };
         // SAFETY: self.ptr live; CStrings + value live for the call.
         unsafe {
-            dm_noesis_templates_multi_trigger_add_setter(
+            noesis_templates_multi_trigger_add_setter(
                 self.ptr.as_ptr(),
                 t.as_ptr(),
                 d.as_ptr(),
@@ -774,7 +771,7 @@ impl MultiTrigger {
     /// Number of setters.
     #[must_use]
     pub fn setter_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_multi_trigger_setter_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_multi_trigger_setter_count(self.ptr.as_ptr()) })
     }
 }
 
@@ -788,7 +785,7 @@ impl MultiDataTrigger {
         // SAFETY: self.ptr live; binding.raw() is a live BaseBinding*; value.raw()
         // a live boxed BaseComponent* — both for the call.
         unsafe {
-            dm_noesis_templates_multi_data_trigger_add_condition(
+            noesis_templates_multi_data_trigger_add_condition(
                 self.ptr.as_ptr(),
                 binding.raw(),
                 value.raw(),
@@ -799,7 +796,7 @@ impl MultiDataTrigger {
     /// Number of conditions.
     #[must_use]
     pub fn condition_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_multi_data_trigger_condition_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_multi_data_trigger_condition_count(self.ptr.as_ptr()) })
     }
 
     /// Whether the condition at `index` has a `Binding` set, observed by reading
@@ -809,7 +806,7 @@ impl MultiDataTrigger {
     pub fn condition_has_binding(&self, index: u32) -> bool {
         // SAFETY: self.ptr live; returns -1 / 0 / 1.
         let has = unsafe {
-            dm_noesis_templates_multi_data_trigger_condition_has_binding(self.ptr.as_ptr(), index)
+            noesis_templates_multi_data_trigger_condition_has_binding(self.ptr.as_ptr(), index)
         };
         has == 1
     }
@@ -819,7 +816,7 @@ impl MultiDataTrigger {
     #[must_use]
     pub fn condition_value(&self, index: u32) -> Option<OwnedValue> {
         owned_value(unsafe {
-            dm_noesis_templates_multi_data_trigger_get_condition_value(self.ptr.as_ptr(), index)
+            noesis_templates_multi_data_trigger_get_condition_value(self.ptr.as_ptr(), index)
         })
     }
 
@@ -831,7 +828,7 @@ impl MultiDataTrigger {
         };
         // SAFETY: self.ptr live; CStrings + value live for the call.
         unsafe {
-            dm_noesis_templates_multi_data_trigger_add_setter(
+            noesis_templates_multi_data_trigger_add_setter(
                 self.ptr.as_ptr(),
                 t.as_ptr(),
                 d.as_ptr(),
@@ -843,7 +840,7 @@ impl MultiDataTrigger {
     /// Number of setters.
     #[must_use]
     pub fn setter_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_multi_data_trigger_setter_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_multi_data_trigger_setter_count(self.ptr.as_ptr()) })
     }
 }
 
@@ -858,7 +855,7 @@ impl EventTrigger {
         };
         // SAFETY: self.ptr live; CStrings live for the call.
         unsafe {
-            dm_noesis_templates_event_trigger_set_routed_event(
+            noesis_templates_event_trigger_set_routed_event(
                 self.ptr.as_ptr(),
                 o.as_ptr(),
                 e.as_ptr(),
@@ -870,7 +867,7 @@ impl EventTrigger {
     #[must_use]
     pub fn routed_event_name(&self) -> Option<String> {
         read_name(unsafe {
-            dm_noesis_templates_event_trigger_get_routed_event_name(self.ptr.as_ptr())
+            noesis_templates_event_trigger_get_routed_event_name(self.ptr.as_ptr())
         })
     }
 
@@ -882,20 +879,20 @@ impl EventTrigger {
             return false;
         };
         // SAFETY: self.ptr live; n lives for the call.
-        unsafe { dm_noesis_templates_event_trigger_set_source_name(self.ptr.as_ptr(), n.as_ptr()) }
+        unsafe { noesis_templates_event_trigger_set_source_name(self.ptr.as_ptr(), n.as_ptr()) }
     }
 
     /// The trigger's `SourceName`, read back from the live object (empty string
     /// if unset).
     #[must_use]
     pub fn source_name(&self) -> Option<String> {
-        read_name(unsafe { dm_noesis_templates_event_trigger_get_source_name(self.ptr.as_ptr()) })
+        read_name(unsafe { noesis_templates_event_trigger_get_source_name(self.ptr.as_ptr()) })
     }
 
     /// Number of `TriggerAction` objects in the trigger's `Actions` collection.
     #[must_use]
     pub fn action_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_event_trigger_action_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_event_trigger_action_count(self.ptr.as_ptr()) })
     }
 
     /// Append a [`BeginStoryboard`] action to this trigger's `Actions`
@@ -909,7 +906,7 @@ impl EventTrigger {
     pub fn add_action(&mut self, action: &BeginStoryboard) -> bool {
         // SAFETY: self.ptr live; action.raw() is a live TriggerAction*
         // (BeginStoryboard*); Noesis AddRefs it into the Actions collection.
-        unsafe { dm_noesis_templates_event_trigger_add_action(self.ptr.as_ptr(), action.raw()) }
+        unsafe { noesis_templates_event_trigger_add_action(self.ptr.as_ptr(), action.raw()) }
     }
 }
 
@@ -935,40 +932,40 @@ impl TriggerReadback {
     /// Property name (`Trigger` only).
     #[must_use]
     pub fn property_name(&self) -> Option<String> {
-        read_name(unsafe { dm_noesis_templates_trigger_get_property_name(self.ptr.as_ptr()) })
+        read_name(unsafe { noesis_templates_trigger_get_property_name(self.ptr.as_ptr()) })
     }
 
     /// Compared `Value` (`Trigger` only).
     #[must_use]
     pub fn value(&self) -> Option<OwnedValue> {
-        owned_value(unsafe { dm_noesis_templates_trigger_get_value(self.ptr.as_ptr()) })
+        owned_value(unsafe { noesis_templates_trigger_get_value(self.ptr.as_ptr()) })
     }
 
     /// Setter count (`Trigger` only — use the kind-specific reads for others).
     #[must_use]
     pub fn setter_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_trigger_setter_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_trigger_setter_count(self.ptr.as_ptr()) })
     }
 
     /// Routed-event name (`EventTrigger` only).
     #[must_use]
     pub fn routed_event_name(&self) -> Option<String> {
         read_name(unsafe {
-            dm_noesis_templates_event_trigger_get_routed_event_name(self.ptr.as_ptr())
+            noesis_templates_event_trigger_get_routed_event_name(self.ptr.as_ptr())
         })
     }
 
     /// Condition count (`MultiTrigger` only).
     #[must_use]
     pub fn condition_count(&self) -> u32 {
-        count(unsafe { dm_noesis_templates_multi_trigger_condition_count(self.ptr.as_ptr()) })
+        count(unsafe { noesis_templates_multi_trigger_condition_count(self.ptr.as_ptr()) })
     }
 }
 
 impl Drop for TriggerReadback {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref by get_trigger.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -1040,7 +1037,7 @@ impl TemplateSelector {
         // SAFETY: VTABLE is 'static; userdata is the leaked handler box, freed by
         // selector_free_trampoline when the native object is destroyed.
         let ptr = unsafe {
-            dm_noesis_templates_selector_create(&VTABLE, userdata, selector_free_trampoline)
+            noesis_templates_selector_create(&VTABLE, userdata, selector_free_trampoline)
         };
         match NonNull::new(ptr) {
             Some(ptr) => Self { ptr },
@@ -1048,7 +1045,7 @@ impl TemplateSelector {
                 // Reclaim the leaked box so a (single) failed create doesn't leak.
                 // SAFETY: userdata is the box we just leaked and ownership wasn't taken.
                 drop(unsafe { Box::from_raw(userdata.cast::<Box<dyn SelectTemplate>>()) });
-                panic!("dm_noesis_templates_selector_create returned null");
+                panic!("noesis_templates_selector_create returned null");
             }
         }
     }
@@ -1075,7 +1072,7 @@ impl TemplateSelector {
         container: *mut c_void,
     ) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live selector; item/container per # Safety.
-        let p = unsafe { dm_noesis_templates_selector_select(self.ptr.as_ptr(), item, container) };
+        let p = unsafe { noesis_templates_selector_select(self.ptr.as_ptr(), item, container) };
         NonNull::new(p)
     }
 }
@@ -1084,7 +1081,7 @@ impl Drop for TemplateSelector {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref (create); destroy releases it and, on
         // the final release, runs selector_free_trampoline to drop the handler.
-        unsafe { dm_noesis_templates_selector_destroy(self.ptr.as_ptr()) }
+        unsafe { noesis_templates_selector_destroy(self.ptr.as_ptr()) }
     }
 }
 

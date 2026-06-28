@@ -43,8 +43,8 @@ namespace {
 
 class RustCommand final: public Noesis::BaseCommand {
 public:
-    RustCommand(const dm_noesis_command_vtable* vt, void* userdata,
-                dm_noesis_command_free_fn free_handler)
+    RustCommand(const noesis_command_vtable* vt, void* userdata,
+                noesis_command_free_fn free_handler)
         : mVtable(*vt), mUserdata(userdata), mFree(free_handler) {}
 
     ~RustCommand() {
@@ -77,22 +77,22 @@ public:
     NS_IMPLEMENT_INLINE_REFLECTION(RustCommand, Noesis::BaseCommand, "DmNoesis.RustCommand") {}
 
 private:
-    dm_noesis_command_vtable  mVtable;
+    noesis_command_vtable  mVtable;
     void*                     mUserdata;
-    dm_noesis_command_free_fn mFree;
+    noesis_command_free_fn mFree;
 };
 
 }  // namespace
 
 // ── C ABI surface ──────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_command_create(
-    const dm_noesis_command_vtable* vt,
+extern "C" void* noesis_command_create(
+    const noesis_command_vtable* vt,
     void* userdata,
-    dm_noesis_command_free_fn free_handler) {
+    noesis_command_free_fn free_handler) {
     if (!vt) return nullptr;
     // BaseRefCounted starts at refcount 1 — that initial reference IS the
-    // caller's +1, balanced by dm_noesis_command_destroy. (No AddReference:
+    // caller's +1, balanced by noesis_command_destroy. (No AddReference:
     // a binding that later stores the command takes its own ref via
     // SetValueObject, so the handler box outlives our destroy until that ref
     // also drops.)
@@ -100,12 +100,12 @@ extern "C" void* dm_noesis_command_create(
     return static_cast<Noesis::BaseComponent*>(cmd);
 }
 
-extern "C" void dm_noesis_command_destroy(void* command) {
+extern "C" void noesis_command_destroy(void* command) {
     if (!command) return;
     static_cast<Noesis::BaseComponent*>(command)->Release();
 }
 
-extern "C" void dm_noesis_command_raise_can_execute_changed(void* command) {
+extern "C" void noesis_command_raise_can_execute_changed(void* command) {
     if (!command) return;
     auto* cmd = Noesis::DynamicCast<Noesis::BaseCommand*>(
         static_cast<Noesis::BaseComponent*>(command));
@@ -120,9 +120,9 @@ extern "C" void dm_noesis_command_raise_can_execute_changed(void* command) {
 // first matching CommandBinding (below). Construction needs an owner TypeClass;
 // we resolve it from a type name through the Core reflection registry (a
 // built-in like "UIElement" or a §9-registered custom class). Both are
-// BaseCommand-derived, so dm_noesis_command_raise_can_execute_changed works on
+// BaseCommand-derived, so noesis_command_raise_can_execute_changed works on
 // them too. Returned commands carry +1 (release via
-// dm_noesis_base_component_release).
+// noesis_base_component_release).
 
 namespace {
 const Noesis::TypeClass* resolve_owner(const char* owner_type_name) {
@@ -132,7 +132,7 @@ const Noesis::TypeClass* resolve_owner(const char* owner_type_name) {
 }
 }  // namespace
 
-extern "C" void* dm_noesis_routed_command_create(const char* name, const char* owner_type_name) {
+extern "C" void* noesis_routed_command_create(const char* name, const char* owner_type_name) {
     if (!name) return nullptr;
     const Noesis::TypeClass* owner = resolve_owner(owner_type_name);
     if (!owner) return nullptr;
@@ -141,7 +141,7 @@ extern "C" void* dm_noesis_routed_command_create(const char* name, const char* o
     return static_cast<Noesis::BaseComponent*>(cmd);
 }
 
-extern "C" void* dm_noesis_routed_ui_command_create(
+extern "C" void* noesis_routed_ui_command_create(
     const char* name, const char* text, const char* owner_type_name) {
     if (!name) return nullptr;
     const Noesis::TypeClass* owner = resolve_owner(owner_type_name);
@@ -150,7 +150,7 @@ extern "C" void* dm_noesis_routed_ui_command_create(
     return static_cast<Noesis::BaseComponent*>(cmd);
 }
 
-extern "C" void dm_noesis_routed_command_execute(void* command, void* param, void* target) {
+extern "C" void noesis_routed_command_execute(void* command, void* param, void* target) {
     auto* cmd = Noesis::DynamicCast<Noesis::RoutedCommand*>(
         static_cast<Noesis::BaseComponent*>(command));
     auto* ui = Noesis::DynamicCast<Noesis::UIElement*>(
@@ -160,7 +160,7 @@ extern "C" void dm_noesis_routed_command_execute(void* command, void* param, voi
     }
 }
 
-extern "C" bool dm_noesis_routed_command_can_execute(void* command, void* param, void* target) {
+extern "C" bool noesis_routed_command_can_execute(void* command, void* param, void* target) {
     auto* cmd = Noesis::DynamicCast<Noesis::RoutedCommand*>(
         static_cast<Noesis::BaseComponent*>(command));
     auto* ui = Noesis::DynamicCast<Noesis::UIElement*>(
@@ -172,19 +172,19 @@ extern "C" bool dm_noesis_routed_command_can_execute(void* command, void* param,
 }
 
 // Registered name (RoutedCommand::GetName), borrowed (interned Symbol string).
-extern "C" const char* dm_noesis_routed_command_get_name(void* command) {
+extern "C" const char* noesis_routed_command_get_name(void* command) {
     auto* cmd = Noesis::DynamicCast<Noesis::RoutedCommand*>(
         static_cast<Noesis::BaseComponent*>(command));
     return cmd ? cmd->GetName().Str() : nullptr;
 }
 
-extern "C" const char* dm_noesis_routed_ui_command_get_text(void* command) {
+extern "C" const char* noesis_routed_ui_command_get_text(void* command) {
     auto* cmd = Noesis::DynamicCast<Noesis::RoutedUICommand*>(
         static_cast<Noesis::BaseComponent*>(command));
     return cmd ? cmd->GetText() : nullptr;
 }
 
-extern "C" void dm_noesis_routed_ui_command_set_text(void* command, const char* text) {
+extern "C" void noesis_routed_ui_command_set_text(void* command, const char* text) {
     auto* cmd = Noesis::DynamicCast<Noesis::RoutedUICommand*>(
         static_cast<Noesis::BaseComponent*>(command));
     if (cmd) {
@@ -206,9 +206,9 @@ namespace {
 class RustCommandBinding {
 public:
     RustCommandBinding(Noesis::ICommand* command,
-                       dm_noesis_cmd_executed_fn executed,
-                       dm_noesis_cmd_can_execute_fn can_execute,
-                       void* userdata, dm_noesis_command_free_fn free_handler)
+                       noesis_cmd_executed_fn executed,
+                       noesis_cmd_can_execute_fn can_execute,
+                       void* userdata, noesis_command_free_fn free_handler)
         : mExecuted(executed), mCanExecute(can_execute), mUserdata(userdata),
           mFree(free_handler) {
         mBinding = *new Noesis::CommandBinding(command);
@@ -252,18 +252,18 @@ private:
     }
 
     Noesis::Ptr<Noesis::CommandBinding> mBinding;
-    dm_noesis_cmd_executed_fn    mExecuted;
-    dm_noesis_cmd_can_execute_fn mCanExecute;
+    noesis_cmd_executed_fn    mExecuted;
+    noesis_cmd_can_execute_fn mCanExecute;
     void*                        mUserdata;
-    dm_noesis_command_free_fn    mFree;
+    noesis_command_free_fn    mFree;
 };
 
 }  // namespace
 
-extern "C" void* dm_noesis_command_binding_create(
-    void* command, dm_noesis_cmd_executed_fn executed,
-    dm_noesis_cmd_can_execute_fn can_execute, void* userdata,
-    dm_noesis_command_free_fn free_handler) {
+extern "C" void* noesis_command_binding_create(
+    void* command, noesis_cmd_executed_fn executed,
+    noesis_cmd_can_execute_fn can_execute, void* userdata,
+    noesis_command_free_fn free_handler) {
     if (!command) return nullptr;
     auto* cmd = Noesis::DynamicCast<Noesis::ICommand*>(
         static_cast<Noesis::BaseComponent*>(command));
@@ -271,7 +271,7 @@ extern "C" void* dm_noesis_command_binding_create(
     return new RustCommandBinding(cmd, executed, can_execute, userdata, free_handler);
 }
 
-extern "C" bool dm_noesis_command_binding_attach(void* token, void* element) {
+extern "C" bool noesis_command_binding_attach(void* token, void* element) {
     if (!token || !element) return false;
     auto* ui = Noesis::DynamicCast<Noesis::UIElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -281,7 +281,7 @@ extern "C" bool dm_noesis_command_binding_attach(void* token, void* element) {
     return true;
 }
 
-extern "C" void dm_noesis_command_binding_destroy(void* token) {
+extern "C" void noesis_command_binding_destroy(void* token) {
     if (!token) return;
     // Detaches the delegates, frees the donated box, drops our binding ref.
     delete static_cast<RustCommandBinding*>(token);
@@ -294,7 +294,7 @@ extern "C" void dm_noesis_command_binding_destroy(void* token) {
 // static at call time (after GUI init), so the pointers are live. NULL on an
 // out-of-range index.
 
-extern "C" const void* dm_noesis_application_command(uint32_t which) {
+extern "C" const void* noesis_application_command(uint32_t which) {
     using AC = Noesis::ApplicationCommands;
     switch (which) {
         case 0:  return AC::CancelPrintCommand;
@@ -323,7 +323,7 @@ extern "C" const void* dm_noesis_application_command(uint32_t which) {
     }
 }
 
-extern "C" const void* dm_noesis_component_command(uint32_t which) {
+extern "C" const void* noesis_component_command(uint32_t which) {
     using CC = Noesis::ComponentCommands;
     switch (which) {
         case 0:  return CC::ExtendSelectionDownCommand;

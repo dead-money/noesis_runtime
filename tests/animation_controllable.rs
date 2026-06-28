@@ -5,8 +5,8 @@
 //! Each step reads `Opacity` back through Noesis, so a stubbed Pause/Stop (which
 //! would let the value keep climbing to 1) fails the assertions.
 
-use dm_noesis_runtime::animation::{Animation, DoubleAnimation, Storyboard, Timeline};
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::animation::{Animation, DoubleAnimation, Storyboard, Timeline};
+use noesis_runtime::view::{FrameworkElement, View};
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -21,9 +21,9 @@ fn controllable_storyboard_pause_resume_stop() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let element = FrameworkElement::parse(XAML).expect("parse");
@@ -91,5 +91,5 @@ fn controllable_storyboard_pause_resume_stop() {
         drop(content);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

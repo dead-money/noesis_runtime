@@ -33,17 +33,17 @@ use core::ptr::NonNull;
 use std::ffi::c_void;
 
 use crate::ffi::{
-    dm_noesis_base_component_add_reference, dm_noesis_base_component_release,
-    dm_noesis_definition_collection_add, dm_noesis_definition_collection_clear,
-    dm_noesis_definition_collection_count, dm_noesis_definition_collection_get,
-    dm_noesis_definition_collection_insert, dm_noesis_definition_collection_remove_at,
-    dm_noesis_grid_column_definition_create, dm_noesis_grid_column_definition_get_width,
-    dm_noesis_grid_column_definition_set_width, dm_noesis_grid_get_column_definitions,
-    dm_noesis_grid_get_row_definitions, dm_noesis_grid_row_definition_create,
-    dm_noesis_grid_row_definition_get_height, dm_noesis_grid_row_definition_set_height,
-    dm_noesis_panel_children_add, dm_noesis_panel_children_clear, dm_noesis_panel_children_count,
-    dm_noesis_panel_children_get, dm_noesis_panel_children_get_at, dm_noesis_panel_children_insert,
-    dm_noesis_panel_children_remove_at,
+    noesis_base_component_add_reference, noesis_base_component_release,
+    noesis_definition_collection_add, noesis_definition_collection_clear,
+    noesis_definition_collection_count, noesis_definition_collection_get,
+    noesis_definition_collection_insert, noesis_definition_collection_remove_at,
+    noesis_grid_column_definition_create, noesis_grid_column_definition_get_width,
+    noesis_grid_column_definition_set_width, noesis_grid_get_column_definitions,
+    noesis_grid_get_row_definitions, noesis_grid_row_definition_create,
+    noesis_grid_row_definition_get_height, noesis_grid_row_definition_set_height,
+    noesis_panel_children_add, noesis_panel_children_clear, noesis_panel_children_count,
+    noesis_panel_children_get, noesis_panel_children_get_at, noesis_panel_children_insert,
+    noesis_panel_children_remove_at,
 };
 use crate::view::FrameworkElement;
 
@@ -198,7 +198,7 @@ macro_rules! definition_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a *_create entrypoint with a +1 ref we own;
                 // released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -207,17 +207,17 @@ macro_rules! definition_handle {
 definition_handle!(
     /// A `Grid` `RowDefinition`. Its [`GridLength`] sizes the row's height.
     RowDefinition,
-    dm_noesis_grid_row_definition_create,
-    dm_noesis_grid_row_definition_set_height,
-    dm_noesis_grid_row_definition_get_height,
+    noesis_grid_row_definition_create,
+    noesis_grid_row_definition_set_height,
+    noesis_grid_row_definition_get_height,
     "Set the row's `Height`."
 );
 definition_handle!(
     /// A `Grid` `ColumnDefinition`. Its [`GridLength`] sizes the column's width.
     ColumnDefinition,
-    dm_noesis_grid_column_definition_create,
-    dm_noesis_grid_column_definition_set_width,
-    dm_noesis_grid_column_definition_get_width,
+    noesis_grid_column_definition_create,
+    noesis_grid_column_definition_set_width,
+    noesis_grid_column_definition_get_width,
     "Set the column's `Width`."
 );
 
@@ -239,7 +239,7 @@ impl PanelChildren {
     pub fn add(&mut self, child: &FrameworkElement) -> Option<usize> {
         // SAFETY: self.ptr is a live UIElementCollection*; child.raw() is a live
         // UIElement* for the call.
-        let idx = unsafe { dm_noesis_panel_children_add(self.ptr.as_ptr(), child.raw()) };
+        let idx = unsafe { noesis_panel_children_add(self.ptr.as_ptr(), child.raw()) };
         (idx >= 0).then_some(idx as usize)
     }
 
@@ -248,28 +248,28 @@ impl PanelChildren {
     #[must_use = "a false return means the child was not inserted"]
     pub fn insert(&mut self, index: usize, child: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live UIElementCollection*; child.raw() is live.
-        unsafe { dm_noesis_panel_children_insert(self.ptr.as_ptr(), index as u32, child.raw()) }
+        unsafe { noesis_panel_children_insert(self.ptr.as_ptr(), index as u32, child.raw()) }
     }
 
     /// Remove the child at `index`. Returns `false` if `index` is out of range.
     #[must_use = "a false return means nothing was removed"]
     pub fn remove_at(&mut self, index: usize) -> bool {
         // SAFETY: self.ptr is a live UIElementCollection*.
-        unsafe { dm_noesis_panel_children_remove_at(self.ptr.as_ptr(), index as u32) }
+        unsafe { noesis_panel_children_remove_at(self.ptr.as_ptr(), index as u32) }
     }
 
     /// Remove every child.
     #[must_use = "a false return means this is not a panel children collection"]
     pub fn clear(&mut self) -> bool {
         // SAFETY: self.ptr is a live UIElementCollection*.
-        unsafe { dm_noesis_panel_children_clear(self.ptr.as_ptr()) }
+        unsafe { noesis_panel_children_clear(self.ptr.as_ptr()) }
     }
 
     /// Number of children currently in the collection.
     #[must_use]
     pub fn count(&self) -> usize {
         // SAFETY: self.ptr is a live UIElementCollection*.
-        let n = unsafe { dm_noesis_panel_children_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_panel_children_count(self.ptr.as_ptr()) };
         n.max(0) as usize
     }
 
@@ -281,7 +281,7 @@ impl PanelChildren {
         let borrowed = NonNull::new(self.get_raw(index))?;
         // AddRef so the returned handle owns its reference, released on drop.
         // SAFETY: `borrowed` is a live UIElement* (BaseComponent*).
-        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        let owned = unsafe { noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|ptr| unsafe { FrameworkElement::from_owned(ptr) })
     }
 
@@ -291,15 +291,15 @@ impl PanelChildren {
     #[must_use]
     pub fn get_raw(&self, index: usize) -> *mut c_void {
         // SAFETY: self.ptr is a live UIElementCollection*; bounds checked C-side.
-        unsafe { dm_noesis_panel_children_get_at(self.ptr.as_ptr(), index as u32) }
+        unsafe { noesis_panel_children_get_at(self.ptr.as_ptr(), index as u32) }
     }
 }
 
 impl Drop for PanelChildren {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_panel_children_get with a +1 ref we own;
+        // SAFETY: produced by noesis_panel_children_get with a +1 ref we own;
         // released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -322,7 +322,7 @@ impl DefinitionCollection {
         // SAFETY: self.ptr is a live definition collection*; definition_raw() is
         // a live BaseDefinition* for the call.
         let idx = unsafe {
-            dm_noesis_definition_collection_add(self.ptr.as_ptr(), definition.definition_raw())
+            noesis_definition_collection_add(self.ptr.as_ptr(), definition.definition_raw())
         };
         (idx >= 0).then_some(idx as usize)
     }
@@ -334,7 +334,7 @@ impl DefinitionCollection {
         // SAFETY: self.ptr is a live definition collection*; definition_raw() is
         // a live BaseDefinition* for the call.
         unsafe {
-            dm_noesis_definition_collection_insert(
+            noesis_definition_collection_insert(
                 self.ptr.as_ptr(),
                 index as u32,
                 definition.definition_raw(),
@@ -347,21 +347,21 @@ impl DefinitionCollection {
     #[must_use = "a false return means nothing was removed"]
     pub fn remove_at(&mut self, index: usize) -> bool {
         // SAFETY: self.ptr is a live definition collection*.
-        unsafe { dm_noesis_definition_collection_remove_at(self.ptr.as_ptr(), index as u32) }
+        unsafe { noesis_definition_collection_remove_at(self.ptr.as_ptr(), index as u32) }
     }
 
     /// Remove every definition.
     #[must_use = "a false return means this is not a definition collection"]
     pub fn clear(&mut self) -> bool {
         // SAFETY: self.ptr is a live definition collection*.
-        unsafe { dm_noesis_definition_collection_clear(self.ptr.as_ptr()) }
+        unsafe { noesis_definition_collection_clear(self.ptr.as_ptr()) }
     }
 
     /// Number of definitions currently in the collection.
     #[must_use]
     pub fn count(&self) -> usize {
         // SAFETY: self.ptr is a live definition collection*.
-        let n = unsafe { dm_noesis_definition_collection_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_definition_collection_count(self.ptr.as_ptr()) };
         n.max(0) as usize
     }
 
@@ -373,7 +373,7 @@ impl DefinitionCollection {
     pub fn get_raw(&self, index: usize) -> *mut c_void {
         // SAFETY: self.ptr is a live definition collection*; bounds checked
         // C-side.
-        unsafe { dm_noesis_definition_collection_get(self.ptr.as_ptr(), index as u32) }
+        unsafe { noesis_definition_collection_get(self.ptr.as_ptr(), index as u32) }
     }
 }
 
@@ -381,7 +381,7 @@ impl Drop for DefinitionCollection {
     fn drop(&mut self) {
         // SAFETY: produced by a grid-get-definitions entrypoint with a +1 ref we
         // own; released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -409,7 +409,7 @@ impl FrameworkElement {
 pub fn panel_children(element: &FrameworkElement) -> Option<PanelChildren> {
     // SAFETY: element.raw() is a live FrameworkElement*; the C side DynamicCasts
     // to Panel and hands out a +1 collection (or null).
-    let ptr = unsafe { dm_noesis_panel_children_get(element.raw()) };
+    let ptr = unsafe { noesis_panel_children_get(element.raw()) };
     NonNull::new(ptr).map(|ptr| PanelChildren { ptr })
 }
 
@@ -418,7 +418,7 @@ pub fn panel_children(element: &FrameworkElement) -> Option<PanelChildren> {
 #[must_use]
 pub fn row_definitions(element: &FrameworkElement) -> Option<DefinitionCollection> {
     // SAFETY: element.raw() is a live FrameworkElement*; +1 collection or null.
-    let ptr = unsafe { dm_noesis_grid_get_row_definitions(element.raw()) };
+    let ptr = unsafe { noesis_grid_get_row_definitions(element.raw()) };
     NonNull::new(ptr).map(|ptr| DefinitionCollection { ptr })
 }
 
@@ -427,6 +427,6 @@ pub fn row_definitions(element: &FrameworkElement) -> Option<DefinitionCollectio
 #[must_use]
 pub fn column_definitions(element: &FrameworkElement) -> Option<DefinitionCollection> {
     // SAFETY: element.raw() is a live FrameworkElement*; +1 collection or null.
-    let ptr = unsafe { dm_noesis_grid_get_column_definitions(element.raw()) };
+    let ptr = unsafe { noesis_grid_get_column_definitions(element.raw()) };
     NonNull::new(ptr).map(|ptr| DefinitionCollection { ptr })
 }

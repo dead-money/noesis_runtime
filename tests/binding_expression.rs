@@ -19,11 +19,11 @@
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::binding::{Binding, BindingMode, UpdateSourceTrigger, set_binding};
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::binding::{Binding, BindingMode, UpdateSourceTrigger, set_binding};
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -56,9 +56,9 @@ fn binding_expression_explicit_update_source() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // View model with one string DP, `Text`, seeded with "init".
@@ -73,7 +73,7 @@ fn binding_expression_explicit_update_source() {
 
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), XAML.as_bytes().to_vec());
-        let _guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let element = FrameworkElement::load("scene.xaml").expect("load_xaml returned None");
         let mut view = View::create(element);
@@ -163,5 +163,5 @@ fn binding_expression_explicit_update_source() {
         drop(_guard);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

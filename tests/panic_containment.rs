@@ -12,7 +12,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::diagnostics as diag;
+use noesis_runtime::diagnostics as diag;
 
 #[test]
 fn panicking_handler_is_contained_not_aborting() {
@@ -20,9 +20,9 @@ fn panicking_handler_is_contained_not_aborting() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // Silence the default panic hook so the deliberate panics below don't spam
     // the test log with backtraces; restore it afterwards.
@@ -70,5 +70,5 @@ fn panicking_handler_is_contained_not_aborting() {
     );
 
     std::panic::set_hook(prev_hook);
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

@@ -12,9 +12,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::{FrameworkElement, View};
 
 #[derive(Clone, Default)]
 struct Recorder {
@@ -44,9 +44,9 @@ fn custom_base_classes() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // One code-created instance per base; round-trip an Int32 DP through
@@ -127,5 +127,5 @@ fn custom_base_classes() {
         }
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

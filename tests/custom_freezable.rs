@@ -16,8 +16,8 @@
 //! The sibling `Animatable` subtrees (`Brush`/`Geometry`/`Transform`/`Effect`)
 //! are NOT subclassable this way — see TODO.md "Known SDK limitations".
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
 
 struct Noop;
 impl PropertyChangeHandler for Noop {
@@ -30,11 +30,11 @@ fn custom_freezable() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
     {
-        let mut b = ClassBuilder::new("DmFz.Recipe", ClassBase::Freezable, Noop);
+        let mut b = ClassBuilder::new("NzFz.Recipe", ClassBase::Freezable, Noop);
         let amount = b.add_property("Amount", PropType::Int32);
         let reg = b.register().expect("Freezable class registration failed");
         assert_eq!(reg.num_properties(), 1);
@@ -62,5 +62,5 @@ fn custom_freezable() {
         drop(inst);
         drop(reg);
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

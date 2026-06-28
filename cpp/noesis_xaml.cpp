@@ -9,7 +9,7 @@
 //     `GUI::SetSchemeXamlProvider` / `SetAssemblyXamlProvider` /
 //     `SetSchemeAssemblyXamlProvider` overloads (and the identical Texture +
 //     Font triples). These REUSE the provider handles produced by
-//     `dm_noesis_{xaml,font,texture}_provider_create` in the existing shim
+//     `noesis_{xaml,font,texture}_provider_create` in the existing shim
 //     files — only the install call differs from the global setter.
 //
 //   * Typed component load — `GUI::LoadXaml` for a root that need not be a
@@ -48,7 +48,7 @@ namespace {
 // recover both from the single `void* user` slot GetXamlDependencies forwards.
 struct DependencyCtx {
     void* user;
-    dm_noesis_xaml_dependency_fn cb;
+    noesis_xaml_dependency_fn cb;
 };
 
 // Capture-less so it converts to the plain `XamlDependencyCallback` function
@@ -65,9 +65,9 @@ void DependencyTrampoline(void* user, const Noesis::Uri& uri, Noesis::XamlDepend
 
 // ── GetXamlDependencies ────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_get_xaml_dependencies(
+extern "C" void noesis_get_xaml_dependencies(
     const uint8_t* xaml, uint32_t len, const char* base_uri,
-    void* user, dm_noesis_xaml_dependency_fn cb)
+    void* user, noesis_xaml_dependency_fn cb)
 {
     if (!xaml || !cb) return;
     // MemoryStream wraps the buffer without copying; GetXamlDependencies reads
@@ -83,10 +83,10 @@ extern "C" void dm_noesis_get_xaml_dependencies(
 
 // Load XAML by URI WITHOUT narrowing the root to FrameworkElement. Returns the
 // loaded root as a BaseComponent* at +1 (release via
-// dm_noesis_base_component_release), or NULL when the URI is unknown to the
-// installed provider / the XAML is malformed. Unlike dm_noesis_gui_load_xaml,
+// noesis_base_component_release), or NULL when the URI is unknown to the
+// installed provider / the XAML is malformed. Unlike noesis_gui_load_xaml,
 // this keeps non-FrameworkElement roots (e.g. ResourceDictionary).
-extern "C" void* dm_noesis_gui_load_xaml_component(const char* uri) {
+extern "C" void* noesis_gui_load_xaml_component(const char* uri) {
     if (!uri) return nullptr;
     Noesis::Ptr<Noesis::BaseComponent> component =
         Noesis::GUI::LoadXaml(Noesis::Uri(uri));
@@ -98,7 +98,7 @@ extern "C" void* dm_noesis_gui_load_xaml_component(const char* uri) {
 // "Grid"). Returns Noesis's interned `const char*` (owned by the type system,
 // stable for the process lifetime); Rust copies it immediately. NULL on a
 // NULL object or a type with no class.
-extern "C" const char* dm_noesis_base_component_type_name(void* obj) {
+extern "C" const char* noesis_base_component_type_name(void* obj) {
     if (!obj) return nullptr;
     const Noesis::TypeClass* tc = static_cast<Noesis::BaseComponent*>(obj)->GetClassType();
     if (!tc) return nullptr;
@@ -107,23 +107,23 @@ extern "C" const char* dm_noesis_base_component_type_name(void* obj) {
 
 // ── Scheme- / assembly-scoped provider setters ─────────────────────────────
 //
-// `provider` is a handle from the matching `dm_noesis_*_provider_create`. A
+// `provider` is a handle from the matching `noesis_*_provider_create`. A
 // NULL scheme/assembly is a no-op (the C++ API requires a valid C string).
 // Passing a NULL provider clears the scoped registration.
 
-extern "C" void dm_noesis_set_xaml_provider_scheme(const char* scheme, void* provider) {
+extern "C" void noesis_set_xaml_provider_scheme(const char* scheme, void* provider) {
     if (!scheme) return;
     Noesis::GUI::SetSchemeXamlProvider(
         scheme, static_cast<Noesis::XamlProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_xaml_provider_assembly(const char* assembly, void* provider) {
+extern "C" void noesis_set_xaml_provider_assembly(const char* assembly, void* provider) {
     if (!assembly) return;
     Noesis::GUI::SetAssemblyXamlProvider(
         assembly, static_cast<Noesis::XamlProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_xaml_provider_scheme_assembly(
+extern "C" void noesis_set_xaml_provider_scheme_assembly(
     const char* scheme, const char* assembly, void* provider)
 {
     if (!scheme || !assembly) return;
@@ -131,19 +131,19 @@ extern "C" void dm_noesis_set_xaml_provider_scheme_assembly(
         scheme, assembly, static_cast<Noesis::XamlProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_texture_provider_scheme(const char* scheme, void* provider) {
+extern "C" void noesis_set_texture_provider_scheme(const char* scheme, void* provider) {
     if (!scheme) return;
     Noesis::GUI::SetSchemeTextureProvider(
         scheme, static_cast<Noesis::TextureProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_texture_provider_assembly(const char* assembly, void* provider) {
+extern "C" void noesis_set_texture_provider_assembly(const char* assembly, void* provider) {
     if (!assembly) return;
     Noesis::GUI::SetAssemblyTextureProvider(
         assembly, static_cast<Noesis::TextureProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_texture_provider_scheme_assembly(
+extern "C" void noesis_set_texture_provider_scheme_assembly(
     const char* scheme, const char* assembly, void* provider)
 {
     if (!scheme || !assembly) return;
@@ -151,19 +151,19 @@ extern "C" void dm_noesis_set_texture_provider_scheme_assembly(
         scheme, assembly, static_cast<Noesis::TextureProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_font_provider_scheme(const char* scheme, void* provider) {
+extern "C" void noesis_set_font_provider_scheme(const char* scheme, void* provider) {
     if (!scheme) return;
     Noesis::GUI::SetSchemeFontProvider(
         scheme, static_cast<Noesis::FontProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_font_provider_assembly(const char* assembly, void* provider) {
+extern "C" void noesis_set_font_provider_assembly(const char* assembly, void* provider) {
     if (!assembly) return;
     Noesis::GUI::SetAssemblyFontProvider(
         assembly, static_cast<Noesis::FontProvider*>(provider));
 }
 
-extern "C" void dm_noesis_set_font_provider_scheme_assembly(
+extern "C" void noesis_set_font_provider_scheme_assembly(
     const char* scheme, const char* assembly, void* provider)
 {
     if (!scheme || !assembly) return;

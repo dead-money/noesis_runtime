@@ -11,7 +11,7 @@
 //     `scroll_to_home()` ⇒ offset returns to 0.
 //   * Negative: a non-ScrollViewer reports `vertical_offset()==None`.
 
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 // Without a theme there is no default ScrollViewer template, so the
 // `PART_ScrollContentPresenter` (which provides the IScrollInfo extent/viewport)
@@ -44,9 +44,9 @@ fn scrollviewer_offsets_and_methods() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let root = FrameworkElement::parse(SV).expect("parse ScrollViewer");
@@ -124,5 +124,5 @@ fn scrollviewer_offsets_and_methods() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

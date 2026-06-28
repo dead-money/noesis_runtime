@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# pre-push hook for dm_noesis_runtime.
+# pre-push hook for noesis_runtime.
 #
 # Runs the full local gate before a push reaches the remote: rustfmt, clippy
 # (-D warnings), and the test suite. CI only runs `cargo fmt` on GitHub-hosted

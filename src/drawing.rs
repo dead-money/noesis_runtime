@@ -31,16 +31,15 @@ use std::ffi::{CStr, c_void};
 
 use crate::brushes::Brush;
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_drawing_draw_ellipse,
-    dm_noesis_drawing_draw_geometry, dm_noesis_drawing_draw_image, dm_noesis_drawing_draw_line,
-    dm_noesis_drawing_draw_mesh, dm_noesis_drawing_draw_rectangle,
-    dm_noesis_drawing_draw_rounded_rectangle, dm_noesis_drawing_draw_text, dm_noesis_drawing_pop,
-    dm_noesis_drawing_push_blending_mode, dm_noesis_drawing_push_clip,
-    dm_noesis_drawing_push_transform, dm_noesis_pen_create, dm_noesis_pen_get_brush,
-    dm_noesis_pen_get_dash_offset, dm_noesis_pen_get_dashes, dm_noesis_pen_get_line_caps,
-    dm_noesis_pen_get_line_join, dm_noesis_pen_get_thickness, dm_noesis_pen_set_brush,
-    dm_noesis_pen_set_dash_style, dm_noesis_pen_set_line_caps, dm_noesis_pen_set_line_join,
-    dm_noesis_pen_set_thickness,
+    noesis_base_component_release, noesis_drawing_draw_ellipse, noesis_drawing_draw_geometry,
+    noesis_drawing_draw_image, noesis_drawing_draw_line, noesis_drawing_draw_mesh,
+    noesis_drawing_draw_rectangle, noesis_drawing_draw_rounded_rectangle, noesis_drawing_draw_text,
+    noesis_drawing_pop, noesis_drawing_push_blending_mode, noesis_drawing_push_clip,
+    noesis_drawing_push_transform, noesis_pen_create, noesis_pen_get_brush,
+    noesis_pen_get_dash_offset, noesis_pen_get_dashes, noesis_pen_get_line_caps,
+    noesis_pen_get_line_join, noesis_pen_get_thickness, noesis_pen_set_brush,
+    noesis_pen_set_dash_style, noesis_pen_set_line_caps, noesis_pen_set_line_join,
+    noesis_pen_set_thickness,
 };
 // `Geometry` / `RectangleGeometry` are the canonical types from `geometry`,
 // re-exported so `drawing::{Geometry, RectangleGeometry}` keep resolving and the
@@ -86,9 +85,9 @@ impl Pen {
     pub fn new(brush: &dyn Brush, thickness: f32) -> Self {
         // SAFETY: brush.brush_raw() is a live Brush* for the borrow; the C side
         // copies the reference. Returns a +1-owned Pen* this handle releases.
-        let ptr = unsafe { dm_noesis_pen_create(brush.brush_raw(), thickness) };
+        let ptr = unsafe { noesis_pen_create(brush.brush_raw(), thickness) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_pen_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_pen_create returned null"),
         }
     }
 
@@ -100,9 +99,9 @@ impl Pen {
     #[must_use]
     pub fn with_thickness(thickness: f32) -> Self {
         // SAFETY: a null brush is allowed (set one later via set_brush).
-        let ptr = unsafe { dm_noesis_pen_create(core::ptr::null_mut(), thickness) };
+        let ptr = unsafe { noesis_pen_create(core::ptr::null_mut(), thickness) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_pen_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_pen_create returned null"),
         }
     }
 
@@ -116,7 +115,7 @@ impl Pen {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_brush(&mut self, brush: &dyn Brush) -> bool {
         // SAFETY: self.ptr is a live Pen*; brush_raw() is a live Brush*.
-        unsafe { dm_noesis_pen_set_brush(self.ptr.as_ptr(), brush.brush_raw()) }
+        unsafe { noesis_pen_set_brush(self.ptr.as_ptr(), brush.brush_raw()) }
     }
 
     /// Borrowed `Noesis::Brush*` currently set on the pen, or `None`. The
@@ -124,7 +123,7 @@ impl Pen {
     #[must_use]
     pub fn brush(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live Pen*; the returned pointer is borrowed.
-        let p = unsafe { dm_noesis_pen_get_brush(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_pen_get_brush(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -132,7 +131,7 @@ impl Pen {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_thickness(&mut self, thickness: f32) -> bool {
         // SAFETY: self.ptr is a live Pen*.
-        unsafe { dm_noesis_pen_set_thickness(self.ptr.as_ptr(), thickness) }
+        unsafe { noesis_pen_set_thickness(self.ptr.as_ptr(), thickness) }
     }
 
     /// Read the stroke thickness back from the live object.
@@ -140,7 +139,7 @@ impl Pen {
     pub fn thickness(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: self.ptr is a live Pen*; `out` is a valid float.
-        unsafe { dm_noesis_pen_get_thickness(self.ptr.as_ptr(), &mut out) };
+        unsafe { noesis_pen_get_thickness(self.ptr.as_ptr(), &mut out) };
         out
     }
 
@@ -149,7 +148,7 @@ impl Pen {
     pub fn set_line_caps(&mut self, start: PenLineCap, end: PenLineCap, dash: PenLineCap) -> bool {
         // SAFETY: self.ptr is a live Pen*; the enum ordinals match Noesis's.
         unsafe {
-            dm_noesis_pen_set_line_caps(self.ptr.as_ptr(), start as i32, end as i32, dash as i32)
+            noesis_pen_set_line_caps(self.ptr.as_ptr(), start as i32, end as i32, dash as i32)
         }
     }
 
@@ -158,7 +157,7 @@ impl Pen {
     pub fn line_caps(&self) -> Option<(PenLineCap, PenLineCap, PenLineCap)> {
         let mut out = [0i32; 3];
         // SAFETY: self.ptr is a live Pen*; `out` is a 3-int buffer.
-        let ok = unsafe { dm_noesis_pen_get_line_caps(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        let ok = unsafe { noesis_pen_get_line_caps(self.ptr.as_ptr(), out.as_mut_ptr()) };
         if !ok {
             return None;
         }
@@ -173,7 +172,7 @@ impl Pen {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_line_join(&mut self, join: PenLineJoin, miter_limit: f32) -> bool {
         // SAFETY: self.ptr is a live Pen*; the enum ordinal matches Noesis's.
-        unsafe { dm_noesis_pen_set_line_join(self.ptr.as_ptr(), join as i32, miter_limit) }
+        unsafe { noesis_pen_set_line_join(self.ptr.as_ptr(), join as i32, miter_limit) }
     }
 
     /// Read `(join, miter_limit)` back from the live object.
@@ -182,7 +181,7 @@ impl Pen {
         let mut join = 0i32;
         let mut miter = 0.0f32;
         // SAFETY: self.ptr is a live Pen*; both out params are valid.
-        let ok = unsafe { dm_noesis_pen_get_line_join(self.ptr.as_ptr(), &mut join, &mut miter) };
+        let ok = unsafe { noesis_pen_get_line_join(self.ptr.as_ptr(), &mut join, &mut miter) };
         ok.then(|| (join_from_i32(join), miter))
     }
 
@@ -200,7 +199,7 @@ impl Pen {
         let count = u32::try_from(dashes.len()).unwrap_or(u32::MAX);
         // SAFETY: self.ptr is a live Pen*; `dashes`/`count` describe a valid
         // (possibly empty) slice read only for the duration of the call.
-        unsafe { dm_noesis_pen_set_dash_style(self.ptr.as_ptr(), dashes.as_ptr(), count, offset) }
+        unsafe { noesis_pen_set_dash_style(self.ptr.as_ptr(), dashes.as_ptr(), count, offset) }
     }
 
     /// Read the dash `offset` back from the live object, or `None` if no dash
@@ -209,7 +208,7 @@ impl Pen {
     pub fn dash_offset(&self) -> Option<f32> {
         let mut out = 0.0f32;
         // SAFETY: self.ptr is a live Pen*; `out` is a valid float.
-        let ok = unsafe { dm_noesis_pen_get_dash_offset(self.ptr.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_pen_get_dash_offset(self.ptr.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -222,7 +221,7 @@ impl Pen {
         // SAFETY: self.ptr is a live Pen*; the returned pointer (if non-null) is
         // a borrowed NUL-terminated string valid until the next pen mutation —
         // copied out immediately here.
-        let p = unsafe { dm_noesis_pen_get_dashes(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_pen_get_dashes(self.ptr.as_ptr()) };
         if p.is_null() {
             return None;
         }
@@ -239,8 +238,8 @@ impl Pen {
 
 impl Drop for Pen {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_pen_create with a +1 ref we own.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        // SAFETY: produced by noesis_pen_create with a +1 ref we own.
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -302,7 +301,7 @@ impl DrawingContext<'_> {
     /// Draw a line between two points with `pen`.
     pub fn draw_line(&self, pen: &Pen, p0: (f32, f32), p1: (f32, f32)) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; pen.raw() is a live Pen*.
-        unsafe { dm_noesis_drawing_draw_line(self.ptr.as_ptr(), pen.raw(), p0.0, p0.1, p1.0, p1.1) }
+        unsafe { noesis_drawing_draw_line(self.ptr.as_ptr(), pen.raw(), p0.0, p0.1, p1.0, p1.1) }
     }
 
     /// Fill and/or stroke a rectangle `[x, y, w, h]`.
@@ -315,7 +314,7 @@ impl DrawingContext<'_> {
         // SAFETY: self.ptr is a live DrawingContext*; the brush / pen pointers
         // (or null) are live for the borrow.
         unsafe {
-            dm_noesis_drawing_draw_rectangle(
+            noesis_drawing_draw_rectangle(
                 self.ptr.as_ptr(),
                 brush_ptr(brush),
                 pen_ptr(pen),
@@ -339,7 +338,7 @@ impl DrawingContext<'_> {
     ) -> bool {
         // SAFETY: as `draw_rectangle`.
         unsafe {
-            dm_noesis_drawing_draw_rounded_rectangle(
+            noesis_drawing_draw_rounded_rectangle(
                 self.ptr.as_ptr(),
                 brush_ptr(brush),
                 pen_ptr(pen),
@@ -365,7 +364,7 @@ impl DrawingContext<'_> {
     ) -> bool {
         // SAFETY: as `draw_rectangle`.
         unsafe {
-            dm_noesis_drawing_draw_ellipse(
+            noesis_drawing_draw_ellipse(
                 self.ptr.as_ptr(),
                 brush_ptr(brush),
                 pen_ptr(pen),
@@ -386,7 +385,7 @@ impl DrawingContext<'_> {
     ) -> bool {
         // SAFETY: as `draw_rectangle`; geometry_raw() is a live Geometry*.
         unsafe {
-            dm_noesis_drawing_draw_geometry(
+            noesis_drawing_draw_geometry(
                 self.ptr.as_ptr(),
                 brush_ptr(brush),
                 pen_ptr(pen),
@@ -407,7 +406,7 @@ impl DrawingContext<'_> {
         // SAFETY: self.ptr is a live DrawingContext*; raw() is a live
         // FormattedText* borrowed for the call.
         unsafe {
-            dm_noesis_drawing_draw_text(
+            noesis_drawing_draw_text(
                 self.ptr.as_ptr(),
                 formatted_text.raw(),
                 bounds[0],
@@ -423,7 +422,7 @@ impl DrawingContext<'_> {
     pub fn draw_mesh(&self, brush: Option<&dyn Brush>, mesh: &crate::mesh::MeshData) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; mesh.raw() is a live
         // MeshData*; the brush pointer (or null) is live for the borrow.
-        unsafe { dm_noesis_drawing_draw_mesh(self.ptr.as_ptr(), brush_ptr(brush), mesh.raw()) }
+        unsafe { noesis_drawing_draw_mesh(self.ptr.as_ptr(), brush_ptr(brush), mesh.raw()) }
     }
 
     /// Draw a borrowed `Noesis::ImageSource*` into `[x, y, w, h]`. Returns
@@ -436,7 +435,7 @@ impl DrawingContext<'_> {
     pub unsafe fn draw_image(&self, image_source: *mut c_void, rect: [f32; 4]) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; `image_source` per contract.
         unsafe {
-            dm_noesis_drawing_draw_image(
+            noesis_drawing_draw_image(
                 self.ptr.as_ptr(),
                 image_source,
                 rect[0],
@@ -450,25 +449,25 @@ impl DrawingContext<'_> {
     /// Pop the last `push_*` operation off the context.
     pub fn pop(&self) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*.
-        unsafe { dm_noesis_drawing_pop(self.ptr.as_ptr()) }
+        unsafe { noesis_drawing_pop(self.ptr.as_ptr()) }
     }
 
     /// Push a clip [`Geometry`]; pair with [`Self::pop`].
     pub fn push_clip(&self, geometry: &dyn Geometry) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; geometry_raw() is live.
-        unsafe { dm_noesis_drawing_push_clip(self.ptr.as_ptr(), geometry.geometry_raw()) }
+        unsafe { noesis_drawing_push_clip(self.ptr.as_ptr(), geometry.geometry_raw()) }
     }
 
     /// Push a [`Transform`]; pair with [`Self::pop`].
     pub fn push_transform(&self, transform: &dyn Transform) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; transform_raw() is live.
-        unsafe { dm_noesis_drawing_push_transform(self.ptr.as_ptr(), transform.transform_raw()) }
+        unsafe { noesis_drawing_push_transform(self.ptr.as_ptr(), transform.transform_raw()) }
     }
 
     /// Push a [`BlendingMode`]; pair with [`Self::pop`].
     pub fn push_blending_mode(&self, mode: BlendingMode) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; the ordinal matches Noesis.
-        unsafe { dm_noesis_drawing_push_blending_mode(self.ptr.as_ptr(), mode as i32) }
+        unsafe { noesis_drawing_push_blending_mode(self.ptr.as_ptr(), mode as i32) }
     }
 }
 

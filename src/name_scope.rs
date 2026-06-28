@@ -11,10 +11,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_name_scope_create, dm_noesis_name_scope_enum,
-    dm_noesis_name_scope_find_name, dm_noesis_name_scope_find_object, dm_noesis_name_scope_get,
-    dm_noesis_name_scope_register_name, dm_noesis_name_scope_set,
-    dm_noesis_name_scope_unregister_name, dm_noesis_name_scope_update_name,
+    noesis_base_component_release, noesis_name_scope_create, noesis_name_scope_enum,
+    noesis_name_scope_find_name, noesis_name_scope_find_object, noesis_name_scope_get,
+    noesis_name_scope_register_name, noesis_name_scope_set, noesis_name_scope_unregister_name,
+    noesis_name_scope_update_name,
 };
 use crate::view::FrameworkElement;
 
@@ -36,9 +36,9 @@ impl NameScope {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: the C side returns a freshly-created NameScope* at +1.
-        let ptr = unsafe { dm_noesis_name_scope_create() };
+        let ptr = unsafe { noesis_name_scope_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_name_scope_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_name_scope_create returned null"),
         }
     }
 
@@ -49,7 +49,7 @@ impl NameScope {
     pub fn of(element: &FrameworkElement) -> Option<Self> {
         // SAFETY: element.raw() is a live BaseComponent*; the C side AddRef's
         // any attached scope before handing it back.
-        let ptr = unsafe { dm_noesis_name_scope_get(element.raw()) };
+        let ptr = unsafe { noesis_name_scope_get(element.raw()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -61,7 +61,7 @@ impl NameScope {
         let scope_ptr = scope.map_or(core::ptr::null_mut(), NameScope::raw);
         // SAFETY: both pointers are live (or null to clear); Noesis stores its
         // own reference to the scope.
-        unsafe { dm_noesis_name_scope_set(element.raw(), scope_ptr) }
+        unsafe { noesis_name_scope_set(element.raw(), scope_ptr) }
     }
 
     /// Look up the object registered under `name` (`INameScope::FindName`), or
@@ -75,7 +75,7 @@ impl NameScope {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: self.ptr is a live NameScope*; c lives for the call; the C
         // side AddRef's the found object (or returns NULL).
-        let ptr = unsafe { dm_noesis_name_scope_find_name(self.ptr.as_ptr(), c.as_ptr()) };
+        let ptr = unsafe { noesis_name_scope_find_name(self.ptr.as_ptr(), c.as_ptr()) };
         // SAFETY: ptr is a +1 BaseComponent* we take ownership of.
         NonNull::new(ptr).map(|ptr| unsafe { FrameworkElement::from_owned(ptr) })
     }
@@ -90,7 +90,7 @@ impl NameScope {
     pub fn register_name(&mut self, name: &str, obj: &FrameworkElement) {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: all pointers are live; c lives for the call.
-        unsafe { dm_noesis_name_scope_register_name(self.ptr.as_ptr(), c.as_ptr(), obj.raw()) };
+        unsafe { noesis_name_scope_register_name(self.ptr.as_ptr(), c.as_ptr(), obj.raw()) };
     }
 
     /// Remove `name` from this scope (`INameScope::UnregisterName`).
@@ -101,7 +101,7 @@ impl NameScope {
     pub fn unregister_name(&mut self, name: &str) {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: self.ptr is a live NameScope*; c lives for the call.
-        unsafe { dm_noesis_name_scope_unregister_name(self.ptr.as_ptr(), c.as_ptr()) };
+        unsafe { noesis_name_scope_unregister_name(self.ptr.as_ptr(), c.as_ptr()) };
     }
 
     /// Replace the object registered under `name` with `obj`
@@ -114,7 +114,7 @@ impl NameScope {
     pub fn update_name(&mut self, name: &str, obj: &FrameworkElement) {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: all pointers are live; c lives for the call.
-        unsafe { dm_noesis_name_scope_update_name(self.ptr.as_ptr(), c.as_ptr(), obj.raw()) };
+        unsafe { noesis_name_scope_update_name(self.ptr.as_ptr(), c.as_ptr(), obj.raw()) };
     }
 
     /// Reverse lookup: the name `obj` is registered under in this scope
@@ -123,7 +123,7 @@ impl NameScope {
     pub fn find_object(&self, obj: &FrameworkElement) -> Option<String> {
         // SAFETY: both pointers are live; the returned C string is owned by the
         // scope and valid until the scope is mutated — we copy it immediately.
-        let p = unsafe { dm_noesis_name_scope_find_object(self.ptr.as_ptr(), obj.raw()) };
+        let p = unsafe { noesis_name_scope_find_object(self.ptr.as_ptr(), obj.raw()) };
         if p.is_null() {
             return None;
         }
@@ -166,7 +166,7 @@ impl NameScope {
         // SAFETY: tramp matches the C ABI; `callback` outlives the synchronous
         // enumeration; self.ptr is a live NameScope*.
         unsafe {
-            dm_noesis_name_scope_enum(self.ptr.as_ptr(), tramp, (&raw mut callback).cast());
+            noesis_name_scope_enum(self.ptr.as_ptr(), tramp, (&raw mut callback).cast());
         }
     }
 
@@ -187,6 +187,6 @@ impl Default for NameScope {
 impl Drop for NameScope {
     fn drop(&mut self) {
         // SAFETY: self.ptr carries a +1 we own; released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) };
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) };
     }
 }

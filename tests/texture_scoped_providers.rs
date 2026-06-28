@@ -19,15 +19,15 @@
 //! device is required (we never bind one to the `View`).
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test texture_scoped_providers -- --nocapture`
+//!   `cargo test -p noesis_runtime --test texture_scoped_providers -- --nocapture`
 
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::texture_provider::{
+use noesis_runtime::texture_provider::{
     ImageData, TextureInfo, TextureProvider, set_assembly_texture_provider,
     set_scheme_assembly_texture_provider, set_scheme_texture_provider, set_texture_provider,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 // Four <Image> sources, one per scope:
 //   * myassets:///tex.png                                  → scheme provider
@@ -69,9 +69,9 @@ fn texture_scoped_providers_route_by_scheme_and_assembly() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let log: Arc<Mutex<Vec<(&'static str, String)>>> = Arc::default();
@@ -183,5 +183,5 @@ fn texture_scoped_providers_route_by_scheme_and_assembly() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

@@ -11,14 +11,14 @@
 //! Single `#[test]` per file (Noesis can't be re-init'd in a process); all work
 //! happens in an inner scope so every owning wrapper drops before `shutdown()`.
 
-use dm_noesis_runtime::animation::{
+use noesis_runtime::animation::{
     Animation, AsComponent, BeginStoryboard, DoubleAnimation, HandoffBehavior, Int16Animation,
     Int16AnimationUsingKeyFrames, Int32Animation, Int32AnimationUsingKeyFrames, Int64Animation,
     Int64AnimationUsingKeyFrames, KeyFrameInterp, KeyFrameKind, KeySpline,
     MatrixAnimationUsingKeyFrames, ObjectAnimationUsingKeyFrames, RectAnimation,
     RectAnimationUsingKeyFrames, SizeAnimation, SizeAnimationUsingKeyFrames, Storyboard, Timeline,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -33,9 +33,9 @@ fn animation_value_types_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Rect From/To/By ──────────────────────────────────────────────────
@@ -87,9 +87,9 @@ fn animation_value_types_round_trip() {
         assert!(spline.set_control_point2(0.6, 0.8));
         assert_eq!(spline.control_point2(), Some((0.6, 0.8)));
 
-        let easing = dm_noesis_runtime::animation::EasingFunction::new(
-            dm_noesis_runtime::animation::EasingKind::Cubic,
-            dm_noesis_runtime::animation::EasingMode::EaseInOut,
+        let easing = noesis_runtime::animation::EasingFunction::new(
+            noesis_runtime::animation::EasingKind::Cubic,
+            noesis_runtime::animation::EasingMode::EaseInOut,
         );
 
         // ── Rect key frames (Discrete / Linear / Easing / Spline) ────────────
@@ -242,5 +242,5 @@ fn animation_value_types_round_trip() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

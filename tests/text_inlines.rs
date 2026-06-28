@@ -14,13 +14,13 @@
 //! all owning handles drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test text_inlines -- --nocapture`
+//!   `cargo test -p noesis_runtime --test text_inlines -- --nocapture`
 
-use dm_noesis_runtime::text_inlines::{
+use noesis_runtime::text_inlines::{
     Bold, Hyperlink, Inline, InlineUIContainer, Italic, LineBreak, Run, Span, TextDecorations,
     Underline, text_block_inlines,
 };
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
@@ -30,9 +30,9 @@ fn text_inlines_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Run text round-trips through the live Noesis object ─────────────
@@ -183,5 +183,5 @@ fn text_inlines_round_trip() {
         assert_eq!(inlines.count(), 4, "TextBlock now has four inlines");
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

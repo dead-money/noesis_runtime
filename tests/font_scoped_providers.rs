@@ -22,16 +22,16 @@
 //! completes.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test font_scoped_providers -- --nocapture`
+//!   `cargo test -p noesis_runtime --test font_scoped_providers -- --nocapture`
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::font_provider::{
+use noesis_runtime::font_provider::{
     FontProvider, set_assembly_font_provider, set_font_provider, set_scheme_assembly_font_provider,
     set_scheme_font_provider,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 // One TextBlock per scope. The FontFamily prefix selects the provider:
 //   * myassets:///Fonts/#Bitter                              → scheme
@@ -85,9 +85,9 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let sdk_dir = std::env::var("NOESIS_SDK_DIR")
@@ -183,5 +183,5 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

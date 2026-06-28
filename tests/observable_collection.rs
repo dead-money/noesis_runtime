@@ -19,13 +19,13 @@
 //! `ItemTemplate` so it generates containers without depending on a loaded
 //! theme.
 //!
-//!   `cargo test -p dm_noesis_runtime --test observable_collection -- --nocapture`
+//!   `cargo test -p noesis_runtime --test observable_collection -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::binding::ObservableCollection;
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::binding::ObservableCollection;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const LIST_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <ItemsControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -61,9 +61,9 @@ fn observable_collection() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // ── Part 1: pure CRUD over the collection handle ────────────────────────
     {
@@ -77,7 +77,7 @@ fn observable_collection() {
         assert!(coll.get(3).is_none());
 
         // insert at front
-        let mid = dm_noesis_runtime::binding::box_string("z");
+        let mid = noesis_runtime::binding::box_string("z");
         // SAFETY: `mid` is a live boxed value for the duration of the call.
         assert!(unsafe { coll.insert_component(0, mid.raw()) });
         assert_eq!(coll.len(), 4);
@@ -98,7 +98,7 @@ fn observable_collection() {
 
         let mut bytes = HashMap::new();
         bytes.insert("list.xaml".to_string(), LIST_XAML.as_bytes().to_vec());
-        let _guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let element = FrameworkElement::load("list.xaml").expect("load_xaml returned None");
         let mut view = View::create(element);
@@ -159,5 +159,5 @@ fn observable_collection() {
         drop(coll);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

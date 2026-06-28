@@ -1,6 +1,6 @@
 //! Phase 1 integration test: drives the C++ `RustRenderDevice` subclass
 //! through one representative frame via the test-only entrypoint
-//! `dm_noesis_test_run_frame_scenario`, with a [`MockDevice`] on the Rust
+//! `noesis_test_run_frame_scenario`, with a [`MockDevice`] on the Rust
 //! side recording every virtual call. Asserts the recorded sequence matches
 //! the expected ordering verbatim (including the destructor-driven
 //! `drop_texture` / `drop_render_target` callbacks at scenario exit).
@@ -17,9 +17,9 @@
 use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::render_device::ffi::dm_noesis_test_run_frame_scenario;
-use dm_noesis_runtime::render_device::types::{Batch, DeviceCaps, Shader, TextureFormat, Tile};
-use dm_noesis_runtime::render_device::{
+use noesis_runtime::render_device::ffi::noesis_test_run_frame_scenario;
+use noesis_runtime::render_device::types::{Batch, DeviceCaps, Shader, TextureFormat, Tile};
+use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
     TextureDesc, TextureHandle, TextureRect, register,
 };
@@ -291,16 +291,16 @@ fn frame_scenario_records_expected_op_sequence() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let log: Arc<Mutex<Vec<Op>>> = Arc::new(Mutex::new(Vec::new()));
     let registered = register(MockDevice::new(log.clone()));
 
     // SAFETY: registered.raw() points to a live Noesis::RenderDevice* that
     // remains valid until `drop(registered)` below.
-    unsafe { dm_noesis_test_run_frame_scenario(registered.raw()) };
+    unsafe { noesis_test_run_frame_scenario(registered.raw()) };
 
     // Tear down the device — but the scenario already dropped its Ptr<>s, so
     // this just releases our +1 reference and finalises the C++ instance.
@@ -422,5 +422,5 @@ fn frame_scenario_records_expected_op_sequence() {
     }
 
     drop(ops);
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

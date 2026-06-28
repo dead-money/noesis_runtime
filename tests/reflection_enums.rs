@@ -5,7 +5,7 @@
 //! string path the XAML parser uses). A no-op / stubbed registration makes the
 //! type unresolvable or the names unknown, so every assertion below fails.
 
-use dm_noesis_runtime::reflection::register_enum;
+use noesis_runtime::reflection::register_enum;
 
 #[test]
 fn custom_enum_round_trips_through_noesis() {
@@ -13,17 +13,17 @@ fn custom_enum_round_trips_through_noesis() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let e = register_enum(
-            "DmTest.Direction",
+            "NzTest.Direction",
             &[("North", 10), ("East", 20), ("South", 30), ("West", 40)],
         )
         .expect("register_enum returned None");
-        assert_eq!(e.name(), "DmTest.Direction");
+        assert_eq!(e.name(), "NzTest.Direction");
 
         // Forward: name -> value, read through TypeEnum::HasName.
         assert_eq!(e.value_from_name("North"), Some(10));
@@ -40,7 +40,7 @@ fn custom_enum_round_trips_through_noesis() {
 
         // Re-registering the same name must fail (no silent shadowing).
         assert!(
-            register_enum("DmTest.Direction", &[("X", 1)]).is_none(),
+            register_enum("NzTest.Direction", &[("X", 1)]).is_none(),
             "duplicate enum name should be rejected"
         );
 
@@ -49,5 +49,5 @@ fn custom_enum_round_trips_through_noesis() {
         assert!(bogus.is_none(), "empty enum name should be rejected");
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

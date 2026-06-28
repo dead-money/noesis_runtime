@@ -7,19 +7,19 @@
 //!
 //! Lives in its own integration-test binary (rather than appended to
 //! `events.rs`) because each test crate calls
-//! `dm_noesis_runtime::init()` / `shutdown()` once and Noesis can't be
+//! `noesis_runtime::init()` / `shutdown()` once and Noesis can't be
 //! re-initialised inside a single process.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test visibility`
+//!   `cargo test -p noesis_runtime --test visibility`
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::events::subscribe_click;
-use dm_noesis_runtime::view::{FrameworkElement, MouseButton, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::events::subscribe_click;
+use noesis_runtime::view::{FrameworkElement, MouseButton, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const VISIBILITY_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -57,9 +57,9 @@ fn set_visibility_toggles_overlay_and_blocks_hit_test() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let click_count = Arc::new(AtomicU32::new(0));
 
@@ -70,7 +70,7 @@ fn set_visibility_toggles_overlay_and_blocks_hit_test() {
             VISIBILITY_XAML.as_bytes().to_vec(),
         );
         let provider = InMem { bytes };
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
         let element = FrameworkElement::load("scene.xaml").expect("load_xaml returned None");
         let mut view = View::create(element);
@@ -136,5 +136,5 @@ fn set_visibility_toggles_overlay_and_blocks_hit_test() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }
