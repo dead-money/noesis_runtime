@@ -19,7 +19,8 @@ use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    PropType, dm_noesis_base_component_release, dm_noesis_dependency_object_check_access,
+    PropType, dm_noesis_base_component_release, dm_noesis_binding_expression_update_source,
+    dm_noesis_binding_expression_update_target, dm_noesis_dependency_object_check_access,
     dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
@@ -32,21 +33,26 @@ use crate::ffi::{
     dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
     dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
     dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
-    dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml, dm_noesis_items_control_items_count,
-    dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
-    dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_path_set_points,
-    dm_noesis_renderer_init, dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
-    dm_noesis_renderer_shutdown, dm_noesis_renderer_update_render_tree,
-    dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_view_activate,
-    dm_noesis_view_char, dm_noesis_view_create, dm_noesis_view_deactivate, dm_noesis_view_destroy,
-    dm_noesis_view_get_content, dm_noesis_view_get_renderer, dm_noesis_view_hscroll,
+    dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml,
+    dm_noesis_items_control_items_count, dm_noesis_items_control_realized_count,
+    dm_noesis_items_control_set_items_source, dm_noesis_logical_child,
+    dm_noesis_logical_children_count, dm_noesis_path_set_points, dm_noesis_renderer_init,
+    dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
+    dm_noesis_renderer_update_render_tree, dm_noesis_text_caret_to_end, dm_noesis_text_get,
+    dm_noesis_text_set, dm_noesis_view_activate, dm_noesis_view_cancel_timer, dm_noesis_view_char,
+    dm_noesis_view_create, dm_noesis_view_create_timer, dm_noesis_view_deactivate,
+    dm_noesis_view_destroy, dm_noesis_view_get_content, dm_noesis_view_get_flags,
+    dm_noesis_view_get_renderer, dm_noesis_view_get_stats,
+    dm_noesis_view_get_tessellation_max_pixel_error, dm_noesis_view_hscroll,
     dm_noesis_view_key_down, dm_noesis_view_key_up, dm_noesis_view_mouse_button_down,
-    dm_noesis_view_mouse_button_up, dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_move,
-    dm_noesis_view_mouse_wheel, dm_noesis_view_scroll, dm_noesis_view_set_flags,
-    dm_noesis_view_set_projection_matrix, dm_noesis_view_set_scale, dm_noesis_view_set_size,
-    dm_noesis_view_touch_down, dm_noesis_view_touch_move, dm_noesis_view_touch_up,
-    dm_noesis_view_update, dm_noesis_visual_child, dm_noesis_visual_children_count,
-    dm_noesis_visual_hit_test, dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
+    dm_noesis_view_mouse_button_up, dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel,
+    dm_noesis_view_mouse_move, dm_noesis_view_mouse_wheel, dm_noesis_view_restart_timer,
+    dm_noesis_view_scroll, dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix,
+    dm_noesis_view_set_scale, dm_noesis_view_set_size,
+    dm_noesis_view_set_tessellation_max_pixel_error, dm_noesis_view_touch_down,
+    dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
+    dm_noesis_visual_child, dm_noesis_visual_children_count, dm_noesis_visual_hit_test,
+    dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
 
@@ -71,6 +77,45 @@ pub struct FrameworkElement {
 // Noesis — concurrent shared borrows can't race on Noesis state.
 unsafe impl Send for FrameworkElement {}
 unsafe impl Sync for FrameworkElement {}
+
+/// A **borrowed** handle to a `Noesis::BindingExpression` — the live binding
+/// instance on a target element's dependency property, obtained from
+/// [`FrameworkElement::binding_expression`].
+///
+/// The expression is owned by the target element, NOT by this handle: it holds
+/// no `+1` reference and runs no `Drop`. The `'a` lifetime ties it to the
+/// `&FrameworkElement` it was borrowed from, so it cannot outlive that borrow.
+/// It also becomes stale if the binding is cleared from the property while the
+/// handle is held — only call its methods while the binding is known live.
+///
+/// # Threading
+///
+/// These run on the view-driving thread, like the other accessors here
+/// (no `VerifyAccess`).
+pub struct BindingExpressionRef<'a> {
+    ptr: NonNull<c_void>,
+    _marker: PhantomData<&'a FrameworkElement>,
+}
+
+impl BindingExpressionRef<'_> {
+    /// Force a source → target data transfer (re-pull the source value onto the
+    /// target property), via `BaseBindingExpression::UpdateTarget`.
+    pub fn update_target(&self) {
+        // SAFETY: self.ptr is the borrowed BindingExpression* owned by the
+        // target element, valid for the `'a` borrow this handle carries.
+        unsafe { dm_noesis_binding_expression_update_target(self.ptr.as_ptr()) }
+    }
+
+    /// Push the current target value back to the source, via
+    /// `BaseBindingExpression::UpdateSource`. This is what commits a `TwoWay` /
+    /// `OneWayToSource` binding whose
+    /// [`UpdateSourceTrigger`](crate::binding::UpdateSourceTrigger) is
+    /// `Explicit`; Noesis no-ops it for other binding modes.
+    pub fn update_source(&self) {
+        // SAFETY: as above — borrowed BindingExpression* valid for `'a`.
+        unsafe { dm_noesis_binding_expression_update_source(self.ptr.as_ptr()) }
+    }
+}
 
 impl FrameworkElement {
     /// Load XAML by URI. Returns `None` when the URI is unknown to the
@@ -145,6 +190,35 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call.
         let ptr = unsafe { dm_noesis_framework_element_find_name(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Borrow the [`BindingExpressionRef`] for the binding on this element's
+    /// dependency property named `dp_name`, via
+    /// `BindingOperations::GetBindingExpression`. Returns `None` if `dp_name`
+    /// is unknown on this element's type, or if no binding is currently set on
+    /// that property.
+    ///
+    /// The returned handle is **borrowed** — it is owned by this element and
+    /// stays valid only while the binding is live and `self` is alive (the
+    /// `'_` lifetime ties it to `&self`). Use it to drive an explicit
+    /// `UpdateSource` / `UpdateTarget` — notably to commit a `TwoWay` binding
+    /// whose [`UpdateSourceTrigger`](crate::binding::UpdateSourceTrigger) is
+    /// `Explicit`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `dp_name` contains an interior NUL byte.
+    #[must_use]
+    pub fn binding_expression(&self, dp_name: &str) -> Option<BindingExpressionRef<'_>> {
+        let c = CString::new(dp_name).expect("dp name contained interior NUL");
+        // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call.
+        // The returned pointer is borrowed (owned by the target) — never
+        // released; its validity is bounded by the `'_` borrow of `self`.
+        let ptr = unsafe { dm_noesis_get_binding_expression(self.ptr.as_ptr(), c.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| BindingExpressionRef {
+            ptr,
+            _marker: PhantomData,
+        })
     }
 
     /// The element's `x:Name`, or `None` if it has no name. The returned
@@ -1476,9 +1550,116 @@ impl View {
     }
 
     /// Combination of [`RenderFlag`] values — see `NsGui/IView.h` for the
-    /// canonical list.
+    /// canonical list. Kept for back-compat / interop with raw bitmasks;
+    /// prefer [`Self::set_render_flags`] for a typed set.
     pub fn set_flags(&mut self, flags: u32) {
         unsafe { dm_noesis_view_set_flags(self.ptr.as_ptr(), flags) }
+    }
+
+    /// Set the view's render flags from a typed [`RenderFlags`] set, so callers
+    /// don't hand-OR raw `u32`s.
+    pub fn set_render_flags(&mut self, flags: RenderFlags) {
+        self.set_flags(flags.bits());
+    }
+
+    /// Current render flags as a raw bitmask (`IView::GetFlags`). The raw
+    /// counterpart of [`Self::flags`].
+    #[must_use]
+    pub fn get_flags(&self) -> u32 {
+        // SAFETY: self.ptr is a live IView*; GetFlags is a const accessor.
+        unsafe { dm_noesis_view_get_flags(self.ptr.as_ptr()) }
+    }
+
+    /// Current render flags as a typed [`RenderFlags`] set.
+    #[must_use]
+    pub fn flags(&self) -> RenderFlags {
+        RenderFlags(self.get_flags())
+    }
+
+    /// Set the tessellation curve tolerance in screen-space pixels — the raw
+    /// `IView::SetTessellationMaxPixelError` knob. Smaller values mean finer
+    /// curve subdivision (higher quality, more triangles). Prefer
+    /// [`Self::set_quality`] for the named presets.
+    pub fn set_tessellation_max_pixel_error(&mut self, error: f32) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_tessellation_max_pixel_error(self.ptr.as_ptr(), error) }
+    }
+
+    /// Set the antialiasing / curve quality to one of the named presets
+    /// (`Low` 0.7, `Medium` 0.4, `High` 0.2 pixel error).
+    pub fn set_quality(&mut self, quality: Quality) {
+        self.set_tessellation_max_pixel_error(quality.pixel_error());
+    }
+
+    /// Current tessellation curve tolerance in screen-space pixels
+    /// (`IView::GetTessellationMaxPixelError`).
+    #[must_use]
+    pub fn tessellation_max_pixel_error(&self) -> f32 {
+        // SAFETY: self.ptr is a live IView*; const accessor.
+        unsafe { dm_noesis_view_get_tessellation_max_pixel_error(self.ptr.as_ptr()) }
+    }
+
+    /// Performance counters for the last rendered frame (`IView::GetStats`).
+    /// Most counters (triangle / draw / batch / glyph counts) are populated by
+    /// the render pass; timing fields are tracked across update + render. See
+    /// [`ViewStats`].
+    #[must_use]
+    pub fn stats(&self) -> ViewStats {
+        let mut out = ViewStats::default();
+        // SAFETY: self.ptr is a live IView*; `out` is a live, correctly-sized
+        // ViewStats whose repr(C) layout matches the C ABI struct (guarded by
+        // a static_assert in noesis_view.cpp); the C side writes all fields.
+        unsafe { dm_noesis_view_get_stats(self.ptr.as_ptr(), &raw mut out) };
+        out
+    }
+
+    /// Create a view-driven timer firing roughly every `interval_ms`
+    /// milliseconds. Timers are serviced from inside [`Self::update`] (off the
+    /// view clock advanced by the time passed to `update`), so the cadence
+    /// follows your update loop rather than wall-clock time.
+    ///
+    /// `handler` returns the next interval in milliseconds (`0` stops the
+    /// timer). The returned [`TimerSubscription`] is RAII: drop it to cancel
+    /// the timer and free the handler. Returns `None` only if the underlying
+    /// C entrypoint fails (e.g. a null view).
+    ///
+    /// # Panics
+    ///
+    /// Panics only on internal logic errors — if `Box::into_raw` returns null
+    /// (it cannot; the wrapper is `NonNull` to keep the invariant explicit).
+    pub fn create_timer<H: TimerHandler>(
+        &mut self,
+        interval_ms: u32,
+        handler: H,
+    ) -> Option<TimerSubscription> {
+        // Double-Box gives a stable thin pointer for the C ABI userdata, the
+        // same pattern as the event subscriptions.
+        let outer: Box<Box<dyn TimerHandler>> = Box::new(Box::new(handler));
+        let userdata = Box::into_raw(outer);
+
+        // SAFETY: trampolines are `extern "C"`; userdata is freshly leaked and
+        // donated to the C++ RustTimer (freed via `timer_free` on cancel); the
+        // view pointer is borrowed for the call only.
+        let token = unsafe {
+            dm_noesis_view_create_timer(
+                self.ptr.as_ptr(),
+                interval_ms,
+                timer_trampoline,
+                userdata.cast(),
+                timer_free,
+            )
+        };
+
+        if let Some(token) = NonNull::new(token) {
+            Some(TimerSubscription { token })
+        } else {
+            // Creation failed before donation took effect — free the box we
+            // leaked above so the handler isn't leaked.
+            // SAFETY: userdata came from Box::into_raw moments ago; nothing
+            // else ever saw the pointer.
+            unsafe { drop(Box::from_raw(userdata)) };
+            None
+        }
     }
 
     /// Recover keyboard focus for this view. Noesis ignores keyboard input
@@ -1515,6 +1696,15 @@ impl View {
     /// `delta` is signed — Noesis uses Windows-style 120 units per notch.
     pub fn mouse_wheel(&mut self, x: i32, y: i32, delta: i32) -> bool {
         unsafe { dm_noesis_view_mouse_wheel(self.ptr.as_ptr(), x, y, delta) }
+    }
+
+    /// Horizontal mouse wheel (e.g. a tilt-wheel or trackpad swipe). `delta`
+    /// is signed with the same 120-units-per-notch convention as
+    /// [`Self::mouse_wheel`]; positive scrolls right. Returns whether Noesis
+    /// handled the event.
+    pub fn mouse_hwheel(&mut self, x: i32, y: i32, delta: i32) -> bool {
+        // SAFETY: self.ptr is a live IView*; thin pass-through to MouseHWheel.
+        unsafe { dm_noesis_view_mouse_hwheel(self.ptr.as_ptr(), x, y, delta) }
     }
 
     /// Vertical scroll with the cursor at `(x, y)`. `value` is in lines
@@ -1758,6 +1948,7 @@ pub enum Key {
 /// `NsGui/IView.h` for the authoritative list.
 #[repr(u32)]
 #[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RenderFlag {
     Wireframe = 1,
     ColorBatches = 2,
@@ -1768,6 +1959,216 @@ pub enum RenderFlag {
     ShowGlyphs = 64,
     ShowRamps = 128,
     DepthTesting = 256,
+}
+
+/// A typed bitset of [`RenderFlag`]s, so callers compose render flags without
+/// hand-ORing raw `u32`s. Convert to/from the raw bitmask Noesis uses with
+/// [`Self::bits`] / [`Self::from_bits`]; pass it to
+/// [`View::set_render_flags`] and read it back via [`View::flags`].
+///
+/// ```
+/// use dm_noesis_runtime::view::{RenderFlag, RenderFlags};
+/// let flags = RenderFlags::from_iter([RenderFlag::Ppaa, RenderFlag::Wireframe]);
+/// assert!(flags.contains(RenderFlag::Ppaa));
+/// assert!(!flags.contains(RenderFlag::Overdraw));
+/// assert_eq!(flags.bits(), RenderFlag::Ppaa as u32 | RenderFlag::Wireframe as u32);
+/// ```
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct RenderFlags(pub u32);
+
+impl RenderFlags {
+    /// An empty set (no flags).
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    /// Wrap a raw `Noesis::RenderFlags` bitmask.
+    #[must_use]
+    pub const fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    /// The raw bitmask Noesis expects.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// Add `flag` to the set (in place).
+    pub const fn insert(&mut self, flag: RenderFlag) {
+        self.0 |= flag as u32;
+    }
+
+    /// Return a copy of this set with `flag` added — handy for `const`-ish
+    /// builder chains (`RenderFlags::empty().with(..).with(..)`).
+    #[must_use]
+    pub const fn with(mut self, flag: RenderFlag) -> Self {
+        self.0 |= flag as u32;
+        self
+    }
+
+    /// Whether `flag` is present in the set.
+    #[must_use]
+    pub const fn contains(self, flag: RenderFlag) -> bool {
+        self.0 & (flag as u32) != 0
+    }
+}
+
+impl FromIterator<RenderFlag> for RenderFlags {
+    fn from_iter<I: IntoIterator<Item = RenderFlag>>(iter: I) -> Self {
+        let mut flags = Self(0);
+        for flag in iter {
+            flags.insert(flag);
+        }
+        flags
+    }
+}
+
+impl Extend<RenderFlag> for RenderFlags {
+    fn extend<I: IntoIterator<Item = RenderFlag>>(&mut self, iter: I) {
+        for flag in iter {
+            self.insert(flag);
+        }
+    }
+}
+
+/// Named antialiasing / curve-quality presets for
+/// [`View::set_quality`], mapping onto `Noesis::TessellationMaxPixelError`'s
+/// screen-space pixel-error thresholds. `Medium` is the Noesis default; `High`
+/// is recommended only when rendering to a multisampled surface.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Quality {
+    /// `LowQuality` — 0.7 px error (coarsest curves).
+    Low,
+    /// `MediumQuality` — 0.4 px error (the Noesis default).
+    Medium,
+    /// `HighQuality` — 0.2 px error (finest curves).
+    High,
+}
+
+impl Quality {
+    /// The screen-space pixel-error threshold this preset maps to. Mirrors the
+    /// `TessellationMaxPixelError::{Low,Medium,High}Quality()` constants.
+    #[must_use]
+    pub const fn pixel_error(self) -> f32 {
+        match self {
+            Self::Low => 0.7,
+            Self::Medium => 0.4,
+            Self::High => 0.2,
+        }
+    }
+}
+
+/// Per-frame performance counters returned by [`View::stats`], mirroring
+/// `Noesis::ViewStats` field-for-field (3 `f32` timings then 12 `u32` counts).
+/// The `#[repr(C)]` layout is the FFI contract; a `static_assert` in
+/// `noesis_view.cpp` guards the size against SDK drift.
+///
+/// Timing fields are in milliseconds. Counters reflect the work of the last
+/// rendered frame, so the geometry / draw / glyph counts are only meaningful
+/// after a render pass (`Renderer::render`); a pure `update()` populates the
+/// timing-related fields.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct ViewStats {
+    /// Total frame time (ms).
+    pub frame_time: f32,
+    /// Time spent in `Update` (ms).
+    pub update_time: f32,
+    /// Time spent rendering (ms).
+    pub render_time: f32,
+    /// Triangles submitted.
+    pub triangles: u32,
+    /// Draw calls.
+    pub draws: u32,
+    /// Batches submitted to the GPU.
+    pub batches: u32,
+    /// Geometry tessellations performed.
+    pub tessellations: u32,
+    /// Vertex/index buffer flushes.
+    pub flushes: u32,
+    /// Geometry buffer size (bytes).
+    pub geometry_size: u32,
+    /// Clipping masks rendered.
+    pub masks: u32,
+    /// Opacity (transparency layer) groups rendered.
+    pub opacities: u32,
+    /// Render-target switches.
+    pub render_target_switches: u32,
+    /// Gradient ramps uploaded this frame.
+    pub uploaded_ramps: u32,
+    /// Glyphs rasterized this frame.
+    pub rasterized_glyphs: u32,
+    /// Glyph atlas tiles discarded this frame.
+    pub discarded_glyph_tiles: u32,
+}
+
+// ── View-driven timers (TODO §1) ─────────────────────────────────────────────
+
+/// Rust-side handler for a view timer (see [`View::create_timer`]). Called once
+/// per tick from inside [`View::update`]; returns the next interval in
+/// milliseconds, or `0` to stop the timer.
+///
+/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
+/// or be moved onto the render thread — same rationale as the event handlers
+/// in [`crate::events`]. Timers fire on the view-driving thread.
+pub trait TimerHandler: Send + 'static {
+    /// Run one tick; return the next interval in ms (`0` stops the timer).
+    fn on_tick(&mut self) -> u32;
+}
+
+impl<F: FnMut() -> u32 + Send + 'static> TimerHandler for F {
+    fn on_tick(&mut self) -> u32 {
+        self()
+    }
+}
+
+/// SAFETY: `userdata` must be a pointer produced by [`View::create_timer`] and
+/// still alive (its [`TimerSubscription`] hasn't been dropped).
+unsafe extern "C" fn timer_trampoline(userdata: *mut c_void) -> u32 {
+    // SAFETY: userdata is the double-boxed handler leaked in create_timer; the
+    // RustTimer keeps it alive until cancel, so the deref is valid here.
+    let handler = unsafe { &mut *userdata.cast::<Box<dyn TimerHandler>>() };
+    handler.on_tick()
+}
+
+/// SAFETY: `userdata` must be the pointer donated to the C++ `RustTimer` by
+/// [`View::create_timer`]; the C side invokes this exactly once on cancel.
+unsafe extern "C" fn timer_free(userdata: *mut c_void) {
+    // SAFETY: reconstitute and drop the double box we leaked in create_timer.
+    unsafe { drop(Box::from_raw(userdata.cast::<Box<dyn TimerHandler>>())) };
+}
+
+/// RAII handle for a view timer created by [`View::create_timer`]. While alive,
+/// the timer stays scheduled; dropping it cancels the timer and frees the
+/// boxed handler (the C++ teardown runs `CancelTimer` then the donated free
+/// handler exactly once). Drop it before [`crate::shutdown`], like every other
+/// owning handle in this crate.
+pub struct TimerSubscription {
+    token: NonNull<c_void>,
+}
+
+// SAFETY: the boxed handler is `Send`, and the C++ timer is bound to a single
+// view whose access Noesis serialises — mirrors the event subscriptions.
+unsafe impl Send for TimerSubscription {}
+unsafe impl Sync for TimerSubscription {}
+
+impl TimerSubscription {
+    /// Restart this timer with a new interval (ms). Equivalent to
+    /// `IView::RestartTimer`; takes effect on the next [`View::update`].
+    pub fn restart(&self, interval_ms: u32) {
+        // SAFETY: token is a live RustTimer* until this handle drops.
+        unsafe { dm_noesis_view_restart_timer(self.token.as_ptr(), interval_ms) };
+    }
+}
+
+impl Drop for TimerSubscription {
+    fn drop(&mut self) {
+        // SAFETY: token produced by create_timer; cancel deletes the RustTimer
+        // (running the donated free handler), freed exactly once here.
+        unsafe { dm_noesis_view_cancel_timer(self.token.as_ptr()) };
+    }
 }
 
 /// Borrowed handle to the view's renderer. Methods map 1:1 onto

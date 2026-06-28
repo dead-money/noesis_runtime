@@ -468,6 +468,83 @@ bool dm_noesis_view_char(void* view, uint32_t codepoint);
 void dm_noesis_view_activate(void* view);
 void dm_noesis_view_deactivate(void* view);
 
+// Horizontal mouse wheel. `delta` mirrors `dm_noesis_view_mouse_wheel`'s
+// Windows-style 120-units-per-notch convention; positive scrolls right.
+bool dm_noesis_view_mouse_hwheel(void* view, int32_t x, int32_t y, int32_t delta);
+
+// ── View flags / quality / stats (TODO §1) ─────────────────────────────────
+
+// Current render flags (a bitmask of `Noesis::RenderFlags`). Companion to
+// dm_noesis_view_set_flags.
+uint32_t dm_noesis_view_get_flags(void* view);
+
+// Tessellation curve tolerance in screen-space pixels (smaller == higher
+// quality). LowQuality is 0.7, MediumQuality 0.4, HighQuality 0.2.
+void dm_noesis_view_set_tessellation_max_pixel_error(void* view, float error);
+float dm_noesis_view_get_tessellation_max_pixel_error(void* view);
+
+// Performance counters for the last rendered frame. Field order / types match
+// `Noesis::ViewStats` exactly (3 floats then 12 uint32_t); a static_assert in
+// noesis_view.cpp guards the size. `out` is written only when both pointers
+// are non-null.
+typedef struct dm_noesis_view_stats {
+    float frame_time;
+    float update_time;
+    float render_time;
+
+    uint32_t triangles;
+    uint32_t draws;
+    uint32_t batches;
+
+    uint32_t tessellations;
+    uint32_t flushes;
+    uint32_t geometry_size;
+
+    uint32_t masks;
+    uint32_t opacities;
+    uint32_t render_target_switches;
+
+    uint32_t uploaded_ramps;
+    uint32_t rasterized_glyphs;
+    uint32_t discarded_glyph_tiles;
+} dm_noesis_view_stats;
+
+void dm_noesis_view_get_stats(void* view, dm_noesis_view_stats* out);
+
+// ── View-driven timers (TODO §1) ───────────────────────────────────────────
+//
+// `IView::CreateTimer(interval, Delegate<uint32_t()>)` fires from inside
+// View::Update on the thread driving the view. The callback returns the next
+// interval in milliseconds, or 0 to stop. Lifetime mirrors the RustCommand
+// donated-free-fn pattern: a heap `RustTimer` holds the Rust callback + the
+// donated userdata + a free handler + the assigned timer id + the IView (with
+// a +1 ref so the token can safely outlive the caller's other view handles).
+// The token returned here is that `RustTimer*`.
+
+// Callback fired on each timer tick. Returns the next interval in ms (0 stops
+// the timer). Fires from inside View::Update on the view-driving thread.
+typedef uint32_t (*dm_noesis_timer_fn)(void* userdata);
+
+// Free callback invoked exactly once when the timer token is cancelled (its
+// RustTimer destroyed). Receives the `userdata` passed to create; ownership of
+// `userdata` transfers to the C++ side at creation. Optional (may be NULL).
+typedef void (*dm_noesis_timer_free_fn)(void* userdata);
+
+// Create a view timer firing every `interval_ms`. Returns an opaque token (a
+// RustTimer*) or NULL on failure (`view`/`cb` null). Cancel + free via
+// dm_noesis_view_cancel_timer.
+void* dm_noesis_view_create_timer(
+    void* view, uint32_t interval_ms, dm_noesis_timer_fn cb, void* userdata,
+    dm_noesis_timer_free_fn free_handler);
+
+// Restart the timer with a new interval (ms). No-op on a NULL token.
+void dm_noesis_view_restart_timer(void* token, uint32_t interval_ms);
+
+// Cancel the timer and destroy the token: calls IView::CancelTimer(id), then
+// deletes the RustTimer (invoking the donated free handler exactly once and
+// releasing the +1 view ref). Safe to call with NULL.
+void dm_noesis_view_cancel_timer(void* token);
+
 // ── Element traversal + events (Phase 5.B) ─────────────────────────────────
 //
 // Look up named elements in the logical / visual tree and subscribe Rust
@@ -591,6 +668,36 @@ void* dm_noesis_subscribe_event(
 
 // Unsubscribe and free the routed-event handler. Safe to call with NULL.
 void dm_noesis_unsubscribe_event(void* token);
+
+// ── Non-routed lifecycle events (TODO §5) ───────────────────────────────────
+//
+// `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
+// notifications ride the `Event_<T>` mechanism (AddEventHandler(Symbol,
+// EventHandler)), not AddHandler(RoutedEvent, ...). This name-keyed surface
+// drives the public accessors' `+=` / `-=` so the internal Symbol keys never
+// have to be guessed. None of these notifications carry args we surface, so the
+// callback is a bare `void(userdata)`.
+
+// Lifecycle-event callback. Same threading contract as `dm_noesis_click_fn`
+// (fires from inside the layout / property pump on the view-driving thread).
+typedef void (*dm_noesis_lifecycle_fn)(void* userdata);
+
+// Subscribe `cb(userdata)` to the non-routed lifecycle event named `event_name`
+// on `element` (DynamicCast to FrameworkElement*). Supported names:
+// "Initialized", "LayoutUpdated", "DataContextChanged", "IsEnabledChanged",
+// "IsVisibleChanged", "IsHitTestVisibleChanged", "IsKeyboardFocusedChanged",
+// "IsKeyboardFocusWithinChanged", "IsMouseCapturedChanged",
+// "IsMouseCaptureWithinChanged", "IsMouseDirectlyOverChanged",
+// "FocusableChanged". Returns an opaque token to pass once to
+// `dm_noesis_unsubscribe_lifecycle`, or NULL if `element` is not a
+// FrameworkElement, `event_name` is unknown, or `cb` is NULL. The token holds a
+// +1 ref on the element so the subscription outlives every other handle the
+// caller drops.
+void* dm_noesis_subscribe_lifecycle(
+    void* element, const char* event_name, dm_noesis_lifecycle_fn cb, void* userdata);
+
+// Unsubscribe and free the lifecycle handler. Safe to call with NULL.
+void dm_noesis_unsubscribe_lifecycle(void* token);
 
 // Event-arg accessors. Each takes the opaque `args` handed to the callback and
 // returns a sentinel when the live event isn't of the matching kind (so one
@@ -1287,6 +1394,33 @@ void dm_noesis_binding_set_update_source_trigger(void* binding, int32_t trigger)
 // Bind relative to the target element itself (RelativeSource Self) — e.g. bind
 // one property of an element to another on the same element.
 void dm_noesis_binding_set_relative_source_self(void* binding);
+// RelativeSource FindAncestor: resolve `type_name` through the reflection
+// registry and bind to the `level`-th ancestor of that type (1 = nearest;
+// 0 is coerced to 1). The ancestor type must already be registered with
+// Reflection (referencing it from XAML forces registration). Returns false
+// (no-op) on a NULL/non-Binding pointer or an unknown / unregistered type name.
+bool dm_noesis_binding_set_relative_source_find_ancestor(
+    void* binding, const char* type_name, uint32_t level);
+// RelativeSource PreviousData: bind to the previous item in a data-bound
+// collection. Uses the shared static singleton.
+void dm_noesis_binding_set_relative_source_previous_data(void* binding);
+// RelativeSource TemplatedParent: bind to the control a ControlTemplate is
+// applied to. Uses the shared static singleton.
+void dm_noesis_binding_set_relative_source_templated_parent(void* binding);
+
+// Borrowed BindingExpression* for the binding on `element`'s `dp_name` property
+// (BindingOperations::GetBindingExpression). OWNED by the target — do NOT
+// release; valid only while the binding stays live on that property. NULL if
+// `element` is not a DependencyObject, the DP name is unknown, or no binding is
+// set. Pass the result to the update entrypoints below.
+void* dm_noesis_get_binding_expression(void* element, const char* dp_name);
+// Force a source -> target data transfer (re-pull the source value). No-op on
+// NULL.
+void dm_noesis_binding_expression_update_target(void* expr);
+// Push the current target value back to the source — commits a binding whose
+// UpdateSourceTrigger is Explicit. No-op (per Noesis) unless the binding's Mode
+// is TwoWay / OneWayToSource. No-op on NULL.
+void dm_noesis_binding_expression_update_source(void* expr);
 
 // Resolve `dp_name` on `element`'s class hierarchy and wire `binding` onto it
 // via BindingOperations::SetBinding. Returns false if `element` is not a

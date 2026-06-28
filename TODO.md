@@ -12,14 +12,9 @@ don't keep re-discovering them.
 
 ## 1. View / Renderer
 
-- **Quality / AA tuning.** `SetTessellationMaxPixelError` (Low/Medium/HighQuality), `GetTessellationMaxPixelError`.
-- **`RenderFlags` as typed options.** We pass a raw `u32` to `set_flags`; expose the enum (`Wireframe`, `ColorBatches`, `Overdraw`, `FlipY`, `PPAA`, `LCD`, `ShowGlyphs`, `ShowRamps`, `DepthTesting`) and `GetFlags`.
 - **Gesture / touch thresholds.** `SetHoldingTimeThreshold`, `SetHoldingDistanceThreshold`, `SetManipulationDistanceThreshold`, `SetDoubleTapTimeThreshold`, `SetDoubleTapDistanceThreshold`, `SetEmulateTouch`.
 - **Stereo / VR.** `SetStereoOffscreenScaleFactor`.
 - **`Rendering` event.** Per-frame `RenderingEventHandler` delegate (hook before render).
-- **View-driven timers.** `CreateTimer` / `RestartTimer` / `CancelTimer` — animation/dispatcher-style callbacks scheduled by the view. Unlocks §2 queued-invoke and §6 animation scheduling.
-- **`ViewStats`.** `GetStats()` (frame/update/render time, triangle/draw/batch counts, glyph stats) for profiling overlays.
-- **`MouseHWheel`** (horizontal wheel) is in `IView` but not pumped.
 - **Renderer offscreen sizing / glyph cache** and the render-thread split (UpdateRenderTree on render thread vs Update on UI thread).
 
 ## 2. Element tree access
@@ -31,8 +26,6 @@ don't keep re-discovering them.
 
 ## 3. Data binding
 
-- **`RelativeSource` ancestor modes** (`FindAncestor` with `AncestorType`/`AncestorLevel`, `PreviousData`, `TemplatedParent`) — only the `Self` convenience is wrapped. Cheap.
-- **`BindingExpression` inspection** — `BindingOperations::GetBindingExpression`, explicit `UpdateSource`/`UpdateTarget`. Cheap; completes the already-wrapped `UpdateSourceTrigger::Explicit` (nothing currently commits an explicit-trigger binding).
 - **`IMultiValueConverter` + `MultiBinding`** (runtime construction; `TryConvert` over an array of values).
 - **`PriorityBinding`, `TemplateBinding`** (runtime construction).
 - **`INotifyPropertyChanged` for plain (non-`DependencyObject`) view models.** Large: Noesis resolves non-DP binding paths only through registered `TypeProperty` reflection (no getter-by-name), so this needs the runtime reflection registration from §9. The `DependencyObject`-backed VM path already covers the notification need.
@@ -45,7 +38,6 @@ don't keep re-discovering them.
 
 ## 5. Routed events
 
-- **Non-routed lifecycle events.** `Initialized`, `LayoutUpdated`, and the `Is*Changed` notifications use `AddEventHandler(Symbol, EventHandler)` (the `Event_` mechanism), not `AddHandler(RoutedEvent, …)`. Cheap: one `EventHandler`/Symbol trampoline covers all of them.
 - **Richer typed arg accessors.** Focus-changed (`old`/`new` element — 2 fields, cheap), manipulation (delta/velocity/inertia — ~6 nested structs), and drag (effects/key-states bitmasks). Currently reachable only as base `RoutedEventArgs` (source/handled).
 - **`DragDrop` source side** (`DoDragDrop`) and the copy/paste `DataObject` handlers.
 
@@ -162,10 +154,9 @@ From `IntegrationAPI.h`, none are wired:
 Ordered to finish the crate with the least rework — cheap completions and high-leverage
 primitives first, big rocks once their prerequisites exist. Each phase is a natural batch.
 
-**Phase A — finish the core + cheap wins.**
-1. §3 `RelativeSource FindAncestor` + `BindingExpression` `UpdateSource`/`UpdateTarget`, and §5 `Initialized`/`LayoutUpdated`/`Is*Changed` — all cheap, complementary; one small PR.
-2. §1 View timers (`CreateTimer`) + `RenderFlags`/`ViewStats`/quality. **Timers unlock §2 queued-invoke and §6 animation**, so do them before those.
-3. ~~§15 `ParseXaml` (+ `LoadComponent`) and §17 inspector-enable — both cheap and broadly useful for dev/tests.~~
+**Phase A — finish the core + cheap wins.** ✅ Complete (§3 `RelativeSource FindAncestor` +
+`BindingExpression` update, §5 non-routed lifecycle events; §1 View timers + typed `RenderFlags` +
+`ViewStats` + tessellation quality + `MouseHWheel`; §15 `ParseXaml`/`LoadComponent`; §17 inspector).
 
 **Phase B — presentation.**
 4. §7 Styles / resources / templates (`FindResource`, `DataTemplate`/`ControlTemplate` from code) — needed to theme and to render bound collections meaningfully.

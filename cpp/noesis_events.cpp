@@ -35,6 +35,8 @@
 #include <NsCore/Delegate.h>
 #include <NsCore/DynamicCast.h>
 #include <NsGui/BaseButton.h>
+#include <NsGui/DependencyObject.h>
+#include <NsGui/Events.h>
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/Path.h>
 #include <NsGui/RoutedEvent.h>
@@ -631,4 +633,133 @@ extern "C" void* dm_noesis_routed_args_source(const void* args) {
     if (!args) return nullptr;
     auto* w = static_cast<const DmEventArgs*>(args);
     return w->args ? w->args->source : nullptr;
+}
+
+// ── Non-routed lifecycle events (TODO §5) ───────────────────────────────────
+//
+// `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
+// notifications are NOT routed events — they ride the `Event_<T>` mechanism
+// (`UIElement::AddEventHandler(Symbol, const EventHandler&)` /
+// `RemoveEventHandler`), not `AddHandler(RoutedEvent, ...)`. Rather than guess
+// the internal Symbol keys, we drive each event through its public accessor's
+// `operator+=` / `operator-=` (which forward to Add/RemoveEventHandler with the
+// right key). The two delegate signatures involved — `EventHandler`
+// (Initialized / LayoutUpdated) and `DependencyPropertyChangedEventHandler`
+// (everything else) — are dispatched by the `ApplyLifecycle` table below. None
+// carry args we surface, so the Rust callback is a bare `void(userdata)`.
+//
+// Lifetime mirrors `RustRoutedHandler`: the heap handler owns a +1 ref on the
+// element (so the subscription survives the caller dropping every other handle)
+// and remembers the event name so teardown's `-=` is exact.
+
+namespace {
+
+class RustLifecycleHandler {
+public:
+    RustLifecycleHandler(dm_noesis_lifecycle_fn cb, void* userdata,
+        Noesis::FrameworkElement* element, const char* name)
+        : mCb(cb), mUserdata(userdata), mElement(element)
+    {
+        if (mElement) {
+            mElement->AddReference();
+        }
+        const size_t n = strlen(name);
+        mName = new char[n + 1];
+        memcpy(mName, name, n + 1);
+    }
+
+    ~RustLifecycleHandler() {
+        if (mElement) {
+            mElement->Release();
+        }
+        delete[] mName;
+    }
+
+    RustLifecycleHandler(const RustLifecycleHandler&) = delete;
+    RustLifecycleHandler& operator=(const RustLifecycleHandler&) = delete;
+
+    // EventHandler signature (Initialized / LayoutUpdated).
+    void OnEvent(Noesis::BaseComponent* /*sender*/, const Noesis::EventArgs& /*args*/) {
+        if (mCb) mCb(mUserdata);
+    }
+
+    // DependencyPropertyChangedEventHandler signature (Is*Changed / Focusable /
+    // DataContext). The arg carries old/new DP values we don't surface here.
+    void OnDpEvent(Noesis::BaseComponent* /*sender*/,
+        const Noesis::DependencyPropertyChangedEventArgs& /*args*/) {
+        if (mCb) mCb(mUserdata);
+    }
+
+    Noesis::FrameworkElement* element() const { return mElement; }
+    const char* name() const { return mName; }
+
+private:
+    dm_noesis_lifecycle_fn mCb;
+    void* mUserdata;
+    Noesis::FrameworkElement* mElement;  // raw + manual AddRef/Release.
+    char* mName;
+};
+
+// Add (`add == true`) or remove the handler for the named lifecycle event by
+// driving the matching public accessor's `+=` / `-=`. Returns false if `name`
+// is not one of the supported lifecycle events. The same table services both
+// subscribe and unsubscribe so the registration is exactly symmetric.
+bool ApplyLifecycle(
+    Noesis::FrameworkElement* fe, const char* name, RustLifecycleHandler* h, bool add)
+{
+#define DM_LC_PLAIN(N, ACC)                                                       \
+    if (strcmp(name, N) == 0) {                                                    \
+        if (add) fe->ACC() += Noesis::MakeDelegate(h, &RustLifecycleHandler::OnEvent); \
+        else fe->ACC() -= Noesis::MakeDelegate(h, &RustLifecycleHandler::OnEvent);     \
+        return true;                                                               \
+    }
+#define DM_LC_DP(N, ACC)                                                          \
+    if (strcmp(name, N) == 0) {                                                    \
+        if (add) fe->ACC() += Noesis::MakeDelegate(h, &RustLifecycleHandler::OnDpEvent); \
+        else fe->ACC() -= Noesis::MakeDelegate(h, &RustLifecycleHandler::OnDpEvent);     \
+        return true;                                                               \
+    }
+    DM_LC_PLAIN("Initialized", Initialized)
+    DM_LC_PLAIN("LayoutUpdated", LayoutUpdated)
+    DM_LC_DP("IsEnabledChanged", IsEnabledChanged)
+    DM_LC_DP("IsVisibleChanged", IsVisibleChanged)
+    DM_LC_DP("IsHitTestVisibleChanged", IsHitTestVisibleChanged)
+    DM_LC_DP("IsKeyboardFocusedChanged", IsKeyboardFocusedChanged)
+    DM_LC_DP("IsKeyboardFocusWithinChanged", IsKeyboardFocusWithinChanged)
+    DM_LC_DP("IsMouseCapturedChanged", IsMouseCapturedChanged)
+    DM_LC_DP("IsMouseCaptureWithinChanged", IsMouseCaptureWithinChanged)
+    DM_LC_DP("IsMouseDirectlyOverChanged", IsMouseDirectlyOverChanged)
+    DM_LC_DP("FocusableChanged", FocusableChanged)
+    DM_LC_DP("DataContextChanged", DataContextChanged)
+#undef DM_LC_PLAIN
+#undef DM_LC_DP
+    return false;
+}
+
+}  // namespace
+
+extern "C" void* dm_noesis_subscribe_lifecycle(
+    void* element, const char* event_name, dm_noesis_lifecycle_fn cb, void* userdata)
+{
+    if (!element || !event_name || !cb) return nullptr;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return nullptr;
+
+    auto* handler = new RustLifecycleHandler(cb, userdata, fe, event_name);
+    if (!ApplyLifecycle(fe, handler->name(), handler, true)) {
+        // Unknown event name — undo and report failure (frees the +1 ref + name).
+        delete handler;
+        return nullptr;
+    }
+    return handler;
+}
+
+extern "C" void dm_noesis_unsubscribe_lifecycle(void* token) {
+    if (!token) return;
+    auto* handler = static_cast<RustLifecycleHandler*>(token);
+    if (auto* fe = handler->element()) {
+        ApplyLifecycle(fe, handler->name(), handler, false);
+    }
+    delete handler;
 }

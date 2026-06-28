@@ -31,15 +31,17 @@ use crate::ffi::{
     dm_noesis_base_component_release, dm_noesis_binding_create, dm_noesis_binding_destroy,
     dm_noesis_binding_set_converter, dm_noesis_binding_set_converter_parameter,
     dm_noesis_binding_set_element_name, dm_noesis_binding_set_fallback_value,
-    dm_noesis_binding_set_mode, dm_noesis_binding_set_relative_source_self,
-    dm_noesis_binding_set_source, dm_noesis_binding_set_string_format,
-    dm_noesis_binding_set_update_source_trigger, dm_noesis_box_bool, dm_noesis_box_double,
-    dm_noesis_box_int32, dm_noesis_box_string, dm_noesis_framework_element_add_resource,
-    dm_noesis_observable_collection_add, dm_noesis_observable_collection_clear,
-    dm_noesis_observable_collection_count, dm_noesis_observable_collection_create,
-    dm_noesis_observable_collection_get, dm_noesis_observable_collection_insert,
-    dm_noesis_observable_collection_remove_at, dm_noesis_observable_collection_set,
-    dm_noesis_set_binding,
+    dm_noesis_binding_set_mode, dm_noesis_binding_set_relative_source_find_ancestor,
+    dm_noesis_binding_set_relative_source_previous_data,
+    dm_noesis_binding_set_relative_source_self,
+    dm_noesis_binding_set_relative_source_templated_parent, dm_noesis_binding_set_source,
+    dm_noesis_binding_set_string_format, dm_noesis_binding_set_update_source_trigger,
+    dm_noesis_box_bool, dm_noesis_box_double, dm_noesis_box_int32, dm_noesis_box_string,
+    dm_noesis_framework_element_add_resource, dm_noesis_observable_collection_add,
+    dm_noesis_observable_collection_clear, dm_noesis_observable_collection_count,
+    dm_noesis_observable_collection_create, dm_noesis_observable_collection_get,
+    dm_noesis_observable_collection_insert, dm_noesis_observable_collection_remove_at,
+    dm_noesis_observable_collection_set, dm_noesis_set_binding,
 };
 use crate::view::FrameworkElement;
 
@@ -404,6 +406,67 @@ impl Binding {
     #[must_use]
     pub fn relative_source_self(self) -> Self {
         unsafe { dm_noesis_binding_set_relative_source_self(self.ptr.as_ptr()) };
+        self
+    }
+
+    /// Bind relative to an ancestor of the target — `RelativeSource
+    /// {RelativeSource Mode=FindAncestor, AncestorType=type_name,
+    /// AncestorLevel=level}`. `type_name` is resolved through Noesis's
+    /// reflection registry (use the registered class name, e.g. `"StackPanel"`,
+    /// `"Border"`); the type must already be registered, which referencing it
+    /// from loaded XAML guarantees. `level` is the 1-based ancestor index
+    /// (`1` = the nearest ancestor of that type; `0` is treated as `1`).
+    /// Chainable.
+    ///
+    /// If `type_name` is unknown / not yet registered (or contains an interior
+    /// NUL), the relative source is left unset — the binding falls back to its
+    /// other source configuration rather than panicking. Build with
+    /// [`try_relative_source_find_ancestor`](Self::try_relative_source_find_ancestor)
+    /// if you need to observe that failure.
+    #[must_use]
+    pub fn relative_source_find_ancestor(self, type_name: &str, level: u32) -> Self {
+        let _ = self.set_relative_source_find_ancestor(type_name, level);
+        self
+    }
+
+    /// Like [`relative_source_find_ancestor`](Self::relative_source_find_ancestor)
+    /// but borrows and returns whether the ancestor type resolved (so a caller
+    /// can distinguish an unknown type name from a successful set). `false` also
+    /// covers a `type_name` with an interior NUL byte.
+    pub fn try_relative_source_find_ancestor(&self, type_name: &str, level: u32) -> bool {
+        self.set_relative_source_find_ancestor(type_name, level)
+    }
+
+    fn set_relative_source_find_ancestor(&self, type_name: &str, level: u32) -> bool {
+        let Ok(c) = CString::new(type_name) else {
+            return false;
+        };
+        // SAFETY: self.ptr is a live Binding*; c lives for the call. The C side
+        // resolves the type by name and returns false (no-op) if it is unknown.
+        unsafe {
+            dm_noesis_binding_set_relative_source_find_ancestor(
+                self.ptr.as_ptr(),
+                c.as_ptr(),
+                level,
+            )
+        }
+    }
+
+    /// Bind to the previous data item in a data-bound collection
+    /// (`RelativeSource PreviousData`). Chainable.
+    #[must_use]
+    pub fn relative_source_previous_data(self) -> Self {
+        // SAFETY: self.ptr is a live Binding*.
+        unsafe { dm_noesis_binding_set_relative_source_previous_data(self.ptr.as_ptr()) };
+        self
+    }
+
+    /// Bind to the control a `ControlTemplate` is applied to (`RelativeSource
+    /// TemplatedParent`). Chainable.
+    #[must_use]
+    pub fn relative_source_templated_parent(self) -> Self {
+        // SAFETY: self.ptr is a live Binding*.
+        unsafe { dm_noesis_binding_set_relative_source_templated_parent(self.ptr.as_ptr()) };
         self
     }
 

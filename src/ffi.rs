@@ -184,6 +184,24 @@ unsafe extern "C" {
 
     pub fn dm_noesis_view_activate(view: *mut c_void);
     pub fn dm_noesis_view_deactivate(view: *mut c_void);
+    pub fn dm_noesis_view_mouse_hwheel(view: *mut c_void, x: i32, y: i32, delta: i32) -> bool;
+
+    // ── View flags / quality / stats (TODO §1) ───────────────────────────────
+    pub fn dm_noesis_view_get_flags(view: *mut c_void) -> u32;
+    pub fn dm_noesis_view_set_tessellation_max_pixel_error(view: *mut c_void, error: f32);
+    pub fn dm_noesis_view_get_tessellation_max_pixel_error(view: *mut c_void) -> f32;
+    pub fn dm_noesis_view_get_stats(view: *mut c_void, out: *mut crate::view::ViewStats);
+
+    // ── View-driven timers (TODO §1) ─────────────────────────────────────────
+    pub fn dm_noesis_view_create_timer(
+        view: *mut c_void,
+        interval_ms: u32,
+        cb: TimerFn,
+        userdata: *mut c_void,
+        free_handler: TimerFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_view_restart_timer(token: *mut c_void, interval_ms: u32);
+    pub fn dm_noesis_view_cancel_timer(token: *mut c_void);
 
     pub fn dm_noesis_framework_element_find_name(
         element: *mut c_void,
@@ -221,6 +239,17 @@ unsafe extern "C" {
         userdata: *mut c_void,
     ) -> *mut c_void;
     pub fn dm_noesis_unsubscribe_event(token: *mut c_void);
+
+    // ── Non-routed lifecycle events (TODO §5) ─────────────────────────────────
+    // The callback is the same shape as `ClickFn` (a bare `void(userdata)`), so
+    // it is reused here.
+    pub fn dm_noesis_subscribe_lifecycle(
+        element: *mut c_void,
+        event_name: *const c_char,
+        cb: ClickFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_unsubscribe_lifecycle(token: *mut c_void);
 
     pub fn dm_noesis_mouse_args_position(args: *const c_void, x: *mut f32, y: *mut f32) -> bool;
     pub fn dm_noesis_mouse_button_args_button(args: *const c_void) -> i32;
@@ -439,6 +468,19 @@ unsafe extern "C" {
     pub fn dm_noesis_binding_set_fallback_value(binding: *mut c_void, value: *mut c_void);
     pub fn dm_noesis_binding_set_update_source_trigger(binding: *mut c_void, trigger: i32);
     pub fn dm_noesis_binding_set_relative_source_self(binding: *mut c_void);
+    pub fn dm_noesis_binding_set_relative_source_find_ancestor(
+        binding: *mut c_void,
+        type_name: *const c_char,
+        level: u32,
+    ) -> bool;
+    pub fn dm_noesis_binding_set_relative_source_previous_data(binding: *mut c_void);
+    pub fn dm_noesis_binding_set_relative_source_templated_parent(binding: *mut c_void);
+    pub fn dm_noesis_get_binding_expression(
+        element: *mut c_void,
+        dp_name: *const c_char,
+    ) -> *mut c_void;
+    pub fn dm_noesis_binding_expression_update_target(expr: *mut c_void);
+    pub fn dm_noesis_binding_expression_update_source(expr: *mut c_void);
     pub fn dm_noesis_set_binding(
         element: *mut c_void,
         dp_name: *const c_char,
@@ -535,6 +577,17 @@ pub type KeyDownFn = unsafe extern "C" fn(userdata: *mut c_void, key: i32, out_h
 /// Same threading contract as [`ClickFn`].
 pub type RoutedEventFn =
     unsafe extern "C" fn(userdata: *mut c_void, args: *const c_void, out_handled: *mut bool);
+
+/// C callback fired on each view-timer tick (the `dm_noesis_view_create_timer`
+/// path). Returns the next interval in milliseconds, or `0` to stop the timer.
+/// Fires from inside `IView::Update` on the view-driving thread — same
+/// threading contract as [`ClickFn`].
+pub type TimerFn = unsafe extern "C" fn(userdata: *mut c_void) -> u32;
+
+/// C callback invoked exactly once when a view-timer token is cancelled (the
+/// C++ `RustTimer` destroyed). Frees the donated `userdata`. Mirrors
+/// [`CommandFreeFn`].
+pub type TimerFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Custom XAML class registration (Phase 5.C). See cpp/noesis_shim.h for the
