@@ -554,6 +554,36 @@ void* dm_noesis_subscribe_event(
 // Unsubscribe and free the routed-event handler. Safe to call with NULL.
 void dm_noesis_unsubscribe_event(void* token);
 
+// ── Non-routed lifecycle events (TODO §5) ───────────────────────────────────
+//
+// `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
+// notifications ride the `Event_<T>` mechanism (AddEventHandler(Symbol,
+// EventHandler)), not AddHandler(RoutedEvent, ...). This name-keyed surface
+// drives the public accessors' `+=` / `-=` so the internal Symbol keys never
+// have to be guessed. None of these notifications carry args we surface, so the
+// callback is a bare `void(userdata)`.
+
+// Lifecycle-event callback. Same threading contract as `dm_noesis_click_fn`
+// (fires from inside the layout / property pump on the view-driving thread).
+typedef void (*dm_noesis_lifecycle_fn)(void* userdata);
+
+// Subscribe `cb(userdata)` to the non-routed lifecycle event named `event_name`
+// on `element` (DynamicCast to FrameworkElement*). Supported names:
+// "Initialized", "LayoutUpdated", "DataContextChanged", "IsEnabledChanged",
+// "IsVisibleChanged", "IsHitTestVisibleChanged", "IsKeyboardFocusedChanged",
+// "IsKeyboardFocusWithinChanged", "IsMouseCapturedChanged",
+// "IsMouseCaptureWithinChanged", "IsMouseDirectlyOverChanged",
+// "FocusableChanged". Returns an opaque token to pass once to
+// `dm_noesis_unsubscribe_lifecycle`, or NULL if `element` is not a
+// FrameworkElement, `event_name` is unknown, or `cb` is NULL. The token holds a
+// +1 ref on the element so the subscription outlives every other handle the
+// caller drops.
+void* dm_noesis_subscribe_lifecycle(
+    void* element, const char* event_name, dm_noesis_lifecycle_fn cb, void* userdata);
+
+// Unsubscribe and free the lifecycle handler. Safe to call with NULL.
+void dm_noesis_unsubscribe_lifecycle(void* token);
+
 // Event-arg accessors. Each takes the opaque `args` handed to the callback and
 // returns a sentinel when the live event isn't of the matching kind (so one
 // generic callback can probe whatever arrived).
@@ -1249,6 +1279,33 @@ void dm_noesis_binding_set_update_source_trigger(void* binding, int32_t trigger)
 // Bind relative to the target element itself (RelativeSource Self) — e.g. bind
 // one property of an element to another on the same element.
 void dm_noesis_binding_set_relative_source_self(void* binding);
+// RelativeSource FindAncestor: resolve `type_name` through the reflection
+// registry and bind to the `level`-th ancestor of that type (1 = nearest;
+// 0 is coerced to 1). The ancestor type must already be registered with
+// Reflection (referencing it from XAML forces registration). Returns false
+// (no-op) on a NULL/non-Binding pointer or an unknown / unregistered type name.
+bool dm_noesis_binding_set_relative_source_find_ancestor(
+    void* binding, const char* type_name, uint32_t level);
+// RelativeSource PreviousData: bind to the previous item in a data-bound
+// collection. Uses the shared static singleton.
+void dm_noesis_binding_set_relative_source_previous_data(void* binding);
+// RelativeSource TemplatedParent: bind to the control a ControlTemplate is
+// applied to. Uses the shared static singleton.
+void dm_noesis_binding_set_relative_source_templated_parent(void* binding);
+
+// Borrowed BindingExpression* for the binding on `element`'s `dp_name` property
+// (BindingOperations::GetBindingExpression). OWNED by the target — do NOT
+// release; valid only while the binding stays live on that property. NULL if
+// `element` is not a DependencyObject, the DP name is unknown, or no binding is
+// set. Pass the result to the update entrypoints below.
+void* dm_noesis_get_binding_expression(void* element, const char* dp_name);
+// Force a source -> target data transfer (re-pull the source value). No-op on
+// NULL.
+void dm_noesis_binding_expression_update_target(void* expr);
+// Push the current target value back to the source — commits a binding whose
+// UpdateSourceTrigger is Explicit. No-op (per Noesis) unless the binding's Mode
+// is TwoWay / OneWayToSource. No-op on NULL.
+void dm_noesis_binding_expression_update_source(void* expr);
 
 // Resolve `dp_name` on `element`'s class hierarchy and wire `binding` onto it
 // via BindingOperations::SetBinding. Returns false if `element` is not a

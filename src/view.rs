@@ -19,7 +19,8 @@ use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    PropType, dm_noesis_base_component_release, dm_noesis_dependency_object_check_access,
+    PropType, dm_noesis_base_component_release, dm_noesis_binding_expression_update_source,
+    dm_noesis_binding_expression_update_target, dm_noesis_dependency_object_check_access,
     dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
@@ -32,7 +33,7 @@ use crate::ffi::{
     dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
     dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
     dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
-    dm_noesis_gui_load_xaml, dm_noesis_items_control_items_count,
+    dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_items_control_items_count,
     dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
     dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_path_set_points,
     dm_noesis_renderer_init, dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
@@ -71,6 +72,45 @@ pub struct FrameworkElement {
 // Noesis — concurrent shared borrows can't race on Noesis state.
 unsafe impl Send for FrameworkElement {}
 unsafe impl Sync for FrameworkElement {}
+
+/// A **borrowed** handle to a `Noesis::BindingExpression` — the live binding
+/// instance on a target element's dependency property, obtained from
+/// [`FrameworkElement::binding_expression`].
+///
+/// The expression is owned by the target element, NOT by this handle: it holds
+/// no `+1` reference and runs no `Drop`. The `'a` lifetime ties it to the
+/// `&FrameworkElement` it was borrowed from, so it cannot outlive that borrow.
+/// It also becomes stale if the binding is cleared from the property while the
+/// handle is held — only call its methods while the binding is known live.
+///
+/// # Threading
+///
+/// These run on the view-driving thread, like the other accessors here
+/// (no `VerifyAccess`).
+pub struct BindingExpressionRef<'a> {
+    ptr: NonNull<c_void>,
+    _marker: PhantomData<&'a FrameworkElement>,
+}
+
+impl BindingExpressionRef<'_> {
+    /// Force a source → target data transfer (re-pull the source value onto the
+    /// target property), via `BaseBindingExpression::UpdateTarget`.
+    pub fn update_target(&self) {
+        // SAFETY: self.ptr is the borrowed BindingExpression* owned by the
+        // target element, valid for the `'a` borrow this handle carries.
+        unsafe { dm_noesis_binding_expression_update_target(self.ptr.as_ptr()) }
+    }
+
+    /// Push the current target value back to the source, via
+    /// `BaseBindingExpression::UpdateSource`. This is what commits a `TwoWay` /
+    /// `OneWayToSource` binding whose
+    /// [`UpdateSourceTrigger`](crate::binding::UpdateSourceTrigger) is
+    /// `Explicit`; Noesis no-ops it for other binding modes.
+    pub fn update_source(&self) {
+        // SAFETY: as above — borrowed BindingExpression* valid for `'a`.
+        unsafe { dm_noesis_binding_expression_update_source(self.ptr.as_ptr()) }
+    }
+}
 
 impl FrameworkElement {
     /// Load XAML by URI. Returns `None` when the URI is unknown to the
@@ -121,6 +161,35 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call.
         let ptr = unsafe { dm_noesis_framework_element_find_name(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Borrow the [`BindingExpressionRef`] for the binding on this element's
+    /// dependency property named `dp_name`, via
+    /// `BindingOperations::GetBindingExpression`. Returns `None` if `dp_name`
+    /// is unknown on this element's type, or if no binding is currently set on
+    /// that property.
+    ///
+    /// The returned handle is **borrowed** — it is owned by this element and
+    /// stays valid only while the binding is live and `self` is alive (the
+    /// `'_` lifetime ties it to `&self`). Use it to drive an explicit
+    /// `UpdateSource` / `UpdateTarget` — notably to commit a `TwoWay` binding
+    /// whose [`UpdateSourceTrigger`](crate::binding::UpdateSourceTrigger) is
+    /// `Explicit`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `dp_name` contains an interior NUL byte.
+    #[must_use]
+    pub fn binding_expression(&self, dp_name: &str) -> Option<BindingExpressionRef<'_>> {
+        let c = CString::new(dp_name).expect("dp name contained interior NUL");
+        // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call.
+        // The returned pointer is borrowed (owned by the target) — never
+        // released; its validity is bounded by the `'_` borrow of `self`.
+        let ptr = unsafe { dm_noesis_get_binding_expression(self.ptr.as_ptr(), c.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| BindingExpressionRef {
+            ptr,
+            _marker: PhantomData,
+        })
     }
 
     /// The element's `x:Name`, or `None` if it has no name. The returned

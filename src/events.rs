@@ -35,8 +35,9 @@ use crate::ffi::{
     dm_noesis_key_args_key, dm_noesis_mouse_args_position, dm_noesis_mouse_button_args_button,
     dm_noesis_mouse_wheel_args_delta, dm_noesis_routed_args_source,
     dm_noesis_size_changed_args_new_size, dm_noesis_subscribe_click, dm_noesis_subscribe_event,
-    dm_noesis_subscribe_keydown, dm_noesis_text_args_ch, dm_noesis_unsubscribe_click,
-    dm_noesis_unsubscribe_event, dm_noesis_unsubscribe_keydown,
+    dm_noesis_subscribe_keydown, dm_noesis_subscribe_lifecycle, dm_noesis_text_args_ch,
+    dm_noesis_unsubscribe_click, dm_noesis_unsubscribe_event, dm_noesis_unsubscribe_keydown,
+    dm_noesis_unsubscribe_lifecycle,
 };
 use crate::view::{FrameworkElement, Key, MouseButton};
 
@@ -609,6 +610,116 @@ pub fn subscribe_event<H: RoutedEventHandler>(
         })
     } else {
         // Subscription failed (unknown event / not a UIElement). Free the
+        // userdata we leaked above so we don't leak the handler.
+        // SAFETY: userdata came from Box::into_raw moments ago; nothing else
+        // ever saw the pointer.
+        unsafe { drop(Box::from_raw(userdata)) };
+        None
+    }
+}
+
+// ── Non-routed lifecycle events (TODO §5) ───────────────────────────────────
+//
+// `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
+// notifications are NOT routed events — they ride Noesis's `Event_<T>`
+// mechanism (`AddEventHandler(Symbol, EventHandler)`), so they go through a
+// separate name-keyed entrypoint rather than the routed `subscribe_event` path.
+// They carry no arguments we surface, so the handler is a bare `FnMut()`.
+
+/// Rust-side handler for a non-routed lifecycle event. These notifications
+/// carry no arguments we surface, so the callback takes none.
+///
+/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
+/// or be moved onto the render thread.
+pub trait LifecycleHandler: Send + 'static {
+    fn on_event(&mut self);
+}
+
+impl<F: FnMut() + Send + 'static> LifecycleHandler for F {
+    fn on_event(&mut self) {
+        self();
+    }
+}
+
+/// SAFETY: `userdata` must be a pointer produced by [`subscribe_lifecycle`] and
+/// still alive (the [`LifecycleSubscription`] hasn't been dropped).
+unsafe extern "C" fn lifecycle_trampoline(userdata: *mut c_void) {
+    let handler = &mut *userdata.cast::<Box<dyn LifecycleHandler>>();
+    handler.on_event();
+}
+
+/// RAII subscription token for [`subscribe_lifecycle`]. Drop to unsubscribe and
+/// free the boxed handler. Mirrors [`ClickSubscription`].
+pub struct LifecycleSubscription {
+    token: NonNull<c_void>,
+    userdata: NonNull<Box<dyn LifecycleHandler>>,
+}
+
+// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
+// Box<dyn LifecycleHandler> is `Send`, and the C++ subscription is bound to a
+// single element whose access is serialised by Noesis.
+unsafe impl Send for LifecycleSubscription {}
+unsafe impl Sync for LifecycleSubscription {}
+
+impl Drop for LifecycleSubscription {
+    fn drop(&mut self) {
+        // SAFETY: token + userdata produced together by subscribe_lifecycle;
+        // freed exactly once here.
+        unsafe {
+            dm_noesis_unsubscribe_lifecycle(self.token.as_ptr());
+            drop(Box::from_raw(self.userdata.as_ptr()));
+        }
+    }
+}
+
+/// Subscribe `handler` to the non-routed lifecycle event named `name` on
+/// `element`.
+///
+/// Supported names: `"Initialized"`, `"LayoutUpdated"`, `"DataContextChanged"`,
+/// `"IsEnabledChanged"`, `"IsVisibleChanged"`, `"IsHitTestVisibleChanged"`,
+/// `"IsKeyboardFocusedChanged"`, `"IsKeyboardFocusWithinChanged"`,
+/// `"IsMouseCapturedChanged"`, `"IsMouseCaptureWithinChanged"`,
+/// `"IsMouseDirectlyOverChanged"`, `"FocusableChanged"`.
+///
+/// Returns `None` if `element` is not a `FrameworkElement`, `name` is unknown
+/// or contains an interior NUL, or the C++ subscription fails. The returned
+/// [`LifecycleSubscription`] keeps the handler installed until dropped; it holds
+/// a `+1` ref on the element so the subscription survives the caller dropping
+/// every other handle.
+///
+/// # Panics
+///
+/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
+/// explicit at the type level).
+pub fn subscribe_lifecycle<H: LifecycleHandler>(
+    element: &FrameworkElement,
+    name: &str,
+    handler: H,
+) -> Option<LifecycleSubscription> {
+    let cname = CString::new(name).ok()?;
+
+    let outer: Box<Box<dyn LifecycleHandler>> = Box::new(Box::new(handler));
+    let userdata = Box::into_raw(outer);
+
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
+    // element + name pointers are borrowed for the call duration only.
+    let token = unsafe {
+        dm_noesis_subscribe_lifecycle(
+            element.raw(),
+            cname.as_ptr(),
+            lifecycle_trampoline,
+            userdata.cast(),
+        )
+    };
+
+    if let Some(token) = NonNull::new(token) {
+        Some(LifecycleSubscription {
+            token,
+            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
+        })
+    } else {
+        // Subscription failed (unknown name / not a FrameworkElement). Free the
         // userdata we leaked above so we don't leak the handler.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
