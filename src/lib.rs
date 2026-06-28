@@ -18,6 +18,7 @@ pub mod brushes;
 pub mod classes;
 pub mod commands;
 pub mod converters;
+pub mod drawing;
 pub mod events;
 pub mod ffi;
 pub mod font_provider;

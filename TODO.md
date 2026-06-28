@@ -106,11 +106,13 @@ Remaining:
 
 ## 10. Geometry, shapes, drawing
 
-Only `Path.set_points` is exposed.
+`Path.set_points` is exposed, plus immediate-mode `DrawingContext` (via an
+`OnRender` override on the custom-element trampolines — `src/drawing.rs`,
+`cpp/noesis_drawing.cpp`) with a code-built `Pen` and a minimal
+`RectangleGeometry`.
 
-- **Geometry construction.** `StreamGeometry`/`StreamGeometryContext`, `PathGeometry` + figures/segments (Line/Bezier/Arc/Poly*), `EllipseGeometry`/`RectangleGeometry`/`LineGeometry`, `CombinedGeometry`, `GeometryGroup`.
+- **Geometry construction.** `StreamGeometry`/`StreamGeometryContext`, `PathGeometry` + figures/segments (Line/Bezier/Arc/Poly*), `EllipseGeometry`/`LineGeometry`, `CombinedGeometry`, `GeometryGroup` (only `RectangleGeometry` ships, as the `DrawGeometry`/`PushClip` argument).
 - **Shapes.** `Rectangle`/`Ellipse`/`Line`/`Polygon`/`Polyline` property access; `Shape` stroke/fill/`Pen`/`DashStyle`.
-- **`DrawingContext`** immediate-mode drawing.
 
 ## 11. Brushes, transforms, visual properties
 
@@ -198,3 +200,5 @@ Recorded so they aren't re-attempted — 3.2.12 doesn't expose these; the workar
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
 - **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.
+- **No public Drawing object model / `DrawingVisual::RenderOpen` (§10).** In 3.2.13 `DrawingContext` has a private constructor (`friend UIElement`) and is delivered ONLY to `UIElement::OnRender(DrawingContext*)`; there is no public `DrawingVisual`/`RenderOpen` and no `Drawing`/`DrawingGroup`/`GeometryDrawing`/`ImageDrawing`/`DrawingImage`/`DrawingBrush` headers. So immediate-mode drawing is reachable only by overriding `OnRender` — which the §10 PR wires through a `render` callback on the custom-element trampolines (`ClassBuilder::set_render` → a borrowed `DrawingContext`). Retained/recorded drawings and drawing-as-a-brush are not expressible.
+- **`DrawingContext::DrawImage` source (§10).** `DrawImage` needs a live `ImageSource`, which this crate cannot build headlessly yet (TODO §12 imaging); the wrapper accepts a borrowed `ImageSource*` but rejects null. `DrawText`/`DrawMesh` are likewise un-exercisable without a `FormattedText` / `MeshData` builder and are not wrapped.
