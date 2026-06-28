@@ -365,6 +365,53 @@ void dm_noesis_texture_provider_destroy(void* provider);
 // Install `provider` as the global texture provider, or pass NULL to clear.
 void dm_noesis_set_texture_provider(void* provider);
 
+// ── XAML loading variants (TODO §15) ───────────────────────────────────────
+//
+// GetXamlDependencies walks an in-memory XAML buffer's referenced resources
+// without instantiating the object tree, invoking `cb` once per dependency:
+//   - `xaml` / `len` — the raw XAML bytes (UTF-8). Wrapped in a MemoryStream
+//     without copying; must stay valid for the duration of the call.
+//   - `base_uri` — the URI the XAML is considered to live at, used to resolve
+//     relative dependency paths. May be empty.
+//   - `cb(user, uri, type)` — `type` is a `Noesis::XamlDependencyType` ordinal:
+//     0 Filename (xamls/textures/audio/Uri props), 1 Font (FontFamily),
+//     2 UserControl (prefixed nodes e.g. local:Foo), 3 Root (root node type).
+//     `uri` is a borrowed NUL-terminated string; copy it before returning.
+typedef void (*dm_noesis_xaml_dependency_fn)(void* user, const char* uri, int32_t type);
+void dm_noesis_get_xaml_dependencies(
+    const uint8_t* xaml, uint32_t len, const char* base_uri,
+    void* user, dm_noesis_xaml_dependency_fn cb);
+
+// Load XAML by URI WITHOUT narrowing the root to FrameworkElement. Returns the
+// loaded root as a BaseComponent* (+1 ref; release with
+// dm_noesis_base_component_release), or NULL on unknown URI / malformed XAML.
+// Use this for roots like ResourceDictionary that dm_noesis_gui_load_xaml
+// rejects.
+void* dm_noesis_gui_load_xaml_component(const char* uri);
+
+// Reflected class-type name of any BaseComponent (e.g. "ResourceDictionary").
+// Returns Noesis's interned `const char*` (stable for the process lifetime);
+// copy it immediately on the Rust side. NULL on NULL input.
+const char* dm_noesis_base_component_type_name(void* obj);
+
+// Scheme- / assembly-scoped provider setters. `provider` is a handle from the
+// matching `dm_noesis_*_provider_create`; NULL clears the scoped registration.
+// A NULL scheme/assembly string is a no-op. These mirror the global setters
+// but install into the scheme/assembly-scoped slots Noesis consults for
+// `scheme:///...` and pack-assembly URIs respectively.
+void dm_noesis_set_xaml_provider_scheme(const char* scheme, void* provider);
+void dm_noesis_set_xaml_provider_assembly(const char* assembly, void* provider);
+void dm_noesis_set_xaml_provider_scheme_assembly(
+    const char* scheme, const char* assembly, void* provider);
+void dm_noesis_set_texture_provider_scheme(const char* scheme, void* provider);
+void dm_noesis_set_texture_provider_assembly(const char* assembly, void* provider);
+void dm_noesis_set_texture_provider_scheme_assembly(
+    const char* scheme, const char* assembly, void* provider);
+void dm_noesis_set_font_provider_scheme(const char* scheme, void* provider);
+void dm_noesis_set_font_provider_assembly(const char* assembly, void* provider);
+void dm_noesis_set_font_provider_scheme_assembly(
+    const char* scheme, const char* assembly, void* provider);
+
 // ── XAML loading + View + Renderer (Phase 4.C) ─────────────────────────────
 //
 // Opaque pointer contracts:

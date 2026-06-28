@@ -105,6 +105,13 @@ pub struct TextureProviderVTable {
     ) -> bool,
 }
 
+/// Callback signature for [`dm_noesis_get_xaml_dependencies`] (TODO §15). The
+/// C++ trampoline invokes it once per dependency found in the XAML buffer.
+/// `uri` is a borrowed NUL-terminated string; `kind` is a
+/// `Noesis::XamlDependencyType` ordinal (0 Filename, 1 Font, 2 `UserControl`,
+/// 3 Root).
+pub type XamlDependencyFn = unsafe extern "C" fn(user: *mut c_void, uri: *const c_char, kind: i32);
+
 unsafe extern "C" {
     pub fn dm_noesis_xaml_provider_create(
         vtable: *const XamlProviderVTable,
@@ -133,6 +140,41 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn dm_noesis_texture_provider_destroy(provider: *mut c_void);
     pub fn dm_noesis_set_texture_provider(provider: *mut c_void);
+
+    // ── XAML loading variants (TODO §15) ─────────────────────────────────────
+    pub fn dm_noesis_get_xaml_dependencies(
+        xaml: *const u8,
+        len: u32,
+        base_uri: *const c_char,
+        user: *mut c_void,
+        cb: XamlDependencyFn,
+    );
+    pub fn dm_noesis_gui_load_xaml_component(uri: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_base_component_type_name(obj: *mut c_void) -> *const c_char;
+
+    // Scheme- / assembly-scoped provider setters. Each takes a provider handle
+    // produced by the matching `dm_noesis_*_provider_create`.
+    pub fn dm_noesis_set_xaml_provider_scheme(scheme: *const c_char, provider: *mut c_void);
+    pub fn dm_noesis_set_xaml_provider_assembly(assembly: *const c_char, provider: *mut c_void);
+    pub fn dm_noesis_set_xaml_provider_scheme_assembly(
+        scheme: *const c_char,
+        assembly: *const c_char,
+        provider: *mut c_void,
+    );
+    pub fn dm_noesis_set_texture_provider_scheme(scheme: *const c_char, provider: *mut c_void);
+    pub fn dm_noesis_set_texture_provider_assembly(assembly: *const c_char, provider: *mut c_void);
+    pub fn dm_noesis_set_texture_provider_scheme_assembly(
+        scheme: *const c_char,
+        assembly: *const c_char,
+        provider: *mut c_void,
+    );
+    pub fn dm_noesis_set_font_provider_scheme(scheme: *const c_char, provider: *mut c_void);
+    pub fn dm_noesis_set_font_provider_assembly(assembly: *const c_char, provider: *mut c_void);
+    pub fn dm_noesis_set_font_provider_scheme_assembly(
+        scheme: *const c_char,
+        assembly: *const c_char,
+        provider: *mut c_void,
+    );
 
     pub fn dm_noesis_gui_load_xaml(uri: *const c_char) -> *mut c_void;
     pub fn dm_noesis_gui_parse_xaml(text: *const c_char) -> *mut c_void;
