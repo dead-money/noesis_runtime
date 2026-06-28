@@ -2,7 +2,7 @@
 //! their drawing properties without authoring XAML.
 //!
 //! Each handle owns a freshly-created Noesis shape holding a single `+1`
-//! reference released on [`Drop`] — the same ownership idiom as
+//! reference released on [`Drop`], the same ownership idiom as
 //! [`crate::brushes`] / [`crate::transforms`]. A shape *is* a
 //! [`FrameworkElement`](crate::view::FrameworkElement), so once built you can
 //! hand its [`raw`](Rectangle::raw) pointer to the element tree (e.g. as a
@@ -19,7 +19,7 @@
 //! # SDK scope
 //!
 //! Noesis ships only `Rectangle`, `Ellipse`, `Line`, and `Path` as shape
-//! elements — there is **no** `Polygon`/`Polyline`. Build a polygon or polyline
+//! elements; there is **no** `Polygon`/`Polyline`. Build a polygon or polyline
 //! as a `PathGeometry`/`StreamGeometry` hosted in a `Path`.
 
 use core::ptr::NonNull;
@@ -362,7 +362,7 @@ pub trait Shape {
     #[must_use]
     fn stroke_dash_array(&self) -> String {
         // SAFETY: shape_raw() is live; the returned pointer is owned by the
-        // Noesis object and valid until the next mutation — we copy immediately.
+        // Noesis object and valid until the next mutation, so we copy immediately.
         let p = unsafe { noesis_shape_get_stroke_dash_array(self.shape_raw()) };
         if p.is_null() {
             String::new()
@@ -446,7 +446,7 @@ shape_handle!(
 shape_handle!(
     Line,
     noesis_line_create,
-    "A `Line` shape defined by its two endpoints `(X1, Y1)`–`(X2, Y2)` in\n\
+    "A `Line` shape defined by its two endpoints `(X1, Y1)`-`(X2, Y2)` in\n\
      addition to the shared [`Shape`] surface."
 );
 

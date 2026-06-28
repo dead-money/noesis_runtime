@@ -31,7 +31,7 @@ fn imaging_family_round_trip() {
 
     {
         let texture_source = TextureSource::new();
-        // null headless — no RenderDevice Texture bound; documented outcome, not a stub
+        // null headless: no RenderDevice Texture bound; documented outcome, not a stub
         assert!(
             texture_source.texture().is_none(),
             "TextureSource has no texture bound headless (needs a host RenderDevice Texture)"
@@ -116,7 +116,7 @@ fn imaging_family_round_trip() {
             "BitmapImage pixel dims are 0 until a texture provider resolves it"
         );
 
-        // flag stays 0 headless — render-thread callback never fires without a pass
+        // flag stays 0 headless: render-thread callback never fires without a pass
         let mut flag: u32 = 0;
         let mut dyn_src = unsafe {
             DynamicTextureSource::new(64, 48, never_called, (&raw mut flag).cast::<c_void>())

@@ -3,19 +3,19 @@
 //
 // This is the "drive XAML from Rust data" surface. Three cooperating pieces:
 //
-//   * ObservableCollection<BaseComponent> — Noesis's concrete observable list.
+//   * ObservableCollection<BaseComponent>: Noesis's concrete observable list.
 //     It already implements INotifyCollectionChanged + INotifyPropertyChanged,
 //     so once it's bound to an ItemsControl.ItemsSource, every Add/Insert/
 //     Remove/Clear from Rust raises CollectionChanged and the control
 //     regenerates its containers. We just expose CRUD over the C ABI.
 //
-//   * Boxing — list items and DataContext values are `BaseComponent*`. The
+//   * Boxing: list items and DataContext values are `BaseComponent*`. The
 //     most common item is a string; `noesis_box_string` wraps a C string
 //     in a `BoxedValue<String>` so a `DataTemplate` with `{Binding}` (the whole
 //     item) renders it. Reference-typed view models (the synthetic classes from
 //     noesis_classes.cpp) are passed through directly.
 //
-//   * DataContext / ItemsSource setters — the two DependencyObject hooks a
+//   * DataContext / ItemsSource setters: the two DependencyObject hooks a
 //     binding-driven workflow needs: point an element's DataContext at a Rust
 //     view model, or an ItemsControl's ItemsSource at an ObservableCollection.
 //
@@ -185,8 +185,8 @@ extern "C" int32_t noesis_items_control_items_count(void* element) {
 
 // Number of *realized* item containers the generator has materialized. Unlike
 // `items_count` (a live passthrough to the source), this only grows when the
-// generator actually regenerates — which, for a source mutated after the first
-// layout, requires INotifyCollectionChanged to have fired and invalidated
+// generator actually regenerates. For a source mutated after the first
+// layout, that requires INotifyCollectionChanged to have fired and invalidated
 // measure. So a realized count that tracks post-mutation collection size is a
 // genuine proof that change notification reached the control. -1 if `element`
 // is not an ItemsControl.
@@ -208,7 +208,7 @@ extern "C" int32_t noesis_items_control_realized_count(void* element) {
 
 // ── Visual / logical tree traversal ─────────────────────────────────────────
 //
-// VisualTreeHelper operates on `Visual*` — children may be plain Visuals, not
+// VisualTreeHelper operates on `Visual*`. Children may be plain Visuals, not
 // FrameworkElements, so these return raw +1 BaseComponent* handles without
 // null-filtering non-FE nodes (filtering would punch holes in indexed
 // traversal). The Rust `FrameworkElement` handle is just an owned
@@ -255,7 +255,7 @@ extern "C" void* noesis_visual_hit_test(void* element, float x, float y) {
     return static_cast<Noesis::BaseComponent*>(result.visualHit);
 }
 
-// Filtered hit test — the callback overload of VisualTreeHelper::HitTest. As the
+// Filtered hit test: the callback overload of VisualTreeHelper::HitTest. As the
 // tree is walked, `filter` is invoked for each visual (its return selects which
 // branches to descend), and `result` for each hit (its return continues or
 // stops the walk). The visual pointers handed to the callbacks are BORROWED and
@@ -306,7 +306,7 @@ extern "C" void* noesis_framework_element_logical_parent(void* element) {
 }
 
 // ── RenderTransform origin ──────────────────────────────────────────────────
-// UIElement::Get/SetRenderTransformOrigin — the (0..1, 0..1) relative pivot the
+// UIElement::Get/SetRenderTransformOrigin: the (0..1, 0..1) relative pivot the
 // RenderTransform rotates/scales around. `out_x`/`out_y` are written 0 when the
 // element is not a UIElement; the setter is a no-op then.
 
@@ -450,7 +450,7 @@ extern "C" void* noesis_framework_element_template_child(void* element, const ch
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!fe) return nullptr;
-    // GetTemplateChild returns a non-owning raw pointer — AddReference() to
+    // GetTemplateChild returns a non-owning raw pointer. AddReference() to
     // hand the caller a +1, matching the rest of this surface.
     Noesis::BaseComponent* child = fe->GetTemplateChild(name);
     if (!child) return nullptr;
@@ -463,7 +463,7 @@ extern "C" void* noesis_framework_element_template_child(void* element, const ch
 // A bespoke path: the generic INT32 tag won't match the enum's reflected Type,
 // so go through the FrameworkElement accessors directly. Values mirror
 // `Noesis::HorizontalAlignment` / `VerticalAlignment` (Left/Center/Right/
-// Stretch, Top/Center/Bottom/Stretch — 0..=3). Getters return -1 if `element`
+// Stretch, Top/Center/Bottom/Stretch; 0..=3). Getters return -1 if `element`
 // is not a FrameworkElement; setters no-op.
 
 extern "C" void noesis_framework_element_set_halign(void* element, int32_t value) {
@@ -522,8 +522,8 @@ extern "C" uint32_t noesis_dependency_object_thread_id(void* obj) {
 // ── ICollectionView current-item navigation ──────────────────────────────────
 //
 // A CollectionViewSource wraps a source list and lazily produces a
-// CollectionView (an ICollectionView) over it. The view tracks a *current item*
-// — the record-management surface WPF/Noesis controls (Selector etc.) bind to.
+// CollectionView (an ICollectionView) over it. The view tracks a *current item*,
+// the record-management surface WPF/Noesis controls (Selector etc.) bind to.
 // Sort/filter/group remain a real SDK limitation (no programmatic SortDescription
 // /Filter delegate), so only current-item navigation + Refresh are exposed.
 
@@ -562,7 +562,7 @@ public:
 private:
     noesis_collection_view_changed_fn mCb;
     void* mUserdata;
-    Noesis::CollectionView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
+    Noesis::CollectionView* mView;  // raw + manual AddRef/Release, see ctor/dtor.
 };
 
 }  // namespace
@@ -592,7 +592,7 @@ extern "C" bool noesis_collection_view_source_set_source(void* cvs, void* source
 // hosted (XAML-parsed / initialized in a tree); a standalone code-built one
 // leaves GetView() null. So when GetView() is null we build a CollectionView
 // directly over the source list (which is exactly what the hosted path would
-// produce) — the current-item navigation surface is identical either way.
+// produce). The current-item navigation surface is identical either way.
 extern "C" void* noesis_collection_view_source_get_view(void* cvs) {
     auto* s = Noesis::DynamicCast<Noesis::CollectionViewSource*>(
         static_cast<Noesis::BaseComponent*>(cvs));

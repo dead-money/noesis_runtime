@@ -226,7 +226,7 @@ fn on_render_fires_and_draws() {
             "DrawImage(null) was not rejected"
         );
         // The painting element adds real geometry on top of the identical
-        // watermark baseline — a no-op draw fn would leave the counts equal.
+        // watermark baseline; a no-op draw fn would leave the counts equal.
         assert!(
             full > baseline,
             "filled draws produced no extra GPU batches (no-op draw fns): \

@@ -98,7 +98,7 @@ fn texture_scoped_providers_route_by_scheme_and_assembly() {
         assert!(
             !entries.is_empty(),
             "no texture provider was consulted during the measure pass; \
-             GetTextureInfo never fired — log = {entries:?}"
+             GetTextureInfo never fired : log = {entries:?}"
         );
 
         assert!(
@@ -130,7 +130,7 @@ fn texture_scoped_providers_route_by_scheme_and_assembly() {
         assert!(
             !entries.iter().any(|(l, u)| *l == "global"
                 && (u.contains("myassets") || u.contains("App") || u.contains("Skin"))),
-            "global provider was consulted for a scoped URI — routing leaked; log = {entries:?}"
+            "global provider was consulted for a scoped URI : routing leaked; log = {entries:?}"
         );
         assert!(
             !entries

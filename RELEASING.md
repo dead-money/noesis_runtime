@@ -43,7 +43,7 @@ With `main` clean and CI green:
 
 > **First release (0.9.0):** the version is already set in `Cargo.toml` and the
 > `0.9.0` section of `CHANGELOG.md` is already filled, so do NOT run
-> `cargo release` for it — that would re-bump the version and duplicate the
+> `cargo release` for it, which would re-bump the version and duplicate the
 > changelog heading. Just tag the current commit and push the tag:
 >
 > ```sh
@@ -60,7 +60,7 @@ cargo release 1.0.0        # or: patch | minor | major
 stamps `CHANGELOG.md` (move notes out of `[Unreleased]`), commits, tags
 `v0.9.0`, and pushes. The pushed tag triggers `.github/workflows/release.yml` on
 the self-hosted runner, which runs the test suite, authenticates via Trusted
-Publishing, and runs `cargo publish` — a full verification build against the SDK,
+Publishing, and runs `cargo publish`, a full verification build against the SDK,
 then upload.
 
 Do a dry run first to see exactly what it will do:

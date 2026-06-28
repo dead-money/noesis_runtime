@@ -148,7 +148,7 @@ fn controls_s8_remainder_round_trips() {
         );
 
         // SetSelectedValue with the default path selects the matching item
-        // (here the container itself) — proven via SelectedIndex moving to 0.
+        // (here the container itself), proven via SelectedIndex moving to 0.
         assert!(
             unsafe { list.set_selected_value(c0.as_ptr()) },
             "set_selected_value(container0)",

@@ -3,7 +3,7 @@
 //! [`DynamicTextureSource`] objects from Rust without authoring XAML.
 //!
 //! Each type here is an owning handle over a freshly-created Noesis object
-//! holding a single `+1` reference, released on [`Drop`] — the same pattern as
+//! holding a single `+1` reference, released on [`Drop`], the same pattern as
 //! [`crate::brushes::SolidColorBrush`]. Assigning the object to an element
 //! (e.g. as an `Image.Source`, or via
 //! [`ImageBrush::with_source`](crate::brushes::ImageBrush::with_source) using
@@ -21,7 +21,7 @@
 //!
 //! - [`TextureSource::texture`] is `None` until a host
 //!   `RenderDevice`-created `Texture` is bound (a `Noesis::Texture*` is only
-//!   minted by a live render device — see "Known SDK limitations" in
+//!   minted by a live render device; see "Known SDK limitations" in
 //!   `LIMITATIONS.md`).
 //! - [`BitmapSource`] pixel dims / dpi ([`BitmapSource::pixel_size`],
 //!   [`BitmapSource::dpi`]) stay `0` until a texture provider resolves the image.
@@ -144,7 +144,7 @@ macro_rules! base_component_handle {
 }
 
 /// A `CroppedBitmap`: an image source that crops another [`BitmapSource`] to a
-/// rectangular [`Int32Rect`]. Fully round-trippable headless — no GPU needed.
+/// rectangular [`Int32Rect`]. Fully round-trippable headless, no GPU needed.
 pub struct CroppedBitmap {
     ptr: NonNull<c_void>,
 }

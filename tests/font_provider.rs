@@ -1,4 +1,4 @@
-//! `Registered::register_font` smoke test — verifies eager `RegisterFont`
+//! `Registered::register_font` smoke test. Verifies eager `RegisterFont`
 //! triggers `open_font` without `ScanFolder` (which caches after one call;
 //! faces absent at scan time are invisible forever without eager register).
 //!
@@ -26,7 +26,7 @@ impl FontProvider for ObservedProvider {
     }
 
     fn scan_folder(&mut self, folder_uri: &str, _register: &mut dyn FnMut(&str)) {
-        // deliberately empty — proves eager RegisterFont works without a healthy scan_folder
+        // deliberately empty: proves eager RegisterFont works without a healthy scan_folder
         self.scans.lock().unwrap().push(folder_uri.to_string());
     }
 

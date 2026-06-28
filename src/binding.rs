@@ -1,25 +1,25 @@
 //! Data-binding bridge: drive XAML from Rust-owned data.
 //!
-//! Bindings are authored in XAML — `{Binding Path}` on a property,
+//! Bindings are authored in XAML: `{Binding Path}` on a property,
 //! `ItemsSource="{Binding}"` on a list control. This module supplies the
 //! runtime data those bindings resolve against:
 //!
-//! * [`ObservableCollection`] — a Rust handle to Noesis's
+//! * [`ObservableCollection`]: a Rust handle to Noesis's
 //!   `ObservableCollection<BaseComponent>`. It implements
 //!   `INotifyCollectionChanged`, so once you bind it to an
 //!   `ItemsControl::ItemsSource`
 //!   ([`FrameworkElement::set_items_source`](crate::view::FrameworkElement::set_items_source)),
 //!   every [`push_string`](ObservableCollection::push_string) /
-//!   [`remove_at`](ObservableCollection::remove_at) / … from Rust raises
+//!   [`remove_at`](ObservableCollection::remove_at) / ... from Rust raises
 //!   `CollectionChanged` and the control regenerates its item containers on the
 //!   next `View::update`.
 //!
-//! * [`box_string`] — wrap a `&str` as a `BoxedValue<String>` so it can be a
+//! * [`box_string`]: wrap a `&str` as a `BoxedValue<String>` so it can be a
 //!   collection item rendered by a `<DataTemplate>` with `{Binding}` (the whole
 //!   item).
 //!
 //! For *property* binding (as opposed to list binding), the source is a
-//! [`ClassInstance`](crate::classes::ClassInstance) — a Rust-backed
+//! [`ClassInstance`](crate::classes::ClassInstance), a Rust-backed
 //! `DependencyObject` view model. Set it as a `DataContext` and bind to its
 //! DPs; see [`ClassRegistration::create_instance`](crate::classes::ClassRegistration::create_instance).
 
@@ -108,7 +108,7 @@ impl ObservableCollection {
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis allocation fails (returns null) — not expected once
+    /// Panics if the Noesis allocation fails (returns null). Not expected once
     /// [`crate::init`] has run.
     #[must_use]
     pub fn new() -> Self {
@@ -246,7 +246,7 @@ pub fn box_f64(value: f64) -> Boxed {
 }
 
 /// Box an `f32` as a `Noesis::BoxedValue<float>`. Prefer this over [`box_f64`]
-/// for `float`-typed dependency properties (`FontSize`, `Opacity`, …): a
+/// for `float`-typed dependency properties (`FontSize`, `Opacity`, ...): a
 /// `BoxedValue<double>` does **not** apply to a `float` DP through a
 /// [`Style`](crate::styles::Style) setter or a resource entry (no implicit
 /// unbox-coercion), so the value would be silently ignored.
@@ -294,7 +294,7 @@ pub enum UpdateSourceTrigger {
     Explicit = 3,
 }
 
-/// A code-built `Noesis::Binding` — the programmatic equivalent of authoring
+/// A code-built `Noesis::Binding`, the programmatic equivalent of authoring
 /// `{Binding ...}` in XAML. Build it with [`Binding::new`] (a property path) or
 /// [`Binding::whole`] (bind the whole `DataContext`), chain the knob setters,
 /// then wire it onto a target DP with [`set_binding`].
@@ -325,7 +325,7 @@ impl Binding {
         }
     }
 
-    /// Create a binding with an empty path — binds to the whole `DataContext`
+    /// Create a binding with an empty path: binds to the whole `DataContext`
     /// (or `Source`) object, like `{Binding}` in XAML.
     ///
     /// # Panics
@@ -418,7 +418,7 @@ impl Binding {
         self
     }
 
-    /// Bind relative to an ancestor of the target — `RelativeSource
+    /// Bind relative to an ancestor of the target: `RelativeSource
     /// {RelativeSource Mode=FindAncestor, AncestorType=type_name,
     /// AncestorLevel=level}`. `type_name` is resolved through Noesis's
     /// reflection registry (use the registered class name, e.g. `"StackPanel"`,
@@ -428,7 +428,7 @@ impl Binding {
     /// Chainable.
     ///
     /// If `type_name` is unknown / not yet registered (or contains an interior
-    /// NUL), the relative source is left unset — the binding falls back to its
+    /// NUL), the relative source is left unset; the binding falls back to its
     /// other source configuration rather than panicking. Build with
     /// [`try_relative_source_find_ancestor`](Self::try_relative_source_find_ancestor)
     /// if you need to observe that failure.
@@ -498,7 +498,7 @@ impl Drop for Binding {
 }
 
 /// Wire `binding` onto `element`'s dependency property named `dp_name`, via
-/// `Noesis::BindingOperations::SetBinding` — the code-built equivalent of
+/// `Noesis::BindingOperations::SetBinding`, the code-built equivalent of
 /// authoring `dp_name="{Binding ...}"` in XAML. Returns `false` if `element` is
 /// not a `DependencyObject` or `dp_name` doesn't resolve to one of its
 /// dependency properties.
@@ -517,7 +517,7 @@ pub fn set_binding(element: &FrameworkElement, dp_name: &str, binding: &Binding)
 /// Insert `object` (e.g. a [`Converter`] via [`Converter::raw`], or a [`Boxed`]
 /// value) into `element`'s `ResourceDictionary` under `key`, creating the
 /// dictionary if the element has none. Makes the object reachable from XAML via
-/// `{StaticResource key}` — e.g. `{Binding Path, Converter={StaticResource
+/// `{StaticResource key}`, e.g. `{Binding Path, Converter={StaticResource
 /// key}}`. The dictionary stores its own reference. Returns `false` if `element`
 /// is not a `FrameworkElement`.
 ///

@@ -6,15 +6,15 @@
 //! (`NS_CHECK`), and internal assertions (`NS_ASSERT`) through handler
 //! functions you can override. There are three:
 //!
-//! - [`set_error_handler`] — the **global** error handler. Invoked for an error
+//! - [`set_error_handler`]: the **global** error handler. Invoked for an error
 //!   when no per-thread handler is installed. Receives `file`, `line`,
 //!   `message`, `fatal`.
-//! - [`set_assert_handler`] — the **global** assert handler. Receives `file`,
+//! - [`set_assert_handler`]: the **global** assert handler. Receives `file`,
 //!   `line`, `expr`; returns a `bool` requesting a debug break (`true`) or not.
-//! - [`set_thread_error_handler`] — a **per-thread** error handler
+//! - [`set_thread_error_handler`]: a **per-thread** error handler
 //!   (`ErrorHandler2`). Takes priority over the global one for errors raised on
 //!   the installing thread, and additionally receives an [`ErrorContext`]
-//!   (`uri` / `line` / `column`) — valuable for XAML parse errors.
+//!   (`uri` / `line` / `column`), valuable for XAML parse errors.
 //!
 //! `SetErrorHandler` / `SetAssertHandler` take a bare C function pointer with no
 //! userdata, so the Rust closure lives in a process-global slot inside the shim;
@@ -23,7 +23,7 @@
 //!
 //! Each setter returns an RAII guard. Dropping the guard restores the previous
 //! handler (the house convention) and frees the boxed closure. Guards are
-//! global state — drop them in LIFO order (nested scopes do this naturally).
+//! global state. Drop them in LIFO order (nested scopes do this naturally).
 //!
 //! ## Driving the handlers
 //!
@@ -79,7 +79,7 @@ unsafe fn cstr_opt(p: *const c_char) -> Option<String> {
     }
 }
 
-/// Context for an error raised with location info — surfaced to a per-thread
+/// Context for an error raised with location info, surfaced to a per-thread
 /// handler ([`set_thread_error_handler`]). For XAML parse errors `uri` names the
 /// offending document and `line` / `column` the position within it.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -144,7 +144,7 @@ impl Drop for ErrorHandlerGuard {
 /// the handler should be active; dropping it restores the previous handler.
 ///
 /// Requires [`crate::init`]. Drive it with [`invoke_error`] (always
-/// `fatal = false` — see the module safety note).
+/// `fatal = false`; see the module safety note).
 pub fn set_error_handler<F>(handler: F) -> ErrorHandlerGuard
 where
     F: FnMut(&str, u32, &str, bool) + Send + 'static,
@@ -216,7 +216,7 @@ impl Drop for AssertHandlerGuard {
 /// `line`, `expr` and returns whether Noesis should request a debug break
 /// (`true`) for that assertion. Keep the guard alive while active.
 ///
-/// Requires [`crate::init`]. Drive it with [`invoke_assert`] — do **not** let a
+/// Requires [`crate::init`]. Drive it with [`invoke_assert`]. Do **not** let a
 /// real failed `NS_ASSERT` reach it (it may abort in a Debug SDK build).
 pub fn set_assert_handler<F>(handler: F) -> AssertHandlerGuard
 where

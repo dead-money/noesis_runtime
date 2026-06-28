@@ -2,15 +2,15 @@
 //!
 //! A [`Converter`] wraps a `Noesis::BaseValueConverter` subclass whose
 //! `TryConvert` / `TryConvertBack` forward into a Rust [`ValueConverter`]. This
-//! is what real bindings need — mapping a source value to a target-shaped value
-//! (bool → text/Visibility, number formatting, enum mapping, …) as the data
+//! is what real bindings need: mapping a source value to a target-shaped value
+//! (bool → text/Visibility, number formatting, enum mapping, ...) as the data
 //! crosses the binding.
 //!
 //! Binding values cross the FFI as boxed `Noesis::BaseComponent*`. The callback
 //! receives the source [`value`](ValueConverter::convert) and the optional
-//! `ConverterParameter` as [`ConvertArg`]s — unbox them with
+//! `ConverterParameter` as [`ConvertArg`]s (unbox them with
 //! [`ConvertArg::as_i32`] / [`as_bool`](ConvertArg::as_bool) /
-//! [`as_f64`](ConvertArg::as_f64) / [`as_str`](ConvertArg::as_str) — and returns
+//! [`as_f64`](ConvertArg::as_f64) / [`as_str`](ConvertArg::as_str)), and returns
 //! a [`Converted`] the trampoline re-boxes for Noesis (or `None` to signal
 //! `UnsetValue`, so the binding falls back to its `FallbackValue` / the
 //! property default).
@@ -19,10 +19,10 @@
 //!
 //! Two ways, both wired the same on the C++ side:
 //!
-//! * **Code-built binding** — the primary path for Rust integration:
+//! * **Code-built binding**, the primary path for Rust integration:
 //!   `Binding::new("Path").converter(&converter)` then
 //!   [`set_binding`](crate::binding::set_binding). See [`crate::binding`].
-//! * **XAML resource** — insert the converter into an element's
+//! * **XAML resource**: insert the converter into an element's
 //!   `ResourceDictionary` with [`add_resource`](crate::binding::add_resource)
 //!   and author `{Binding Path, Converter={StaticResource Key}}` in XAML.
 //!
@@ -30,7 +30,7 @@
 //!
 //! [`Converter`] holds the caller's `+1` reference, released on drop. If a
 //! binding still references the converter (the common case while it's wired
-//! onto a live element), the underlying object — and the boxed handler — stay
+//! onto a live element), the underlying object (and the boxed handler) stay
 //! alive until that reference also drops. The handler is freed exactly once, by
 //! the C++ destructor, after the last reference goes away.
 //!
@@ -40,7 +40,7 @@
 //! thread drives the view. The handler is stored behind `Send`; keep the work
 //! small.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::{self, NonNull};
 use std::ffi::{CStr, CString, c_void};
@@ -121,7 +121,7 @@ pub enum Converted {
     Bool(bool),
     Int32(i32),
     Double(f64),
-    /// A string — the most common converted target (e.g. a `TextBlock`'s `Text`,
+    /// A string, the most common converted target (e.g. a `TextBlock`'s `Text`,
     /// or a value coerced to an enum like `Visibility` via Noesis's
     /// string→enum type converter).
     String(String),
@@ -253,7 +253,7 @@ unsafe impl Send for Converter {}
 impl Converter {
     /// Build a converter from a [`ValueConverter`]. A bare
     /// `Fn(&ConvertArg, &ConvertArg) -> Option<Converted>` closure also works
-    /// (one-way — its `convert_back` returns `None`).
+    /// (one-way: its `convert_back` returns `None`).
     ///
     /// # Panics
     ///

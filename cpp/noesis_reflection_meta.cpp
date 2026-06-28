@@ -7,10 +7,10 @@
 // from a C ABI:
 //
 //   * Reflection::RegisterType(Type*) takes ownership of a hand-built Type and
-//     keeps it alive until shutdown — the same path noesis_classes.cpp uses for
+//     keeps it alive until shutdown, the same path noesis_classes.cpp uses for
 //     its synthetic TypeClassBuilder. We reuse it for a runtime TypeEnum.
-//   * TypeMeta::AddMeta / FindMeta let us attach (and recover) per-type metadata
-//     — UIElementData (routed events) and ContentPropertyMetaData — on an
+//   * TypeMeta::AddMeta / FindMeta let us attach (and recover) per-type metadata,
+//     namely UIElementData (routed events) and ContentPropertyMetaData, on an
 //     already-registered type, keyed only by its reflected name. So none of this
 //     needs the opaque ClassData token from noesis_classes.cpp.
 //
@@ -67,7 +67,7 @@ const Noesis::Type* find_type(const char* name) {
 // forces TypeEnumImpl<T>::GetValueObject -> Boxing::Box<T> -> TypeOf<T>(), which
 // requires a compile-time NS_DECLARE_REFLECTION_ENUM(T). Instead we subclass
 // TypeEnum directly (its only pure virtual is GetValueObject) and box members as
-// a plain int32 — enough for the reflection / EnumConverter lookup paths the
+// a plain int32, enough for the reflection / EnumConverter lookup paths the
 // XAML parser drives, with no compile-time type baggage. The (name, value)
 // members and reflected name come entirely from runtime arguments, so one C++
 // type services arbitrarily many distinct named enums.

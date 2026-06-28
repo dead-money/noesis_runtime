@@ -1,6 +1,6 @@
 //! Routing test for scoped font providers: verifies each of the four setters
 //! (`SetSchemeFontProvider` / `SetAssemblyFontProvider` / `SetSchemeAssemblyFontProvider`)
-//! routes to a distinct Noesis call — a compile-only test can't catch a wiring swap.
+//! routes to a distinct Noesis call. A compile-only test can't catch a wiring swap.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
 //!   `cargo test -p noesis_runtime --test font_scoped_providers -- --nocapture`
@@ -98,7 +98,7 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
         assert!(
             !entries.is_empty(),
             "no font provider was consulted during the measure pass; \
-             ScanFolder/OpenFont never fired — log = {entries:?}"
+             ScanFolder/OpenFont never fired : log = {entries:?}"
         );
 
         assert!(
@@ -128,7 +128,7 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
             "global provider was not asked for the unscoped Fonts folder; log = {entries:?}"
         );
 
-        // "App" (capital) appears only in the assembly URI — "application"
+        // "App" (capital) appears only in the assembly URI; "application"
         // (lowercase) in the pack/packs URIs does NOT match.
         assert!(
             !entries.iter().any(|(l, _, f)| *l == "global"

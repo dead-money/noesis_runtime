@@ -2,13 +2,13 @@
 //! `Grid` row/column definitions from Rust.
 //!
 //! The built-in element types are created via XAML parse and driven by name, but
-//! the collections that hold a tree's structure — `Panel::Children`,
-//! `Grid::RowDefinitions` / `ColumnDefinitions` — and the `Decorator::Child`
+//! the collections that hold a tree's structure (`Panel::Children`,
+//! `Grid::RowDefinitions` / `ColumnDefinitions`) and the `Decorator::Child`
 //! slot are **not** `DependencyProperty`s, so the by-name DP setters cannot
 //! reach them. This module wraps the typed C++ accessors instead:
 //!
 //! * [`panel_children`] hands out a [`PanelChildren`] view over a parsed
-//!   `Panel`'s (`StackPanel` / `Grid` / `Canvas` / …) live
+//!   `Panel`'s (`StackPanel` / `Grid` / `Canvas` / ...) live
 //!   `UIElementCollection`, with add / insert / remove / clear / count / get.
 //! * [`row_definitions`] / [`column_definitions`] hand out a
 //!   [`DefinitionCollection`] over a `Grid`'s definitions; build
@@ -221,7 +221,7 @@ definition_handle!(
     "Set the column's `Width`."
 );
 
-/// An owning handle over a live `Noesis::UIElementCollection` — a parsed
+/// An owning handle over a live `Noesis::UIElementCollection`: a parsed
 /// `Panel`'s `Children`. Holds a `+1` reference released on [`Drop`]; the
 /// collection is also owned by the host `Panel`, so this is a non-exclusive view
 /// that keeps it alive while held.
@@ -387,7 +387,7 @@ impl Drop for DefinitionCollection {
 
 impl FrameworkElement {
     /// Append `child` to this `Panel`'s `Children` (`StackPanel` / `Grid` /
-    /// `Canvas` / …) — the typed convenience for the common tree-building case.
+    /// `Canvas` / ...). The typed convenience for the common tree-building case.
     /// The panel takes its own reference, so `child` may be dropped afterwards.
     /// Returns `false` if this element is not a `Panel` or `child` is not a
     /// `UIElement`.
@@ -404,7 +404,7 @@ impl FrameworkElement {
 }
 
 /// The live [`PanelChildren`] of a `Panel` (`StackPanel` / `Grid` / `Canvas` /
-/// …). `None` if `element` is not a `Panel`.
+/// ...). `None` if `element` is not a `Panel`.
 #[must_use]
 pub fn panel_children(element: &FrameworkElement) -> Option<PanelChildren> {
     // SAFETY: element.raw() is a live FrameworkElement*; the C side DynamicCasts

@@ -104,7 +104,7 @@ fn binding_expression_explicit_update_source() {
         );
 
         // Edit the target. With UpdateSourceTrigger=Explicit, the source must
-        // NOT change yet — so the OneWay Mirror still shows "init".
+        // NOT change yet, so the OneWay Mirror still shows "init".
         assert!(
             editor.set_string("Text", "changed"),
             "set Editor.Text failed"

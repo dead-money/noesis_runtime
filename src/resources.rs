@@ -1,11 +1,11 @@
 //! `ResourceDictionary` access + application resources.
 //!
 //! XAML authors put brushes, colours, styles and templates in a
-//! `<ResourceDictionary>` — either inline on an element's `Resources`, merged
+//! `<ResourceDictionary>`: either inline on an element's `Resources`, merged
 //! from sibling files, or installed process-wide as the application resources.
 //! This module supplies the code-built equivalents:
 //!
-//! * [`ResourceDictionary`] — a Rust-owned `Noesis::ResourceDictionary`. Build
+//! * [`ResourceDictionary`]: a Rust-owned `Noesis::ResourceDictionary`. Build
 //!   one, add `key → BaseComponent*` entries ([`add`](ResourceDictionary::add)
 //!   / [`add_string`](ResourceDictionary::add_string)), look entries up
 //!   ([`find`](ResourceDictionary::find) / [`contains`](ResourceDictionary::contains)),
@@ -14,11 +14,11 @@
 //!   in-memory XAML string.
 //!
 //! * [`set_application_resources`] / [`application_resources_present`] /
-//!   [`application_resources_contains`] — install and inspect the process-global
+//!   [`application_resources_contains`]: install and inspect the process-global
 //!   `GUI::SetApplicationResources` dictionary every [`crate::view::View`]
 //!   created afterwards inherits.
 //!
-//! * [`register_default_styles`] — register a dictionary into the internal
+//! * [`register_default_styles`]: register a dictionary into the internal
 //!   theme (`GUI::RegisterDefaultStyles`).
 //!
 //! Per-element resources and `FindResource` live on
@@ -43,8 +43,8 @@ use crate::ffi::{
 ///
 /// Installing it ([`set_application_resources`]) or assigning it to an element
 /// ([`FrameworkElement::set_resources`](crate::view::FrameworkElement::set_resources))
-/// makes Noesis take its own reference, so the handle may be dropped afterwards
-/// — but keeping it lets you keep mutating the live dictionary.
+/// makes Noesis take its own reference, so the handle may be dropped afterwards.
+/// Keeping it lets you keep mutating the live dictionary.
 pub struct ResourceDictionary {
     ptr: NonNull<c_void>,
 }
@@ -63,7 +63,7 @@ impl ResourceDictionary {
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis allocation fails (returns null) — not expected once
+    /// Panics if the Noesis allocation fails (returns null). Not expected once
     /// [`crate::init`] has run.
     #[must_use]
     pub fn new() -> Self {
@@ -90,7 +90,7 @@ impl ResourceDictionary {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Wrap an already-owned (`+1`) `Noesis::ResourceDictionary*` — e.g. the
+    /// Wrap an already-owned (`+1`) `Noesis::ResourceDictionary*`, e.g. the
     /// result of a `get_*` accessor that `AddRef`'d before handing out.
     ///
     /// # Safety
@@ -129,7 +129,7 @@ impl ResourceDictionary {
     /// # Safety
     ///
     /// `value` must be a live `Noesis::BaseComponent*` (e.g. [`Boxed::raw`],
-    /// [`crate::styles::Style::raw`], a brush, …).
+    /// [`crate::styles::Style::raw`], a brush, ...).
     ///
     /// # Panics
     ///
@@ -195,7 +195,7 @@ impl ResourceDictionary {
         NonNull::new(p)
     }
 
-    /// Add `other` to this dictionary's `MergedDictionaries` collection — its
+    /// Add `other` to this dictionary's `MergedDictionaries` collection. Its
     /// entries become resolvable through this dictionary (WPF/Noesis merge
     /// semantics). The collection takes its own reference to `other`. Returns
     /// `false` if the merged-dictionaries collection is unavailable.
@@ -255,7 +255,7 @@ pub fn application_resources_contains(key: &str) -> bool {
 }
 
 /// Register `uri`'s `ResourceDictionary` into the internal theme
-/// (`GUI::RegisterDefaultStyles`) — useful for setting default styles that
+/// (`GUI::RegisterDefaultStyles`). Useful for setting default styles that
 /// implicit-keyed `Style`s (those without an `x:Key`) resolve against. Requires
 /// a XAML provider that can serve `uri`. Returns `false` on an empty `uri`.
 ///

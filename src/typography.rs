@@ -6,7 +6,7 @@
 //! # Ownership
 //!
 //! [`FontFamily`] is an owning handle over a freshly-created Noesis `FontFamily`
-//! holding a single `+1` reference, released on [`Drop`] — the same idiom as the
+//! holding a single `+1` reference, released on [`Drop`], the same idiom as the
 //! brush/transform handles in [`crate::brushes`]. Assigning it to an element's
 //! `TextElement.FontFamily` makes Noesis take its own reference, so the handle
 //! may be dropped right after assignment.
@@ -285,7 +285,7 @@ impl FontVariants {
     }
 }
 
-/// `Noesis::CompositionLineStyle` — the line style of an IME composition
+/// `Noesis::CompositionLineStyle`: the line style of an IME composition
 /// underline.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -364,7 +364,7 @@ impl FontFamily {
 
     /// Number of concrete fonts the family resolved to via the registered font
     /// provider (`0` with no provider). This is the only per-family enumeration
-    /// 3.2.13 offers — see the module docs.
+    /// 3.2.13 offers. See the module docs.
     #[must_use]
     pub fn num_fonts(&self) -> u32 {
         // SAFETY: self.ptr is a live FontFamily*.

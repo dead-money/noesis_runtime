@@ -3,13 +3,13 @@
 //! Two surfaces that complement the [`crate::view::FrameworkElement`] load /
 //! parse path:
 //!
-//! - [`get_xaml_dependencies`] — statically walk an in-memory XAML buffer's
+//! - [`get_xaml_dependencies`]: statically walk an in-memory XAML buffer's
 //!   referenced resources (other XAMLs / textures / audio, fonts, prefixed
 //!   `UserControl` nodes, and the root node's type) *without* instantiating
-//!   the object tree. Backs `Noesis::GUI::GetXamlDependencies`. Useful for
+//!   the object tree. Backs `Noesis::GUI::GetXamlDependencies`. Use it for
 //!   asset preloading and dependency analysis.
 //!
-//! - [`load_xaml_component`] / [`LoadedComponent`] — load a XAML root that is
+//! - [`load_xaml_component`] / [`LoadedComponent`]: load a XAML root that is
 //!   *not* a `FrameworkElement` (e.g. a bare `ResourceDictionary`), reporting
 //!   success plus the reflected class-type name. The
 //!   [`crate::view::FrameworkElement::load`] path returns `None` for such
@@ -71,7 +71,7 @@ unsafe extern "C" fn collect(user: *mut c_void, uri: *const c_char, kind: i32) {
         let Some(kind) = XamlDependencyKind::from_raw(kind) else {
             return;
         };
-        // Borrowed string from Noesis — copy into an owned String immediately.
+        // Borrowed string from Noesis; copy into an owned String immediately.
         let uri = if uri.is_null() {
             String::new()
         } else {
@@ -119,8 +119,8 @@ pub fn get_xaml_dependencies(xaml: &[u8], base_uri: &str) -> Vec<XamlDependency>
 
 /// An owning handle to a XAML root loaded via [`load_xaml_component`], whatever
 /// its concrete type. Holds a `+1` reference released on [`Drop`]. Unlike
-/// [`crate::view::FrameworkElement`], the root need not be a `FrameworkElement`
-/// — this is how a bare `ResourceDictionary` (or any other `BaseComponent`
+/// [`crate::view::FrameworkElement`], the root need not be a `FrameworkElement`.
+/// This is how a bare `ResourceDictionary` (or any other `BaseComponent`
 /// root) is loaded and inspected.
 pub struct LoadedComponent {
     ptr: NonNull<c_void>,
@@ -145,7 +145,7 @@ impl LoadedComponent {
         if name.is_null() {
             String::new()
         } else {
-            // Interned, process-stable string — copy it immediately anyway.
+            // Interned, process-stable string; copy it immediately anyway.
             // SAFETY: non-null NUL-terminated string owned by Noesis.
             unsafe { CStr::from_ptr(name) }
                 .to_string_lossy()

@@ -1,7 +1,7 @@
 // Narrow C ABI shim over the Noesis Native SDK.
 //
 // This is the ONLY header noesis_runtime/src binds against. Rust declarations live
-// in src/ffi.rs and are hand-mirrored — we do NOT bindgen NsCore/NsGui (their
+// in src/ffi.rs and are hand-mirrored; we do NOT bindgen NsCore/NsGui (their
 // templates + Ptr<T> + virtual-dispatch surface does not translate cleanly).
 //
 // The surface spans lifecycle, the render device, XAML loading, views, input,
@@ -56,7 +56,7 @@ const char* noesis_version(void);
 // ── Inspector / hot-reload toggles + queries ────────────────────────────────
 //
 // The Disable* switches map to `GUI::Disable*` and MUST be called BEFORE
-// noesis_init — they have no effect afterwards. There is no matching
+// noesis_init; they have no effect afterwards. There is no matching
 // "enable": the Inspector / Hot Reload are on by default in Debug/Profile SDK
 // builds; we only expose the off switches plus the runtime connection query
 // and keep-alive pump. On a Release dylib these features are compiled out, so
@@ -174,8 +174,8 @@ void* noesis_render_device_create(
     const noesis_render_device_vtable* vtable, void* userdata);
 
 // Release the +1 reference held by `_create`'s caller. The actual destruction
-// happens when the last `Ptr<>` goes away — including any Noesis-internal
-// references — which transitively releases all `RustTexture` / `RustRenderTarget`
+// happens when the last `Ptr<>` goes away (including any Noesis-internal
+// references), which transitively releases all `RustTexture` / `RustRenderTarget`
 // instances allocated through the device, each calling `drop_texture` /
 // `drop_render_target` on the vtable.
 void noesis_render_device_destroy(void* device);
@@ -250,14 +250,14 @@ void noesis_set_xaml_provider(void* provider);
 // matching (weight/stretch/style) internally once faces are registered; we
 // only need two callbacks:
 //
-//   - `scan_folder(userdata, folder_uri, register_fn, register_cx)` — called
+//   - `scan_folder(userdata, folder_uri, register_fn, register_cx)`: called
 //     the first time a font is requested from a folder. Rust walks its
 //     registry and invokes `register_fn(register_cx, filename)` once per
 //     font file in that folder. The C++ side forwards each call to
 //     `CachedFontProvider::RegisterFont(folder, filename)`, which opens
 //     the file via `open_font` below to scan face metadata.
 //
-//   - `open_font(userdata, folder_uri, filename, out_data, out_len)` —
+//   - `open_font(userdata, folder_uri, filename, out_data, out_len)`:
 //     return `true` with `*out_data`/`*out_len` set; the pointed bytes
 //     must stay valid until the font-stream reader finishes (same
 //     contract as `load_xaml`). Return `false` to signal "not found".
@@ -298,7 +298,7 @@ void noesis_set_font_fallbacks(const char* const* families, uint32_t count);
 // `noesis_font_provider_create` (a `RustFontProvider`); the folder/
 // filename pair must resolve through the same `open_font` callback that
 // would normally service `ScanFolder` registrations. Calling this for a
-// `(folder, filename)` already registered is safe — Noesis re-opens the
+// `(folder, filename)` already registered is safe: Noesis re-opens the
 // stream and re-scans face metadata; the duplicate face entry is ignored
 // during `MatchFont`.
 //
@@ -321,17 +321,17 @@ void noesis_set_font_default_properties(
 //
 // Subclass of `Noesis::TextureProvider`. Two callbacks:
 //
-//   - `get_info(userdata, uri, out)` — return metadata (width/height and
+//   - `get_info(userdata, uri, out)`: return metadata (width/height and
 //     optional atlas rect + dpi scale) without decoding pixels. Returning
 //     `false` (or an all-zero out) signals "texture not found"; Noesis
 //     falls back to the image-load path below.
 //
-//   - `load_texture(userdata, uri, out_width, out_height, out_data, out_len)`
-//     — return RGBA8-packed pixel bytes plus dimensions. Return `true` on
+//   - `load_texture(userdata, uri, out_width, out_height, out_data, out_len)`:
+//     return RGBA8-packed pixel bytes plus dimensions. Return `true` on
 //     success; the pointed bytes must stay valid for the duration of the
-//     call. The C++ shim will immediately turn around and call
+//     call. The C++ shim immediately turns around and calls
 //     `device->CreateTexture(...)` with the data, so the ownership lifetime
-//     is exactly the callback — no need to keep the pixels alive beyond.
+//     is exactly the callback; no need to keep the pixels alive beyond.
 //     Return `false` to signal "not found".
 
 typedef struct noesis_texture_info {
@@ -368,11 +368,11 @@ void noesis_set_texture_provider(void* provider);
 //
 // GetXamlDependencies walks an in-memory XAML buffer's referenced resources
 // without instantiating the object tree, invoking `cb` once per dependency:
-//   - `xaml` / `len` — the raw XAML bytes (UTF-8). Wrapped in a MemoryStream
+//   - `xaml` / `len`: the raw XAML bytes (UTF-8). Wrapped in a MemoryStream
 //     without copying; must stay valid for the duration of the call.
-//   - `base_uri` — the URI the XAML is considered to live at, used to resolve
+//   - `base_uri`: the URI the XAML is considered to live at, used to resolve
 //     relative dependency paths. May be empty.
-//   - `cb(user, uri, type)` — `type` is a `Noesis::XamlDependencyType` ordinal:
+//   - `cb(user, uri, type)`: `type` is a `Noesis::XamlDependencyType` ordinal:
 //     0 Filename (xamls/textures/audio/Uri props), 1 Font (FontFamily),
 //     2 UserControl (prefixed nodes e.g. local:Foo), 3 Root (root node type).
 //     `uri` is a borrowed NUL-terminated string; copy it before returning.
@@ -472,7 +472,7 @@ void* noesis_gui_load_xaml(const char* uri);
 // bare ResourceDictionary). Release with noesis_base_component_release.
 void* noesis_gui_parse_xaml(const char* text);
 
-// Load the XAML at `uri` into an existing `component` instance — the
+// Load the XAML at `uri` into an existing `component` instance: the
 // code-behind / x:Class pattern, where the root object already exists and
 // LoadComponent populates its children + named fields. `component` is an
 // opaque BaseComponent* (borrowed; ownership is not taken). Returns false if
@@ -488,7 +488,7 @@ bool noesis_gui_load_application_resources(const char* uri);
 
 // Install application resources by building the merged-dictionary chain
 // manually, leaf by leaf. `uris` is `count` leaf `ResourceDictionary`
-// URIs in dependency order — earlier entries must be loadable without
+// URIs in dependency order: earlier entries must be loadable without
 // referencing later ones. Returns `true` on success; `false` for null /
 // empty input. Replaces any previously-installed application resources.
 //
@@ -497,12 +497,12 @@ bool noesis_gui_load_application_resources(const char* uri);
 // leaving cross-sibling `{StaticResource SiblingKey}` references inside
 // child bodies null-resolved at parse time. This variant creates each
 // child empty, adds it to the parent's `MergedDictionaries` first, and
-// only then assigns `Source` — so the parent + previously-loaded
+// only then assigns `Source`, so the parent + previously-loaded
 // siblings are visible to the child during parsing.
 //
 // Relative-URI gotcha: each leaf is loaded via `SetSource(Uri)`, so
-// relative URIs *inside* a leaf — most notably
-// `<FontFamily>Folder/#Family</FontFamily>` resources — resolve against
+// relative URIs *inside* a leaf, most notably
+// `<FontFamily>Folder/#Family</FontFamily>` resources, resolve against
 // the leaf's own location. A `Theme/Fonts.xaml` leaf declaring
 // `<FontFamily>Fonts/#X</FontFamily>` will look for family `X` in
 // folder `Theme/Fonts/`, not the project-root `Fonts/`. If the
@@ -586,7 +586,7 @@ void noesis_renderer_render_stereo_both(
 //
 // Thin trampolines over `Noesis::IView` input methods. `button` takes a
 // `Noesis::MouseButton` value (see InputEnums.h); `key` takes a `Noesis::Key`.
-// Out-of-range values are passed through — Noesis ignores unknown keys.
+// Out-of-range values are passed through; Noesis ignores unknown keys.
 //
 // Noesis requires a `MouseMove` at the press coordinate before a
 // `MouseButtonDown` hits the correct element; callers must enqueue moves
@@ -642,7 +642,7 @@ void noesis_view_set_emulate_touch(void* view, bool emulate);
 // ── Stereo / VR ─────────────────────────────────────────────────────────────
 // Scale applied to the offscreen phase to account for stereo eye matrices
 // differing from the view projection. Must be 1.0 (the default) for non-VR;
-// 2–3 is recommended for VR. No-op on a NULL view.
+// 2-3 is recommended for VR. No-op on a NULL view.
 void noesis_view_set_stereo_offscreen_scale_factor(void* view, float factor);
 
 // Performance counters for the last rendered frame. Field order / types match
@@ -710,7 +710,7 @@ void noesis_view_cancel_timer(void* token);
 // ── Rendering event ─────────────────────────────────────────────────────────
 //
 // `IView::Rendering()` is a `Delegate<void(IView*)>` raised after animation and
-// layout are applied to the composition tree, just before it is rendered — a
+// layout are applied to the composition tree, just before it is rendered: a
 // per-frame hook on the view-driving thread. Lifetime mirrors the timer
 // donated-free-fn pattern: a heap handler holds the Rust callback + donated
 // userdata + free handler + a +1 ref on the IView, registers the delegate with
@@ -741,7 +741,7 @@ void noesis_view_remove_rendering_handler(void* token);
 // ── Element traversal + events ──────────────────────────────────────────────
 //
 // Look up named elements in the logical / visual tree and subscribe Rust
-// callbacks to routed events. Currently exposes `BaseButton::Click` only —
+// callbacks to routed events. Currently exposes `BaseButton::Click` only;
 // extend with sibling functions when other events earn it. The pattern (a
 // heap-allocated handler that owns its registration) generalizes cleanly.
 
@@ -758,16 +758,16 @@ void* noesis_framework_element_find_name(void* element, const char* name);
 // strings, but the contract is "don't keep the pointer past your borrow").
 const char* noesis_framework_element_get_name(void* element);
 
-// Set `UIElement::Visibility` on `element` — `true` → Visible, `false` →
-// Collapsed. (Hidden — the third Visibility value, where the element
-// reserves layout space but doesn't paint — isn't exposed; modal/overlay
+// Set `UIElement::Visibility` on `element`: `true` → Visible, `false` →
+// Collapsed. (Hidden, the third Visibility value, where the element
+// reserves layout space but doesn't paint, isn't exposed; modal/overlay
 // patterns want Collapsed, and a future API can add the third state if
 // needed.) Safe to call with NULL.
 void noesis_framework_element_set_visibility(void* element, bool visible);
 
 // Set `FrameworkElement::Margin` on `element` (layout offsets in DIPs: left,
 // top, right, bottom). Paired with a Left/Top-anchored element, a margin of
-// (x, y, 0, 0) places its corner at (x, y) — the positioning primitive a
+// (x, y, 0, 0) places its corner at (x, y): the positioning primitive a
 // floating menu/popup needs (Noesis's Canvas.Left/Top attached property isn't
 // exposed here). Safe to call with NULL.
 void noesis_framework_element_set_margin(
@@ -775,7 +775,7 @@ void noesis_framework_element_set_margin(
 
 // Click-event callback. Invoked from inside `IView::Update` (or another
 // input-pump method, depending on which event raised the click) on whatever
-// thread is driving the view. Keep work in the callback small — push to a
+// thread is driving the view. Keep work in the callback small: push to a
 // queue and process from a regular system step if you need anything heavy.
 typedef void (*noesis_click_fn)(void* userdata);
 
@@ -798,7 +798,7 @@ void noesis_unsubscribe_click(void* token);
 // KeyDown-event callback. Invoked from inside the input pump on whatever
 // thread is driving the view, same threading contract as `noesis_click_fn`.
 //
-// `key` is the raw `Noesis::Key` ordinal — see `view::Key` in src/view.rs for
+// `key` is the raw `Noesis::Key` ordinal; see `view::Key` in src/view.rs for
 // the safe enum mirror. `out_handled` is a borrowed pointer pre-cleared to
 // `false`; the callback may set `*out_handled = true` to stop the routed
 // event propagating (equivalent to setting `KeyEventArgs::handled` in C++).
@@ -828,7 +828,7 @@ void noesis_unsubscribe_keydown(void* token);
 // (which are kept for source compatibility).
 
 // Generic routed-event callback. `args` is an opaque handle to the live event
-// arguments — pass it to the `noesis_*_args_*` accessors below to read typed
+// arguments; pass it to the `noesis_*_args_*` accessors below to read typed
 // fields (position, button, key, wheel delta, new size, source). It is valid
 // ONLY for the duration of the call. `out_handled` is a borrowed bool the shim
 // pre-seeds with the event's current handled state; write `true` to mark the
@@ -922,7 +922,7 @@ int32_t noesis_text_args_ch(const void* args);
 bool noesis_size_changed_args_new_size(const void* args, float* width, float* height);
 
 // Borrowed pointer to the event's originating element (`RoutedEventArgs::source`),
-// or NULL. Not ref-counted — do not release; valid only for the callback.
+// or NULL. Not ref-counted; do not release. Valid only for the callback.
 void* noesis_routed_args_source(const void* args);
 
 // ── Typed arg accessors: focus / drag / manipulation ────────────────────────
@@ -942,24 +942,24 @@ void* noesis_routed_events_focus_new(const void* args);
 bool noesis_routed_events_drag_effects(
     const void* args, uint32_t* effects, uint32_t* allowed, uint32_t* key_states);
 
-// Set DragEventArgs::effects (mutable) — the drop result reported to the source.
+// Set DragEventArgs::effects (mutable): the drop result reported to the source.
 // Returns false unless the event is a drag event.
 bool noesis_routed_events_drag_set_effects(const void* args, uint32_t effects);
 
 // Borrowed pointer to the dragged data object (DragEventArgs::data), or NULL.
 void* noesis_routed_events_drag_data(const void* args);
 
-// DragEventArgs::GetPosition(relative_to) — drop point in `relative_to`'s
+// DragEventArgs::GetPosition(relative_to): drop point in `relative_to`'s
 // coordinates. `relative_to` must be a live UIElement*. Returns false unless the
 // event is a drag event and `relative_to` is non-null.
 bool noesis_routed_events_drag_position(
     const void* args, void* relative_to, float* x, float* y);
 
-// Manipulation origin (manipulationOrigin) — Started / Delta / Completed /
+// Manipulation origin (manipulationOrigin): Started / Delta / Completed /
 // InertiaStarting. Returns false for other kinds.
 bool noesis_routed_events_manip_origin(const void* args, float* x, float* y);
 
-// Primary ManipulationDelta transform — deltaManipulation (Delta) or
+// Primary ManipulationDelta transform: deltaManipulation (Delta) or
 // totalManipulation (Completed): translation, scale, rotation (deg), expansion.
 // Returns false for other kinds.
 bool noesis_routed_events_manip_delta(
@@ -970,18 +970,18 @@ bool noesis_routed_events_manip_delta(
 bool noesis_routed_events_manip_cumulative(
     const void* args, float* tx, float* ty, float* scale, float* rotation, float* ex, float* ey);
 
-// ManipulationVelocities — velocities (Delta), finalVelocities (Completed) or
+// ManipulationVelocities: velocities (Delta), finalVelocities (Completed) or
 // initialVelocities (InertiaStarting): angular (deg/ms), linear and expansion
 // (px/ms). Returns false for other kinds.
 bool noesis_routed_events_manip_velocities(
     const void* args, float* angular, float* lx, float* ly, float* ex, float* ey);
 
-// isInertial flag — 1, 0, or -1 when not a Delta/Completed manipulation event.
+// isInertial flag: 1, 0, or -1 when not a Delta/Completed manipulation event.
 int32_t noesis_routed_events_manip_is_inertial(const void* args);
 
 // ── DragDrop source side + DataObject copy/paste handlers ────────────────────
 
-// Noesis::DragDrop::DoDragDrop — initiate a drag from `source` (DynamicCast to
+// Noesis::DragDrop::DoDragDrop: initiate a drag from `source` (DynamicCast to
 // DependencyObject*) carrying `data`, advertising `allowed_effects`
 // (DragDropEffects bitmask). The drag is then driven by host pointer input;
 // there is no headless completion. Returns false if `source`/`data` is null or
@@ -1020,7 +1020,7 @@ void noesis_routed_events_remove_data_object_handler(void* token);
 // Read `Text` from a TextBox or TextBlock. Returns NULL if `element` is null
 // or not a Text* element. The returned string is owned by Noesis (specifically
 // the BaseTextBox::TextContainer / TextBlock::Text storage); do not free, do
-// not assume it outlives the next layout pass — copy if needed.
+// not assume it outlives the next layout pass; copy if needed.
 const char* noesis_text_get(void* element);
 
 // Write `Text` on a TextBox or TextBlock. `text == NULL` is treated as the
@@ -1033,7 +1033,7 @@ bool noesis_text_set(void* element, const char* text);
 // past the end of the just-restored entry.
 bool noesis_text_caret_to_end(void* element);
 
-// Move keyboard focus to `element`. Equivalent to `UIElement::Focus()` —
+// Move keyboard focus to `element`. Equivalent to `UIElement::Focus()`:
 // returns the focusable result Noesis reports (the element accepted focus).
 // `false` for null input or an element that cannot receive focus (e.g. a
 // disabled or non-focusable element).
@@ -1092,7 +1092,7 @@ typedef enum noesis_class_base {
     // freeze/clone semantics). DPs register against DependencyData (not
     // UIElementData); there is no layout / render / routed-event surface. The
     // other Animatable subtrees (Brush / Geometry / Transform / Effect) are NOT
-    // subclassable this way — see LIMITATIONS.md.
+    // subclassable this way; see LIMITATIONS.md.
     NOESIS_BASE_FREEZABLE         = 6,
 } noesis_class_base;
 
@@ -1120,7 +1120,7 @@ typedef enum noesis_class_base {
 //                   a runtime TypeEnum registered via noesis_register_enum and
 //                   bound at registration via noesis_class_register_enum_property)
 //   IMAGE_SOURCE  → BaseComponent* (a Noesis::ImageSource subclass; ownership
-//                   convention matches noesis_base_component_release — the
+//                   convention matches noesis_base_component_release: the
 //                   `set` path does NOT consume the caller's ref; the `get`
 //                   / changed callback yields a borrowed pointer)
 //   BASE_COMPONENT → BaseComponent* (any Noesis::BaseComponent subclass; same
@@ -1149,7 +1149,7 @@ typedef enum noesis_prop_type {
 // index returned from noesis_class_register_property; `value_ptr` is the
 // new value in the layout determined by the property's registered type.
 //
-// The callback fires from inside Noesis's property pump — typically the main
+// The callback fires from inside Noesis's property pump, typically the main
 // thread during XAML parse + layout + input. Keep work small; queue if heavy.
 typedef void (*noesis_prop_changed_fn)(
     void* userdata,
@@ -1157,7 +1157,7 @@ typedef void (*noesis_prop_changed_fn)(
     uint32_t prop_index,
     const void* value_ptr);
 
-// Free callback invoked when the underlying ClassData is finally torn down —
+// Free callback invoked when the underlying ClassData is finally torn down:
 // either immediately at `noesis_class_unregister` (if no instances exist)
 // or deferred until the last live instance is released. Receives the
 // `userdata` passed to `noesis_class_register` so the Rust trampoline can
@@ -1170,7 +1170,7 @@ typedef void (*noesis_class_free_fn)(void* userdata);
 // base, init not yet called, name already registered).
 //
 // `free_handler` (optional, may be NULL) is invoked exactly once when
-// ClassData is finally freed — see `noesis_class_free_fn`. Ownership of
+// ClassData is finally freed; see `noesis_class_free_fn`. Ownership of
 // `userdata` transfers to the C++ side at registration; the Rust side must
 // not free it.
 void* noesis_class_register(
@@ -1186,7 +1186,7 @@ void* noesis_class_register(
 // duplicate property name on the same class).
 //
 // All properties must be registered BEFORE the first XAML referencing the
-// class loads — Noesis caches the property set on the TypeClass.
+// class loads; Noesis caches the property set on the TypeClass.
 uint32_t noesis_class_register_property(
     void* class_token,
     const char* prop_name,
@@ -1195,8 +1195,8 @@ uint32_t noesis_class_register_property(
 
 // Unregister a class: removes from Factory + Reflection so no NEW instances
 // can be created, then releases the Rust caller's reference on the
-// underlying ClassData. Existing live instances retain their own references
-// — the actual free + `free_handler` callback runs when the last instance
+// underlying ClassData. Existing live instances retain their own references;
+// the actual free + `free_handler` callback runs when the last instance
 // is destroyed (which may be later than this call, e.g. when a View
 // holding the instances is finally torn down). Safe to call with NULL.
 void noesis_class_unregister(void* class_token);
@@ -1204,7 +1204,7 @@ void noesis_class_unregister(void* class_token);
 // Set a property on an instance. `instance` is the BaseComponent* delivered
 // to the changed callback; `prop_index` is the dense index from registration;
 // `value_ptr` follows the per-type layout. Setting fires the changed callback
-// recursively if the new value differs from the current — the Rust side is
+// recursively if the new value differs from the current; the Rust side is
 // responsible for any re-entrancy guard.
 void noesis_instance_set_property(
     void* instance,
@@ -1237,8 +1237,8 @@ bool noesis_image_source_get_size(
 
 // ── Custom base classes + richer DP metadata + layout ───────────────────────
 //
-// `noesis_class_register` accepts any `noesis_class_base` value above —
-// each maps to a sibling trampoline subclass (`RustControl`, `RustPanel`, …)
+// `noesis_class_register` accepts any `noesis_class_base` value above;
+// each maps to a sibling trampoline subclass (`RustControl`, `RustPanel`, ...)
 // that shares the synthetic-TypeClass + ClassData machinery with
 // `RustContentControl`. The additions below layer richer DP metadata
 // (coercion / FrameworkPropertyMetadataOptions / read-only) and layout
@@ -1246,16 +1246,16 @@ bool noesis_image_source_get_size(
 
 // Richer DependencyProperty registration. Superset of
 // `noesis_class_register_property`:
-//   * `fpm_options` — bitmask of Noesis::FrameworkPropertyMetadataOptions
+//   * `fpm_options`: bitmask of Noesis::FrameworkPropertyMetadataOptions
 //     (AffectsMeasure=0x1, AffectsArrange=0x2, AffectsParentMeasure=0x4,
-//     AffectsParentArrange=0x8, AffectsRender=0x10, Inherits=0x20, …). When
+//     AffectsParentArrange=0x8, AffectsRender=0x10, Inherits=0x20, ...). When
 //     non-zero the DP is created with a FrameworkPropertyMetadata so Noesis
 //     invalidates the matching layout/render pass on change.
-//   * `read_only` — registers the DP with PropertyAccess_ReadOnly. The public
+//   * `read_only`: registers the DP with PropertyAccess_ReadOnly. The public
 //     setter paths (noesis_*_set_property / bindings / XAML) then reject
 //     writes; the privileged `noesis_instance_set_readonly_property` is the
 //     only way to mutate it (mirrors a WPF DependencyPropertyKey).
-//   * `coerce` — attaches the class-level coerce callback (installed via
+//   * `coerce`: attaches the class-level coerce callback (installed via
 //     `noesis_class_set_coerce`) to THIS property. Limited to the first 32
 //     properties of a class (the coerce-thunk pool size); registration returns
 //     UINT32_MAX if a 33rd coerced property is requested.
@@ -1355,7 +1355,7 @@ void noesis_class_set_layout(
 // Render callback. The trampoline subclass's `OnRender` override
 // forwards here after the base `OnRender` runs. `instance` is the owning
 // object's BaseComponent*; `context` is a BORROWED Noesis::DrawingContext*
-// (do not release) valid ONLY for the duration of the call — issue immediate
+// (do not release) valid ONLY for the duration of the call: issue immediate
 // mode draw commands through the noesis_drawing_* entrypoints. OnRender
 // fires from inside the renderer's render-tree update (typically the view
 // thread); keep work small.
@@ -1400,7 +1400,7 @@ bool noesis_uielement_desired_size(void* element, float* out_w, float* out_h);
 //
 // Returns false (no-op) on: null obj/name, obj is not a DependencyObject,
 // unknown property name, type-tag mismatch, or (set only) a read-only
-// property. String / component `get` results borrow Noesis-owned storage —
+// property. String / component `get` results borrow Noesis-owned storage;
 // copy immediately (same contract as the instance getter). Never throws; does
 // not call VerifyAccess(), so the caller must respect the View's thread
 // affinity.
@@ -1441,7 +1441,7 @@ void* noesis_visual_parent(void* element);
 // Visual* (+1) or NULL.
 void* noesis_visual_hit_test(void* element, float x, float y);
 
-// Filtered hit test — the callback overload of
+// Filtered hit test: the callback overload of
 // VisualTreeHelper::HitTest. `filter` is called per visual as the tree is
 // walked; its return is a `HitTestFilterBehavior` (0 ContinueSkipSelfAndChildren,
 // 1 ContinueSkipChildren, 2 ContinueSkipSelf, 3 Continue, 4 Stop). `result` is
@@ -1455,7 +1455,7 @@ void noesis_visual_hit_test_filtered(
     void* element, float x, float y, noesis_hit_filter_fn filter,
     noesis_hit_result_fn result, void* userdata);
 
-// RenderTransform origin — UIElement's (0..1, 0..1) relative pivot.
+// RenderTransform origin: UIElement's (0..1, 0..1) relative pivot.
 // The getter writes 0,0 when `element` is not a UIElement; the setter is then a
 // no-op returning false.
 void noesis_ui_element_get_render_transform_origin(void* element, float* out_x, float* out_y);
@@ -1555,7 +1555,7 @@ bool noesis_framework_element_unregister_name(void* element, const char* name);
 
 // ── G. Thread affinity (DispatcherObject) ───────────────────────────────────
 //
-// Only the affinity queries are exposed — NsGui has no public BeginInvoke
+// Only the affinity queries are exposed; NsGui has no public BeginInvoke
 // surface (cross-thread marshalling would need IView timers). True if
 // the calling thread owns `obj` (DispatcherObject::CheckAccess); false if `obj`
 // is not a DispatcherObject. thread_id returns the owning thread id
@@ -1567,7 +1567,7 @@ uint32_t noesis_dependency_object_thread_id(void* obj);
 //
 // Register Rust-backed `MarkupExtension` subclasses so XAML's
 // `{myns:Foo positional_arg}` syntax dispatches to a Rust callback.
-// A localization extension is the motivating example —
+// A localization extension is the motivating example:
 // `{my:Localize menu.main_menu.new_game}` resolves the key through a
 // LocalizationManager and substitutes the result.
 //
@@ -1584,7 +1584,7 @@ uint32_t noesis_dependency_object_thread_id(void* obj);
 // * Callback returns either a borrowed C string (most common) or a
 //   borrowed `BaseComponent*` (for value types that can't be expressed
 //   as text).
-// * No reactive bindings — the callback runs at XAML parse time and the
+// * No reactive bindings: the callback runs at XAML parse time and the
 //   returned value is substituted statically. Locale switching requires
 //   re-loading the XAML (matches the existing byte-substitution shim's
 //   semantics; full reactivity follows in a separate PR via a
@@ -1605,10 +1605,10 @@ uint32_t noesis_dependency_object_thread_id(void* obj);
 // MarkupExtension callback. `key` is the ContentProperty value the XAML
 // parser set on the extension (the bit between `{my:Localize` and `}`).
 // Output slots: write *exactly one* of them (set the other to NULL):
-//   * `*out_string` — borrowed UTF-8 C string. Must outlive the call;
+//   * `*out_string`: borrowed UTF-8 C string. Must outlive the call;
 //     Noesis copies into its own String storage immediately. Pointing into
 //     userdata-owned long-lived storage is the simplest pattern.
-//   * `*out_component` — borrowed BaseComponent* (e.g. an existing
+//   * `*out_component`: borrowed BaseComponent* (e.g. an existing
 //     resource lookup). Caller does NOT consume a ref; Noesis adds its
 //     own AddReference if it stores the value.
 // Return `true` to signal "value produced"; `false` for "no value, use
@@ -1620,7 +1620,7 @@ typedef bool (*noesis_markup_provide_fn)(
     void** out_component);
 
 // Free callback invoked exactly once when the underlying MarkupClassData
-// is finally torn down — either at unregister (no instances alive) or
+// is finally torn down: either at unregister (no instances alive) or
 // deferred to the last live extension instance's destruction. Mirrors
 // `noesis_class_free_fn`. Ownership of `userdata` transfers to the
 // C++ side at registration; the Rust side must not free it.
@@ -1637,7 +1637,7 @@ void* noesis_markup_extension_register(
     void* userdata,
     noesis_markup_free_fn free_handler);
 
-// Unregister a markup extension class — removes from Factory + Reflection
+// Unregister a markup extension class: removes from Factory + Reflection
 // so no NEW instances can be created, then drops the Rust caller's ref
 // on MarkupClassData. Existing live extension instances retain their
 // references; the actual free + `free_handler` callback runs when the
@@ -1758,7 +1758,7 @@ int32_t noesis_items_control_items_count(void* element);
 
 // Number of *realized* item containers the generator has materialized. Only
 // grows when the generator regenerates, which for a source mutated after first
-// layout requires INotifyCollectionChanged to have fired — so it is a genuine
+// layout requires INotifyCollectionChanged to have fired, so it is a genuine
 // signal that change notification reached the control (vs. items_count, which
 // passes through regardless). -1 if `element` is not an ItemsControl.
 int32_t noesis_items_control_realized_count(void* element);
@@ -1775,7 +1775,7 @@ int32_t noesis_items_control_realized_count(void* element);
 //
 // `CanExecute` / `Execute` forward into the vtable. `param` is the borrowed
 // command-parameter `BaseComponent*` the control passes (CommandParameter),
-// and may be NULL. Keep work small — these fire from inside Noesis's input
+// and may be NULL. Keep work small: these fire from inside Noesis's input
 // pump on whatever thread drives the view.
 
 typedef struct noesis_command_vtable {
@@ -1787,7 +1787,7 @@ typedef struct noesis_command_vtable {
 } noesis_command_vtable;
 
 // Free callback invoked exactly once when the underlying RustCommand is
-// finally destroyed (last reference released — which may be the binding
+// finally destroyed (last reference released, which may be the binding
 // long after noesis_command_destroy). Receives the `userdata` passed to
 // noesis_command_create; ownership of `userdata` transfers to the C++
 // side at creation. Optional (may be NULL).
@@ -1815,7 +1815,7 @@ void noesis_command_raise_can_execute_changed(void* command);
 // ── RoutedCommand / RoutedUICommand ─────────────────────────────────────────
 //
 // Commands routed through the element tree to a matching CommandBinding. The
-// owner is resolved from `owner_type_name` via the Core reflection registry — a
+// owner is resolved from `owner_type_name` via the Core reflection registry: a
 // built-in type ("UIElement") or a registered custom class. Both creators
 // return a `BaseComponent*` (+1; release via noesis_base_component_release),
 // and noesis_command_raise_can_execute_changed works on them. NULL on a bad
@@ -1849,7 +1849,7 @@ typedef void (*noesis_cmd_executed_fn)(void* userdata, void* parameter);
 // control enabled state). `parameter` borrowed; may be NULL.
 typedef bool (*noesis_cmd_can_execute_fn)(void* userdata, void* parameter);
 
-// Create a CommandBinding for `command` (a borrowed ICommand* — RoutedCommand,
+// Create a CommandBinding for `command` (a borrowed ICommand*: RoutedCommand,
 // built-in, or Rust ICommand). Returns an opaque token, or NULL on a null /
 // non-ICommand `command`. `can_execute` may be NULL (treated as always-true).
 void* noesis_command_binding_create(
@@ -1873,7 +1873,7 @@ const void* noesis_component_command(uint32_t which);
 // ── Value boxing / unboxing primitives ──────────────────────────────────────
 //
 // Binding values cross the FFI as `Noesis::BaseComponent*` (boxed). These wrap
-// primitives so Rust can produce / read binding values — the currency a
+// primitives so Rust can produce / read binding values: the currency a
 // converter speaks. `noesis_box_string` (above) handles strings; its unbox
 // peer lives here. Each `box_*` returns a BaseComponent* with +1 ref (release
 // via noesis_base_component_release). Each `unbox_*` returns false / NULL if
@@ -1901,13 +1901,13 @@ const char* noesis_unbox_string(void* boxed);
 // (`noesis_framework_element_add_resource`) so XAML
 // `{Binding ..., Converter={StaticResource Key}}` can reach it.
 //
-// `value` / `parameter` are borrowed boxed `BaseComponent*` (may be NULL) —
+// `value` / `parameter` are borrowed boxed `BaseComponent*` (may be NULL);
 // unbox with the helpers above. `target_type` is an opaque `const Noesis::Type*`
 // (forward-compatible; ignore it for simple converters). Write a +1-owned
 // `BaseComponent*` into `*out_result` (ownership transfers to Noesis) and
 // return `true`; return `false` to signal UnsetValue (Noesis uses the
 // FallbackValue / property default). Returning `true` with `*out_result == NULL`
-// yields a null value. Same threading contract as the command vtable — fires
+// yields a null value. Same threading contract as the command vtable: fires
 // from inside Noesis's binding pump.
 
 typedef struct noesis_value_converter_vtable {
@@ -1920,7 +1920,7 @@ typedef struct noesis_value_converter_vtable {
 } noesis_value_converter_vtable;
 
 // Free callback invoked exactly once when the underlying RustValueConverter is
-// finally destroyed (last reference released — which may be a Binding long
+// finally destroyed (last reference released, which may be a Binding long
 // after noesis_value_converter_destroy). Ownership of `userdata` transfers
 // to C++ at creation. Optional (may be NULL).
 typedef void (*noesis_value_converter_free_fn)(void* userdata);
@@ -1941,7 +1941,7 @@ void noesis_value_converter_destroy(void* converter);
 // ── Code-built Binding + SetBinding ─────────────────────────────────────────
 //
 // `new Binding(path)` plus setters for the common knobs, then wire it onto a
-// target DP with `noesis_set_binding` — the code path that mirrors XAML
+// target DP with `noesis_set_binding`: the code path that mirrors XAML
 // `{Binding ...}` authoring. The Binding is a `BaseComponent*` with +1 ref;
 // release via noesis_binding_destroy. SetBinding takes its own reference, so
 // the Binding may be destroyed right after wiring. All setters no-op on a NULL
@@ -1971,7 +1971,7 @@ void noesis_binding_set_string_format(void* binding, const char* format);
 void noesis_binding_set_fallback_value(void* binding, void* value);
 // UpdateSourceTrigger ordinal: 0 Default, 1 PropertyChanged, 2 LostFocus, 3 Explicit.
 void noesis_binding_set_update_source_trigger(void* binding, int32_t trigger);
-// Bind relative to the target element itself (RelativeSource Self) — e.g. bind
+// Bind relative to the target element itself (RelativeSource Self), e.g. bind
 // one property of an element to another on the same element.
 void noesis_binding_set_relative_source_self(void* binding);
 // RelativeSource FindAncestor: resolve `type_name` through the reflection
@@ -1989,7 +1989,7 @@ void noesis_binding_set_relative_source_previous_data(void* binding);
 void noesis_binding_set_relative_source_templated_parent(void* binding);
 
 // Borrowed BindingExpression* for the binding on `element`'s `dp_name` property
-// (BindingOperations::GetBindingExpression). OWNED by the target — do NOT
+// (BindingOperations::GetBindingExpression). OWNED by the target; do NOT
 // release; valid only while the binding stays live on that property. NULL if
 // `element` is not a DependencyObject, the DP name is unknown, or no binding is
 // set. Pass the result to the update entrypoints below.
@@ -1997,7 +1997,7 @@ void* noesis_get_binding_expression(void* element, const char* dp_name);
 // Force a source -> target data transfer (re-pull the source value). No-op on
 // NULL.
 void noesis_binding_expression_update_target(void* expr);
-// Push the current target value back to the source — commits a binding whose
+// Push the current target value back to the source; commits a binding whose
 // UpdateSourceTrigger is Explicit. No-op (per Noesis) unless the binding's Mode
 // is TwoWay / OneWayToSource. No-op on NULL.
 void noesis_binding_expression_update_source(void* expr);
@@ -2185,7 +2185,7 @@ int32_t noesis_render_options_get_bitmap_scaling_mode(void* obj);
 // handle's Drop releases it. `shape` is a Shape* / FrameworkElement* /
 // BaseComponent* (the same opaque handle used elsewhere); every entrypoint
 // DynamicCasts and fails gracefully (false / null / -1) on a type mismatch.
-// Noesis 3.2.13 ships only Rectangle/Ellipse/Line/Path shape elements — there
+// Noesis 3.2.13 ships only Rectangle/Ellipse/Line/Path shape elements; there
 // is no Polygon/Polyline (see LIMITATIONS.md).
 void* noesis_rectangle_create(void);
 void* noesis_ellipse_create(void);
@@ -2231,7 +2231,7 @@ int32_t noesis_shape_get_stroke_line_join(void* shape);
 bool noesis_shape_set_stretch(void* shape, int32_t value);
 int32_t noesis_shape_get_stretch(void* shape);
 
-// StrokeDashArray — Noesis exposes this as a string ("2 1 3"); get returns a
+// StrokeDashArray: Noesis exposes this as a string ("2 1 3"); get returns a
 // borrowed pointer owned by the Shape (null if unset / not a Shape).
 bool noesis_shape_set_stroke_dash_array(void* shape, const char* dashes);
 const char* noesis_shape_get_stroke_dash_array(void* shape);
@@ -2252,7 +2252,7 @@ bool noesis_line_get(void* shape, float out[4]);
 // Rust handle's Drop via noesis_base_component_release). `cast`-style type
 // checks make every setter/getter a no-op (false / null) on a wrong-type
 // pointer. Headless, the GPU-resolved values (TextureSource texture, pixel
-// dims, dpi) read back null / 0 — that resolution needs a RenderDevice render
+// dims, dpi) read back null / 0; that resolution needs a RenderDevice render
 // pass (see LIMITATIONS.md).
 
 // CroppedBitmap (no GPU needed). `source` / the get return are borrowed
@@ -2304,17 +2304,17 @@ bool noesis_dynamic_texture_source_get_pixel_size(void* source, uint32_t* width,
 // Typography accessors take a borrowed DependencyObject* (`element`); every
 // setter has a getter that re-reads from the live object. Enum ordinals match
 // the Noesis headers: FontWeight (FontProperties.h, e.g. Normal=400, Bold=700),
-// FontStyle (Normal=0, Oblique=1, Italic=2), FontStretch (UltraCondensed=1 …
+// FontStyle (Normal=0, Oblique=1, Italic=2), FontStretch (UltraCondensed=1 ...
 // UltraExpanded=9), and the Typography enums (Typography.h).
 
-// FontFamily(source) — `source` may be NULL for the default family. Returns a
+// FontFamily(source): `source` may be NULL for the default family. Returns a
 // +1 FontFamily* (BaseComponent*).
 void* noesis_typography_font_family_create(const char* source);
 // Borrowed source string (the text used to construct it); NULL on type mismatch.
 const char* noesis_typography_font_family_get_source(void* family);
 // Number of concrete fonts the family resolved to via the registered font
 // provider (0 with no provider, or if `family` is not a FontFamily). NOTE:
-// 3.2.13 exposes per-family enumeration only — there is no API to enumerate the
+// 3.2.13 exposes per-family enumeration only; there is no API to enumerate the
 // set of available family names from the font system (see LIMITATIONS.md).
 uint32_t noesis_typography_font_family_get_num_fonts(void* family);
 // Borrowed name of the resolved font at `index`, or NULL if out of range.
@@ -2435,7 +2435,7 @@ bool noesis_drawing_draw_text(void* context, void* formatted_text,
 // Returns false if `mesh` is null / not a MeshData.
 bool noesis_drawing_draw_mesh(void* context, void* brush, void* mesh);
 // Returns false if `image_source` is null / not an ImageSource (DrawImage
-// requires a real source — see Known SDK limitations re: building one headless).
+// requires a real source; see Known SDK limitations re: building one headless).
 bool noesis_drawing_draw_image(void* context, void* image_source,
                                   float x, float y, float w, float h);
 bool noesis_drawing_pop(void* context);
@@ -2472,14 +2472,14 @@ bool noesis_mesh_set_brush(void* mesh, void* brush);
 // Borrowed Brush* (no +1; do not release).
 void* noesis_mesh_get_brush(void* mesh);
 
-// ── Controls — programmatic access ───────────────────────────────────────────
+// ── Controls: programmatic access ────────────────────────────────────────────
 //
 // Implemented in cpp/noesis_controls.cpp. Each entrypoint DynamicCasts to the
 // right control type and fails gracefully (false / null / sentinel) on a type
 // mismatch. `element` is a FrameworkElement* / BaseComponent* (the same opaque
 // handle the rest of the FrameworkElement surface uses).
 
-// Selector — SelectedIndex / SelectedItem (ListBox/ComboBox/TabControl/ListView).
+// Selector: SelectedIndex / SelectedItem (ListBox/ComboBox/TabControl/ListView).
 // get_selected_index writes *out (-1 == empty selection); both return false if
 // `element` is not a Selector. set_selected_index coerces out-of-range to -1.
 // get_selected_item returns a BORROWED (no +1) pointer (the data item for an
@@ -2490,7 +2490,7 @@ bool noesis_selector_set_selected_index(void* element, int32_t index);
 void* noesis_selector_get_selected_item(void* element);
 bool noesis_selector_set_selected_item(void* element, void* item);
 
-// ItemsControl.Items direct mutation (NOT ItemsSource — no-op when an external
+// ItemsControl.Items direct mutation (NOT ItemsSource; no-op when an external
 // ItemsSource is set, since Items is then read-only). `item` is a borrowed
 // BaseComponent* (typically a boxed value); the collection takes its own ref.
 // items_add returns the new index, or -1 on a non-ItemsControl / rejected add.
@@ -2499,7 +2499,7 @@ bool noesis_items_control_items_insert(void* element, uint32_t index, void* item
 bool noesis_items_control_items_remove_at(void* element, uint32_t index);
 bool noesis_items_control_items_clear(void* element);
 
-// RangeBase — `which`: 0 = Value, 1 = Minimum, 2 = Maximum (Slider/ProgressBar/
+// RangeBase `which`: 0 = Value, 1 = Minimum, 2 = Maximum (Slider/ProgressBar/
 // ScrollBar). Getter writes *out, returns false on a non-RangeBase / bad `which`.
 // Setter runs Noesis coercion (Value clamped to [Minimum, Maximum]).
 bool noesis_rangebase_get(void* element, int32_t which, float* out);
@@ -2518,7 +2518,7 @@ bool noesis_popup_set_is_open(void* element, bool open);
 bool noesis_expander_get_is_expanded(void* element, bool* out);
 bool noesis_expander_set_is_expanded(void* element, bool expanded);
 
-// ScrollViewer — `which`: 0 = HorizontalOffset, 1 = VerticalOffset,
+// ScrollViewer `which`: 0 = HorizontalOffset, 1 = VerticalOffset,
 // 2 = ScrollableWidth, 3 = ScrollableHeight, 4 = ExtentHeight,
 // 5 = ViewportHeight (all read-only computed metrics). Getter writes *out,
 // returns false on a non-ScrollViewer / bad `which`. Scrolling is via methods.
@@ -2553,11 +2553,11 @@ bool noesis_passwordbox_set_password(void* element, const char* password);
 // matching *_destroy or the generic noesis_base_component_release). The
 // *_get_resources / *_get_style / *_get_template getters AddRef before handing
 // out, so the caller owns a +1 too. *_find / *_find_resource /
-// *_find_name / *_get_application_resources hand out BORROWED pointers (no +1) —
+// *_find_name / *_get_application_resources hand out BORROWED pointers (no +1);
 // do NOT release; valid only transiently.
 
 // Box a float as a BoxedValue<float> (+1 ref). Companion to the bool/int32/
-// double boxers in the binding section — float DPs (FontSize, Opacity, …) need
+// double boxers in the binding section: float DPs (FontSize, Opacity, ...) need
 // a float box for a Style Setter / resource value to apply.
 void* noesis_box_float(float value);
 
@@ -2638,7 +2638,7 @@ void* noesis_framework_template_find_name(
 // noesis_base_component_release, mirrored by the owning Rust handle's Drop).
 // Adding a timeline to a Storyboard, or a key frame / easing function to its
 // parent, makes Noesis take its own reference. Animations advance off the View
-// clock — pump view.update(t). See cpp/noesis_animation.cpp.
+// clock; pump view.update(t). See cpp/noesis_animation.cpp.
 
 // Storyboard. `fe` arguments below are nullable FrameworkElement*; pass the
 // element tree root (also the namescope for TargetName resolution).
@@ -2710,7 +2710,7 @@ bool noesis_easing_function_set_springiness(void* easing, float value);    // El
 // (`extra` = EasingFunctionBase*), 3 Spline (`extra` = KeySpline*). key_time is
 // in seconds. (The Rect/Size/Int/Point/Thickness/Object/Matrix/Boolean/String
 // key-frame entry points and the Parallel/BeginStoryboard helpers are declared
-// alongside their externs in src/ffi.rs — see cpp/noesis_animation.cpp.)
+// alongside their externs in src/ffi.rs; see cpp/noesis_animation.cpp.)
 void* noesis_double_animation_keyframes_create(void);
 bool noesis_double_animation_add_keyframe(void* anim, int32_t kind, double key_time_seconds,
                                              float value, void* extra);
@@ -2730,13 +2730,13 @@ bool noesis_animation_begin_on(void* anim, void* target, const char* dp_name, in
 // `INotifyPropertyChanged` so a bound UI target refreshes when Rust raises
 // PropertyChanged, and (b) carries a per-registration synthetic `TypeClass`
 // whose properties resolve through reflection (custom `TypeProperty`
-// accessors) — so `{Binding Title}` against this object as a DataContext reads
+// accessors), so `{Binding Title}` against this object as a DataContext reads
 // a value Rust pushed in. Each property's current value is stored per-instance
 // as a boxed `BaseComponent*` (use the noesis_box_* helpers to produce one);
 // reflection reads it back through `TypeProperty::GetComponent`.
 //
 // Lifetime mirrors the synthetic-class registry in noesis_classes.cpp: the
-// registration token (`PlainClassData*`) is refcounted — the Rust caller owns
+// registration token (`PlainClassData*`) is refcounted: the Rust caller owns
 // the initial +1 (released by noesis_plain_vm_unregister), every live
 // instance holds its own share, and the donated Rust free handler runs exactly
 // once when the last reference drops. A shutdown sweep
@@ -2757,7 +2757,7 @@ typedef enum noesis_plain_type {
 // Invoked when a TwoWay / OneWayToSource binding writes a value BACK to a
 // plain-VM property (the UI mutated the source). `instance` is the borrowed
 // RustPlainVm*, `prop_index` the dense index returned by register_property, and
-// `boxed_value` a borrowed boxed `BaseComponent*` (may be NULL) — copy it
+// `boxed_value` a borrowed boxed `BaseComponent*` (may be NULL); copy it
 // immediately (unbox with the noesis_unbox_* helpers). The value is also
 // stored in the instance so a subsequent reflection read returns it. Optional.
 typedef void (*noesis_plain_set_fn)(
@@ -2792,7 +2792,7 @@ void* noesis_plain_vm_create_instance(void* token);
 
 // Store `boxed_value` (a boxed BaseComponent*, e.g. from noesis_box_string;
 // may be NULL to clear) as the current value of property `prop_index`. The
-// instance takes its OWN reference — the caller still owns / must release its
+// instance takes its OWN reference; the caller still owns / must release its
 // boxed value. Does NOT raise PropertyChanged (call noesis_plain_vm_notify).
 // false on a NULL instance or out-of-range index.
 bool noesis_plain_vm_set_value(void* instance, uint32_t prop_index, void* boxed_value);
@@ -2810,7 +2810,7 @@ bool noesis_plain_vm_notify(void* instance, const char* prop_name);
 // registration token. Live instances keep the registration alive until they die.
 void noesis_plain_vm_unregister(void* token);
 
-// Shutdown sweep — see noesis_classes_force_free_at_shutdown. Called from
+// Shutdown sweep; see noesis_classes_force_free_at_shutdown. Called from
 // noesis_shutdown after Noesis::Shutdown.
 void noesis_plain_vm_force_free_at_shutdown(void);
 
@@ -2826,7 +2826,7 @@ void noesis_plain_vm_force_free_at_shutdown(void);
 // `const Noesis::Type*` (ignore it for simple converters). Write a +1-owned
 // `BaseComponent*` into `*out_result` (ownership transfers to Noesis) and return
 // true; return false to signal UnsetValue (fallback / default). Same threading
-// contract as the single-value converter — fires from Noesis's binding pump.
+// contract as the single-value converter: fires from Noesis's binding pump.
 typedef struct noesis_multi_value_converter_vtable {
     bool (*convert)(
         void* userdata, void* const* values, uint32_t count,
@@ -2893,7 +2893,7 @@ bool noesis_enum_value_from_name(
     const char* enum_type, const char* value_name, int32_t* out_value);
 
 // Inverse of the above: the member name for an integer value (borrowed string,
-// valid while Noesis lives — it is an interned Symbol). false if unknown.
+// valid while Noesis lives, an interned Symbol). false if unknown.
 bool noesis_enum_name_from_value(
     const char* enum_type, int32_t value, const char** out_name);
 
@@ -2909,7 +2909,7 @@ bool noesis_type_converter_from_string(
 // (B) Custom routed events --------------------------------------------------
 
 // Register a routed event named `event_name` on the registered type
-// `type_name` (must own a UIElementData meta — i.e. a Rust-backed
+// `type_name` (must own a UIElementData meta, i.e. a Rust-backed
 // ContentControl from noesis_class_register). `strategy`: 0 Tunnel,
 // 1 Bubble, 2 Direct. Returns false if the type is unknown, has no
 // UIElementData, or the name is already registered on it.
@@ -2952,7 +2952,7 @@ bool noesis_type_add_depends_on(
 bool noesis_type_get_depends_on(
     const char* type_name, const char** out_name);
 
-// (D) Custom reflection TypeConverter registration is DEFERRED — not exposed in
+// (D) Custom reflection TypeConverter registration is DEFERRED, not exposed in
 // 3.2.13. TypeConverter::Get resolves converters via an internal registry that
 // TypeConverterMetaData + Factory::RegisterComponent do not drive at runtime.
 // The consumption side (noesis_type_converter_from_string above) works for
@@ -2972,7 +2972,7 @@ bool noesis_type_get_depends_on(
 // matches Noesis::GeometryCombineMode (0 Union, 1 Intersect, 2 Xor, 3 Exclude);
 // SweepDirection matches Noesis::SweepDirection (0 Counterclockwise, 1 Clockwise).
 
-// Geometry base — works on any Geometry* (StreamGeometry, PathGeometry, …).
+// Geometry base: works on any Geometry* (StreamGeometry, PathGeometry, ...).
 // out = {x, y, width, height}.
 bool noesis_geometry_get_bounds(void* geometry, float out[4]);
 // Render bounds with a null Pen (no stroke widening). out = {x, y, w, h}.
@@ -3099,7 +3099,7 @@ int32_t noesis_geometry_group_add_child(void* geometry, void* child);
 int32_t noesis_geometry_group_child_count(void* geometry);
 // ── SVG / SVGPath parsing ────────────────────────────────────────────────────
 //
-// Implemented in cpp/noesis_svg.cpp. Both surfaces are CPU/headless — no GPU
+// Implemented in cpp/noesis_svg.cpp. Both surfaces are CPU/headless; no GPU
 // RenderDevice or render pass needed. The handles are plain heap objects (NOT
 // BaseComponents); release SVGPath* with noesis_svg_path_destroy and
 // SVG::Image* with noesis_svg_image_destroy.
@@ -3154,8 +3154,8 @@ uint32_t noesis_svg_image_shape_count(void* image);
 int32_t noesis_svg_image_shape_fill_type(void* image, uint32_t index);
 // ── TextBlock inline content model ───────────────────────────────────────────
 //
-// The Inline element family shipped in 3.2.13 — Run, Span, Bold, Italic,
-// Underline, Hyperlink, LineBreak, InlineUIContainer — plus the InlineCollection
+// The Inline element family shipped in 3.2.13 (Run, Span, Bold, Italic,
+// Underline, Hyperlink, LineBreak, InlineUIContainer) plus the InlineCollection
 // (UICollection<Inline>) that TextBlock and Span expose. Inlines are assembled
 // in Rust and added to a TextBlock's (or Span's) Inlines collection; read-back
 // getters re-read from the live Noesis object so a stub fails the round-trip.
@@ -3329,7 +3329,7 @@ bool noesis_formatted_text_get_glyph_position(void* ft, uint32_t ch_index, bool 
 bool noesis_formatted_text_hit_test(void* ft, float x, float y, uint32_t* out_index,
     bool* out_is_inside, bool* out_is_trailing);
 
-// ── Input — finer control ────────────────────────────────────────────────────
+// ── Input: finer control ─────────────────────────────────────────────────────
 //
 // Element-level mouse/touch capture, keyboard-state queries, focus-state DPs,
 // focus engagement + traversal, the FocusManager / KeyboardNavigation static +
@@ -3386,7 +3386,7 @@ bool noesis_ui_element_get_is_focused(void* element);
 bool noesis_ui_element_get_is_keyboard_focused(void* element);
 bool noesis_ui_element_get_is_keyboard_focus_within(void* element);
 
-// UIElement::Focus(bool engage) — the gamepad focus-engagement knob.
+// UIElement::Focus(bool engage): the gamepad focus-engagement knob.
 bool noesis_ui_element_focus_engage(void* element, bool engage);
 
 // UIElement::MoveFocus(TraversalRequest{direction, wrapped}).
@@ -3431,7 +3431,7 @@ bool noesis_ui_element_add_input_binding(void* element, void* binding);
 
 // ── Diagnostics: error / assert handlers + memory queries ────────────────────
 //
-// All NsCore kernel functions — the kernel must be up (noesis_init has run)
+// All NsCore kernel functions: the kernel must be up (noesis_init has run)
 // before they do anything meaningful. ALWAYS drive the invokers with
 // fatal=false: a fatal error or a failed assert can abort the process.
 //

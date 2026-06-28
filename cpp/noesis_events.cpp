@@ -1,25 +1,25 @@
 // FrameworkElement traversal + event subscription FFI.
 //
 // Pieces:
-//   * `noesis_framework_element_find_name` — wraps Noesis's `FindName`.
+//   * `noesis_framework_element_find_name`: wraps Noesis's `FindName`.
 //     Returns an owning (+1 ref) `FrameworkElement*` so the Rust side
 //     manages lifetime via the same release path as `GUI::LoadXaml`.
-//   * `noesis_subscribe_click` — installs a Rust callback on the
+//   * `noesis_subscribe_click`: installs a Rust callback on the
 //     `BaseButton::Click` routed event. `noesis_unsubscribe_click`
 //     removes it. The token returned to Rust is a heap-allocated
 //     `RustClickHandler` whose lifetime is tied 1:1 to the subscription;
 //     it owns a +1 ref on the button so the subscription stays valid
 //     even if the only other reference is the parent FrameworkElement
 //     that the Rust caller dropped.
-//   * `noesis_subscribe_keydown` / `_unsubscribe_keydown` — same shape
+//   * `noesis_subscribe_keydown` / `_unsubscribe_keydown`: same shape
 //     as click but for `UIElement::KeyDown`. The callback receives the
 //     pressed Key as a raw int and a writable `out_handled` flag the
 //     Rust side can set to `true` to suppress further routing (e.g.
 //     swallow backtick so it doesn't get typed into the focused TextBox).
-//   * `noesis_text_get` / `_text_set` / `_text_caret_to_end` — read /
+//   * `noesis_text_get` / `_text_set` / `_text_caret_to_end`: read /
 //     write `TextBox::Text` (and `TextBlock::Text` for read), plus a
 //     caret-to-end helper for command-history navigation.
-//   * `noesis_focus_element` — `UIElement::Focus()` so Rust can move
+//   * `noesis_focus_element`: `UIElement::Focus()` so Rust can move
 //     keyboard focus to a named element programmatically (the input box
 //     when the console opens, etc.).
 //
@@ -95,7 +95,7 @@ public:
 private:
     noesis_click_fn mCb;
     void* mUserdata;
-    Noesis::BaseButton* mButton;  // raw + manual AddRef/Release — see ctor/dtor.
+    Noesis::BaseButton* mButton;  // raw + manual AddRef/Release; see ctor/dtor.
 };
 
 }  // namespace
@@ -116,7 +116,7 @@ extern "C" void* noesis_framework_element_find_name(void* element, const char* n
 }
 
 // Register / unregister an x:Name in the namescope hosting `element`.
-// `object` is borrowed — the scope takes its own reference. Returns false if
+// `object` is borrowed; the scope takes its own reference. Returns false if
 // `element` is not a FrameworkElement. The element must live within a namescope
 // (the XAML root hosts one); registering a name already present updates it.
 extern "C" bool noesis_framework_element_register_name(
@@ -184,13 +184,13 @@ extern "C" void noesis_unsubscribe_click(void* token) {
 namespace {
 
 // Adapter between Noesis's `Delegate<void(BaseComponent*, const KeyEventArgs&)>`
-// and the C ABI callback. Mirrors `RustClickHandler` — owns a +1 ref on the
+// and the C ABI callback. Mirrors `RustClickHandler`: owns a +1 ref on the
 // element so the subscription survives the caller dropping every other
 // handle. Pair construction with `KeyDown() +=` and destruction with
 // `KeyDown() -=`.
 //
 // `out_handled` lets the Rust side mark the event handled so further routing
-// stops — important for swallowing the backtick keystroke that opens the
+// stops, which matters for swallowing the backtick keystroke that opens the
 // console (otherwise it gets typed into the focused TextBox).
 class RustKeyDownHandler {
 public:
@@ -215,7 +215,7 @@ public:
         if (!mCb) return;
         bool handled = false;
         mCb(mUserdata, static_cast<int32_t>(args.key), &handled);
-        // RoutedEventArgs::handled is `mutable` — writing through a const
+        // RoutedEventArgs::handled is `mutable`; writing through a const
         // reference is supported by design.
         if (handled) {
             args.handled = true;
@@ -227,7 +227,7 @@ public:
 private:
     noesis_keydown_fn mCb;
     void* mUserdata;
-    Noesis::UIElement* mElement;  // raw + manual AddRef/Release — see ctor/dtor.
+    Noesis::UIElement* mElement;  // raw + manual AddRef/Release; see ctor/dtor.
 };
 
 }  // namespace
@@ -305,7 +305,7 @@ extern "C" bool noesis_focus_element(void* element) {
 // Build a single open polyline figure from `count` (x, y) pairs in `xy` (so
 // `xy` has `2*count` floats, in the Path's local coordinate space) and assign it
 // as a named `Path`'s `Data`. This is the geometry affordance behind the live
-// oscilloscope trace — a real vector polyline fed from Rust each frame, in place
+// oscilloscope trace: a real vector polyline fed from Rust each frame, in place
 // of a rasterised text canvas. Returns false if the element is missing, not a
 // `Path`, or there are fewer than two points (no segment to draw).
 extern "C" bool noesis_path_set_points(void* element, const float* xy, uint32_t count) {
@@ -336,7 +336,7 @@ extern "C" bool noesis_path_set_points(void* element, const float* xy, uint32_t 
 //      takes a *generic* `RoutedEventHandler` =
 //      `Delegate<void(BaseComponent*, const RoutedEventArgs&)>`. Every typed
 //      `RoutedEvent_<T>` wrapper in UIElement.h reinterpret_casts its handler
-//      to exactly that delegate before calling AddHandler — so a single
+//      to exactly that delegate before calling AddHandler, so a single
 //      delegate signature is ABI-correct for *every* routed event. We register
 //      one `OnEvent(BaseComponent*, const RoutedEventArgs&)` for all of them.
 //
@@ -349,7 +349,7 @@ extern "C" bool noesis_path_set_points(void* element, const float* xy, uint32_t 
 //      pointer offset, so the downcast is sound for the known type) and return
 //      a sentinel when the kind doesn't match.
 //
-// `handledEventsToo`: this SDK's `AddHandler` has NO third bool parameter —
+// `handledEventsToo`: this SDK's `AddHandler` has NO third bool parameter, so
 // already-handled events are not re-delivered to a registered handler across
 // the bubble/tunnel route. The `handled_too` flag is still honoured *within*
 // the per-element multicast delegate: when false, the user callback is skipped
@@ -428,7 +428,7 @@ const EventEntry kEvents[] = {
     // Text input (ch)
     {"TextInput",        &Noesis::UIElement::TextInputEvent,        ARG_TEXT_INPUT},
     {"PreviewTextInput", &Noesis::UIElement::PreviewTextInputEvent, ARG_TEXT_INPUT},
-    // Focus — GotFocus/LostFocus carry base routed args; the keyboard-focus
+    // Focus: GotFocus/LostFocus carry base routed args; the keyboard-focus
     // variants downcast to KeyboardFocusChangedEventArgs (old/new focus).
     {"GotFocus",                 &Noesis::UIElement::GotFocusEvent,                 ARG_ROUTED},
     {"LostFocus",                &Noesis::UIElement::LostFocusEvent,                ARG_ROUTED},
@@ -450,14 +450,14 @@ const EventEntry kEvents[] = {
     {"DoubleTapped",          &Noesis::UIElement::DoubleTappedEvent,          ARG_ROUTED},
     {"Holding",               &Noesis::UIElement::HoldingEvent,               ARG_ROUTED},
     {"RightTapped",           &Noesis::UIElement::RightTappedEvent,           ARG_ROUTED},
-    // Manipulation — Starting carries only mode/container (base args); the rest
+    // Manipulation: Starting carries only mode/container (base args); the rest
     // downcast to their typed args (origin / delta / velocities / inertia).
     {"ManipulationStarting",         &Noesis::UIElement::ManipulationStartingEvent,         ARG_ROUTED},
     {"ManipulationStarted",          &Noesis::UIElement::ManipulationStartedEvent,          ARG_MANIP_STARTED},
     {"ManipulationDelta",            &Noesis::UIElement::ManipulationDeltaEvent,            ARG_MANIP_DELTA},
     {"ManipulationInertiaStarting",  &Noesis::UIElement::ManipulationInertiaStartingEvent,  ARG_MANIP_INERTIA},
     {"ManipulationCompleted",        &Noesis::UIElement::ManipulationCompletedEvent,        ARG_MANIP_COMPLETED},
-    // Drag/drop — DragEventArgs (data / effects / allowedEffects / keyStates /
+    // Drag/drop: DragEventArgs (data / effects / allowedEffects / keyStates /
     // position). Leave/QueryContinueDrag/GiveFeedback carry different args; the
     // enter/over/drop family all use DragEventArgs.
     {"DragEnter",        &Noesis::UIElement::DragEnterEvent,        ARG_DRAG},
@@ -530,7 +530,7 @@ public:
         DmEventArgs wrap{mKind, &args};
         bool handled = args.handled;
         mCb(mUserdata, &wrap, &handled);
-        // RoutedEventArgs::handled is `mutable` — writing through the const
+        // RoutedEventArgs::handled is `mutable`; writing through the const
         // reference is supported by design.
         if (handled) {
             args.handled = true;
@@ -543,7 +543,7 @@ public:
 private:
     noesis_routed_event_fn mCb;
     void* mUserdata;
-    Noesis::UIElement* mElement;  // raw + manual AddRef/Release — see ctor/dtor.
+    Noesis::UIElement* mElement;  // raw + manual AddRef/Release; see ctor/dtor.
     const Noesis::RoutedEvent* mEvent;
     int32_t mKind;
     bool mHandledToo;
@@ -641,7 +641,7 @@ extern "C" bool noesis_size_changed_args_new_size(const void* args, float* width
 }
 
 // Borrowed pointer to the event's originating element (`RoutedEventArgs::source`).
-// Returns NULL if `args` is null or the source is null. Not ref-counted — do
+// Returns NULL if `args` is null or the source is null. Not ref-counted; do
 // not release; valid only for the callback's duration.
 extern "C" void* noesis_routed_args_source(const void* args) {
     if (!args) return nullptr;
@@ -658,7 +658,7 @@ extern "C" void* noesis_routed_args_source(const void* args) {
 // callback's duration. A `kind` mismatch yields a sentinel so a generic
 // callback can safely probe whichever args arrived.
 
-// KeyboardFocusChangedEventArgs::oldFocus — element that previously had focus.
+// KeyboardFocusChangedEventArgs::oldFocus: element that previously had focus.
 // Borrowed UIElement* (may be null even on a real focus event). Returns null
 // when the args are not a keyboard-focus event.
 extern "C" void* noesis_routed_events_focus_old(const void* args) {
@@ -669,7 +669,7 @@ extern "C" void* noesis_routed_events_focus_old(const void* args) {
     return f->oldFocus;
 }
 
-// KeyboardFocusChangedEventArgs::newFocus — element focus moved to. Borrowed
+// KeyboardFocusChangedEventArgs::newFocus: element focus moved to. Borrowed
 // UIElement*. Returns null when the args are not a keyboard-focus event.
 extern "C" void* noesis_routed_events_focus_new(const void* args) {
     if (!args) return nullptr;
@@ -695,7 +695,7 @@ extern "C" bool noesis_routed_events_drag_effects(
     return true;
 }
 
-// Set DragEventArgs::effects — the chosen drop effect a Drop/DragOver handler
+// Set DragEventArgs::effects: the chosen drop effect a Drop/DragOver handler
 // reports back to the drag source (`effects` is `mutable`). Returns false when
 // the args are not a drag event.
 extern "C" bool noesis_routed_events_drag_set_effects(const void* args, uint32_t effects) {
@@ -718,7 +718,7 @@ extern "C" void* noesis_routed_events_drag_data(const void* args) {
     return d->data;
 }
 
-// DragEventArgs::GetPosition(relativeTo) — drop point in `relative_to`'s
+// DragEventArgs::GetPosition(relativeTo): drop point in `relative_to`'s
 // coordinate space. `relative_to` must be a live UIElement*. Returns false when
 // the args are not a drag event or `relative_to` is null.
 extern "C" bool noesis_routed_events_drag_position(
@@ -734,7 +734,7 @@ extern "C" bool noesis_routed_events_drag_position(
     return true;
 }
 
-// Manipulation origin (manipulationOrigin) — present on Started/Delta/
+// Manipulation origin (manipulationOrigin): present on Started/Delta/
 // Completed/InertiaStarting. Returns false for other kinds.
 extern "C" bool noesis_routed_events_manip_origin(const void* args, float* x, float* y) {
     if (!args) return false;
@@ -761,7 +761,7 @@ extern "C" bool noesis_routed_events_manip_origin(const void* args, float* x, fl
     return true;
 }
 
-// The primary ManipulationDelta transform — `deltaManipulation` for a Delta
+// The primary ManipulationDelta transform: `deltaManipulation` for a Delta
 // event, `totalManipulation` for a Completed event. translation (tx,ty), scale,
 // rotation (degrees), expansion (ex,ey). Returns false for other kinds.
 extern "C" bool noesis_routed_events_manip_delta(
@@ -805,7 +805,7 @@ extern "C" bool noesis_routed_events_manip_cumulative(
     return true;
 }
 
-// ManipulationVelocities — `velocities` (Delta), `finalVelocities` (Completed)
+// ManipulationVelocities: `velocities` (Delta), `finalVelocities` (Completed)
 // or `initialVelocities` (InertiaStarting). angular (deg/ms), linear (lx,ly)
 // and expansion (ex,ey) in px/ms. Returns false for other kinds.
 extern "C" bool noesis_routed_events_manip_velocities(
@@ -835,7 +835,7 @@ extern "C" bool noesis_routed_events_manip_velocities(
     return true;
 }
 
-// isInertial flag — 1 (inertia phase), 0, or -1 when not a Delta/Completed
+// isInertial flag: 1 (inertia phase), 0, or -1 when not a Delta/Completed
 // manipulation event.
 extern "C" int32_t noesis_routed_events_manip_is_inertial(const void* args) {
     if (!args) return -1;
@@ -851,7 +851,7 @@ extern "C" int32_t noesis_routed_events_manip_is_inertial(const void* args) {
 
 // ── DragDrop source side + DataObject copy/paste handlers ────────────────────
 
-// Noesis::DragDrop::DoDragDrop — initiates a drag from `source` carrying
+// Noesis::DragDrop::DoDragDrop: initiates a drag from `source` carrying
 // `data`, advertising `allowed_effects` (DragDropEffects bitmask). The drag is
 // then driven by the host's pointer input; there is no headless completion.
 // Returns false if `source` or `data` is null.
@@ -967,14 +967,14 @@ extern "C" void noesis_routed_events_remove_data_object_handler(void* token) {
 // ── Non-routed lifecycle events ─────────────────────────────────────────────
 //
 // `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
-// notifications are NOT routed events — they ride the `Event_<T>` mechanism
+// notifications are NOT routed events; they ride the `Event_<T>` mechanism
 // (`UIElement::AddEventHandler(Symbol, const EventHandler&)` /
 // `RemoveEventHandler`), not `AddHandler(RoutedEvent, ...)`. Rather than guess
 // the internal Symbol keys, we drive each event through its public accessor's
 // `operator+=` / `operator-=` (which forward to Add/RemoveEventHandler with the
-// right key). The two delegate signatures involved — `EventHandler`
+// right key). The two delegate signatures involved, `EventHandler`
 // (Initialized / LayoutUpdated) and `DependencyPropertyChangedEventHandler`
-// (everything else) — are dispatched by the `ApplyLifecycle` table below. None
+// (everything else), are dispatched by the `ApplyLifecycle` table below. None
 // carry args we surface, so the Rust callback is a bare `void(userdata)`.
 //
 // Lifetime mirrors `RustRoutedHandler`: the heap handler owns a +1 ref on the
@@ -1077,7 +1077,7 @@ extern "C" void* noesis_subscribe_lifecycle(
 
     auto* handler = new RustLifecycleHandler(cb, userdata, fe, event_name);
     if (!ApplyLifecycle(fe, handler->name(), handler, true)) {
-        // Unknown event name — undo and report failure (frees the +1 ref + name).
+        // Unknown event name: undo and report failure (frees the +1 ref + name).
         delete handler;
         return nullptr;
     }
@@ -1105,7 +1105,7 @@ extern "C" void noesis_unsubscribe_lifecycle(void* token) {
 // fields (a stub returning 0 must fail), these helpers construct the real
 // `DragEventArgs` / `Manipulation*EventArgs` with known field values, wrap them
 // in the same `DmEventArgs` the live dispatcher uses, and invoke the supplied
-// callback — exactly mirroring `RustRoutedHandler::OnEvent`. The Rust test then
+// callback, exactly mirroring `RustRoutedHandler::OnEvent`. The Rust test then
 // reads the values back through the production accessors.
 
 #ifdef NOESIS_TEST_UTILS

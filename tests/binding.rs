@@ -82,9 +82,9 @@ fn rust_view_model_drives_binding() {
         );
 
         // Mutate the VM after the view is live; the binding must propagate the
-        // change to the TextBlock on the next update. This is the part that
-        // only works if the DependencyObject change notification reached the
-        // binding — a static one-shot read would leave the text at "Hello".
+        // change to the TextBlock on the next update. This works only if the
+        // DependencyObject change notification reached the binding; a static
+        // one-shot read would leave the text at "Hello".
         vm.handle().set_string(title_idx, "World");
         assert!(view.update(0.0));
         assert_eq!(

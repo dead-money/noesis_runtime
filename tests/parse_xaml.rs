@@ -15,7 +15,7 @@ use noesis_runtime::gui::load_component;
 use noesis_runtime::view::{FrameworkElement, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// A Grid hosting a single named Button — a real FrameworkElement tree.
+// A Grid hosting a single named Button: a real FrameworkElement tree.
 const GRID_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -24,7 +24,7 @@ const GRID_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
           HorizontalAlignment="Center" VerticalAlignment="Center"/>
 </Grid>"##;
 
-// A bare ResourceDictionary — a valid XAML object tree whose root is NOT a
+// A bare ResourceDictionary: a valid XAML object tree whose root is NOT a
 // FrameworkElement, so `parse` must reject it.
 const DICT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -39,7 +39,7 @@ const BROKEN_XAML: &str = "this is definitely not xaml @@@ <<< >>>";
 // XAML served by URI for the LoadComponent test. The `x:Class` names the
 // Rust-registered class (`Nz.LoadTarget`, a ContentControl) so Noesis maps the
 // root onto the supplied instance by type identity and grafts the parsed body
-// — here a single named Button — onto it. We then assert that named child is
+// (here a single named Button) onto it. We then assert that named child is
 // reachable from the instance, which is the observable proof LoadComponent ran.
 const COMPONENT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <ContentControl x:Class="Nz.LoadTarget"

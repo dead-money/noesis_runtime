@@ -2,7 +2,7 @@
 //! Rust and paint elements with them without authoring XAML.
 //!
 //! Each type here is an owning handle over a freshly-created Noesis object
-//! holding a single `+1` reference, released on [`Drop`] — the same pattern as
+//! holding a single `+1` reference, released on [`Drop`]. Same pattern as
 //! [`crate::binding::Boxed`] / [`crate::binding::ObservableCollection`].
 //! Assigning a brush/effect to an element makes Noesis take its own reference,
 //! so the Rust handle may be dropped right after assignment. The ergonomic way
@@ -10,7 +10,7 @@
 //! (`set_background` / `set_foreground` / `set_fill` / `set_effect`), which
 //! routes through the generic `set_component` DP path.
 //!
-//! Read-back getters ([`SolidColorBrush::color`], [`BlurEffect::radius`], …)
+//! Read-back getters ([`SolidColorBrush::color`], [`BlurEffect::radius`], ...)
 //! re-read from the live Noesis object, so they reflect its current state rather
 //! than a Rust-side cache.
 
@@ -616,7 +616,7 @@ impl AlignmentY {
 /// `Noesis::Stretch`: how content is resized to fill its
 /// allocated space. Ordinals match the C++ enum.
 ///
-/// This is the crate's single `Stretch` type — used both by tile brushes here
+/// This is the crate's single `Stretch` type, used both by tile brushes here
 /// and by [shapes](crate::shapes::Shape::set_stretch), which re-exports it.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -809,7 +809,7 @@ pub trait TileBrush: Brush {
 
 /// An `ImageBrush` tiling/stretching an `ImageSource` over the painted area.
 ///
-/// Source wiring is via a borrowed `ImageSource*` — typically one obtained from
+/// Source wiring is via a borrowed `ImageSource*`, typically one obtained from
 /// [`FrameworkElement::get_component`](crate::view::FrameworkElement::get_component)
 /// on an element with a loaded image, since this crate does not yet build
 /// `ImageSource`s from raw pixels (that needs the imaging surface).
@@ -884,14 +884,14 @@ impl Brush for ImageBrush {
 
 impl TileBrush for ImageBrush {}
 
-/// A `VisualBrush` painting an area with a `Visual` — any element (a
+/// A `VisualBrush` painting an area with a `Visual`. Any element (a
 /// [`FrameworkElement`](crate::view::FrameworkElement)) is a Visual.
 ///
 /// It derives from [`TileBrush`], so the tiling knobs (alignment / stretch /
 /// tile mode / viewport / viewbox) apply here too.
 ///
 /// A `VisualBrush` only *renders* when its visual is part of the live element
-/// tree — the property still round-trips ([`VisualBrush::visual`] reads the
+/// tree. The property still round-trips ([`VisualBrush::visual`] reads the
 /// pointer straight back from the brush), but nothing paints until the visual
 /// is parented.
 pub struct VisualBrush {

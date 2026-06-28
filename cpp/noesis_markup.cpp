@@ -8,7 +8,7 @@
 // parser set via the ContentProperty mechanism.
 //
 // Takes a single positional `Key` string argument. Returns either a
-// borrowed C string (most common — wrapped into a BoxedValue<String>) or
+// borrowed C string (most common, wrapped into a BoxedValue<String>) or
 // a borrowed BaseComponent* (for value types that can't be expressed as
 // text, e.g. an existing resource lookup).
 
@@ -38,7 +38,7 @@ namespace {
 
 // ── ClassData + registry ───────────────────────────────────────────────────
 
-// Same intrusive-refcount model as ClassData in noesis_classes.cpp — see
+// Same intrusive-refcount model as ClassData in noesis_classes.cpp; see
 // the comment there for the full lifetime contract. Short version: each
 // live `RustMarkupExtension` instance bumps the count; the Rust caller's
 // `MarkupExtensionRegistration` holds the +1 created at register time;
@@ -61,7 +61,7 @@ struct MarkupClassData {
     void Release() {
         if (ref_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             std::atomic_thread_fence(std::memory_order_acquire);
-            // See ClassData::Release in noesis_classes.cpp — same
+            // See ClassData::Release in noesis_classes.cpp. Same
             // rationale: never delete typeClass or `this` from inside
             // the destructor chain. Just free the Rust handler box;
             // the rest leaks until process shutdown sweeps it.
@@ -77,7 +77,7 @@ struct MarkupClassData {
 std::mutex                                              g_markup_registry_mutex;
 std::unordered_map<uint32_t, MarkupClassData*>          g_markup_registry;
 
-// Same shape as g_all_class_data in noesis_classes.cpp — see the comment
+// Same shape as g_all_class_data in noesis_classes.cpp; see the comment
 // there. Holds every successfully-registered MarkupClassData; the
 // shutdown sweep iterates the whole list and frees any handler box
 // whose `userdata` is still set (entries with userdata=null are
@@ -116,7 +116,7 @@ void markup_registry_erase(Noesis::Symbol sym) {
 
 class RustMarkupExtension: public Noesis::MarkupExtension {
 public:
-    Noesis::String Key; // ContentProperty — populated by XAML parser
+    Noesis::String Key; // ContentProperty, populated by XAML parser
 
     RustMarkupExtension() = default;
 
@@ -137,7 +137,7 @@ public:
     Noesis::Ptr<Noesis::BaseComponent>
     ProvideValue(const Noesis::ValueTargetProvider* /*provider*/) override;
 
-    // Hand-rolled reflection — see noesis_classes.cpp::RustContentControl
+    // Hand-rolled reflection. See noesis_classes.cpp::RustContentControl
     // for the rationale.
     static const Noesis::TypeClass*
     StaticGetClassType(Noesis::TypeTag<RustMarkupExtension>*);
@@ -252,7 +252,7 @@ extern "C" void* noesis_markup_extension_register(
     if (!markup_registry_insert(sym, cd)) {
         // Same fully-torn-down failure path as in noesis_classes.cpp:
         // no instances exist, no destructor chain in play, `cd` not yet
-        // in the shutdown sweep list — so free everything including
+        // in the shutdown sweep list, so free everything including
         // MarkupClassData itself.
         Noesis::Factory::UnregisterComponent(sym);
         Noesis::Reflection::Unregister(cd->typeClass);
@@ -273,7 +273,7 @@ extern "C" void noesis_markup_extension_unregister(void* token) {
     auto* cd = static_cast<MarkupClassData*>(token);
 
     // Stop new instances; existing live instances retain their own refs.
-    // Reflection::Unregister is deliberately NOT called — Noesis::Shutdown
+    // Reflection::Unregister is deliberately NOT called. Noesis::Shutdown
     // tears down the registry on its own and walking it manually mid-
     // process trips on instance destructor chains. See noesis_classes.cpp.
     Noesis::Factory::UnregisterComponent(cd->sym);
@@ -285,7 +285,7 @@ extern "C" void noesis_markup_extension_unregister(void* token) {
     cd->Release();
 }
 
-// Process-shutdown sweep — see noesis_classes.cpp's
+// Process-shutdown sweep. See noesis_classes.cpp's
 // `noesis_classes_force_free_at_shutdown` for the rationale.
 extern "C" void noesis_markup_extensions_force_free_at_shutdown(void) {
     std::vector<MarkupClassData*> all;

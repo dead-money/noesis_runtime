@@ -6,14 +6,14 @@
 //!
 //! The pieces, in dependency order:
 //!
-//! - [`types`] — `#[repr(C)]` mirrors of the public Noesis types in
+//! - [`types`]: `#[repr(C)]` mirrors of the public Noesis types in
 //!   `Include/NsRender/RenderDevice.h`. These are the ABI surface and their
 //!   layouts are checked against the C++ headers at compile time.
-//! - [`device`] — the [`RenderDevice`] trait your device impl satisfies, plus
+//! - [`device`]: the [`RenderDevice`] trait your device impl satisfies, plus
 //!   its handle / desc / binding plain-data types.
-//! - [`ffi`] — Rust mirrors of the C ABI types in `cpp/noesis_shim.h`, plus the
+//! - [`ffi`]: Rust mirrors of the C ABI types in `cpp/noesis_shim.h`, plus the
 //!   `extern "C"` declarations for the factory and helpers.
-//! - [`vtable`] — the `extern "C"` trampolines and the [`register`] entry point
+//! - [`vtable`]: the `extern "C"` trampolines and the [`register`] entry point
 //!   that owns the boxed impl and the C++ `RustRenderDevice` handle.
 
 pub mod device;

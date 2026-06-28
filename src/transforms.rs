@@ -71,7 +71,7 @@ macro_rules! transform_handle {
 }
 
 /// An owning, **type-erased** handle to a `Noesis::Transform` read back from an
-/// element — e.g. via
+/// element, e.g. via
 /// [`FrameworkElement::render_transform`](crate::view::FrameworkElement::render_transform).
 /// It doesn't expose the concrete transform kind, but it implements
 /// [`Transform`], so it can be re-applied to another element through
@@ -475,7 +475,7 @@ macro_rules! transform3d_handle {
 }
 
 /// An owning, **type-erased** handle to a `Noesis::Transform3D` read back from an
-/// element — e.g. via
+/// element, e.g. via
 /// [`FrameworkElement::transform3d`](crate::view::FrameworkElement::transform3d).
 /// It implements [`Transform3D`], so it can be re-applied to another element via
 /// [`FrameworkElement::set_transform3d`](crate::view::FrameworkElement::set_transform3d).
@@ -622,7 +622,7 @@ impl CompositeTransform3D {
 }
 
 /// Applies an arbitrary 3D matrix (XAML `MatrixTransform3D`). The matrix is a
-/// Noesis `Transform3` — 12 floats laid out as 4 rows of a `Vector3`
+/// Noesis `Transform3`: 12 floats laid out as 4 rows of a `Vector3`
 /// (`[row0(xyz), row1(xyz), row2(xyz), row3(xyz)]`, row 3 being translation).
 pub struct MatrixTransform3D {
     ptr: NonNull<c_void>,

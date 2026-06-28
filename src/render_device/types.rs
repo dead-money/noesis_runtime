@@ -9,7 +9,7 @@
 //!   `#[repr(C)]` Rust enums match that.
 //! - `Shader`, `SamplerState`, and `RenderState` are stored as a single
 //!   `uint8_t` in `Batch`. We mirror them as `#[repr(transparent)]` newtypes
-//!   over `u8` rather than Rust enums — that preserves the size *and* keeps
+//!   over `u8` rather than Rust enums; that preserves the size *and* keeps
 //!   any incoming byte value valid (no UB if Noesis adds variants we haven't
 //!   mirrored yet).
 //! - Bitfield ordering follows the LSB-first convention used by GCC and
@@ -21,7 +21,7 @@ use core::mem::{align_of, size_of};
 use std::os::raw::c_void;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Texture formats — `Noesis::TextureFormat::Enum`
+// Texture formats: `Noesis::TextureFormat::Enum`
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Pixel layout of a texture you create for the render device.
@@ -41,7 +41,7 @@ pub enum TextureFormat {
 pub const TEXTURE_FORMAT_COUNT: usize = 3;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Sampler state — `Noesis::WrapMode::Enum`, `MinMagFilter::Enum`,
+// Sampler state: `Noesis::WrapMode::Enum`, `MinMagFilter::Enum`,
 // `MipFilter::Enum`, `Noesis::SamplerState`
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -99,8 +99,8 @@ pub const MIP_FILTER_COUNT: usize = 3;
 
 /// Mirror of `Noesis::SamplerState`.
 ///
-/// Packed bitfield in a single byte: bits 0–2 wrap mode, bit 3 min/mag
-/// filter, bits 4–5 mip filter, bits 6–7 unused.
+/// Packed bitfield in a single byte: bits 0-2 wrap mode, bit 3 min/mag
+/// filter, bits 4-5 mip filter, bits 6-7 unused.
 #[repr(transparent)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct SamplerState(pub u8);
@@ -133,7 +133,7 @@ impl SamplerState {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Blend & stencil — `Noesis::BlendMode::Enum`, `Noesis::StencilMode::Enum`,
+// Blend & stencil: `Noesis::BlendMode::Enum`, `Noesis::StencilMode::Enum`,
 // `Noesis::RenderState`
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -147,7 +147,7 @@ impl SamplerState {
 pub enum BlendMode {
     /// `cs / as`
     Src = 0,
-    /// `cs + cd*(1-as) / as + ad*(1-as)` — standard premultiplied alpha.
+    /// `cs + cd*(1-as) / as + ad*(1-as)`. Standard premultiplied alpha.
     SrcOver = 1,
     /// `cs * cd + cd*(1-as) / as + ad*(1-as)`.
     SrcOverMultiply = 2,
@@ -188,8 +188,8 @@ pub const STENCIL_MODE_COUNT: usize = 7;
 
 /// Mirror of `Noesis::RenderState`.
 ///
-/// Packed bitfield in a single byte: bit 0 colorEnable, bits 1–3 blendMode,
-/// bits 4–6 stencilMode, bit 7 wireframe.
+/// Packed bitfield in a single byte: bit 0 colorEnable, bits 1-3 blendMode,
+/// bits 4-6 stencilMode, bit 7 wireframe.
 #[repr(transparent)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct RenderState(pub u8);
@@ -236,14 +236,14 @@ impl RenderState {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Shader / vertex / format taxonomy — `Noesis::Shader` and nested types
+// Shader / vertex / format taxonomy: `Noesis::Shader` and nested types
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Mirror of `Noesis::Shader`.
 ///
 /// The C++ side is a struct with a single `uint8_t v` field. We use a
 /// transparent newtype rather than a Rust enum so any incoming byte stays
-/// valid — Noesis is allowed to extend the variant set in a point release
+/// valid. Noesis is allowed to extend the variant set in a point release
 /// without us reading uninitialised discriminants.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -516,7 +516,7 @@ pub enum VertexAttrType {
 pub const VERTEX_ATTR_TYPE_COUNT: usize = 5;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Static lookup tables — mirrors of the `static constexpr const uint8_t` arrays
+// Static lookup tables: mirrors of the `static constexpr const uint8_t` arrays
 // declared inline in `RenderDevice.h`. Length-checked at compile time against
 // the corresponding `*_COUNT` constants.
 // ────────────────────────────────────────────────────────────────────────────
@@ -549,7 +549,7 @@ pub const TYPE_FOR_ATTR: [u8; VERTEX_ATTR_COUNT] = [1, 3, 1, 1, 0, 4, 2, 2];
 pub const SIZE_FOR_TYPE: [u8; VERTEX_ATTR_TYPE_COUNT] = [4, 8, 16, 4, 8];
 
 // ────────────────────────────────────────────────────────────────────────────
-// Frame primitives — `DeviceCaps`, `Tile`, `UniformData`
+// Frame primitives: `DeviceCaps`, `Tile`, `UniformData`
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Mirror of `Noesis::DeviceCaps`.
@@ -571,8 +571,8 @@ pub struct DeviceCaps {
 
 impl Default for DeviceCaps {
     fn default() -> Self {
-        // Values must match the C++ in-class member initializers (note
-        // depth_range_zero_to_one defaults to true, not false).
+        // Values must match the C++ in-class member initializers
+        // (depth_range_zero_to_one defaults to true, not false).
         Self {
             center_pixel_offset: 0.0,
             linear_rendering: false,
@@ -583,7 +583,7 @@ impl Default for DeviceCaps {
     }
 }
 
-/// Mirror of `Noesis::Tile` — a region of the render target with origin at
+/// Mirror of `Noesis::Tile`: a region of the render target with origin at
 /// the lower-left corner.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
@@ -598,7 +598,7 @@ pub struct Tile {
     pub height: u32,
 }
 
-/// Mirror of `Noesis::UniformData` — a span of dwords for uniform-buffer
+/// Mirror of `Noesis::UniformData`: a span of dwords for uniform-buffer
 /// updates, plus a content hash so the device can skip redundant uploads.
 ///
 /// `values` points into Noesis-owned memory that lives at least until the
@@ -610,7 +610,7 @@ pub struct UniformData {
     pub values: *const c_void,
     /// Number of 4-byte dwords at `values`.
     pub num_dwords: u32,
-    /// Content hash — equal hashes guarantee equal contents.
+    /// Content hash; equal hashes guarantee equal contents.
     pub hash: u32,
 }
 
@@ -660,7 +660,7 @@ impl UniformData {
 /// Your device's `create_texture` callback produces these; they then come back
 /// to you in `update_texture`, in `Batch.pattern`/`ramps`/`image`/`glyphs`/`shadow`,
 /// and the other texture-bearing callbacks. Only ever hold it behind a
-/// `*mut Texture` — the underlying class is owned by the C++ shim, so you can
+/// `*mut Texture`: the underlying class is owned by the C++ shim, so you can
 /// never construct or dereference one from Rust.
 #[repr(C)]
 pub struct Texture {
@@ -669,7 +669,7 @@ pub struct Texture {
     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 
-/// Mirror of `Noesis::Batch` — a single indexed-triangle draw call.
+/// Mirror of `Noesis::Batch`: a single indexed-triangle draw call.
 ///
 /// Hot-path payload to `RenderDevice::draw_batch`. Texture pointers are null
 /// when unused. Vertex data starts at the most recent `map_vertices()` return
@@ -680,7 +680,7 @@ pub struct Texture {
 /// (which come from Noesis and reference `RustTexture` instances inside the
 /// C++ shim) into the `TextureHandle` values originally returned by
 /// `RenderDevice::create_texture`. Safe to call: the shim getter does a
-/// null check and reads a stored handle field — no further dereferencing.
+/// null check and reads a stored handle field; no further dereferencing.
 #[repr(C)]
 #[derive(Debug)]
 pub struct Batch {
@@ -794,7 +794,7 @@ fn handle_from_texture_ptr(ptr: *mut Texture) -> Option<crate::render_device::Te
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Layout assertions — these fire at compile time if any mirror drifts from
+// Layout assertions: these fire at compile time if any mirror drifts from
 // the Noesis-side layout. Sizes for the byte-packed types are checked
 // explicitly; the `#[repr(C)]` enums get their size from the platform's int
 // representation, which already matches Noesis's unscoped enum default.

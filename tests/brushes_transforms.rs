@@ -95,7 +95,7 @@ fn brushes_transforms_effects_round_trip() {
             grad.raw(),
             "Fill is the exact gradient brush"
         );
-        // Border has no Fill DP — the typed sugar must report failure.
+        // Border has no Fill DP, so the typed sugar must report failure.
         assert!(!border.set_fill(&brush), "Border has no Fill");
 
         let mut radial = RadialGradientBrush::new();

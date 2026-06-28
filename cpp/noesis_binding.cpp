@@ -3,18 +3,18 @@
 // Two cooperating pieces that close the gap between "bindings authored in
 // XAML" and "bindings + conversion logic driven from Rust":
 //
-//   * RustValueConverter : Noesis::BaseValueConverter — a trampoline whose
+//   * RustValueConverter : Noesis::BaseValueConverter. A trampoline whose
 //     TryConvert / TryConvertBack forward into a Rust vtable. Binding values
 //     cross the FFI as boxed `BaseComponent*` (the same boxing the rest of the
 //     data-binding bridge uses); the Rust side unboxes the input with the
 //     noesis_unbox_* helpers below and boxes its result with noesis_box_*.
 //     Lifetime: the converter is an ordinary BaseComponent, so Noesis's
 //     intrusive refcount runs the
-//     destructor — and the donated Rust free handler — exactly once after the
+//     destructor (and the donated Rust free handler) exactly once after the
 //     last reference drops (which may be a Binding holding the converter alive
 //     well past the Rust handle being dropped).
 //
-//   * Binding construction + BindingOperations::SetBinding — `new Binding(path)`
+//   * Binding construction + BindingOperations::SetBinding: `new Binding(path)`
 //     plus setters for the common knobs (Source, ElementName, Mode, Converter,
 //     ConverterParameter, StringFormat, FallbackValue, UpdateSourceTrigger,
 //     RelativeSource Self) and a wiring entrypoint that resolves the target DP
@@ -22,7 +22,7 @@
 //     that mirrors what XAML `{Binding ...}` authoring does.
 //
 // Plus value boxing/unboxing helpers (bool/int32/double) so Rust can move
-// primitive values across as BaseComponent* — the currency every binding /
+// primitive values across as BaseComponent*, the currency every binding /
 // converter speaks. `noesis_box_string` already lives in
 // noesis_collections.cpp; the string *unbox* helper is here next to its peers.
 
@@ -111,7 +111,7 @@ private:
         if (!ok) return false;
         if (out) {
             // Adopt the +1 reference transferred from Rust (the `Ptr<T>(T&)`
-            // constructor takes ownership without an extra AddReference — the
+            // constructor takes ownership without an extra AddReference, the
             // same adopt idiom used for `*new T` elsewhere in this shim).
             result = Noesis::Ptr<Noesis::BaseComponent>(*static_cast<Noesis::BaseComponent*>(out));
         } else {
@@ -190,7 +190,7 @@ extern "C" void* noesis_value_converter_create(
     void* userdata,
     noesis_value_converter_free_fn free_handler) {
     if (!vt) return nullptr;
-    // BaseComponent starts at refcount 1 — that initial reference IS the
+    // BaseComponent starts at refcount 1. That initial reference IS the
     // caller's +1, balanced by noesis_value_converter_destroy. A Binding
     // that later stores the converter (SetConverter) takes its own ref, so the
     // handler box outlives our destroy until that ref also drops.
@@ -285,7 +285,7 @@ extern "C" bool noesis_binding_set_relative_source_find_ancestor(
 
     const int lvl = level == 0 ? 1 : static_cast<int>(level);
     // new RelativeSource starts at refcount 1; the local Ptr adopts that and
-    // releases on scope exit — SetRelativeSource takes its own reference.
+    // releases on scope exit. SetRelativeSource takes its own reference.
     Noesis::Ptr<Noesis::RelativeSource> rs = *new Noesis::RelativeSource(
         Noesis::RelativeSourceMode_FindAncestor, type, lvl);
     b->SetRelativeSource(rs.GetPtr());
@@ -311,7 +311,7 @@ extern "C" void noesis_binding_set_relative_source_templated_parent(void* bindin
 
 // Borrowed BindingExpression* for the binding on `element`'s `dp_name` property,
 // via BindingOperations::GetBindingExpression. The expression is OWNED by the
-// target object — the caller must NOT release it, and it is valid only while the
+// target object: the caller must NOT release it, and it is valid only while the
 // binding stays live on that property. Returns NULL if `element` is not a
 // DependencyObject, the DP name is unknown, or no binding is set on it. The
 // pointer is returned as the BaseBindingExpression base (upcast) so the
@@ -339,7 +339,7 @@ extern "C" void noesis_binding_expression_update_target(void* expr) {
 }
 
 // Push the current target value back to the source. No-op (per Noesis) unless
-// the binding's Mode is TwoWay / OneWayToSource — this is what commits a binding
+// the binding's Mode is TwoWay / OneWayToSource. This commits a binding
 // whose UpdateSourceTrigger is Explicit.
 extern "C" void noesis_binding_expression_update_source(void* expr) {
     if (!expr) return;

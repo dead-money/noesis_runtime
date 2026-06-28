@@ -1,23 +1,23 @@
 //! Immediate-mode drawing via `DrawingContext`.
 //!
 //! In Noesis 3.2.13 a [`DrawingContext`] has a private constructor (friend
-//! `UIElement`) and is delivered ONLY to `UIElement::OnRender` — there is no
+//! `UIElement`) and is delivered ONLY to `UIElement::OnRender`. There is no
 //! public `DrawingVisual`/`RenderOpen` and no `Drawing`/`DrawingGroup` object
 //! model. So immediate-mode drawing is reachable exactly one way: override
 //! `OnRender` on a custom element. This module provides:
 //!
-//! * [`Pen`] — a code-built `Noesis::Pen` (brush + thickness + line caps /
+//! * [`Pen`]: a code-built `Noesis::Pen` (brush + thickness + line caps /
 //!   join), the stroke descriptor several draw calls need. Owning handle with a
 //!   `+1` reference released on [`Drop`], like the brushes in [`crate::brushes`].
-//!   Read-back getters ([`Pen::thickness`], [`Pen::line_caps`], …) re-read the
+//!   Read-back getters ([`Pen::thickness`], [`Pen::line_caps`], ...) re-read the
 //!   live object.
 //! * [`DrawingContext::draw_geometry`] / [`DrawingContext::push_clip`] take any
-//!   [`Geometry`] — the rich code-built geometry types
+//!   [`Geometry`]. The code-built geometry types
 //!   ([`RectangleGeometry`], [`PathGeometry`](crate::geometry::PathGeometry),
-//!   [`EllipseGeometry`](crate::geometry::EllipseGeometry), …) live in
+//!   [`EllipseGeometry`](crate::geometry::EllipseGeometry), ...) live in
 //!   [`crate::geometry`]; the trait and `RectangleGeometry` are re-exported here
 //!   for convenience.
-//! * [`DrawingContext`] — a **borrowed** handle over the `DrawingContext*`
+//! * [`DrawingContext`]: a **borrowed** handle over the `DrawingContext*`
 //!   handed to a [`crate::classes::RenderHandler`]. Valid only for the duration
 //!   of the render callback; the draw / push / pop methods forward straight into
 //!   Noesis.
@@ -61,8 +61,8 @@ pub enum BlendingMode {
 
 // ── Pen ──────────────────────────────────────────────────────────────────────
 
-/// A code-built `Noesis::Pen`: the stroke (outline) descriptor — a [`Brush`] +
-/// thickness + line caps / join — that the `Draw*` calls stroke with.
+/// A code-built `Noesis::Pen`: the stroke (outline) descriptor (a [`Brush`] +
+/// thickness + line caps / join) that the `Draw*` calls stroke with.
 pub struct Pen {
     ptr: NonNull<c_void>,
 }
@@ -216,7 +216,7 @@ impl Pen {
     #[must_use]
     pub fn dashes(&self) -> Option<Vec<f32>> {
         // SAFETY: self.ptr is a live Pen*; the returned pointer (if non-null) is
-        // a borrowed NUL-terminated string valid until the next pen mutation —
+        // a borrowed NUL-terminated string valid until the next pen mutation,
         // copied out immediately here.
         let p = unsafe { noesis_pen_get_dashes(self.ptr.as_ptr()) };
         if p.is_null() {
@@ -262,11 +262,11 @@ fn join_from_i32(v: i32) -> PenLineJoin {
 /// A **borrowed** drawing context, valid only for the duration of a
 /// [`crate::classes::RenderHandler::render`] callback. Issues immediate-mode
 /// draw / push / pop commands straight into Noesis. Do not store it past the
-/// callback — the underlying `Noesis::DrawingContext*` is owned by the element's
+/// callback; the underlying `Noesis::DrawingContext*` is owned by the element's
 /// render pass.
 ///
 /// Coordinates are in DIPs in the element's local space. A null `brush` (`None`)
-/// fills nothing; a null `pen` (`None`) strokes nothing — matching Noesis's own
+/// fills nothing; a null `pen` (`None`) strokes nothing, matching Noesis's own
 /// behaviour, so passing both `None` draws nothing.
 pub struct DrawingContext<'a> {
     ptr: NonNull<c_void>,

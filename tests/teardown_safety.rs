@@ -81,7 +81,7 @@ fn class_handler_drops_when_last_instance_dies_not_at_unregister() {
             .expect("find_name ProbeInstance");
         drop(probe);
 
-        // Drop registration before view — previously segfaulted: ClassRegistration::drop
+        // Drop registration before view. Previously segfaulted: ClassRegistration::drop
         // freed the handler box while the View still owned an instance whose destructor
         // fired a callback into that box.
         drop(registration);
@@ -108,5 +108,5 @@ fn class_handler_drops_when_last_instance_dies_not_at_unregister() {
 }
 
 // Markup-extension counterpart lives in `tests/teardown_safety_markup.rs`
-// because Noesis is process-singleton — each integration-test binary gets
+// because Noesis is process-singleton; each integration-test binary gets
 // exactly one init/shutdown cycle.

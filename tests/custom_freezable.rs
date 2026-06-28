@@ -1,11 +1,11 @@
 //! Custom `Freezable` base class with custom DPs and freeze state machine.
 //!
-//! The property-changed callback is NOT asserted here — it does not fire on
+//! The property-changed callback is NOT asserted here: it does not fire on
 //! code-created (un-parsed, tree-detached) `Freezable` instances; see
 //! LIMITATIONS.md. The handler below is a `Noop` for that reason.
 //!
 //! The sibling `Animatable` subtrees (`Brush`/`Geometry`/`Transform`/`Effect`)
-//! are NOT subclassable this way — see LIMITATIONS.md.
+//! are NOT subclassable this way; see LIMITATIONS.md.
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
 use noesis_runtime::ffi::{ClassBase, PropType};

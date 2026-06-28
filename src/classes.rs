@@ -18,15 +18,15 @@
 //!    XAML / bindings / runtime fire your [`PropertyChangeHandler::on_changed`]
 //!    on the main thread.
 //! 4. From Rust, mutate the instance via [`Instance::set_int32`] /
-//!    [`Instance::set_thickness`] / etc. — useful for "computed" properties
+//!    [`Instance::set_thickness`] / etc., useful for "computed" properties
 //!    (`NineSlicer`'s `TopLeftViewbox` family is the motivating example).
 //! 5. Drop the [`ClassRegistration`] AFTER all live instances are released
 //!    (typically at process shutdown). RAII + the `Send`/`Sync` bounds are
-//!    deliberately conservative — registrations are cheap and rare.
+//!    deliberately conservative; registrations are cheap and rare.
 //!
 //! # Threading
 //!
-//! Property-changed callbacks fire on whatever thread drives the View — in
+//! Property-changed callbacks fire on whatever thread drives the View, in
 //! practice the main thread. The handler is stored behind a `Send` trait
 //! bound; if you need cross-thread fan-out (e.g. Bevy ECS), keep the handler
 //! body small and route to a channel / queue.
@@ -37,7 +37,7 @@
 //! if the new value differs. Guard against re-entrancy in the handler if you
 //! plan to write back to the same property.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ffi::{CStr, c_char};
 use core::ptr::{self, NonNull};
@@ -85,7 +85,7 @@ unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
 /// the pointer is null or doesn't downcast.
 ///
 /// Useful when a custom-control [`PropertyChangeHandler`] needs the source
-/// dimensions to compute derived properties — `NineSlicer` / `ThreeSlicer`'s
+/// dimensions to compute derived properties. `NineSlicer` / `ThreeSlicer`'s
 /// `OnSlicesChanged` is the motivating example.
 ///
 /// # Safety
@@ -102,7 +102,7 @@ pub unsafe fn image_source_size(image_source: NonNull<c_void>) -> Option<(f32, f
 }
 
 /// Per-instance Rust callback. Implementations receive a stable instance
-/// pointer (see [`Instance`]) and the index of the changed property — index
+/// pointer (see [`Instance`]) and the index of the changed property. The index
 /// matches the order in which DPs were added to the class.
 ///
 /// # Re-entrancy
@@ -113,7 +113,7 @@ pub unsafe fn image_source_size(image_source: NonNull<c_void>) -> Option<(f32, f
 /// inside `on_changed` (e.g. `SliceThickness` changes → recompute viewboxes →
 /// `instance.set_rect(...)`). That synchronous write re-enters Noesis, which
 /// re-invokes this same handler before the outer call has returned. Holding a
-/// `&mut self` across the user callback would alias on re-entry — undefined
+/// `&mut self` across the user callback would alias on re-entry: undefined
 /// behaviour. Handlers that need mutable state must use interior mutability
 /// (`Cell` / `RefCell` / `Mutex` / atomics); re-entering a `RefCell` borrow is a
 /// controlled panic, never UB.
@@ -125,8 +125,8 @@ pub trait PropertyChangeHandler: Send + 'static {
 /// [`PropType`] declared at registration time.
 ///
 /// Borrowed variants (`String`, `ImageSource`, `BaseComponent`) reference
-/// Noesis-owned storage that may be invalidated by the next layout pass —
-/// copy if you need to keep the value past the callback.
+/// Noesis-owned storage that may be invalidated by the next layout pass.
+/// Copy if you need to keep the value past the callback.
 #[derive(Debug)]
 pub enum PropertyValue<'a> {
     Int32(i32),
@@ -434,7 +434,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             if idx == u32::MAX {
                 // C++ owns the property-handler box now; unregister triggers
                 // its free trampoline (no instances exist yet). The coerce /
-                // layout boxes were never donated — drop them here.
+                // layout boxes were never donated, so drop them here.
                 unsafe { noesis_class_unregister(token.as_ptr()) };
                 drop(coerce);
                 drop(layout);
@@ -592,7 +592,7 @@ impl OwnedDefault {
             OwnedDefault::Double(v) => (v as *const f64).cast(),
             OwnedDefault::Bool(v) => (v as *const bool).cast(),
             OwnedDefault::String(slot) => match slot {
-                // FFI expects `const char* const*` — a pointer to a c-string
+                // FFI expects `const char* const*`, a pointer to a c-string
                 // pointer. `slot.ptr` is that c-string pointer, held in stable
                 // storage owned by this `OwnedDefault`; we hand the FFI the
                 // address of that slot. It is dereferenced synchronously by the
@@ -612,8 +612,8 @@ impl OwnedDefault {
     }
 }
 
-/// RAII handle for a registered class. Drop unregisters the class —
-/// preventing new instances from being created — but the underlying
+/// RAII handle for a registered class. Drop unregisters the class
+/// (preventing new instances from being created), but the underlying
 /// `ClassData` (and the boxed handler) survive as long as instances remain
 /// alive. The intrusive refcount on the C++ side guarantees the handler
 /// outlives any property-change callback fired during instance destruction.
@@ -729,7 +729,7 @@ impl Drop for ClassRegistration {
         // time) and is responsible for calling `class_handler_free_trampoline`
         // exactly once when the underlying ClassData is finally freed.
         // That happens *here* if no instances are alive, or deferred to
-        // the last instance's destruction otherwise — which is the whole
+        // the last instance's destruction otherwise, which is the whole
         // point of the refcount: instances may legally outlive the Rust
         // `ClassRegistration` (e.g. when Bevy drops the registry resource
         // before the View tearing down).
@@ -742,8 +742,8 @@ impl Drop for ClassRegistration {
 
 /// Stable pointer to a Rust-backed instance, as observed by the
 /// [`PropertyChangeHandler`] callback. Use it to drive the
-/// [`Instance`] `set_*` / `get_*` methods without holding a Noesis ref
-/// — the instance is owned by the visual tree.
+/// [`Instance`] `set_*` / `get_*` methods without holding a Noesis ref:
+/// the instance is owned by the visual tree.
 #[derive(Copy, Clone, Debug)]
 pub struct Instance(NonNull<c_void>);
 
@@ -753,7 +753,7 @@ impl Instance {
     /// # Safety
     ///
     /// `ptr` must be a non-null pointer obtained from the FFI's
-    /// property-change callback or from another [`Instance`] — it is treated
+    /// property-change callback or from another [`Instance`]. It is treated
     /// as opaque and stays valid for the instance's lifetime.
     pub unsafe fn from_raw(ptr: NonNull<c_void>) -> Self {
         Self(ptr)
@@ -879,7 +879,7 @@ impl Instance {
     /// caller keeps ownership of `component` (pass `null` to clear). The
     /// motivating use is binding a control to a Rust-backed
     /// [`crate::commands::Command`]: register a `BaseComponent` DP on the view
-    /// model, point it at `command.raw()`, then bind `Command="{Binding …}"`.
+    /// model, point it at `command.raw()`, then bind `Command="{Binding ...}"`.
     ///
     /// # Safety
     ///
@@ -896,7 +896,7 @@ impl Instance {
         }
     }
 
-    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand) — a
+    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand): a
     /// [`Command`](crate::commands::Command),
     /// [`RoutedCommand`](crate::commands::RoutedCommand),
     /// [`RoutedUICommand`](crate::commands::RoutedUICommand), or built-in
@@ -911,7 +911,7 @@ impl Instance {
     /// [`set_component`](Self::set_component) for the command case: the
     /// `&impl AsCommand` borrow encodes the live-`BaseComponent` invariant. Set
     /// the instance as a `DataContext` and bind `Command="{Binding ThatProperty}"`
-    /// in XAML — see the [`crate::commands`] module docs.
+    /// in XAML. See the [`crate::commands`] module docs.
     pub fn set_command(self, prop_index: u32, command: &impl crate::commands::AsCommand) {
         // SAFETY: `command.command_ptr()` is a live ICommand* (a BaseComponent*
         // at runtime) borrowed for the duration of this synchronous call; the
@@ -1018,8 +1018,8 @@ impl Instance {
     /// Read the intrinsic size of an `ImageSource`-typed property's current
     /// value. Returns `None` when the source is null, not an
     /// `ImageSource` subclass, or the property index doesn't match an
-    /// `ImageSource` property. Safe wrapper over [`image_source_size`] —
-    /// useful for custom-control handlers (`NineSlicer` / `ThreeSlicer`) that
+    /// `ImageSource` property. Safe wrapper over [`image_source_size`] for
+    /// custom-control handlers (`NineSlicer` / `ThreeSlicer`) that
     /// need source dimensions without dropping into `unsafe`.
     #[must_use]
     pub fn get_image_source_size(self, prop_index: u32) -> Option<(f32, f32)> {
@@ -1068,7 +1068,7 @@ unsafe extern "C" fn prop_changed_trampoline(
 // during ClassBuilder::register. We use the userdata pointer as the key
 // because it's stable per-class and unique (one Box per registration).
 //
-// This avoids broadening the FFI callback signature — the C++ side already
+// This avoids broadening the FFI callback signature: the C++ side already
 // knows the prop type internally; the Rust side mirrors the list so it can
 // decode `value_ptr` at the boundary.
 static CLASS_PROP_TYPES: Mutex<Vec<(usize, Vec<PropType>)>> = Mutex::new(Vec::new());
@@ -1105,7 +1105,7 @@ unsafe fn decode_value<'a>(
 ) -> PropertyValue<'a> {
     let kind = match lookup_prop_type(userdata, prop_index) {
         Some(k) => k,
-        None => return PropertyValue::Bool(false), // unknown — defensive
+        None => return PropertyValue::Bool(false), // unknown; defensive
     };
     if value_ptr.is_null() {
         return match kind {
@@ -1344,7 +1344,7 @@ impl Size {
 /// [`LayoutChild::arrange`].
 ///
 /// Default impls make the element take zero space (measure) and accept the
-/// final size (arrange) — override the half you need.
+/// final size (arrange); override the half you need.
 ///
 /// Methods take `&self` (re-entrant: a single handler box is shared by every
 /// instance of the class, so a panel that lays out children of its own type
@@ -1646,7 +1646,7 @@ unsafe fn encode_coerced(
             *f = x;
             *f.add(1) = y;
         }
-        // Variant / type mismatch — leave the passthrough copy in place.
+        // Variant / type mismatch: leave the passthrough copy in place.
         _ => {}
     }
 }
@@ -1723,7 +1723,7 @@ unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
 ///
 /// `OnRender` fires during the renderer's render-tree update (drive it with a
 /// [`View`](crate::view::View) + [`Renderer`](crate::view::Renderer) bound to a
-/// [`RenderDevice`](crate::render_device::RenderDevice) — see `tests/drawing.rs`).
+/// [`RenderDevice`](crate::render_device::RenderDevice); see `tests/drawing.rs`).
 /// Like the layout callbacks it runs on the view-driving thread; keep work small.
 ///
 /// Takes `&self` (re-entrant: one handler box is shared by every instance of
@@ -1752,7 +1752,7 @@ unsafe extern "C" fn render_trampoline(
             return;
         };
         // SAFETY: `ctx` is the borrowed DrawingContext* delivered to OnRender, valid
-        // only for this call — the `DrawingContext<'_>` lifetime keeps it scoped.
+        // only for this call; the `DrawingContext<'_>` lifetime keeps it scoped.
         let ctx = DrawingContext::from_raw(ctx);
         handler.render(Instance(inst), ctx);
     })

@@ -110,7 +110,7 @@ fn observable_collection() {
         assert_eq!(
             content.realized_item_count(),
             Some(3),
-            "adding an item from Rust did not regenerate a container — \
+            "adding an item from Rust did not regenerate a container : \
              INotifyCollectionChanged did not reach the control"
         );
 

@@ -63,7 +63,7 @@ fn element_props_round_trip() {
         let content = view.content().expect("View::content returned None");
 
         // Noesis lays out eagerly on content()/set_size, so actual_width() may
-        // already be non-zero before update(0.0) — cap-check rather than assert zero.
+        // already be non-zero before update(0.0); cap-check rather than assert zero.
         let mut sized = content.find_name("Sized").expect("Sized not found");
         if let Some(w) = sized.actual_width() {
             // Never larger than the declared Width for a non-stretched element.

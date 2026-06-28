@@ -1,7 +1,7 @@
 //! `MultiBinding` + `IMultiValueConverter` from Rust.
 //!
 //! A [`MultiBinding`] combines N child [`Binding`]s through a Rust
-//! [`MultiValueConverter`] into a single target value — the code-built
+//! [`MultiValueConverter`] into a single target value, the code-built
 //! equivalent of authoring a `<MultiBinding>` with several `<Binding>` children
 //! and a `Converter` in XAML. The converter receives the source values as an
 //! array of boxed arguments (one per child binding, in order) and returns a
@@ -26,7 +26,7 @@
 //! drop. [`MultiBinding::set_on`] makes Noesis take its own reference, so the
 //! handle may be dropped after wiring; the converter stays alive while the
 //! binding references it. The converter's handler box is freed exactly once, by
-//! the C++ destructor, after the last reference drops — modelled on
+//! the C++ destructor, after the last reference drops. Modelled on
 //! [`crate::converters::Converter`].
 //!
 //! # Threading
@@ -34,7 +34,7 @@
 //! `convert` fires from inside Noesis's binding pump on whatever thread drives
 //! the view. The handler is stored behind `Send`; keep the work small.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};

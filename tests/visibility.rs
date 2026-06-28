@@ -72,7 +72,7 @@ fn set_visibility_toggles_overlay_and_blocks_hit_test() {
         let _click_sub = subscribe_click(&button, move || {
             counter_in_handler.fetch_add(1, Ordering::SeqCst);
         })
-        .expect("subscribe_click returned None — HitButton not a button?");
+        .expect("subscribe_click returned None : HitButton not a button?");
 
         // First update is required before hit-testing works.
         assert!(view.update(0.0), "first Update should report change");

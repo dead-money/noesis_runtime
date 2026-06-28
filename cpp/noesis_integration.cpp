@@ -6,8 +6,8 @@
 //   `GetCulture`.
 //
 //   For the callback hooks we keep a static `(user, cb)` slot per hook and
-//   register a C++ trampoline whose job is to translate the Noesis-typed
-//   arguments — `Cursor*` (→ CursorType int), `const Uri&` (→ const char*) —
+//   register a C++ trampoline that translates the Noesis-typed
+//   arguments, `Cursor*` (→ CursorType int) and `const Uri&` (→ const char*),
 //   into the plain C ABI the Rust side declared. The Rust user pointer is
 //   forwarded untouched. Passing a NULL `cb` clears the slot and the
 //   underlying Noesis callback.

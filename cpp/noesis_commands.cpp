@@ -13,7 +13,7 @@
 // instances), a command is 1:1 with its Rust handler box. The box is owned
 // directly by the `RustCommand` instance and freed in its destructor. The
 // instance is an ordinary `BaseComponent`, so Noesis's intrusive refcount
-// guarantees the destructor — and therefore the free handler — runs exactly
+// guarantees the destructor (and therefore the free handler) runs exactly
 // once, after the LAST reference drops. That last reference may be the
 // binding (Button.Command) holding the command alive well past the Rust
 // `Command` handle being dropped, so CanExecute / Execute keep working until
@@ -60,7 +60,7 @@ public:
     }
 
     // From ICommand (via BaseCommand). `param` is the borrowed command
-    // parameter BaseComponent* (may be null) — forwarded verbatim.
+    // parameter BaseComponent* (may be null). Forwarded verbatim.
     bool CanExecute(Noesis::BaseComponent* param) const override {
         if (mVtable.can_execute) {
             return mVtable.can_execute(mUserdata, param);
@@ -91,7 +91,7 @@ extern "C" void* noesis_command_create(
     void* userdata,
     noesis_command_free_fn free_handler) {
     if (!vt) return nullptr;
-    // BaseRefCounted starts at refcount 1 — that initial reference IS the
+    // BaseRefCounted starts at refcount 1. That initial reference IS the
     // caller's +1, balanced by noesis_command_destroy. (No AddReference:
     // a binding that later stores the command takes its own ref via
     // SetValueObject, so the handler box outlives our destroy until that ref
@@ -136,7 +136,7 @@ extern "C" void* noesis_routed_command_create(const char* name, const char* owne
     if (!name) return nullptr;
     const Noesis::TypeClass* owner = resolve_owner(owner_type_name);
     if (!owner) return nullptr;
-    // BaseRefCounted starts at refcount 1 — that initial ref is the caller's +1.
+    // BaseRefCounted starts at refcount 1. That initial ref is the caller's +1.
     auto* cmd = new Noesis::RoutedCommand(Noesis::Symbol(name), owner);
     return static_cast<Noesis::BaseComponent*>(cmd);
 }
@@ -289,7 +289,7 @@ extern "C" void noesis_command_binding_destroy(void* token) {
 
 // ── Built-in command libraries ───────────────────────────────────────────────
 //
-// Borrowed `const RoutedUICommand*` singletons owned by the framework — do NOT
+// Borrowed `const RoutedUICommand*` singletons owned by the framework. Do NOT
 // release. Indexed by the enums in src/commands.rs; the switch evaluates each
 // static at call time (after GUI init), so the pointers are live. NULL on an
 // out-of-range index.

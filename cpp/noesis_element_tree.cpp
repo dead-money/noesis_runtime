@@ -2,7 +2,7 @@
 // Border/Decorator children, and Grid row/column definitions from Rust. The
 // relevant collections (Panel::Children, Grid::Row/ColumnDefinitions) and the
 // Decorator Child are NOT DependencyProperties, so they cannot be reached by the
-// generic by-name DP setters — this unit wraps the typed C++ accessors instead.
+// generic by-name DP setters, so this unit wraps the typed C++ accessors instead.
 //
 // Ownership mirrors cpp/noesis_text_inlines.cpp / cpp/noesis_collections.cpp:
 //

@@ -3,18 +3,18 @@
 // Typed sugar + genuinely-new entrypoints over the standard Noesis controls,
 // each guarded by a DynamicCast to the right control type so a type mismatch
 // degrades gracefully (false / null / a sentinel) rather than crashing across
-// the C ABI — mirroring the text_get/set + visual_state guards elsewhere.
+// the C ABI, mirroring the text_get/set + visual_state guards elsewhere.
 //
 // Covered families:
-//   * Selector  — SelectedIndex / SelectedItem (ListBox/ComboBox/TabControl/…)
-//   * ItemsControl.Items — direct collection mutation (Add/Insert/RemoveAt/Clear)
-//   * RangeBase — Value/Minimum/Maximum (Slider/ProgressBar/ScrollBar)
-//   * ToggleButton — IsChecked as a tri-state Nullable<bool> (CheckBox/RadioButton)
+//   * Selector: SelectedIndex / SelectedItem (ListBox/ComboBox/TabControl/...)
+//   * ItemsControl.Items: direct collection mutation (Add/Insert/RemoveAt/Clear)
+//   * RangeBase: Value/Minimum/Maximum (Slider/ProgressBar/ScrollBar)
+//   * ToggleButton: IsChecked as a tri-state Nullable<bool> (CheckBox/RadioButton)
 //   * Popup.IsOpen / Expander.IsExpanded
-//   * ScrollViewer — read offsets/extents + ScrollTo* methods
-//   * BaseTextBox/TextBox — selection + caret; PasswordBox password
+//   * ScrollViewer: read offsets/extents + ScrollTo* methods
+//   * BaseTextBox/TextBox: selection + caret; PasswordBox password
 //
-// No VerifyAccess() — these must never throw across the C ABI. Single-thread
+// No VerifyAccess(): these must never throw across the C ABI. Single-thread
 // (View) affinity is the caller's responsibility, like the other accessors.
 
 #include "noesis_shim.h"
@@ -101,7 +101,7 @@ extern "C" bool noesis_selector_set_selected_item(void* element, void* item) {
 // ── ItemsControl.Items direct mutation ──────────────────────────────────────
 //
 // These mutate the control's own `Items` collection (NOT an external
-// ItemsSource — when ItemsSource is set, Items is read-only and these no-op via
+// ItemsSource; when ItemsSource is set, Items is read-only and these no-op via
 // Noesis's own guard). `item` is a borrowed BaseComponent* (typically a boxed
 // value); the ItemCollection takes its own reference.
 
@@ -402,7 +402,7 @@ extern "C" bool noesis_controls_selector_set_selected_value(void* element, void*
     return true;
 }
 
-// Borrowed pointer to the SelectedValuePath string (never null for a Selector —
+// Borrowed pointer to the SelectedValuePath string (never null for a Selector;
 // the default is ""). Null only when `element` is not a Selector. Copy now.
 extern "C" const char* noesis_controls_selector_get_selected_value_path(void* element) {
     if (!element) return nullptr;
@@ -430,7 +430,7 @@ extern "C" void* noesis_controls_treeview_get_selected_item(void* element) {
     return tv ? static_cast<Noesis::BaseComponent*>(tv->GetSelectedItem()) : nullptr;
 }
 
-// TreeViewItem.IsSelected / IsExpanded — selection is driven per-item in a
+// TreeViewItem.IsSelected / IsExpanded. Selection is driven per-item in a
 // TreeView (there is no public TreeView::SetSelectedItem).
 extern "C" bool noesis_controls_treeviewitem_get_is_selected(void* element, bool* out) {
     if (!element || !out) return false;
@@ -610,7 +610,7 @@ extern "C" bool noesis_controls_fe_set_tooltip_string(void* element, const char*
     return true;
 }
 
-// ToolTipService attached ToolTip — readable on ANY DependencyObject (it is what
+// ToolTipService attached ToolTip. Readable on ANY DependencyObject (it is what
 // FrameworkElement.ToolTip ultimately writes; exposing the service lets a caller
 // read/write it on non-FrameworkElement targets too).
 extern "C" void* noesis_controls_tooltipservice_get_tooltip(void* obj) {
@@ -665,7 +665,7 @@ extern "C" bool noesis_controls_fe_set_context_menu(void* element, void* menu) {
     return true;
 }
 
-// ContextMenuService attached ContextMenu — readable/writable on any
+// ContextMenuService attached ContextMenu. Readable/writable on any
 // DependencyObject.
 extern "C" void* noesis_controls_contextmenuservice_get_context_menu(void* obj) {
     if (!obj) return nullptr;

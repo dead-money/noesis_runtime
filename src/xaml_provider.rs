@@ -7,12 +7,12 @@
 //! # Lifetime
 //!
 //! Keep the [`Registered`] guard alive as long as Noesis might call back into
-//! [`XamlProvider::load_xaml`] — in practice, until after [`crate::shutdown`]
+//! [`XamlProvider::load_xaml`], in practice until after [`crate::shutdown`]
 //! returns. Shutdown releases Noesis's internal `Ptr<XamlProvider>`, dropping
 //! the C++ wrapper's refcount to 1 (ours); dropping the guard then releases the
 //! final ref, fires the C++ destructor, and frees the boxed Rust impl.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
@@ -79,7 +79,7 @@ unsafe extern "C" fn t_load_xaml(
         let Some(bytes) = provider(userdata).load_xaml(&uri_str) else {
             return false;
         };
-        // A >4 GiB document can't be represented to the shim — treat as failure
+        // A >4 GiB document can't be represented to the shim; treat as failure
         // rather than panicking inside the trampoline.
         let Ok(len) = u32::try_from(bytes.len()) else {
             return false;
@@ -100,7 +100,7 @@ static VTABLE: XamlProviderVTable = XamlProviderVTable {
 /// [`crate::shutdown`] before this drop so Noesis's own `Ptr<XamlProvider>`
 /// is already released; otherwise the final destructor fires later than
 /// expected and the boxed impl outlives its C++ wrapper briefly (still
-/// safe — no further callbacks are possible after `Shutdown`).
+/// safe: no further callbacks are possible after `Shutdown`).
 #[must_use = "dropping the guard immediately clears the registration"]
 pub struct Registered {
     handle: NonNull<c_void>,
@@ -111,8 +111,8 @@ pub struct Registered {
 unsafe impl Send for Registered {}
 
 impl Registered {
-    /// Raw `Noesis::XamlProvider*` — useful for passing to other Noesis APIs
-    /// that take a provider. Borrowed for the lifetime of this `Registered`.
+    /// Raw `Noesis::XamlProvider*`, for passing to other Noesis APIs that
+    /// take a provider. Borrowed for the lifetime of this `Registered`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.handle.as_ptr()
@@ -157,7 +157,7 @@ impl Drop for Registered {
 /// Panics if the C++ factory returns null (only possible on internal logic
 /// errors).
 pub fn set_xaml_provider<P: XamlProvider + 'static>(provider: P) -> Registered {
-    // SAFETY: install globally — Noesis retains its own +1.
+    // SAFETY: install globally; Noesis retains its own +1.
     register_with(provider, |handle| unsafe {
         noesis_set_xaml_provider(handle)
     })

@@ -4,7 +4,7 @@
 // ownership idioms already established in noesis_binding.cpp and
 // noesis_view.cpp:
 //
-//   * ResourceDictionary — create/own a dictionary from Rust, add a
+//   * ResourceDictionary: create/own a dictionary from Rust, add a
 //     key->component, look up by key (borrowed component out), wire merged
 //     dictionaries, parse a <ResourceDictionary> from an in-memory XAML
 //     string, and install one as the process-global application resources
@@ -12,13 +12,13 @@
 //     Resources get/set and a non-throwing FindResource (logical-chain
 //     lookup) live here too.
 //
-//   * Style — `new Style`, set the target type by name (resolved through
+//   * Style: `new Style`, set the target type by name (resolved through
 //     Noesis::Reflection like the RelativeSource FindAncestor path in
 //     noesis_binding.cpp), append Setters (DP resolved on the target type by
 //     name; value is a boxed BaseComponent*), set BasedOn, then assign via
 //     FrameworkElement::SetStyle / read back GetStyle.
 //
-//   * Templates — parse a <ControlTemplate>/<DataTemplate> from a string
+//   * Templates: parse a <ControlTemplate>/<DataTemplate> from a string
 //     (GUI::ParseXaml + cast), assign a ControlTemplate via Control::SetTemplate
 //     (DataTemplate is DP-settable via the existing set_component path), read
 //     GetTemplate back, and a FrameworkTemplate::FindName accessor.
@@ -131,7 +131,7 @@ bool add_setter_to(Noesis::BaseSetterCollection* setters, const char* type_name,
 // ── RustDataTemplateSelector ─────────────────────────────────────────────────
 //
 // A DataTemplateSelector subclass whose SelectTemplate() virtual trampolines
-// into a Rust callback — the runtime-constructible "selector from Rust" path.
+// into a Rust callback, the runtime-constructible "selector from Rust" path.
 // Mirrors the RustValueConverter trampoline in noesis_binding.cpp (donated
 // userdata box, freed once when the final reference drops). The callback returns
 // a BORROWED DataTemplate* (the selector keeps its candidate templates alive);
@@ -179,7 +179,7 @@ private:
 // ── Boxing: float ───────────────────────────────────────────────────────────
 //
 // Companion to the bool/int32/double boxers in noesis_binding.cpp. Needed
-// because several common DPs are `float` (FontSize, Opacity, …): a Style Setter
+// because several common DPs are `float` (FontSize, Opacity, ...): a Style Setter
 // or ResourceDictionary entry whose value is a BoxedValue<double> will NOT apply
 // to a float DP (no implicit unbox-coercion), so style setters on float
 // properties must carry a BoxedValue<float>. +1 ref for the caller.
@@ -191,7 +191,7 @@ extern "C" void* noesis_box_float(float value) {
 // ── ResourceDictionary ──────────────────────────────────────────────────────
 
 extern "C" void* noesis_resource_dictionary_create(void) {
-    // new ResourceDictionary starts at refcount 1 — the caller's +1, balanced
+    // new ResourceDictionary starts at refcount 1 (the caller's +1), balanced
     // by noesis_resource_dictionary_destroy (or any AddRef a consumer takes,
     // e.g. SetApplicationResources / SetResources).
     auto* d = new Noesis::ResourceDictionary();
@@ -238,7 +238,7 @@ extern "C" bool noesis_resource_dictionary_contains(void* dict, const char* key)
     return d->Contains(key);
 }
 
-// Borrowed (no +1) lookup by key — valid while the dictionary keeps the entry.
+// Borrowed (no +1) lookup by key, valid while the dictionary keeps the entry.
 // NULL if absent. Uses Find (the non-throwing variant) so a miss is a clean
 // NULL rather than an error.
 extern "C" void* noesis_resource_dictionary_find(void* dict, const char* key) {
@@ -272,7 +272,7 @@ extern "C" void noesis_gui_set_application_resources(void* dict) {
 }
 
 // Borrowed (no +1) application ResourceDictionary*, or NULL if none installed.
-// Owned by the GUI subsystem — do NOT release.
+// Owned by the GUI subsystem. Do NOT release.
 extern "C" void* noesis_gui_get_application_resources(void) {
     return Noesis::GUI::GetApplicationResources();
 }
@@ -307,7 +307,7 @@ extern "C" bool noesis_framework_element_set_resources(void* element, void* dict
 }
 
 // Non-throwing resource lookup walking the logical parent chain + application
-// resources. Borrowed (no +1) — valid transiently. NULL if not found or
+// resources. Borrowed (no +1), valid transiently. NULL if not found or
 // `element` is not a FrameworkElement. This is the TryFindResource-style
 // variant: FrameworkElement::FindResource returns NULL on a miss (it does not
 // throw), so callers get an honest Option.
@@ -320,7 +320,7 @@ extern "C" void* noesis_framework_element_find_resource(void* element, const cha
 // ── Style ────────────────────────────────────────────────────────────────────
 
 extern "C" void* noesis_style_create(void) {
-    // new Style starts at refcount 1 — the caller's +1, balanced by
+    // new Style starts at refcount 1 (the caller's +1), balanced by
     // noesis_style_destroy (or an AddRef from SetStyle / a ResourceDictionary).
     auto* s = new Noesis::Style();
     return static_cast<Noesis::BaseComponent*>(s);
@@ -368,7 +368,7 @@ extern "C" bool noesis_style_add_setter(void* style, const char* dp_name, void* 
     if (!setters) return false;
 
     // new Setter starts at refcount 1; the local Ptr adopts that and releases on
-    // scope exit — Add takes the collection's own reference.
+    // scope exit. Add takes the collection's own reference.
     Noesis::Ptr<Noesis::Setter> setter = *new Noesis::Setter();
     setter->SetProperty(dp);
     setter->SetValue(static_cast<Noesis::BaseComponent*>(value));
@@ -449,7 +449,7 @@ extern "C" void* noesis_control_get_template(void* control) {
     return handout(c->GetTemplate());
 }
 
-// FrameworkTemplate::FindName — find a named element within `tmpl` as applied to
+// FrameworkTemplate::FindName: find a named element within `tmpl` as applied to
 // `templated_parent`. Borrowed (no +1); valid while the template stays applied.
 // NULL if `tmpl` is not a FrameworkTemplate, `templated_parent` is not a
 // FrameworkElement, or the name is not found in the applied template.
@@ -537,7 +537,7 @@ extern "C" void* noesis_templates_data_trigger_create(void) {
     return static_cast<Noesis::BaseComponent*>(t);
 }
 
-// Set the DataTrigger's Binding (any BaseBinding* — e.g. a Binding from
+// Set the DataTrigger's Binding (any BaseBinding*, e.g. a Binding from
 // noesis_binding.cpp). Returns false on a non-DataTrigger handle or a value that
 // is not a BaseBinding.
 extern "C" bool noesis_templates_data_trigger_set_binding(void* trigger, void* binding) {

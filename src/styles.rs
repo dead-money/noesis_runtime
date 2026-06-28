@@ -23,7 +23,7 @@
 //!
 //! Templates ([`ControlTemplate`], [`DataTemplate`]) are authored by parsing a
 //! `<ControlTemplate>` / `<DataTemplate>` from an in-memory XAML string and
-//! assigning it — a `ControlTemplate` via
+//! assigning it: a `ControlTemplate` via
 //! [`FrameworkElement::set_control_template`](crate::view::FrameworkElement::set_control_template),
 //! a `DataTemplate` via the existing `set_component` path on `ContentTemplate` /
 //! `ItemTemplate`.
@@ -78,7 +78,7 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// A code-built `Noesis::Style` — the programmatic equivalent of a XAML
+/// A code-built `Noesis::Style`: the programmatic equivalent of a XAML
 /// `<Style>`. Owns a `+1` reference released on drop.
 ///
 /// Assigning it to an element
@@ -116,7 +116,7 @@ impl Style {
         }
     }
 
-    /// Wrap an already-owned (`+1`) `Noesis::Style*` — e.g. the `AddRef`'d result
+    /// Wrap an already-owned (`+1`) `Noesis::Style*`, e.g. the `AddRef`'d result
     /// of `style`.
     ///
     /// # Safety
@@ -136,8 +136,8 @@ impl Style {
     }
 
     /// Set the style's `TargetType` by registered type name (e.g. `"TextBlock"`,
-    /// `"Button"`). The type is resolved through Noesis's reflection registry —
-    /// it must already be registered, which the built-in controls do on first
+    /// `"Button"`). The type is resolved through Noesis's reflection registry.
+    /// It must already be registered, which the built-in controls do on first
     /// use (and any type referenced from loaded XAML does). Returns `false`
     /// (leaving the target type unset) if the name is unknown or contains an
     /// interior NUL byte. Setting the target type is a prerequisite for
@@ -365,9 +365,9 @@ impl Drop for ControlTemplate {
 
 /// A parsed `Noesis::DataTemplate`. Owns a `+1` reference released on drop.
 ///
-/// Assign it through the existing component-DP path — e.g.
+/// Assign it through the existing component-DP path, e.g.
 /// `element.set_component("ContentTemplate", template.raw())` on a
-/// `ContentControl`, or `"ItemTemplate"` on an `ItemsControl` — which makes
+/// `ContentControl`, or `"ItemTemplate"` on an `ItemsControl`, which makes
 /// Noesis take its own reference.
 pub struct DataTemplate {
     ptr: NonNull<c_void>,
@@ -563,27 +563,27 @@ macro_rules! owned_trigger {
 owned_trigger!(
     Trigger,
     noesis_templates_trigger_create,
-    "A property `Trigger` — applies its setters while a dependency property on the\ntargeted element equals the trigger `Value` (`Noesis::Trigger`)."
+    "A property `Trigger`: applies its setters while a dependency property on the\ntargeted element equals the trigger `Value` (`Noesis::Trigger`)."
 );
 owned_trigger!(
     DataTrigger,
     noesis_templates_data_trigger_create,
-    "A `DataTrigger` — applies its setters while a bound value equals the trigger\n`Value` (`Noesis::DataTrigger`)."
+    "A `DataTrigger`: applies its setters while a bound value equals the trigger\n`Value` (`Noesis::DataTrigger`)."
 );
 owned_trigger!(
     MultiTrigger,
     noesis_templates_multi_trigger_create,
-    "A `MultiTrigger` — applies its setters while **all** of its property\nconditions are met (`Noesis::MultiTrigger`)."
+    "A `MultiTrigger`: applies its setters while **all** of its property\nconditions are met (`Noesis::MultiTrigger`)."
 );
 owned_trigger!(
     MultiDataTrigger,
     noesis_templates_multi_data_trigger_create,
-    "A `MultiDataTrigger` — applies its setters while **all** of its\nbinding-value conditions are met (`Noesis::MultiDataTrigger`). The\nbinding-condition sibling of [`MultiTrigger`]."
+    "A `MultiDataTrigger`: applies its setters while **all** of its\nbinding-value conditions are met (`Noesis::MultiDataTrigger`). The\nbinding-condition sibling of [`MultiTrigger`]."
 );
 owned_trigger!(
     EventTrigger,
     noesis_templates_event_trigger_create,
-    "An `EventTrigger` — runs its actions in response to a routed event\n(`Noesis::EventTrigger`)."
+    "An `EventTrigger`: runs its actions in response to a routed event\n(`Noesis::EventTrigger`)."
 );
 
 impl Trigger {
@@ -780,7 +780,7 @@ impl MultiDataTrigger {
     /// `false` only on invalid handles.
     pub fn add_condition(&mut self, binding: &Binding, value: &Boxed) -> bool {
         // SAFETY: self.ptr live; binding.raw() is a live BaseBinding*; value.raw()
-        // a live boxed BaseComponent* — both for the call.
+        // a live boxed BaseComponent*, both for the call.
         unsafe {
             noesis_templates_multi_data_trigger_add_condition(
                 self.ptr.as_ptr(),
@@ -895,7 +895,7 @@ impl EventTrigger {
     /// Append a [`BeginStoryboard`] action to this trigger's `Actions`
     /// collection (the collection takes its own reference, so the action handle
     /// may be dropped afterwards). When the trigger's `RoutedEvent` fires, each
-    /// action is invoked — a `BeginStoryboard` starts its [`Storyboard`]. Read
+    /// action is invoked: a `BeginStoryboard` starts its [`Storyboard`]. Read
     /// the count back with [`action_count`](Self::action_count). Returns `false`
     /// only on invalid handles.
     ///
@@ -937,7 +937,7 @@ impl TriggerReadback {
         owned_value(unsafe { noesis_templates_trigger_get_value(self.ptr.as_ptr()) })
     }
 
-    /// Setter count (`Trigger` only — use the kind-specific reads for others).
+    /// Setter count (`Trigger` only; use the kind-specific reads for others).
     #[must_use]
     pub fn setter_count(&self) -> u32 {
         count(unsafe { noesis_templates_trigger_setter_count(self.ptr.as_ptr()) })
@@ -986,7 +986,7 @@ fn count(n: i32) -> u32 {
 pub trait SelectTemplate: Send + 'static {
     /// `item` is the borrowed boxed data object (`BaseComponent*`, may be null);
     /// `container` is the borrowed item container (`DependencyObject*`, may be
-    /// null). Return the chosen template (its reference is **borrowed** — the
+    /// null). Return the chosen template (its reference is **borrowed**; the
     /// selector keeps its candidate templates alive).
     ///
     /// Takes `&self` (re-entrant: selecting a template for an item that itself

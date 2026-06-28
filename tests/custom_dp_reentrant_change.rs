@@ -1,7 +1,7 @@
 //! Re-entrant property-change handler: `on_changed` for `In` writes `Out`
 //! synchronously, re-invoking the same handler box before the outer call
 //! returns. The trampoline must not hold `&mut` to the handler across the
-//! callback — that would be aliasing UB on re-entry.
+//! callback. That would be aliasing UB on re-entry.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -30,7 +30,7 @@ impl XamlProvider for InMem {
 }
 
 /// Handler uses interior mutability (`&self` callback) and writes the `Out` DP
-/// from inside the `In` DP's change notification — the re-entrant path.
+/// from inside the `In` DP's change notification: the re-entrant path.
 struct Computed {
     in_idx: u32,
     out_idx: u32,

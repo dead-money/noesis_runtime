@@ -1,18 +1,18 @@
 // C++ wrappers for the XAML loading variants surface:
 //
-//   * GetXamlDependencies — walk an in-memory XAML buffer's referenced
+//   * GetXamlDependencies: walk an in-memory XAML buffer's referenced
 //     resources (other XAMLs, fonts, textures, prefixed UserControl nodes,
 //     the root type) without instantiating the tree, forwarding each hit
 //     into a Rust callback.
 //
-//   * Scheme- / assembly-scoped provider setters — thin pass-throughs to the
+//   * Scheme- / assembly-scoped provider setters: thin pass-throughs to the
 //     `GUI::SetSchemeXamlProvider` / `SetAssemblyXamlProvider` /
 //     `SetSchemeAssemblyXamlProvider` overloads (and the identical Texture +
 //     Font triples). These REUSE the provider handles produced by
 //     `noesis_{xaml,font,texture}_provider_create` in the existing shim
-//     files — only the install call differs from the global setter.
+//     files; only the install call differs from the global setter.
 //
-//   * Typed component load — `GUI::LoadXaml` for a root that need not be a
+//   * Typed component load: `GUI::LoadXaml` for a root that need not be a
 //     FrameworkElement (e.g. a ResourceDictionary), plus a reflection helper
 //     that reports the loaded root's class-type name so the typed-load path
 //     is observable headlessly.

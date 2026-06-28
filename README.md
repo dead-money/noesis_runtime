@@ -21,7 +21,7 @@ Set `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to apply your license. Withou
 noesis_runtime = "0.9"
 ```
 
-The crate is on crates.io, but it still links the Noesis SDK at build time — you need `NOESIS_SDK_DIR` set (see above) for it to compile.
+The crate is on crates.io, but it still links the Noesis SDK at build time. You need `NOESIS_SDK_DIR` set (see above) for it to compile.
 
 ```rust
 use noesis_runtime::view::{FrameworkElement, View};

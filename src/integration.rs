@@ -1,5 +1,5 @@
 //! System integration callbacks from `NsGui/IntegrationAPI.h` (namespace
-//! `Noesis::GUI`). These are **process-global** host hooks — not per-view —
+//! `Noesis::GUI`). These are **process-global** host hooks (not per-view)
 //! that let the host react to engine requests: update the OS cursor, show or
 //! hide the on-screen keyboard, open a URL, play a sound, and set the default
 //! culture.
@@ -17,7 +17,7 @@
 //!
 //! # Single-slot, last-registration-wins
 //!
-//! These hooks are **process-global with exactly one slot per hook** — both
+//! These hooks are **process-global with exactly one slot per hook**. Both
 //! Noesis itself and the C++ shim store a single `(user, callback)` pair. They
 //! are therefore **not** independent, freely-stacked registrations: calling a
 //! `set_*` again replaces the previous registration (last-registration-wins),
@@ -31,10 +31,10 @@
 //! and leaves the slot pointing at whoever overwrote it. Consequences:
 //!
 //!   - Dropping the **older** of two guards for the same hook is a no-op on the
-//!     slot — the newer registration keeps firing (no clobber). Its box is
+//!     slot. The newer registration keeps firing (no clobber). Its box is
 //!     still freed; the C++ slot never referenced it after the overwrite.
 //!   - Dropping the **active** guard clears the slot and unregisters the Noesis
-//!     callback. A previously-overwritten registration is **not** restored —
+//!     callback. A previously-overwritten registration is **not** restored:
 //!     once replaced, an older registration is gone for good.
 //!
 //! Each guard always frees exactly its own boxed closure, so there is no
@@ -43,7 +43,7 @@
 //! # Triggering
 //!
 //! [`open_url`] and [`play_audio`] invoke the registered callback
-//! **synchronously** — they are genuine end-to-end round trips and are tested
+//! **synchronously**: they are genuine end-to-end round trips and are tested
 //! as such. The cursor callback fires from input handling inside a live view's
 //! event pump and *is* reachable headlessly: a mouse-move over an element with
 //! a non-default `Cursor` drives it (proved in `tests/integration.rs`). The
@@ -58,7 +58,7 @@
 //! into the closure. Keep it alive until after [`crate::shutdown`] returns (or
 //! until you explicitly drop it to unregister).
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
 use std::borrow::Cow;
@@ -155,7 +155,7 @@ impl CursorType {
     }
 }
 
-/// Decode a Noesis-supplied string lossily — odd/non-UTF-8 engine input must not
+/// Decode a Noesis-supplied string lossily. Odd/non-UTF-8 engine input must not
 /// panic across the C ABI, so invalid bytes become U+FFFD rather than aborting.
 fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {

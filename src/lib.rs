@@ -1,4 +1,4 @@
-//! Safe Rust bindings to the Noesis GUI native SDK — a XAML-based UI engine,
+//! Safe Rust bindings to the Noesis GUI native SDK, a XAML-based UI engine,
 //! wrapped here by a hand-written C ABI over opaque, reference-counted handles.
 //!
 //! The crate is renderer-agnostic: it builds UI trees, drives input, and ticks
@@ -14,7 +14,7 @@
 //!
 //! 1. Install an asset source with [`xaml_provider::set_xaml_provider`] (plus
 //!    optional font and texture providers).
-//! 2. Build a UI root — [`view::FrameworkElement::load`] from a URI, or
+//! 2. Build a UI root: [`view::FrameworkElement::load`] from a URI, or
 //!    [`view::FrameworkElement::parse`] from an in-memory XAML string.
 //! 3. Wrap it in a [`view::View`] with [`view::View::create`], then feed it the
 //!    surface size, input events, and per-frame time updates.
@@ -40,7 +40,7 @@
 //!   thread. Ownership of a handle may be *moved* to whichever thread owns the
 //!   Noesis view, after which all calls happen on that thread.
 //! - **`Sync` is unsound.** Many `&self` methods call into Noesis (FFI reads,
-//!   and some lazily mutate engine state — e.g. resource-dictionary or
+//!   and some lazily mutate engine state, e.g. resource-dictionary or
 //!   collection getters). Sharing a `&handle` across threads would let two
 //!   threads invoke those concurrently on a thread-affine engine, which races.
 //!
@@ -48,7 +48,7 @@
 //! comments on the individual `unsafe impl Send` blocks point back here rather
 //! than restating this contract. (The render-device *trait* is the exception:
 //! a user [`render_device::RenderDevice`] impl must be `Send + Sync` because
-//! Noesis may call its trampolines from a dedicated render thread — that bound
+//! Noesis may call its trampolines from a dedicated render thread. That bound
 //! is on the trait, not on these owning handles.)
 
 use std::ffi::{CStr, CString};
@@ -172,7 +172,7 @@ pub fn update_inspector() {
 /// Initialize Noesis subsystems. Call exactly once per process; Noesis does
 /// not support re-init after [`shutdown`].
 pub fn init() {
-    // SAFETY: no preconditions other than "call once" — documented by Noesis.
+    // SAFETY: no preconditions other than "call once", documented by Noesis.
     unsafe { ffi::noesis_init() }
 }
 
@@ -190,9 +190,9 @@ pub fn shutdown() {
 /// markup-extension surface, the provider traits, the lifecycle free functions,
 /// and the most-used enums.
 ///
-/// This is a convenience surface, not the full API — anything not listed here is
+/// This is a convenience surface, not the full API. Anything not listed here is
 /// still reachable through its owning module (`crate::animation`,
-/// `crate::input`, `crate::diagnostics`, …).
+/// `crate::input`, `crate::diagnostics`, ...).
 ///
 /// Compiled (so the names stay honest) but not executed: Noesis [`init`] runs
 /// once per process, and `cargo test` merges all doctests into one binary.

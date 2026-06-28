@@ -56,7 +56,7 @@ fn click_event_fires_callback() {
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
 
         // Tests both paths: pre-view (raw element) and post-view via
-        // View::content(). Post-view is the plugin's pattern — View::create
+        // View::content(). Post-view is the plugin's pattern: View::create
         // consumes the element, so subscriptions must wire after.
         let pre_view = element
             .find_name("MyButton")
@@ -78,7 +78,7 @@ fn click_event_fires_callback() {
         let click_sub = subscribe_click(&button, move || {
             counter_in_handler.fetch_add(1, Ordering::SeqCst);
         })
-        .expect("subscribe_click returned None — element not a button?");
+        .expect("subscribe_click returned None : element not a button?");
 
         let grid_handle = view.content().expect("View::content returned None");
         let grid_subscription = subscribe_click(&grid_handle, || {
@@ -100,7 +100,7 @@ fn click_event_fires_callback() {
         let _ = view.mouse_button_up(100, 100, MouseButton::Left);
         let _ = view.update(0.048);
 
-        // drop before view — C++ -= must happen while the button is still alive
+        // drop before view: C++ -= must happen while the button is still alive
         drop(click_sub);
         view.deactivate();
         drop(view);

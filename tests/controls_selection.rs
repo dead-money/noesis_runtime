@@ -105,7 +105,7 @@ fn selector_and_items_mutation() {
         assert_eq!(ic.items_add_string("Y"), Some(1));
         assert_eq!(ic.items_count(), Some(2), "two items in the collection");
         // The non-virtualizing ItemsControl realizes all items after a layout
-        // pass — a genuine signal that change-notification reached the control.
+        // pass: a genuine signal that change-notification reached the control.
         for i in 10..=16 {
             view.update(f64::from(i) * 0.016);
         }

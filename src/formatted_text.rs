@@ -2,7 +2,7 @@
 //! given font without authoring XAML or building a `TextBlock`.
 //!
 //! A [`FormattedText`] is an owning handle over a freshly-created Noesis
-//! `FormattedText` holding a single `+1` reference, released on [`Drop`] — the
+//! `FormattedText` holding a single `+1` reference, released on [`Drop`], the
 //! same pattern as [`crate::brushes::SolidColorBrush`]. Noesis computes the
 //! glyph metrics and text layout while the object is constructed (there are no
 //! separate layout *setters* in 3.2.13; the constraints are constructor
@@ -10,12 +10,12 @@
 //!
 //! # Font resolution
 //!
-//! This module deliberately exposes **no** [`FontFamily`](crate::typography::FontFamily) entrypoint — the
+//! This module deliberately exposes **no** [`FontFamily`](crate::typography::FontFamily) entrypoint. The
 //! typography unit owns that. [`FormattedText::builder`] takes the family as a
 //! plain name string and builds the Noesis `FontFamily` internally in C++. The
 //! name resolves through the registered font provider / fallback chain (see
 //! [`crate::font_provider`]); without a real face for that family Noesis cannot
-//! shape glyphs and the metrics collapse to zero — drive a font provider in any
+//! shape glyphs and the metrics collapse to zero; drive a font provider in any
 //! test that asserts non-zero metrics.
 
 use core::ptr::NonNull;

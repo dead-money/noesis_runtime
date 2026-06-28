@@ -2,16 +2,16 @@
 //
 // Two surfaces live here:
 //
-//   1. A code-built `Pen` (NsGui/Pen.h) — constructed from Rust and handed out
+//   1. A code-built `Pen` (NsGui/Pen.h), constructed from Rust and handed out
 //      with a single owned reference, exactly like the brushes / transforms in
 //      cpp/noesis_brushes.cpp (handout() + `*new T` adopt). Several
 //      DrawingContext draw calls need a Pen, and Noesis's Pen has read-back
-//      getters (GetThickness / GetBrush / GetStartLineCap / …) so a test can
+//      getters (GetThickness / GetBrush / GetStartLineCap / ...) so a test can
 //      prove a value crossed into the live object rather than being cached.
 //
 //   2. The `DrawingContext` draw / push / pop commands. A DrawingContext has a
 //      PRIVATE constructor in 3.2.13 (friend UIElement) and is delivered ONLY
-//      to UIElement::OnRender — so these entrypoints take the BORROWED context
+//      to UIElement::OnRender, so these entrypoints take the BORROWED context
 //      pointer the class render trampoline (cpp/noesis_classes.cpp) hands out,
 //      DynamicCast it to a Noesis::DrawingContext*, and forward the call. They
 //      are immediate-mode (no read-back): the test proves they reached Noesis

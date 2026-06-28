@@ -1,4 +1,4 @@
-//! Register Rust-backed XAML `MarkupExtension`s — Rust callbacks XAML can
+//! Register Rust-backed XAML `MarkupExtension`s: Rust callbacks XAML can
 //! invoke as `{myns:Foo positional_arg}`.
 //!
 //! Reach for this when you want XAML markup to resolve a value through your
@@ -11,7 +11,7 @@
 //! * Single positional `Key` argument (the bit between `{name ` and `}`).
 //! * Callback returns either a `&str` (most common) or a borrowed
 //!   `BaseComponent*`.
-//! * No reactive bindings — the callback runs at XAML parse time and the
+//! * No reactive bindings: the callback runs at XAML parse time and the
 //!   returned value is substituted statically. Locale switching requires
 //!   re-loading the XAML.
 //!
@@ -22,7 +22,7 @@
 //! drives the View). The handler is `Send`; mutations to Bevy ECS state
 //! should be queued and processed on the main thread.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ffi::CStr;
 use core::ptr::NonNull;
@@ -40,7 +40,7 @@ pub enum MarkupValue<'a> {
     /// Borrowed `Noesis::BaseComponent*`. Caller does not consume a ref;
     /// the C++ trampoline adds one when constructing the returned `Ptr`.
     Component(NonNull<c_void>),
-    /// Signals "no value" — Noesis substitutes `BaseComponent::GetUnsetValue()`
+    /// Signals "no value": Noesis substitutes `BaseComponent::GetUnsetValue()`
     /// (which the parser interprets as "leave the property at its default").
     Unset,
 }
@@ -57,8 +57,8 @@ pub enum MarkupValue<'a> {
 /// inside `provide_value` (e.g. calling [`crate::xaml::load_xaml_component`]
 /// on markup that uses this extension). Doing so would
 /// alias the handler box. The parser itself never re-enters `provide_value`
-/// — multiple `{Ext ...}` usages in one document are resolved sequentially, not
-/// nested — so ordinary usage is sound.
+/// (multiple `{Ext ...}` usages in one document are resolved sequentially, not
+/// nested), so ordinary usage is sound.
 pub trait MarkupExtensionHandler: Send + 'static {
     fn provide_value(&mut self, key: &str) -> MarkupValue<'_>;
 }
@@ -90,8 +90,8 @@ pub struct ClosureHandler<F: FnMut(&str) -> Option<String> + Send + 'static> {
 }
 
 /// RAII handle for a registered `MarkupExtension`. Drop unregisters from
-/// the Factory + Reflection registries — preventing new instances from
-/// being parsed — but the underlying `MarkupClassData` and the boxed
+/// the Factory + Reflection registries (preventing new instances from
+/// being parsed), but the underlying `MarkupClassData` and the boxed
 /// handler survive as long as live extension instances remain. Same
 /// intrusive-refcount contract as [`crate::classes::ClassRegistration`].
 #[must_use = "dropping the guard immediately clears the registration"]
@@ -162,7 +162,7 @@ impl MarkupExtensionRegistration {
 impl Drop for MarkupExtensionRegistration {
     fn drop(&mut self) {
         // The C++ side owns the boxed handler. `noesis_markup_extension_unregister`
-        // releases the Rust caller's MarkupClassData ref — if no extension
+        // releases the Rust caller's MarkupClassData ref: if no extension
         // instances are alive, ClassData self-destructs immediately and
         // `markup_handler_free_trampoline` runs to drop the handler box;
         // otherwise the deferred free runs when the last instance dies.

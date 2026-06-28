@@ -4,9 +4,9 @@
 //!
 //! Userdata convention: every trampoline receives a `*mut c_void` whose
 //! actual type is `*mut Box<dyn RenderDevice>`. The double-`Box` gives us a
-//! stable thin pointer (the inner `Box<dyn …>` is a fat pointer).
+//! stable thin pointer (the inner `Box<dyn ...>` is a fat pointer).
 
-#![allow(unsafe_op_in_unsafe_fn)] // FFI sea-of-unsafe — explicit blocks add noise.
+#![allow(unsafe_op_in_unsafe_fn)] // FFI sea-of-unsafe; explicit blocks add noise.
 
 use core::num::NonZeroU64;
 use core::ptr::NonNull;
@@ -106,7 +106,7 @@ unsafe extern "C" fn t_create_texture(
         let dev = device(userdata);
         let label = cstr_to_str(label);
         // Unknown engine-supplied format ordinal: contained failure, leave `out`
-        // unwritten (same as the panic path — the C side sees a null texture).
+        // unwritten (same as the panic path, where the C side sees a null texture).
         let Some(format) = texture_format_from_raw(format_raw) else {
             return;
         };
@@ -418,8 +418,8 @@ impl Registered {
     }
 
     /// Width of offscreen render-target textures, in pixels. `0` (the default)
-    /// selects automatic sizing. Set this — and the sibling offscreen /
-    /// glyph-cache knobs — before the renderer draws its first frame.
+    /// selects automatic sizing. Set this (and the sibling offscreen /
+    /// glyph-cache knobs) before the renderer draws its first frame.
     pub fn set_offscreen_width(&mut self, width: u32) {
         // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
         unsafe { noesis_render_device_set_offscreen_width(self.handle.as_ptr(), width) }
@@ -453,7 +453,7 @@ impl Registered {
     }
 
     /// Width of the glyph-cache texture, in pixels. The default is
-    /// build-dependent — read it back with [`Self::glyph_cache_width`] rather
+    /// build-dependent, so read it back with [`Self::glyph_cache_width`] rather
     /// than assuming a value.
     pub fn set_glyph_cache_width(&mut self, width: u32) {
         // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
@@ -461,7 +461,7 @@ impl Registered {
     }
 
     /// Height of the glyph-cache texture, in pixels. The default is
-    /// build-dependent — read it back with [`Self::glyph_cache_height`] rather
+    /// build-dependent, so read it back with [`Self::glyph_cache_height`] rather
     /// than assuming a value.
     pub fn set_glyph_cache_height(&mut self, height: u32) {
         // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
@@ -548,7 +548,7 @@ impl Drop for Registered {
 /// Panics if the C++ factory returns null (only possible on internal logic
 /// errors).
 pub fn register<D: RenderDevice + 'static>(device: D) -> Registered {
-    // Box<dyn …> is a fat pointer; wrap in another Box to get a stable thin
+    // Box<dyn ...> is a fat pointer; wrap in another Box to get a stable thin
     // pointer we can pass through the C ABI as userdata.
     let outer: Box<Box<dyn RenderDevice>> = Box::new(Box::new(device));
     let userdata = Box::into_raw(outer);

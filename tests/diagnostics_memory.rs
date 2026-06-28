@@ -7,7 +7,7 @@
 use noesis_runtime::diagnostics as diag;
 use noesis_runtime::view::FrameworkElement;
 
-// A small but non-trivial element tree — each parse allocates many Noesis
+// A small but non-trivial element tree. Each parse allocates many Noesis
 // objects (the Grid, the Button, their DPs / visual children).
 const XAML: &str = r##"<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -62,8 +62,8 @@ fn allocator_counters_track_real_objects() {
             "live allocated_memory must rise while 32 trees are held ({bytes0} -> {bytes1})"
         );
 
-        // Free the batch. NOTE: the live `allocations_count` does NOT reliably
-        // drop right away in a headless process — Noesis services part of its
+        // Free the batch. The live `allocations_count` does NOT reliably
+        // drop right away in a headless process: Noesis services part of its
         // teardown (deferred deletes) from the render/update pump, which never
         // runs here, and unrelated internal allocations happen between reads. So
         // we do NOT assert the live count fell. What we CAN assert is that the

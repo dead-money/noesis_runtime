@@ -11,7 +11,7 @@
 // The TextElement and Typography accessors operate on a borrowed DependencyObject
 // (any element). TextElement exposes static attached getters/setters directly;
 // the Typography DPs are plain attached DependencyProperties, so we drive them
-// through DependencyObject::SetValue/GetValue with the static DP pointers — the
+// through DependencyObject::SetValue/GetValue with the static DP pointers, the
 // same path cpp/noesis_classes.cpp uses for code-set properties. Every setter has
 // a getter that re-reads from the live object so a stubbed impl fails the tests.
 
@@ -170,7 +170,7 @@ extern "C" bool noesis_typography_text_element_get_font_stretch(void* element, i
 // Noesis::Typography. We set/read them through DependencyObject::SetValue/GetValue
 // with the right value type (enum or bool). The remaining ~30 Typography DPs
 // (CapitalSpacing, ContextualAlternates, the 20 StylisticSet* flags, swash/
-// alternate indices, …) follow this identical pattern.
+// alternate indices, ...) follow this identical pattern.
 
 extern "C" bool noesis_typography_set_capitals(void* element, int32_t value) {
     auto* d = cast<Noesis::DependencyObject>(element);

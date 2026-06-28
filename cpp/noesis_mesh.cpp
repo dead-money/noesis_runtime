@@ -6,7 +6,7 @@
 // the Mesh FrameworkElement (NsGui/Mesh.h). The buffers and bounds round-trip
 // entirely on the CPU, so a headless test can prove values crossed the FFI by
 // writing them through the setters and reading them back through GetVertices /
-// GetUVs / GetIndices / GetBounds — there is no GetNum* getter in 3.2.13, so a
+// GetUVs / GetIndices / GetBounds. There is no GetNum* getter in 3.2.13, so a
 // count is proven by the buffer data that round-trips at that length.
 //
 // Both objects are handed out with a single owned +1 reference (handout() idiom

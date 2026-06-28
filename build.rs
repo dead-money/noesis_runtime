@@ -73,7 +73,7 @@ fn main() {
     let bin = sdk.join("Bin").join(bin_subdir);
     assert!(
         bin.is_dir(),
-        "Noesis Bin/ subdir not found at {} — does this SDK include the {bin_subdir} target?",
+        "Noesis Bin/ subdir not found at {}. Does this SDK include the {bin_subdir} target?",
         bin.display()
     );
 

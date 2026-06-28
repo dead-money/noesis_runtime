@@ -10,7 +10,7 @@
 //!
 //! Every owning wrapper releases its +1 reference on drop via the Noesis
 //! intrusive refcount, which means the Noesis runtime must still be alive
-//! (i.e. [`crate::shutdown`] not yet called) at drop time — otherwise the
+//! (i.e. [`crate::shutdown`] not yet called) at drop time. Otherwise the
 //! `Release()` path would touch freed state. Keep these wrappers on the
 //! stack for the scope of a single frame, dropped before `shutdown`.
 
@@ -118,7 +118,7 @@ pub struct FrameworkElement {
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for FrameworkElement {}
 
-/// A **borrowed** handle to a `Noesis::BindingExpression` — the live binding
+/// A **borrowed** handle to a `Noesis::BindingExpression`: the live binding
 /// instance on a target element's dependency property, obtained from
 /// [`FrameworkElement::binding_expression`].
 ///
@@ -126,7 +126,7 @@ unsafe impl Send for FrameworkElement {}
 /// no `+1` reference and runs no `Drop`. The `'a` lifetime ties it to the
 /// `&FrameworkElement` it was borrowed from, so it cannot outlive that borrow.
 /// It also becomes stale if the binding is cleared from the property while the
-/// handle is held — only call its methods while the binding is known live.
+/// handle is held. Only call its methods while the binding is known live.
 ///
 /// # Threading
 ///
@@ -152,7 +152,7 @@ impl BindingExpressionRef<'_> {
     /// [`UpdateSourceTrigger`](crate::binding::UpdateSourceTrigger) is
     /// `Explicit`; Noesis no-ops it for other binding modes.
     pub fn update_source(&self) {
-        // SAFETY: as above — borrowed BindingExpression* valid for `'a`.
+        // SAFETY: as above; borrowed BindingExpression* valid for `'a`.
         unsafe { noesis_binding_expression_update_source(self.ptr.as_ptr()) }
     }
 }
@@ -178,7 +178,7 @@ impl FrameworkElement {
     /// Parse XAML directly from an in-memory string, without needing a
     /// [`XamlProvider`] or a URI. Returns `None` when the XAML is malformed
     /// or when the parsed root is not a `FrameworkElement` (e.g. a bare
-    /// `ResourceDictionary` — use the application-resources helpers for those).
+    /// `ResourceDictionary`; use the application-resources helpers for those).
     ///
     /// This is the in-memory sibling of [`FrameworkElement::load`]: it backs
     /// `GUI::ParseXaml`. The returned element holds an independent `+1`
@@ -223,7 +223,7 @@ impl FrameworkElement {
 
     /// Current strong reference count of the underlying `BaseComponent`
     /// (`BaseRefCounted::GetNumReferences`). The absolute value is an internal
-    /// detail — use it for **deltas**: [`clone_ref`](Self::clone_ref) (and any
+    /// detail. Use it for **deltas**: [`clone_ref`](Self::clone_ref) (and any
     /// Noesis-side retain) bumps it `+1`, dropping that handle (or a Noesis-side
     /// release) drops it `-1`. A live, owned handle always reports `>= 1`.
     #[must_use]
@@ -234,7 +234,7 @@ impl FrameworkElement {
 
     /// Take a new owning handle to the same underlying component, bumping its
     /// reference count (`AddReference`). Useful for keeping a handle whose
-    /// pointer was only borrowed — e.g. a hit-test visual handed to a callback.
+    /// pointer was only borrowed, e.g. a hit-test visual handed to a callback.
     #[must_use]
     pub fn clone_ref(&self) -> Self {
         // SAFETY: self.ptr is a live BaseComponent*; the C side AddRef's and
@@ -250,7 +250,7 @@ impl FrameworkElement {
     /// is not itself a `FrameworkElement` (e.g. it's a `Brush` registered in
     /// a `ResourceDictionary`).
     ///
-    /// The returned element holds an independent `+1` reference — dropping
+    /// The returned element holds an independent `+1` reference. Dropping
     /// it does not affect `self`.
     ///
     /// # Panics
@@ -270,10 +270,10 @@ impl FrameworkElement {
     /// is unknown on this element's type, or if no binding is currently set on
     /// that property.
     ///
-    /// The returned handle is **borrowed** — it is owned by this element and
+    /// The returned handle is **borrowed**: it is owned by this element and
     /// stays valid only while the binding is live and `self` is alive (the
     /// `'_` lifetime ties it to `&self`). Use it to drive an explicit
-    /// `UpdateSource` / `UpdateTarget` — notably to commit a `TwoWay` binding
+    /// `UpdateSource` / `UpdateTarget`, notably to commit a `TwoWay` binding
     /// whose [`UpdateSourceTrigger`](crate::binding::UpdateSourceTrigger) is
     /// `Explicit`.
     ///
@@ -284,7 +284,7 @@ impl FrameworkElement {
     pub fn binding_expression(&self, dp_name: &str) -> Option<BindingExpressionRef<'_>> {
         let c = CString::new(dp_name).expect("dp name contained interior NUL");
         // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call.
-        // The returned pointer is borrowed (owned by the target) — never
+        // The returned pointer is borrowed (owned by the target); never
         // released; its validity is bounded by the `'_` borrow of `self`.
         let ptr = unsafe { noesis_get_binding_expression(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| BindingExpressionRef {
@@ -294,7 +294,7 @@ impl FrameworkElement {
     }
 
     /// The element's `x:Name`, or `None` if it has no name. The returned
-    /// string is a borrowed copy — Noesis owns the underlying storage.
+    /// string is a borrowed copy; Noesis owns the underlying storage.
     #[must_use]
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C entrypoint
@@ -311,8 +311,8 @@ impl FrameworkElement {
     }
 
     /// Set `Visibility` to `Visible` (`visible = true`) or `Collapsed`
-    /// (`visible = false`). The third Noesis Visibility state — `Hidden`,
-    /// where the element reserves layout space but doesn't paint —
+    /// (`visible = false`). The third Noesis Visibility state (`Hidden`,
+    /// where the element reserves layout space but doesn't paint)
     /// isn't surfaced; modal-overlay and panel-toggle patterns
     /// (the use cases driving this API) want full Collapsed behaviour.
     /// Add a separate setter if a consumer needs Hidden later.
@@ -326,7 +326,7 @@ impl FrameworkElement {
     /// Set this element's `Margin` (layout offsets in DIPs: left, top, right,
     /// bottom). Paired with `HorizontalAlignment="Left"` /
     /// `VerticalAlignment="Top"`, a margin of `(x, y, 0, 0)` lands the element's
-    /// top-left corner at `(x, y)` — the positioning primitive a floating
+    /// top-left corner at `(x, y)`, the positioning primitive a floating
     /// menu / popup needs, since Noesis's `Canvas.Left`/`Top` attached property
     /// isn't surfaced through this shim.
     pub fn set_margin(&mut self, left: f32, top: f32, right: f32, bottom: f32) {
@@ -343,7 +343,7 @@ impl FrameworkElement {
     /// a `TextBox` nor a `TextBlock`, or if the underlying text is null
     /// (Noesis returns null for an unset / never-touched Text DP).
     ///
-    /// The pointer Noesis returns is borrowed — we copy immediately so the
+    /// The pointer Noesis returns is borrowed; we copy immediately so the
     /// owned String stays valid past the next layout pass (which may
     /// reallocate the underlying storage).
     #[must_use]
@@ -390,7 +390,7 @@ impl FrameworkElement {
     }
 
     /// Move keyboard focus to this element. Returns the value Noesis
-    /// reports for `UIElement::Focus()` — `true` if the element accepted
+    /// reports for `UIElement::Focus()`: `true` if the element accepted
     /// focus, `false` if it's not a `UIElement` or is non-focusable.
     pub fn focus(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
@@ -398,14 +398,14 @@ impl FrameworkElement {
         unsafe { noesis_focus_element(self.ptr.as_ptr()) }
     }
 
-    // ── Input — finer control ───────────────────────────────────────────────
+    // ── Input: finer control ────────────────────────────────────────────────
     //
     // Element-level mouse/touch capture, keyboard-state queries, focus-state
     // DPs, focus engagement, and focus traversal. All narrow this element to a
     // `UIElement` on the C side (returning `false` / `None` on a mismatch).
     // Capture and keyboard-state queries require the element to be connected to
     // a live `View` (Noesis's `GetMouse()` / `GetKeyboard()` are null until
-    // then) — drive them after [`View::create`] + [`View::update`]. The value
+    // then). Drive them after [`View::create`] + [`View::update`]. The value
     // types ([`ModifierKeys`], [`KeyStates`], [`FocusNavigationDirection`],
     // [`CaptureMode`]) live in [`crate::input`].
 
@@ -460,7 +460,7 @@ impl FrameworkElement {
     }
 
     /// The pointer position relative to this element, in element-local DIPs
-    /// (`Mouse::GetPosition(UIElement*)`) — the WPF idiom for reading the cursor
+    /// (`Mouse::GetPosition(UIElement*)`), the WPF idiom for reading the cursor
     /// location *outside* a mouse event handler. `None` if this is not a
     /// `UIElement`.
     ///
@@ -589,7 +589,7 @@ impl FrameworkElement {
         NonNull::new(p)
     }
 
-    /// Assign this element's geometry — as a `Path` — to an open polyline through
+    /// Assign this element's geometry (as a `Path`) to an open polyline through
     /// `points` (`[x, y]` pairs in the Path's local coordinate space). Returns
     /// `false` if the element is not a `Path` or there are fewer than two points.
     /// A real vector trace (built via a Noesis `StreamGeometry`), the geometry
@@ -616,7 +616,7 @@ impl FrameworkElement {
     ///
     /// This targets a templated control: `GoToState` resolves `state` against
     /// the `VisualStateGroup`s declared in the element's `ControlTemplate`
-    /// (e.g. a `Button`'s `CommonStates` — `Normal` / `MouseOver` / `Pressed`
+    /// (e.g. a `Button`'s `CommonStates`: `Normal` / `MouseOver` / `Pressed`
     /// / `Disabled`). Returns `false` if this element is not such a control,
     /// or if `state` names no group/state the control knows about.
     ///
@@ -684,7 +684,7 @@ impl FrameworkElement {
 
     /// Set a `UInt32` dependency property by name. Noesis declares several
     /// integer DPs as `uint32_t` (notably the `Grid.Row` / `Grid.Column`
-    /// family) — the `Int32` tag rejects those, so reach for this instead.
+    /// family). The `Int32` tag rejects those, so reach for this instead.
     ///
     /// # Panics
     ///
@@ -695,8 +695,8 @@ impl FrameworkElement {
     }
 
     /// Set a `Float` (single-precision) dependency property by name. Most
-    /// `FrameworkElement` scalars Noesis exposes — `Width`, `Height`,
-    /// `Opacity` — are `float`, so this is the common case.
+    /// `FrameworkElement` scalars Noesis exposes (`Width`, `Height`,
+    /// `Opacity`) are `float`, so this is the common case.
     ///
     /// # Panics
     ///
@@ -990,7 +990,7 @@ impl FrameworkElement {
     }
 
     /// Read a reference-typed dependency property (any `BaseComponent`
-    /// subclass — `Brush`, `ImageSource`, `Style`, …) as a borrowed opaque
+    /// subclass: `Brush`, `ImageSource`, `Style`, ...) as a borrowed opaque
     /// pointer. `None` on unknown name, type mismatch, or a null value.
     ///
     /// The returned pointer is borrowed: it has no `+1` reference and must not
@@ -1025,7 +1025,7 @@ impl FrameworkElement {
     /// Set this element's `DataContext` to a Rust-backed view model. Returns
     /// `false` if this element is not a `FrameworkElement`. Noesis stores its
     /// own reference to the instance, so it stays valid even after `instance`
-    /// is dropped on the Rust side — though by convention the
+    /// is dropped on the Rust side, though by convention the
     /// [`ClassInstance`](crate::classes::ClassInstance) is kept alive for as
     /// long as the binding is live.
     ///
@@ -1080,7 +1080,7 @@ impl FrameworkElement {
     /// `ListView` / `ComboBox`); returns `false` otherwise. Noesis stores its
     /// own reference to the collection.
     ///
-    /// Safe entry point for `unsafe`-free consumers — the `&ObservableCollection`
+    /// Safe entry point for `unsafe`-free consumers: the `&ObservableCollection`
     /// borrow encodes the live-`BaseComponent` invariant. Use
     /// [`Self::clear_items_source`] to detach, or [`Self::set_items_source_raw`]
     /// for an arbitrary list-implementing `BaseComponent*`.
@@ -1125,7 +1125,7 @@ impl FrameworkElement {
 
     /// Number of *realized* item containers the generator has materialized.
     /// Unlike [`items_count`](Self::items_count), this only grows when the
-    /// generator regenerates — which for a source mutated after the first
+    /// generator regenerates, which for a source mutated after the first
     /// layout pass requires `INotifyCollectionChanged` to have fired. `None` if
     /// this element is not an `ItemsControl`.
     #[must_use]
@@ -1142,7 +1142,7 @@ impl FrameworkElement {
     // `self`). Visual-tree children may be plain `Visual`s rather than
     // `FrameworkElement`s, but the wrapper is just an owned `BaseComponent*`
     // whose `FrameworkElement` methods `DynamicCast` internally, so a `Visual`
-    // round-trips fine — its FE-specific accessors return `None` / no-op.
+    // round-trips fine; its FE-specific accessors return `None` / no-op.
 
     /// Number of visual children. `0` if this element is not a `Visual`.
     #[must_use]
@@ -1185,7 +1185,7 @@ impl FrameworkElement {
     /// top-down, `filter` is called for each visual to steer the descent (skip
     /// children/self, continue, or stop), and `result` is called for each hit
     /// to keep collecting or stop. Both receive a **borrowed**
-    /// [`FrameworkElement`] valid only for that call — use
+    /// [`FrameworkElement`] valid only for that call; use
     /// [`clone_ref`](Self::clone_ref) to keep one.
     ///
     /// Runs synchronously on the view-driving thread. See [`Self::hit_test_all`]
@@ -1395,7 +1395,7 @@ impl FrameworkElement {
     }
 
     /// Set a `UInt32` attached property. The `uint32_t` counterpart to
-    /// [`set_attached_i32`](Self::set_attached_i32) — needed for the
+    /// [`set_attached_i32`](Self::set_attached_i32), needed for the
     /// `Grid.Row` / `Grid.Column` / `Grid.RowSpan` / `Grid.ColumnSpan` family,
     /// which Noesis declares as `uint32_t`. `false` on unknown owner /
     /// property, tag mismatch, or read-only.
@@ -1506,7 +1506,7 @@ impl FrameworkElement {
     }
 
     /// Set the current value of an `Int32` dependency property
-    /// (`SetCurrentValue` — sets the coerced value without overwriting the
+    /// (`SetCurrentValue`: sets the coerced value without overwriting the
     /// local / source value).
     ///
     /// # Panics
@@ -1879,7 +1879,7 @@ impl FrameworkElement {
         self.set_f32("Opacity", value)
     }
 
-    /// `IsEnabled` — whether the element accepts input.
+    /// `IsEnabled`: whether the element accepts input.
     #[must_use]
     pub fn is_enabled(&self) -> Option<bool> {
         self.get_bool("IsEnabled")
@@ -1891,7 +1891,7 @@ impl FrameworkElement {
         self.set_bool("IsEnabled", value)
     }
 
-    /// `Focusable` — whether the element can receive keyboard focus.
+    /// `Focusable`: whether the element can receive keyboard focus.
     #[must_use]
     pub fn focusable(&self) -> Option<bool> {
         self.get_bool("Focusable")
@@ -1941,7 +1941,7 @@ impl FrameworkElement {
         )
     }
 
-    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand) — a
+    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand): a
     /// [`Command`](crate::commands::Command),
     /// [`RoutedCommand`](crate::commands::RoutedCommand),
     /// [`RoutedUICommand`](crate::commands::RoutedUICommand), or built-in
@@ -1956,12 +1956,12 @@ impl FrameworkElement {
     /// `&impl AsCommand` borrow encodes the live-`BaseComponent` invariant the
     /// raw [`set_component`](Self::set_component) demands.
     ///
-    /// This reaches a built-in control's `Command` directly — e.g.
+    /// This reaches a built-in control's `Command` directly, e.g.
     /// `button.set_command("Command", &cmd)` wires a Rust command to a `Button`
     /// from code without a `DataContext` binding. To drive it from a view model
     /// instead, register a `BaseComponent` property, point it with
     /// [`Instance::set_command`](crate::classes::Instance::set_command), and bind
-    /// `Command="{Binding …}"` — the route the [`crate::commands`] module
+    /// `Command="{Binding ...}"`, the route the [`crate::commands`] module
     /// documents.
     ///
     /// # Panics
@@ -2070,7 +2070,7 @@ impl FrameworkElement {
     // (e.g. `set_fill` on a `Border`, which has no `Fill`).
 
     /// Paint this element's `Background` with `brush` (a `Border`, `Panel`,
-    /// `Control`, …). Returns `false` if the element has no `Background` DP.
+    /// `Control`, ...). Returns `false` if the element has no `Background` DP.
     pub fn set_background<B: Brush>(&mut self, brush: &B) -> bool {
         // SAFETY: brush.brush_raw() is a live Brush* borrowed for the call;
         // Noesis stores its own reference.
@@ -2214,7 +2214,7 @@ impl FrameworkElement {
     // gracefully (None / false / no-op) on a type mismatch, mirroring
     // [`text`](Self::text) / [`go_to_state`](Self::go_to_state). Several of these
     // (e.g. selection index, range value) are reachable through the generic DP
-    // accessors too — they exist as typed sugar that also validates the control
+    // accessors too; they exist as typed sugar that also validates the control
     // type, and (for ranges) routes through the proper setter so Noesis coercion
     // runs. View-thread affinity is the caller's, like the rest of this impl.
 
@@ -2273,7 +2273,7 @@ impl FrameworkElement {
     /// Append `item` to this `ItemsControl`'s own `Items` collection, returning
     /// its new index. `None` if this element is not an `ItemsControl` or the add
     /// was rejected (e.g. an external `ItemsSource` is set, making `Items`
-    /// read-only — use [`set_items_source`](Self::set_items_source) +
+    /// read-only; use [`set_items_source`](Self::set_items_source) +
     /// [`crate::binding::ObservableCollection`] for that case). The collection
     /// takes its own reference to `item`.
     ///
@@ -2383,7 +2383,7 @@ impl FrameworkElement {
     /// may be dropped afterwards. Returns `false` if this element has no
     /// `Content` dependency property (i.e. it is not a `ContentControl`).
     ///
-    /// Safe wrapper over the `Content` component-DP path — the `&FrameworkElement`
+    /// Safe wrapper over the `Content` component-DP path: the `&FrameworkElement`
     /// borrow guarantees the value is a live `BaseComponent` for the call, so no
     /// `unsafe` is needed at the call site (unlike the generic
     /// [`set_component`](Self::set_component)).
@@ -2782,7 +2782,7 @@ impl FrameworkElement {
     }
 
     /// `TreeViewItem.IsSelected`. `None` if not a `TreeViewItem`. (A `TreeView`
-    /// has no public `SetSelectedItem`; selection is driven per item — set this
+    /// has no public `SetSelectedItem`; selection is driven per item: set this
     /// on the item, then read it back via [`tree_selected_item`](Self::tree_selected_item).)
     #[must_use]
     pub fn tree_item_is_selected(&self) -> Option<bool> {
@@ -2819,7 +2819,7 @@ impl FrameworkElement {
     //
     // These route through this `ItemsControl`'s `ItemContainerGenerator`.
     // Containers exist only after the control has been laid out in a live
-    // [`View`] — call before a layout pass and the lookups return `None` / `-1`.
+    // [`View`]; call before a layout pass and the lookups return `None` / `-1`.
 
     /// Borrowed pointer to the realized container for item `index`, or `None`
     /// when the index has no realized container / this is not an `ItemsControl`.
@@ -3250,7 +3250,7 @@ impl FrameworkElement {
 
     /// Look up a resource by `key`, walking the logical parent chain and the
     /// application resources (`FrameworkElement::FindResource`). Borrowed (no
-    /// `+1`) — valid only transiently; copy / re-root if you need it longer.
+    /// `+1`). Valid only transiently; copy / re-root if you need it longer.
     /// Returns `None` on a miss (the non-throwing variant) or if this is not a
     /// `FrameworkElement`.
     ///
@@ -3342,7 +3342,7 @@ pub enum DynValue {
     /// Runtime-enum-typed DP value (the underlying `int32` member value).
     Enum(i32),
     /// A reference-typed value (`ImageSource` / `BaseComponent` subclass) as a
-    /// borrowed opaque pointer (no `+1` ref — see
+    /// borrowed opaque pointer (no `+1` ref; see
     /// [`FrameworkElement::get_component`]).
     Component(NonNull<c_void>),
 }
@@ -3418,7 +3418,7 @@ unsafe impl Send for View {}
 
 impl View {
     /// Create a View whose root is `content`. Consumes the
-    /// [`FrameworkElement`] wrapper — its refcount transfers into the view.
+    /// [`FrameworkElement`] wrapper; its refcount transfers into the view.
     ///
     /// # Panics
     ///
@@ -3448,7 +3448,7 @@ impl View {
         unsafe { noesis_view_set_scale(self.ptr.as_ptr(), scale) }
     }
 
-    /// Set the projection matrix. 16 floats, row-major — the native
+    /// Set the projection matrix. 16 floats, row-major: the native
     /// `Matrix4::GetData()` layout. Typical Noesis-facing projection is an
     /// ortho that maps UI pixel coords into Noesis's clip space (0..width,
     /// 0..height).
@@ -3483,7 +3483,7 @@ impl View {
         RenderFlags(self.get_flags())
     }
 
-    /// Set the tessellation curve tolerance in screen-space pixels — the raw
+    /// Set the tessellation curve tolerance in screen-space pixels, the raw
     /// `IView::SetTessellationMaxPixelError` knob. Smaller values mean finer
     /// curve subdivision (higher quality, more triangles). Prefer
     /// [`Self::set_quality`] for the named presets.
@@ -3523,7 +3523,7 @@ impl View {
     }
 
     /// Minimum distance, in pixels, from first contact before a manipulation
-    /// starts (raising `ManipulationStarted`) — `IView::
+    /// starts (raising `ManipulationStarted`). `IView::
     /// SetManipulationDistanceThreshold`. Default 10px.
     pub fn set_manipulation_distance_threshold(&mut self, pixels: u32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
@@ -3556,7 +3556,7 @@ impl View {
     /// Scale applied to the offscreen render phase to account for stereo (VR)
     /// eye matrices differing from the view projection
     /// (`IView::SetStereoOffscreenScaleFactor`). Must be `1.0` (the default)
-    /// for non-VR rendering; `2.0`–`3.0` is recommended for VR.
+    /// for non-VR rendering; `2.0`-`3.0` is recommended for VR.
     pub fn set_stereo_offscreen_scale_factor(&mut self, factor: f32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
         unsafe { noesis_view_set_stereo_offscreen_scale_factor(self.ptr.as_ptr(), factor) }
@@ -3588,7 +3588,7 @@ impl View {
     ///
     /// # Panics
     ///
-    /// Panics only on internal logic errors — if `Box::into_raw` returns null
+    /// Panics only on internal logic errors: if `Box::into_raw` returns null
     /// (it cannot; the wrapper is `NonNull` to keep the invariant explicit).
     pub fn create_timer<H: TimerHandler>(
         &mut self,
@@ -3615,7 +3615,7 @@ impl View {
         if let Some(token) = NonNull::new(token) {
             Some(TimerSubscription { token })
         } else {
-            // Creation failed before donation took effect — free the box we
+            // Creation failed before donation took effect; free the box we
             // leaked above so the handler isn't leaked.
             // SAFETY: userdata came from Box::into_raw moments ago; nothing
             // else ever saw the pointer.
@@ -3626,7 +3626,7 @@ impl View {
 
     /// Subscribe to the view's `Rendering` event (`IView::Rendering`), raised
     /// once per frame after animation and layout are applied to the composition
-    /// tree, just before it is rendered — fired from inside [`Self::update`] on
+    /// tree, just before it is rendered. Fired from inside [`Self::update`] on
     /// the view-driving thread. Use it for per-frame work that must observe the
     /// final, laid-out tree (e.g. syncing an external overlay).
     ///
@@ -3656,7 +3656,7 @@ impl View {
         if let Some(token) = NonNull::new(token) {
             Some(RenderingSubscription { token })
         } else {
-            // Creation failed before donation took effect — free the box we
+            // Creation failed before donation took effect; free the box we
             // leaked above so the handler isn't leaked.
             // SAFETY: userdata came from Box::into_raw moments ago; nothing
             // else ever saw the pointer.
@@ -3703,7 +3703,7 @@ impl View {
         unsafe { noesis_view_mouse_double_click(self.ptr.as_ptr(), x, y, button as i32) }
     }
 
-    /// `delta` is signed — Noesis uses Windows-style 120 units per notch.
+    /// `delta` is signed; Noesis uses Windows-style 120 units per notch.
     pub fn mouse_wheel(&mut self, x: i32, y: i32, delta: i32) -> bool {
         unsafe { noesis_view_mouse_wheel(self.ptr.as_ptr(), x, y, delta) }
     }
@@ -3718,7 +3718,7 @@ impl View {
     }
 
     /// Vertical scroll with the cursor at `(x, y)`. `value` is in lines
-    /// (per WPF convention — integer lines, fractional allowed).
+    /// (per WPF convention: integer lines, fractional allowed).
     pub fn scroll(&mut self, x: i32, y: i32, value: f32) -> bool {
         unsafe { noesis_view_scroll(self.ptr.as_ptr(), x, y, value) }
     }
@@ -3775,7 +3775,7 @@ impl View {
     ///
     /// # Panics
     ///
-    /// Panics if Noesis returns a null renderer — impossible on a
+    /// Panics if Noesis returns a null renderer; impossible on a
     /// successfully-constructed `View`.
     pub fn renderer(&mut self) -> Renderer<'_> {
         let ptr = unsafe { noesis_view_get_renderer(self.ptr.as_ptr()) };
@@ -3792,8 +3792,8 @@ impl View {
     ///
     /// Unlike [`Self::renderer`] (a borrow that cannot outlive or coexist with
     /// other use of the `View`), the handle holds its own `+1` reference on the
-    /// underlying `IView`, so it keeps the view — and the `IRenderer` the view
-    /// owns — alive independently. The `View` and the `RendererHandle` may then
+    /// underlying `IView`, so it keeps the view (and the `IRenderer` the view
+    /// owns) alive independently. The `View` and the `RendererHandle` may then
     /// live on different threads.
     ///
     /// # Threading contract
@@ -3808,7 +3808,7 @@ impl View {
     ///
     /// # Panics
     ///
-    /// Panics if Noesis returns a null renderer — impossible on a
+    /// Panics if Noesis returns a null renderer; impossible on a
     /// successfully-constructed `View`.
     #[must_use]
     pub fn renderer_handle(&self) -> RendererHandle {
@@ -3834,7 +3834,7 @@ impl View {
 
     /// The view's content root, as an owning [`FrameworkElement`]. Returns
     /// `None` only if the view has no content (which shouldn't happen on a
-    /// successfully-constructed `View` — but guard the contract anyway).
+    /// successfully-constructed `View`, but guard the contract anyway).
     ///
     /// The returned element is independently refcounted; dropping it does
     /// not affect the view's own internal reference. Useful for `find_name`
@@ -3856,7 +3856,7 @@ impl Drop for View {
     }
 }
 
-/// Mirror of `Noesis::HitTestFilterBehavior` (`NsGui/Enums.h`) — the value the
+/// Mirror of `Noesis::HitTestFilterBehavior` (`NsGui/Enums.h`): the value the
 /// filter callback of [`FrameworkElement::hit_test_filtered`] returns to steer
 /// the tree walk.
 #[repr(i32)]
@@ -3875,7 +3875,7 @@ pub enum HitTestFilterBehavior {
     Stop = 4,
 }
 
-/// Mirror of `Noesis::HitTestResultBehavior` (`NsGui/Enums.h`) — the value the
+/// Mirror of `Noesis::HitTestResultBehavior` (`NsGui/Enums.h`): the value the
 /// result callback of [`FrameworkElement::hit_test_filtered`] returns to keep
 /// collecting hits or stop.
 #[repr(i32)]
@@ -4094,7 +4094,7 @@ impl RenderFlags {
         self.0 |= flag as u32;
     }
 
-    /// Return a copy of this set with `flag` added — handy for `const`-ish
+    /// Return a copy of this set with `flag` added, handy for `const`-ish
     /// builder chains (`RenderFlags::empty().with(..).with(..)`).
     #[must_use]
     pub const fn with(mut self, flag: RenderFlag) -> Self {
@@ -4134,11 +4134,11 @@ impl Extend<RenderFlag> for RenderFlags {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Quality {
-    /// `LowQuality` — 0.7 px error (coarsest curves).
+    /// `LowQuality`: 0.7 px error (coarsest curves).
     Low,
-    /// `MediumQuality` — 0.4 px error (the Noesis default).
+    /// `MediumQuality`: 0.4 px error (the Noesis default).
     Medium,
-    /// `HighQuality` — 0.2 px error (finest curves).
+    /// `HighQuality`: 0.2 px error (finest curves).
     High,
 }
 
@@ -4206,7 +4206,7 @@ pub struct ViewStats {
 /// milliseconds, or `0` to stop the timer.
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
-/// or be moved onto the render thread — same rationale as the event handlers
+/// or be moved onto the render thread, same rationale as the event handlers
 /// in [`crate::events`]. Timers fire on the view-driving thread.
 ///
 /// Takes `&self` (re-entrant: a tick may call [`View::update`] on the same
@@ -4284,7 +4284,7 @@ impl Drop for TimerSubscription {
 /// is rendered.
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource` or
-/// be moved onto the render thread — same rationale as [`TimerHandler`]. The
+/// be moved onto the render thread, same rationale as [`TimerHandler`]. The
 /// event fires on the view-driving thread.
 ///
 /// Takes `&self` (re-entrant: the callback may call [`View::update`] on the
@@ -4397,7 +4397,7 @@ impl Renderer<'_> {
     /// render target first. `eye_matrix` is a row-major 4×4 (16 floats); since
     /// culling uses the view's projection (see
     /// [`View::set_projection_matrix`]), the eye matrix must be enclosed by it.
-    /// Pair with [`View::set_stereo_offscreen_scale_factor`] (2–3 for VR).
+    /// Pair with [`View::set_stereo_offscreen_scale_factor`] (2-3 for VR).
     pub fn render_stereo(&mut self, eye_matrix: &[f32; 16], flip_y: bool, clear: bool) {
         // SAFETY: self.ptr is a live IRenderer*; eye_matrix is exactly 16 floats
         // as the C side reads (Matrix4(const float*)).
@@ -4407,7 +4407,7 @@ impl Renderer<'_> {
     }
 
     /// Single-pass stereo (VR) render of both eyes in one call
-    /// (`IRenderer::RenderStereo`) — for multiview / instanced VR pipelines.
+    /// (`IRenderer::RenderStereo`), for multiview / instanced VR pipelines.
     /// Each eye matrix is a row-major 4×4 (16 floats), and both must be
     /// enclosed by the view's projection matrix.
     pub fn render_stereo_both(
@@ -4451,7 +4451,7 @@ unsafe impl Send for RendererHandle {}
 
 impl RendererHandle {
     /// Borrow the [`Renderer`] for this frame's render calls (`init` /
-    /// `update_render_tree` / `render` / `render_stereo` / …). The borrow is
+    /// `update_render_tree` / `render` / `render_stereo` / ...). The borrow is
     /// tied to `&mut self`, so it cannot escape the handle.
     pub fn renderer(&mut self) -> Renderer<'_> {
         Renderer {
