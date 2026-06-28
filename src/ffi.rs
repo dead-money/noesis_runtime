@@ -30,6 +30,14 @@ unsafe extern "C" {
     pub fn dm_noesis_init();
     pub fn dm_noesis_shutdown();
     pub fn dm_noesis_version() -> *const c_char;
+
+    // Inspector / hot-reload toggles + queries (TODO §17). The Disable* trio
+    // must be called before dm_noesis_init.
+    pub fn dm_noesis_disable_hot_reload();
+    pub fn dm_noesis_disable_socket_init();
+    pub fn dm_noesis_disable_inspector();
+    pub fn dm_noesis_is_inspector_connected() -> bool;
+    pub fn dm_noesis_update_inspector();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -127,6 +135,8 @@ unsafe extern "C" {
     pub fn dm_noesis_set_texture_provider(provider: *mut c_void);
 
     pub fn dm_noesis_gui_load_xaml(uri: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_gui_parse_xaml(text: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_gui_load_component(component: *mut c_void, uri: *const c_char) -> bool;
     pub fn dm_noesis_gui_load_application_resources(uri: *const c_char) -> bool;
     pub fn dm_noesis_gui_install_app_resources_chain(
         uris: *const *const c_char,

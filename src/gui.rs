@@ -2,10 +2,11 @@
 //! fit into the provider / view / render-device modules.
 
 use std::ffi::CString;
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_void};
 
 use crate::ffi::{
     dm_noesis_gui_install_app_resources_chain, dm_noesis_gui_load_application_resources,
+    dm_noesis_gui_load_component,
 };
 
 /// Load a [`ResourceDictionary`] XAML via the installed XAML provider and
@@ -77,4 +78,51 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
     // duration of the call; the parent dictionary it constructs holds
     // its own refs on the loaded children.
     unsafe { dm_noesis_gui_install_app_resources_chain(ptrs.as_ptr(), ptrs.len() as u32) }
+}
+
+/// Load the XAML at `uri` into an existing component instance — the
+/// code-behind / `x:Class` pattern, where the root object already exists and
+/// `GUI::LoadComponent` populates its children and named fields in place
+/// (instead of constructing a fresh tree the way [`crate::view::FrameworkElement::load`]
+/// does).
+///
+/// Returns `false` when `component` is null or `uri` is empty/unresolvable.
+/// A `true` return means the call linked and ran; it does **not** by itself
+/// guarantee the tree was populated.
+///
+/// # Reflection requirement / limitation
+///
+/// For `LoadComponent` to actually graft the parsed tree onto `component`, the
+/// instance's reflected type must match the XAML root's `x:Class`. Noesis maps
+/// the root element back onto the supplied instance by type identity; a
+/// mismatch leaves the instance untouched (and Noesis logs a type error).
+/// The custom-class registration surface ([`crate::classes`]) supplies exactly
+/// such a type: register a class as `"DM.LoadTarget"`, instantiate it, and load
+/// XAML whose root carries `x:Class="DM.LoadTarget"` — the parsed children and
+/// named fields are grafted onto that instance (verified by `tests/parse_xaml`,
+/// which asserts a named child becomes resolvable through the instance only
+/// after this call). The caller is responsible for ensuring the registered type
+/// name and the XAML `x:Class` agree; this entry point does not synthesize that
+/// pairing on its own.
+///
+/// # Safety
+///
+/// `component` must be a live `Noesis::BaseComponent*` (for example a
+/// [`crate::classes::ClassInstance::raw`] value) that outlives the call, or
+/// null. The pointer is borrowed — ownership is not taken and the caller's
+/// reference is unaffected. Runs on the view-driving thread; no `VerifyAccess`
+/// is performed.
+///
+/// # Panics
+///
+/// Panics if `uri` contains an interior NUL byte.
+#[must_use]
+pub unsafe fn load_component(component: *mut c_void, uri: &str) -> bool {
+    if component.is_null() {
+        return false;
+    }
+    let c = CString::new(uri).expect("uri contained NUL");
+    // SAFETY: `component` is a caller-guaranteed live BaseComponent* (or was
+    // null, handled above); `c` outlives the call. The shim borrows both.
+    unsafe { dm_noesis_gui_load_component(component, c.as_ptr()) }
 }

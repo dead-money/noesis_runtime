@@ -33,25 +33,26 @@ use crate::ffi::{
     dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
     dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
     dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
-    dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_items_control_items_count,
-    dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
-    dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_path_set_points,
-    dm_noesis_renderer_init, dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
-    dm_noesis_renderer_shutdown, dm_noesis_renderer_update_render_tree,
-    dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_view_activate,
-    dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
-    dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
-    dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
-    dm_noesis_view_get_stats, dm_noesis_view_get_tessellation_max_pixel_error,
-    dm_noesis_view_hscroll, dm_noesis_view_key_down, dm_noesis_view_key_up,
-    dm_noesis_view_mouse_button_down, dm_noesis_view_mouse_button_up,
-    dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel, dm_noesis_view_mouse_move,
-    dm_noesis_view_mouse_wheel, dm_noesis_view_restart_timer, dm_noesis_view_scroll,
-    dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix, dm_noesis_view_set_scale,
-    dm_noesis_view_set_size, dm_noesis_view_set_tessellation_max_pixel_error,
-    dm_noesis_view_touch_down, dm_noesis_view_touch_move, dm_noesis_view_touch_up,
-    dm_noesis_view_update, dm_noesis_visual_child, dm_noesis_visual_children_count,
-    dm_noesis_visual_hit_test, dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
+    dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml,
+    dm_noesis_items_control_items_count, dm_noesis_items_control_realized_count,
+    dm_noesis_items_control_set_items_source, dm_noesis_logical_child,
+    dm_noesis_logical_children_count, dm_noesis_path_set_points, dm_noesis_renderer_init,
+    dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
+    dm_noesis_renderer_update_render_tree, dm_noesis_text_caret_to_end, dm_noesis_text_get,
+    dm_noesis_text_set, dm_noesis_view_activate, dm_noesis_view_cancel_timer, dm_noesis_view_char,
+    dm_noesis_view_create, dm_noesis_view_create_timer, dm_noesis_view_deactivate,
+    dm_noesis_view_destroy, dm_noesis_view_get_content, dm_noesis_view_get_flags,
+    dm_noesis_view_get_renderer, dm_noesis_view_get_stats,
+    dm_noesis_view_get_tessellation_max_pixel_error, dm_noesis_view_hscroll,
+    dm_noesis_view_key_down, dm_noesis_view_key_up, dm_noesis_view_mouse_button_down,
+    dm_noesis_view_mouse_button_up, dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel,
+    dm_noesis_view_mouse_move, dm_noesis_view_mouse_wheel, dm_noesis_view_restart_timer,
+    dm_noesis_view_scroll, dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix,
+    dm_noesis_view_set_scale, dm_noesis_view_set_size,
+    dm_noesis_view_set_tessellation_max_pixel_error, dm_noesis_view_touch_down,
+    dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
+    dm_noesis_visual_child, dm_noesis_visual_children_count, dm_noesis_visual_hit_test,
+    dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
 
@@ -131,6 +132,30 @@ impl FrameworkElement {
         // SAFETY: c.as_ptr() is valid for the duration of the call; the
         // C ABI just copies into Noesis::Uri.
         let ptr = unsafe { dm_noesis_gui_load_xaml(c.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Parse XAML directly from an in-memory string, without needing a
+    /// [`XamlProvider`] or a URI. Returns `None` when the XAML is malformed
+    /// or when the parsed root is not a `FrameworkElement` (e.g. a bare
+    /// `ResourceDictionary` — use the application-resources helpers for those).
+    ///
+    /// This is the in-memory sibling of [`FrameworkElement::load`]: it backs
+    /// `GUI::ParseXaml`. The returned element holds an independent `+1`
+    /// reference, released on drop like any other `FrameworkElement` wrapper.
+    ///
+    /// [`XamlProvider`]: crate::xaml_provider::XamlProvider
+    ///
+    /// # Panics
+    ///
+    /// Panics if `xaml` contains an interior NUL byte.
+    #[must_use]
+    pub fn parse(xaml: &str) -> Option<Self> {
+        let c = CString::new(xaml).expect("xaml contained interior NUL");
+        // SAFETY: c.as_ptr() is valid for the duration of the call; the C ABI
+        // only reads the bytes while parsing (synchronously). The result is a
+        // freshly-created FrameworkElement* at +1, which `Self`'s Drop releases.
+        let ptr = unsafe { dm_noesis_gui_parse_xaml(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 

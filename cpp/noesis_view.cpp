@@ -101,6 +101,32 @@ extern "C" void* dm_noesis_gui_load_xaml(const char* uri) {
     return element.GiveOwnership();
 }
 
+extern "C" void* dm_noesis_gui_parse_xaml(const char* text) {
+    if (!text) return nullptr;
+    // ParseXaml builds an object tree directly from the string — no
+    // XamlProvider URI round-trip. Mirrors dm_noesis_gui_load_xaml's
+    // ownership: cast the root to FrameworkElement and hand out a +1 ref.
+    // Malformed XAML yields a null Ptr (the error is routed through the log
+    // handler), so this returns NULL rather than crashing.
+    Noesis::Ptr<Noesis::BaseComponent> component = Noesis::GUI::ParseXaml(text);
+    if (!component) return nullptr;
+    Noesis::Ptr<Noesis::FrameworkElement> element =
+        Noesis::DynamicPtrCast<Noesis::FrameworkElement>(component);
+    if (!element) return nullptr;
+    return element.GiveOwnership();
+}
+
+extern "C" bool dm_noesis_gui_load_component(void* component, const char* uri) {
+    if (!component || !uri) return false;
+    // LoadComponent populates an existing instance (the code-behind / x:Class
+    // pattern). `component` is borrowed; Noesis does not take ownership of the
+    // caller's ref. Meaningful population requires the instance's reflected
+    // type to match the XAML root's x:Class.
+    Noesis::GUI::LoadComponent(
+        static_cast<Noesis::BaseComponent*>(component), Noesis::Uri(uri));
+    return true;
+}
+
 extern "C" void dm_noesis_base_component_release(void* obj) {
     if (!obj) return;
     static_cast<Noesis::BaseComponent*>(obj)->Release();
