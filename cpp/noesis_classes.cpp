@@ -1,4 +1,4 @@
-// Custom XAML class registration FFI (Phase 5.C).
+// Custom XAML class registration FFI.
 //
 // Architecture mirrors what Noesis's C# / Unity binding does for managed
 // code — we cannot conjure C++ types from C-FFI, but we *can* synthesize
@@ -131,7 +131,7 @@ struct ClassData {
     noesis_layout_vtable             layout;
     void*                               layout_userdata;
     noesis_layout_free_fn            layout_free;
-    // Optional render callback (OnRender trampoline, TODO §10).
+    // Optional render callback (OnRender trampoline).
     noesis_render_fn                 render_cb;
     void*                               render_userdata;
     noesis_render_free_fn            render_free;
@@ -502,7 +502,7 @@ void rust_run_render(RustClassInstance* self, Noesis::DrawingContext* dc) {
 // NS_IMPLEMENT_REFLECTION because they generate a `GetClassType()` that always
 // returns the static class type. We need a custom override so that instances
 // created via the synthetic Factory creator report their per-name TypeClass
-// instead — that's what makes XAML `Style TargetType="aor:Foo"` / bindings
+// instead — that's what makes XAML `Style TargetType="my:Foo"` / bindings
 // work. The hand-rolled version reuses Noesis's own `TypeClassCreator::Create`
 // / `Fill` template machinery so `TypeOf<>`, `RegisterType`, and
 // `IsAssignableFrom` all behave normally.
@@ -581,7 +581,7 @@ Noesis::BaseComponent* make_trampoline(ClassData* cd);
 // This proves the synthetic-TypeClass reflection machinery extends to the
 // DependencyObject side of the hierarchy beyond UIElement. The other Animatable
 // subtrees (Brush/Geometry/Transform/Effect) add IRenderProxyCreator's three
-// pure render-tree virtuals and are NOT subclassable this way (see TODO.md).
+// pure render-tree virtuals and are NOT subclassable this way (see LIMITATIONS.md).
 class RustFreezable final : public Noesis::Freezable, public RustClassInstance {
 public:
     RustFreezable() = default;
@@ -1642,7 +1642,7 @@ extern "C" bool noesis_dependency_object_get_property(
     return apply_get(d, dp, type, out_value);
 }
 
-// ── Attached properties (TODO §2.B) ─────────────────────────────────────────
+// ── Attached properties ─────────────────────────────────────────────────────
 //
 // Resolve a DependencyProperty registered on `owner_type` (e.g. owner="Grid",
 // prop="Row"), then set / get it on `obj`. The owner type is resolved through
@@ -1703,7 +1703,7 @@ extern "C" bool noesis_dependency_object_get_attached(
     return apply_get(d, dp, type, out_value);
 }
 
-// ── ClearValue / SetCurrentValue / GetBaseValue (TODO §2.C) ─────────────────
+// ── ClearValue / SetCurrentValue / GetBaseValue ─────────────────────────────
 
 extern "C" bool noesis_dependency_object_clear_value(void* obj, const char* name) {
     Noesis::DependencyObject* d = nullptr;
@@ -1747,8 +1747,6 @@ extern "C" bool noesis_dependency_object_get_base_value(
     // Object tags have no boxed base-value accessor — apply_get returns false.
     return apply_get(d, dp, type, out_value, GetMode::Base);
 }
-
-// ── Dynamic tag inference (TODO §2.D) ───────────────────────────────────────
 
 extern "C" int32_t noesis_dependency_object_property_tag(void* obj, const char* name) {
     const Noesis::DependencyProperty* dp = resolve_dp(obj, name, nullptr);

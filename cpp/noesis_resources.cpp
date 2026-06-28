@@ -1,5 +1,4 @@
-// ResourceDictionary access, Style from code, and template assignment
-// (TODO §7 / Phase B "resources-styles-templates").
+// ResourceDictionary access, Style from code, and template assignment.
 //
 // Three cooperating surfaces, all building on the object-creation /
 // ownership idioms already established in noesis_binding.cpp and

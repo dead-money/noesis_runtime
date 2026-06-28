@@ -1,4 +1,4 @@
-// Input — finer control (TODO §16).
+// Input — finer control.
 //
 // Element-level mouse/touch capture, keyboard-state queries, focus-state DPs,
 // focus engagement + traversal (MoveFocus / PredictFocus), the FocusManager and

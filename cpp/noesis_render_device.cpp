@@ -1,10 +1,7 @@
 // C++ subclasses that satisfy the Noesis pure-virtual `RenderDevice`,
 // `Texture`, and `RenderTarget` contracts by trampolining into the Rust-side
 // vtable supplied at construction. Plus the C-ABI factory functions the Rust
-// `register()` helper calls.
-//
-// See ../docs/PHASE_1_PLAN.md for the design context. The C ABI surface is
-// declared in noesis_shim.h.
+// `register()` helper calls. The C ABI surface is declared in noesis_shim.h.
 
 #include "noesis_shim.h"
 
@@ -257,7 +254,7 @@ extern "C" void noesis_render_device_destroy(void* device) {
     static_cast<Noesis::RenderDevice*>(device)->Release();
 }
 
-// ─── Offscreen / glyph-cache tuning (TODO §1) ───────────────────────────────
+// ─── Offscreen / glyph-cache tuning ─────────────────────────────────────────
 //
 // Non-virtual configuration on the `Noesis::RenderDevice` base, applied to the
 // device the renderer draws with. Width/height of 0 means automatic. These

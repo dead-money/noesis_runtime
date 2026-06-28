@@ -36,7 +36,7 @@ extern "C" void noesis_set_log_handler(noesis_log_fn cb, void* userdata)
     Noesis::SetLogHandler(cb ? log_trampoline : nullptr);
 }
 
-// ── Inspector / hot-reload toggles + queries (TODO §17) ─────────────────────
+// ── Inspector / hot-reload toggles + queries ────────────────────────────────
 //
 // All GUI:: free calls. The Disable* trio MUST run before GUI::Init (i.e.
 // before noesis_init); the query + pump are runtime calls. On a Release

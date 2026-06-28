@@ -1,4 +1,4 @@
-// C++ wrapper for Noesis::TextureProvider (Phase 4.E ImageBrush support).
+// C++ wrapper for Noesis::TextureProvider (ImageBrush support).
 //
 //   `RustTextureProvider` subclasses `Noesis::TextureProvider`. Two virtuals
 //   are overridden:

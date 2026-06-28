@@ -1,4 +1,4 @@
-// Code-built MeshData + Mesh element (TODO §10 immediate-mode drawing).
+// Code-built MeshData + Mesh element (immediate-mode drawing).
 //
 // MeshData (NsGui/MeshData.h) is an Animatable holding CPU-side vertex / UV /
 // index buffers plus an explicit bounding box. It is the low-level geometry

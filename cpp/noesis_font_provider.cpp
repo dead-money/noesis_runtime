@@ -1,4 +1,4 @@
-// C++ wrapper for Noesis::FontProvider (Phase 4.F.1).
+// C++ wrapper for Noesis::FontProvider.
 //
 //   `RustFontProvider` subclasses `Noesis::CachedFontProvider`. Two virtuals
 //   are overridden:

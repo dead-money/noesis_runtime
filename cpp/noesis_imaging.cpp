@@ -1,4 +1,4 @@
-// Code-built ImageSource / BitmapSource family (TODO §12 "Bitmaps").
+// Code-built ImageSource / BitmapSource family.
 //
 // Construct CroppedBitmap / TextureSource / BitmapImage / DynamicTextureSource
 // objects from Rust and hand them out across the C ABI with a single owned
@@ -14,7 +14,7 @@
 // GPU notes: TextureSource::GetTexture and the BitmapSource pixel-size / dpi
 // getters resolve only once a real Texture / texture-provider has run on a
 // RenderDevice render pass. Headless they read back null / 0, which is the
-// correct outcome — see "Known SDK limitations" in TODO.md.
+// correct outcome — see "Known SDK limitations" in LIMITATIONS.md.
 
 #include "noesis_shim.h"
 

@@ -1,4 +1,4 @@
-// ICommand-from-Rust bridge (TODO §4).
+// ICommand-from-Rust bridge.
 //
 // A `RustCommand : Noesis::BaseCommand` trampoline lets XAML
 // `Command="{Binding ...}"` invoke Rust logic. `BaseCommand` already
@@ -114,12 +114,12 @@ extern "C" void noesis_command_raise_can_execute_changed(void* command) {
     }
 }
 
-// ── RoutedCommand / RoutedUICommand (TODO §4) ───────────────────────────────
+// ── RoutedCommand / RoutedUICommand ─────────────────────────────────────────
 //
 // A RoutedCommand routes Execute / CanExecute through the element tree to the
 // first matching CommandBinding (below). Construction needs an owner TypeClass;
 // we resolve it from a type name through the Core reflection registry (a
-// built-in like "UIElement" or a §9-registered custom class). Both are
+// built-in like "UIElement" or a registered custom class). Both are
 // BaseCommand-derived, so noesis_command_raise_can_execute_changed works on
 // them too. Returned commands carry +1 (release via
 // noesis_base_component_release).
@@ -192,7 +192,7 @@ extern "C" void noesis_routed_ui_command_set_text(void* command, const char* tex
     }
 }
 
-// ── CommandBinding (TODO §4) ────────────────────────────────────────────────
+// ── CommandBinding ───────────────────────────────────────────────────────────
 //
 // Binds a command to Rust Executed / CanExecute handlers and attaches to an
 // element's CommandBindings, so an invoked RoutedCommand (or built-in) routing
@@ -287,7 +287,7 @@ extern "C" void noesis_command_binding_destroy(void* token) {
     delete static_cast<RustCommandBinding*>(token);
 }
 
-// ── Built-in command libraries (TODO §4) ────────────────────────────────────
+// ── Built-in command libraries ───────────────────────────────────────────────
 //
 // Borrowed `const RoutedUICommand*` singletons owned by the framework — do NOT
 // release. Indexed by the enums in src/commands.rs; the switch evaluates each

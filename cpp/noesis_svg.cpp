@@ -1,4 +1,4 @@
-// SVG / SVGPath parsing and geometry queries (TODO §12 "SVG").
+// SVG / SVGPath parsing and geometry queries.
 //
 // Two real 3.2.13 surfaces are wrapped here, both fully CPU/headless — no GPU
 // RenderDevice or render pass is required to exercise either one:

@@ -1,4 +1,4 @@
-// Typography & text properties (TODO §13): FontFamily, the TextElement attached
+// Typography & text properties: FontFamily, the TextElement attached
 // font properties, a representative subset of the OpenType Typography attached
 // DPs, and the IME CompositionUnderline list on a TextBox.
 //

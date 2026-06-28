@@ -1,4 +1,4 @@
-// VisualStateManager FFI (TODO §6).
+// VisualStateManager FFI.
 //
 // A single thin entrypoint over `VisualStateManager::GoToState` so Rust can
 // drive control state transitions (the CommonStates / CheckStates / FocusStates
