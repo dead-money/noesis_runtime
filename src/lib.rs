@@ -38,6 +38,7 @@ pub mod svg;
 pub mod text_inlines;
 pub mod texture_provider;
 pub mod transforms;
+pub mod typography;
 pub mod view;
 pub mod xaml_provider;
 

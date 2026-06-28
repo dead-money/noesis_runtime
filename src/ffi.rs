@@ -1236,6 +1236,90 @@ unsafe extern "C" {
         width: *mut u32,
         height: *mut u32,
     ) -> bool;
+    // Typography & text properties (TODO §13) — cpp/noesis_typography.cpp.
+    pub fn dm_noesis_typography_font_family_create(source: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_typography_font_family_get_source(family: *mut c_void) -> *const c_char;
+    pub fn dm_noesis_typography_font_family_get_num_fonts(family: *mut c_void) -> u32;
+    pub fn dm_noesis_typography_font_family_get_font_name(
+        family: *mut c_void,
+        index: u32,
+    ) -> *const c_char;
+
+    pub fn dm_noesis_typography_text_element_set_font_size(element: *mut c_void, size: f32)
+    -> bool;
+    pub fn dm_noesis_typography_text_element_get_font_size(
+        element: *mut c_void,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_set_font_family(
+        element: *mut c_void,
+        family: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_get_font_family(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_typography_text_element_set_foreground(
+        element: *mut c_void,
+        brush: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_get_foreground(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_typography_text_element_set_font_weight(
+        element: *mut c_void,
+        weight: i32,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_get_font_weight(
+        element: *mut c_void,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_set_font_style(
+        element: *mut c_void,
+        style: i32,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_get_font_style(
+        element: *mut c_void,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_set_font_stretch(
+        element: *mut c_void,
+        stretch: i32,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_element_get_font_stretch(
+        element: *mut c_void,
+        out: *mut i32,
+    ) -> bool;
+
+    pub fn dm_noesis_typography_set_capitals(element: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_typography_get_capitals(element: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_typography_set_numeral_style(element: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_typography_get_numeral_style(element: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_typography_set_fraction(element: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_typography_get_fraction(element: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_typography_set_variants(element: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_typography_get_variants(element: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_typography_set_standard_ligatures(element: *mut c_void, value: bool) -> bool;
+    pub fn dm_noesis_typography_get_standard_ligatures(
+        element: *mut c_void,
+        out: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_typography_set_kerning(element: *mut c_void, value: bool) -> bool;
+    pub fn dm_noesis_typography_get_kerning(element: *mut c_void, out: *mut bool) -> bool;
+
+    pub fn dm_noesis_typography_text_box_add_composition_underline(
+        element: *mut c_void,
+        start: u32,
+        end: u32,
+        style: i32,
+        bold: bool,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_box_num_composition_underlines(element: *mut c_void) -> i32;
+    pub fn dm_noesis_typography_text_box_get_composition_underline(
+        element: *mut c_void,
+        index: u32,
+        out_start: *mut u32,
+        out_end: *mut u32,
+        out_style: *mut i32,
+        out_bold: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_typography_text_box_clear_composition_underlines(element: *mut c_void)
+    -> bool;
 }
 
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn

@@ -1950,6 +1950,79 @@ void* dm_noesis_dynamic_texture_source_create(uint32_t width, uint32_t height,
 bool dm_noesis_dynamic_texture_source_resize(void* source, uint32_t width, uint32_t height);
 bool dm_noesis_dynamic_texture_source_get_pixel_size(void* source, uint32_t* width,
                                                      uint32_t* height);
+// ── Typography & text properties (TODO §13) ─────────────────────────────────
+//
+// Implemented in cpp/noesis_typography.cpp. FontFamily is handed out with a +1
+// reference (release via dm_noesis_base_component_release). The TextElement and
+// Typography accessors take a borrowed DependencyObject* (`element`); every
+// setter has a getter that re-reads from the live object. Enum ordinals match
+// the Noesis headers: FontWeight (FontProperties.h, e.g. Normal=400, Bold=700),
+// FontStyle (Normal=0, Oblique=1, Italic=2), FontStretch (UltraCondensed=1 …
+// UltraExpanded=9), and the Typography enums (Typography.h).
+
+// FontFamily(source) — `source` may be NULL for the default family. Returns a
+// +1 FontFamily* (BaseComponent*).
+void* dm_noesis_typography_font_family_create(const char* source);
+// Borrowed source string (the text used to construct it); NULL on type mismatch.
+const char* dm_noesis_typography_font_family_get_source(void* family);
+// Number of concrete fonts the family resolved to via the registered font
+// provider (0 with no provider, or if `family` is not a FontFamily). NOTE:
+// 3.2.13 exposes per-family enumeration only — there is no API to enumerate the
+// set of available family names from the font system (see TODO limitations).
+uint32_t dm_noesis_typography_font_family_get_num_fonts(void* family);
+// Borrowed name of the resolved font at `index`, or NULL if out of range.
+const char* dm_noesis_typography_font_family_get_font_name(void* family, uint32_t index);
+
+// TextElement attached font properties (static Get/Set on a DependencyObject).
+// FontSize is in device-independent pixels. set returns false on type mismatch;
+// get writes through `out` and returns false on type mismatch / null out.
+bool dm_noesis_typography_text_element_set_font_size(void* element, float size);
+bool dm_noesis_typography_text_element_get_font_size(void* element, float* out);
+// FontFamily attached DP: set takes a borrowed FontFamily* (Noesis +1s it);
+// get returns the borrowed FontFamily* currently set (no +1), or NULL.
+bool dm_noesis_typography_text_element_set_font_family(void* element, void* family);
+void* dm_noesis_typography_text_element_get_font_family(void* element);
+// Foreground attached DP: set takes a borrowed Brush* (Noesis +1s it); get
+// returns the borrowed Brush* currently set (no +1), or NULL.
+bool dm_noesis_typography_text_element_set_foreground(void* element, void* brush);
+void* dm_noesis_typography_text_element_get_foreground(void* element);
+// FontWeight / FontStyle / FontStretch enums (ordinals as above).
+bool dm_noesis_typography_text_element_set_font_weight(void* element, int32_t weight);
+bool dm_noesis_typography_text_element_get_font_weight(void* element, int32_t* out);
+bool dm_noesis_typography_text_element_set_font_style(void* element, int32_t style);
+bool dm_noesis_typography_text_element_get_font_style(void* element, int32_t* out);
+bool dm_noesis_typography_text_element_set_font_stretch(void* element, int32_t stretch);
+bool dm_noesis_typography_text_element_get_font_stretch(void* element, int32_t* out);
+
+// Typography attached DPs (representative subset; the remaining ~30 follow the
+// identical SetValue/GetValue-with-DP-pointer pattern). Enum values use the
+// Typography.h ordinals; the bool flags map directly.
+bool dm_noesis_typography_set_capitals(void* element, int32_t value);
+bool dm_noesis_typography_get_capitals(void* element, int32_t* out);
+bool dm_noesis_typography_set_numeral_style(void* element, int32_t value);
+bool dm_noesis_typography_get_numeral_style(void* element, int32_t* out);
+bool dm_noesis_typography_set_fraction(void* element, int32_t value);
+bool dm_noesis_typography_get_fraction(void* element, int32_t* out);
+bool dm_noesis_typography_set_variants(void* element, int32_t value);
+bool dm_noesis_typography_get_variants(void* element, int32_t* out);
+bool dm_noesis_typography_set_standard_ligatures(void* element, bool value);
+bool dm_noesis_typography_get_standard_ligatures(void* element, bool* out);
+bool dm_noesis_typography_set_kerning(void* element, bool value);
+bool dm_noesis_typography_get_kerning(void* element, bool* out);
+
+// CompositionUnderline (IME composition ranges) on a TextBox. `style` matches
+// Noesis::CompositionLineStyle (0 None, 1 Solid, 2 Dot, 3 Dash, 4 Squiggle).
+// add/clear return false if `element` is not a TextBox; num returns -1; get
+// writes the requested fields (any out may be NULL) and returns false on out of
+// range / type mismatch.
+bool dm_noesis_typography_text_box_add_composition_underline(void* element, uint32_t start,
+                                                             uint32_t end, int32_t style,
+                                                             bool bold);
+int32_t dm_noesis_typography_text_box_num_composition_underlines(void* element);
+bool dm_noesis_typography_text_box_get_composition_underline(void* element, uint32_t index,
+                                                             uint32_t* out_start, uint32_t* out_end,
+                                                             int32_t* out_style, bool* out_bold);
+bool dm_noesis_typography_text_box_clear_composition_underlines(void* element);
 
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //
