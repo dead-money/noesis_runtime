@@ -807,9 +807,12 @@ bool dm_noesis_visual_state_go_to_state(
 // (typically: just before dm_noesis_shutdown).
 
 typedef enum dm_noesis_class_base {
-    DM_NOESIS_BASE_CONTENT_CONTROL = 0,
-    // Future bases (Control, UserControl, FrameworkElement, Panel) plug in
-    // by adding sibling trampoline subclasses in noesis_classes.cpp.
+    DM_NOESIS_BASE_CONTENT_CONTROL   = 0,
+    DM_NOESIS_BASE_CONTROL           = 1,
+    DM_NOESIS_BASE_FRAMEWORK_ELEMENT = 2,
+    DM_NOESIS_BASE_USER_CONTROL      = 3,
+    DM_NOESIS_BASE_PANEL             = 4,
+    DM_NOESIS_BASE_DECORATOR         = 5,
 } dm_noesis_class_base;
 
 // Property value-type tag. Determines the layout of `value_ptr` /
@@ -940,6 +943,108 @@ bool dm_noesis_image_source_get_size(
     void* image_source,
     float* out_width,
     float* out_height);
+
+// ── Custom base classes + richer DP metadata + layout (TODO §9) ─────────────
+//
+// `dm_noesis_class_register` accepts any `dm_noesis_class_base` value above —
+// each maps to a sibling trampoline subclass (`RustControl`, `RustPanel`, …)
+// that shares the synthetic-TypeClass + ClassData machinery with
+// `RustContentControl`. The additions below layer richer DP metadata
+// (coercion / FrameworkPropertyMetadataOptions / read-only) and layout
+// participation (MeasureOverride / ArrangeOverride) onto any registered class.
+
+// Richer DependencyProperty registration. Superset of
+// `dm_noesis_class_register_property`:
+//   * `fpm_options` — bitmask of Noesis::FrameworkPropertyMetadataOptions
+//     (AffectsMeasure=0x1, AffectsArrange=0x2, AffectsParentMeasure=0x4,
+//     AffectsParentArrange=0x8, AffectsRender=0x10, Inherits=0x20, …). When
+//     non-zero the DP is created with a FrameworkPropertyMetadata so Noesis
+//     invalidates the matching layout/render pass on change.
+//   * `read_only` — registers the DP with PropertyAccess_ReadOnly. The public
+//     setter paths (dm_noesis_*_set_property / bindings / XAML) then reject
+//     writes; the privileged `dm_noesis_instance_set_readonly_property` is the
+//     only way to mutate it (mirrors a WPF DependencyPropertyKey).
+//   * `coerce` — attaches the class-level coerce callback (installed via
+//     `dm_noesis_class_set_coerce`) to THIS property. Limited to the first 32
+//     properties of a class (the coerce-thunk pool size); registration returns
+//     UINT32_MAX if a 33rd coerced property is requested.
+// Returns the dense property index, or UINT32_MAX on failure.
+uint32_t dm_noesis_class_register_property_ex(
+    void* class_token,
+    const char* prop_name,
+    dm_noesis_prop_type prop_type,
+    const void* default_ptr,
+    uint32_t fpm_options,
+    bool read_only,
+    bool coerce);
+
+// Set a read-only DP on an instance via the privileged path (the analogue of
+// setting through a WPF DependencyPropertyKey). `value_ptr` follows the
+// per-type layout. Returns false on bad input (null/invalid instance, index
+// out of range). Fires the changed callback like any other write.
+bool dm_noesis_instance_set_readonly_property(
+    void* instance,
+    uint32_t prop_index,
+    const void* value_ptr);
+
+// Coerce callback. Invoked synchronously inside Noesis's value pipeline when a
+// coerced DP's effective value is computed. `in_value` is the pre-coercion
+// value (per the DP's prop_type layout); `out_value` is pre-initialized to a
+// copy of `in_value` and the implementation overwrites it with the coerced
+// result. Only scalar / Thickness / Color / Rect tags are coercible; object /
+// string tags pass through unchanged. `instance` is the owning object's
+// BaseComponent*.
+typedef void (*dm_noesis_coerce_fn)(
+    void* userdata,
+    void* instance,
+    uint32_t prop_index,
+    const void* in_value,
+    void* out_value);
+
+// Install a class-level coerce callback. Individual DPs opt in by passing
+// `coerce=true` to dm_noesis_class_register_property_ex. `userdata` ownership
+// transfers to the C++ side and is released via `free_handler` when ClassData
+// is finally torn down (same lifetime contract as the change callback). NULL
+// `cb` detaches.
+void dm_noesis_class_set_coerce(
+    void* class_token,
+    dm_noesis_coerce_fn cb,
+    void* userdata,
+    dm_noesis_class_free_fn free_handler);
+
+// Layout vtable: the trampoline subclass's MeasureOverride / ArrangeOverride
+// forward into these. `instance` is the owning object's BaseComponent* (use it
+// with dm_noesis_visual_children_count / dm_noesis_visual_child +
+// dm_noesis_uielement_measure / _arrange to lay out children). Sizes are in
+// DIPs. Write the desired (measure) / used (arrange) size to out_w/out_h. When
+// no layout handler is installed the base class's default layout runs.
+typedef struct dm_noesis_layout_vtable {
+    void (*measure)(void* userdata, void* instance,
+        float avail_w, float avail_h, float* out_w, float* out_h);
+    void (*arrange)(void* userdata, void* instance,
+        float final_w, float final_h, float* out_w, float* out_h);
+} dm_noesis_layout_vtable;
+
+typedef void (*dm_noesis_layout_free_fn)(void* userdata);
+
+// Install a layout handler on a registered class. Meaningful for any base
+// (all current bases derive from FrameworkElement). Pass a null `vtable` to
+// detach. `userdata` ownership transfers; released via `free_handler` at
+// ClassData teardown. Copies the vtable by value.
+void dm_noesis_class_set_layout(
+    void* class_token,
+    const dm_noesis_layout_vtable* vtable,
+    void* userdata,
+    dm_noesis_layout_free_fn free_handler);
+
+// UIElement layout primitives for custom MeasureOverride / ArrangeOverride
+// implementations. `element` is a borrowed UIElement* (e.g. from
+// dm_noesis_visual_child). measure/arrange return false if `element` is null
+// or not a UIElement; desired_size additionally writes the post-Measure
+// DesiredSize. arrange rect is (x, y, w, h) in the parent's coordinate space.
+bool dm_noesis_uielement_measure(void* element, float avail_w, float avail_h);
+bool dm_noesis_uielement_arrange(void* element, float x, float y, float w, float h);
+bool dm_noesis_uielement_desired_size(void* element, float* out_w, float* out_h);
 
 // ── Generic name-keyed DependencyProperty access ───────────────────────────
 //
