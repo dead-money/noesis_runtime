@@ -1,4 +1,4 @@
-//! Safety smoke test — exercises the dm_noesis_runtime FFI surface against a
+//! Safety smoke test — exercises the `dm_noesis_runtime` FFI surface against a
 //! catalogue of valid-but-edge-case inputs and asserts no crashes.
 //!
 //! The whole file is a single `#[test]` because Noesis's `Init` /
@@ -475,13 +475,13 @@ fn safety_smoke() {
         }
         impl PropertyChangeHandler for ReentrantHandler {
             fn on_changed(&mut self, instance: Instance, idx: u32, value: PropertyValue<'_>) {
-                if idx == self.input_idx {
-                    if let PropertyValue::Float(f) = value {
-                        // Mirror to output_idx — fires another callback for
-                        // output_idx, which the matches above ignore (no
-                        // infinite loop).
-                        instance.set_float(self.output_idx, f * 2.0);
-                    }
+                if idx == self.input_idx
+                    && let PropertyValue::Float(f) = value
+                {
+                    // Mirror to output_idx — fires another callback for
+                    // output_idx, which the matches above ignore (no
+                    // infinite loop).
+                    instance.set_float(self.output_idx, f * 2.0);
                 }
             }
         }

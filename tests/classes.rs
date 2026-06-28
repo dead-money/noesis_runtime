@@ -1,6 +1,6 @@
 //! Phase 5.C — custom XAML class registration integration test.
 //!
-//! Registers a Rust-backed `<Sample.NineSlicer>` ContentControl with three
+//! Registers a Rust-backed `<Sample.NineSlicer>` `ContentControl` with three
 //! DPs (`Source` / `SliceThickness` / `TopLeftViewbox`), loads a XAML that
 //! sets `SliceThickness` on an instance, and asserts:
 //!   * the property-changed callback fired with the right value

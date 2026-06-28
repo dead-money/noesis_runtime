@@ -184,8 +184,8 @@ impl FrameworkElement {
     }
 
     /// Write the `Text` property of a `TextBox` or `TextBlock`. Returns
-    /// `true` on success, `false` if this element is neither a TextBox nor
-    /// a TextBlock.
+    /// `true` on success, `false` if this element is neither a `TextBox` nor
+    /// a `TextBlock`.
     ///
     /// # Panics
     ///
@@ -200,7 +200,7 @@ impl FrameworkElement {
     }
 
     /// Set the caret of a `TextBox` to the end of its current text. No-op
-    /// (returns `false`) if the element is not a `TextBox`. Mirrors AoR's
+    /// (returns `false`) if the element is not a `TextBox`. Mirrors `AoR`'s
     /// `_commandInput.CaretIndex = _commandInput.Text.Length` pattern
     /// after a history-nav substitution.
     pub fn set_caret_to_end(&mut self) -> bool {
@@ -211,7 +211,7 @@ impl FrameworkElement {
 
     /// Move keyboard focus to this element. Returns the value Noesis
     /// reports for `UIElement::Focus()` — `true` if the element accepted
-    /// focus, `false` if it's not a UIElement or is non-focusable.
+    /// focus, `false` if it's not a `UIElement` or is non-focusable.
     pub fn focus(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
         // DynamicCast<UIElement*> + Focus().
@@ -244,7 +244,7 @@ impl FrameworkElement {
     /// the state's `VisualTransition` (animated change), or `false` to snap
     /// straight to the new state.
     ///
-    /// This targets a templated control: GoToState resolves `state` against
+    /// This targets a templated control: `GoToState` resolves `state` against
     /// the `VisualStateGroup`s declared in the element's `ControlTemplate`
     /// (e.g. a `Button`'s `CommonStates` — `Normal` / `MouseOver` / `Pressed`
     /// / `Disabled`). Returns `false` if this element is not such a control,

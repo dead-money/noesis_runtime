@@ -1,4 +1,4 @@
-//! TODO §3 — ObservableCollection / INotifyCollectionChanged: Rust data drives
+//! TODO §3 — `ObservableCollection` / `INotifyCollectionChanged`: Rust data drives
 //! a list control.
 //!
 //! Two layers of assertion:
@@ -15,7 +15,7 @@
 //!      initial value even though the live item count moved — so this is a
 //!      genuine end-to-end proof of change notification, not a passthrough.
 //!
-//! The ItemsControl carries an explicit `ControlTemplate` (ItemsPresenter) and
+//! The `ItemsControl` carries an explicit `ControlTemplate` (`ItemsPresenter`) and
 //! `ItemTemplate` so it generates containers without depending on a loaded
 //! theme.
 //!

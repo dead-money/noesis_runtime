@@ -5,7 +5,7 @@
 //! plus a synthetic per-name `TypeClassBuilder` so XAML can resolve
 //! `{myns:Foo positional_arg}` to a Rust callback.
 //!
-//! AoR's `LocalizeExtension` is the motivating example —
+//! `AoR`'s `LocalizeExtension` is the motivating example —
 //! `{aor:Localize menu.main_menu.new_game}` resolves the key through a
 //! locale table and substitutes the result.
 //!
@@ -81,9 +81,9 @@ pub struct ClosureHandler<F: FnMut(&str) -> Option<String> + Send + 'static> {
     scratch: String,
 }
 
-/// RAII handle for a registered MarkupExtension. Drop unregisters from
+/// RAII handle for a registered `MarkupExtension`. Drop unregisters from
 /// the Factory + Reflection registries — preventing new instances from
-/// being parsed — but the underlying MarkupClassData and the boxed
+/// being parsed — but the underlying `MarkupClassData` and the boxed
 /// handler survive as long as live extension instances remain. Same
 /// intrusive-refcount contract as [`crate::classes::ClassRegistration`].
 pub struct MarkupExtensionRegistration {
@@ -97,7 +97,7 @@ unsafe impl Send for MarkupExtensionRegistration {}
 unsafe impl Sync for MarkupExtensionRegistration {}
 
 impl MarkupExtensionRegistration {
-    /// Register a Rust-backed MarkupExtension. `name` is the XAML-visible
+    /// Register a Rust-backed `MarkupExtension`. `name` is the XAML-visible
     /// type (e.g. `"AOR.Localize"`); the namespace mapping
     /// (`xmlns:aor="clr-namespace:AOR"`) lives in the XAML.
     ///
@@ -146,7 +146,7 @@ impl MarkupExtensionRegistration {
         Self::new(name, handler)
     }
 
-    /// Internal token (a `void*` to the C++-side ClassData).
+    /// Internal token (a `void*` to the C++-side `ClassData`).
     pub fn token(&self) -> NonNull<c_void> {
         self.token
     }
@@ -177,7 +177,7 @@ unsafe extern "C" fn markup_handler_free_trampoline(userdata: *mut c_void) {
     // SAFETY: `userdata` is the `Box::into_raw` from `new`. Single-owner
     // contract; C++ calls this exactly once.
     drop(Box::from_raw(
-        userdata as *mut Box<dyn MarkupExtensionHandler>,
+        userdata.cast::<Box<dyn MarkupExtensionHandler>>(),
     ));
 }
 

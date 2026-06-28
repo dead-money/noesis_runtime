@@ -1,7 +1,7 @@
-//! Phase 5.D — custom MarkupExtension integration test.
+//! Phase 5.D — custom `MarkupExtension` integration test.
 //!
-//! Registers `<sample:Loc>` as a Rust-backed MarkupExtension. Loads a XAML
-//! that uses `{sample:Loc menu.greeting}` to set a TextBlock's `Text`
+//! Registers `<sample:Loc>` as a Rust-backed `MarkupExtension`. Loads a XAML
+//! that uses `{sample:Loc menu.greeting}` to set a `TextBlock`'s `Text`
 //! property, and asserts that the resolved string ("Hello, world!") shows
 //! up on the live element.
 //!

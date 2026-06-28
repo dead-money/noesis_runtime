@@ -21,7 +21,7 @@
 //!   * load XAML that constructs an instance of the registered type,
 //!   * drop the registration FIRST,
 //!   * assert the handler is still alive (counter unchanged),
-//!   * drop the View / FrameworkElement,
+//!   * drop the View / `FrameworkElement`,
 //!   * assert the handler dropped exactly once (counter == 1).
 //!
 //! Run with `NOESIS_SDK_DIR` set; no licence env vars required:
