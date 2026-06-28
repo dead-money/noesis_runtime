@@ -11,9 +11,12 @@
 //!   `+1` reference released on [`Drop`], like the brushes in [`crate::brushes`].
 //!   Read-back getters ([`Pen::thickness`], [`Pen::line_caps`], …) re-read the
 //!   live object so a test proves the value crossed the FFI.
-//! * [`RectangleGeometry`] — a minimal [`Geometry`] primitive so the
-//!   [`DrawingContext::draw_geometry`] / [`DrawingContext::push_clip`] paths are
-//!   reachable (full geometry construction is still TODO §10).
+//! * [`DrawingContext::draw_geometry`] / [`DrawingContext::push_clip`] take any
+//!   [`Geometry`] — the rich code-built geometry types
+//!   ([`RectangleGeometry`], [`PathGeometry`](crate::geometry::PathGeometry),
+//!   [`EllipseGeometry`](crate::geometry::EllipseGeometry), …) live in
+//!   [`crate::geometry`]; the trait and `RectangleGeometry` are re-exported here
+//!   for convenience.
 //! * [`DrawingContext`] — a **borrowed** handle over the `DrawingContext*`
 //!   handed to a [`crate::classes::RenderHandler`]. Valid only for the duration
 //!   of the render callback; the draw / push / pop methods forward straight into
@@ -32,39 +35,18 @@ use crate::ffi::{
     dm_noesis_drawing_draw_geometry, dm_noesis_drawing_draw_image, dm_noesis_drawing_draw_line,
     dm_noesis_drawing_draw_rectangle, dm_noesis_drawing_draw_rounded_rectangle,
     dm_noesis_drawing_pop, dm_noesis_drawing_push_blending_mode, dm_noesis_drawing_push_clip,
-    dm_noesis_drawing_push_transform, dm_noesis_drawing_rect_geometry_create, dm_noesis_pen_create,
-    dm_noesis_pen_get_brush, dm_noesis_pen_get_line_caps, dm_noesis_pen_get_line_join,
-    dm_noesis_pen_get_thickness, dm_noesis_pen_set_brush, dm_noesis_pen_set_line_caps,
-    dm_noesis_pen_set_line_join, dm_noesis_pen_set_thickness,
-    dm_noesis_rectangle_geometry_get_rect,
+    dm_noesis_drawing_push_transform, dm_noesis_pen_create, dm_noesis_pen_get_brush,
+    dm_noesis_pen_get_line_caps, dm_noesis_pen_get_line_join, dm_noesis_pen_get_thickness,
+    dm_noesis_pen_set_brush, dm_noesis_pen_set_line_caps, dm_noesis_pen_set_line_join,
+    dm_noesis_pen_set_thickness,
 };
+// `Geometry` / `RectangleGeometry` are the canonical types from `geometry`,
+// re-exported so `drawing::{Geometry, RectangleGeometry}` keep resolving and the
+// draw / clip calls accept any real built geometry.
+pub use crate::geometry::{Geometry, RectangleGeometry};
+// `PenLineCap` / `PenLineJoin` are the canonical types from `shapes`.
+pub use crate::shapes::{PenLineCap, PenLineJoin};
 use crate::transforms::Transform;
-
-/// How the ends of a stroked line are drawn. Mirrors `Noesis::PenLineCap`.
-#[repr(i32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum PenLineCap {
-    /// No cap past the last point (default).
-    Flat = 0,
-    /// A square extending half the thickness past the end.
-    Square = 1,
-    /// A semicircle of diameter equal to the thickness.
-    Round = 2,
-    /// An isosceles right triangle.
-    Triangle = 3,
-}
-
-/// How the vertices of a stroked shape are joined. Mirrors `Noesis::PenLineJoin`.
-#[repr(i32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum PenLineJoin {
-    /// Sharp angular vertices (default).
-    Miter = 0,
-    /// Beveled vertices.
-    Bevel = 1,
-    /// Rounded vertices.
-    Round = 2,
-}
 
 /// How drawn content is mixed with what's behind it. Mirrors
 /// `Noesis::BlendingMode`.
@@ -75,14 +57,6 @@ pub enum BlendingMode {
     Multiply = 1,
     Screen = 2,
     Additive = 3,
-}
-
-/// A handle to a Noesis `Geometry` — the shape argument of
-/// [`DrawingContext::draw_geometry`] / [`DrawingContext::push_clip`].
-pub trait Geometry {
-    /// Borrowed `Noesis::Geometry*` (a `BaseComponent*`), valid for `self`'s
-    /// lifetime.
-    fn geometry_raw(&self) -> *mut c_void;
 }
 
 // ── Pen ──────────────────────────────────────────────────────────────────────
@@ -231,62 +205,6 @@ fn join_from_i32(v: i32) -> PenLineJoin {
         1 => PenLineJoin::Bevel,
         2 => PenLineJoin::Round,
         _ => PenLineJoin::Miter,
-    }
-}
-
-// ── RectangleGeometry ────────────────────────────────────────────────────────
-
-/// A code-built `Noesis::RectangleGeometry` (an axis-aligned rectangle, with
-/// optional corner radii) — a minimal [`Geometry`] so the `draw_geometry` /
-/// `push_clip` paths are exercisable.
-pub struct RectangleGeometry {
-    ptr: NonNull<c_void>,
-}
-
-// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
-unsafe impl Send for RectangleGeometry {}
-
-impl RectangleGeometry {
-    /// Create a rectangle geometry of `(x, y, w, h)` with corner radii
-    /// `(r_x, r_y)` (pass `0.0` for sharp corners).
-    ///
-    /// # Panics
-    ///
-    /// Panics if Noesis fails to allocate the geometry.
-    #[must_use]
-    pub fn new(x: f32, y: f32, w: f32, h: f32, r_x: f32, r_y: f32) -> Self {
-        let ptr = unsafe { dm_noesis_drawing_rect_geometry_create(x, y, w, h, r_x, r_y) };
-        Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_drawing_rect_geometry_create returned null"),
-        }
-    }
-
-    /// Raw `Noesis::RectangleGeometry*`. Borrowed for the lifetime of `self`.
-    #[must_use]
-    pub fn raw(&self) -> *mut c_void {
-        self.ptr.as_ptr()
-    }
-
-    /// Read the rectangle back from the live object as `[x, y, w, h]`.
-    #[must_use]
-    pub fn rect(&self) -> [f32; 4] {
-        let mut out = [0.0f32; 4];
-        // SAFETY: self.ptr is a live RectangleGeometry*; `out` is 4 floats.
-        unsafe { dm_noesis_rectangle_geometry_get_rect(self.ptr.as_ptr(), out.as_mut_ptr()) };
-        out
-    }
-}
-
-impl Drop for RectangleGeometry {
-    fn drop(&mut self) {
-        // SAFETY: produced by *_create with a +1 ref we own.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
-    }
-}
-
-impl Geometry for RectangleGeometry {
-    fn geometry_raw(&self) -> *mut c_void {
-        self.raw()
     }
 }
 

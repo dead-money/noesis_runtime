@@ -212,7 +212,12 @@ pub trait Geometry {
     /// Apply a `Transform` to the geometry. Noesis takes its own reference, so
     /// `transform` may be dropped afterwards. Returns `false` only on an
     /// internal type mismatch.
-    fn set_transform<T: Transform>(&mut self, transform: &T) -> bool {
+    ///
+    /// Takes `&dyn Transform` (rather than a generic) so this trait stays
+    /// object-safe — `&dyn Geometry` is the shape argument of
+    /// [`DrawingContext::draw_geometry`](crate::drawing::DrawingContext::draw_geometry)
+    /// / [`push_clip`](crate::drawing::DrawingContext::push_clip).
+    fn set_transform(&mut self, transform: &dyn Transform) -> bool {
         // SAFETY: geometry_raw() is a live Geometry*; transform_raw() is a live
         // Transform* borrowed for the duration of the call.
         unsafe { dm_noesis_geometry_set_transform(self.geometry_raw(), transform.transform_raw()) }

@@ -395,8 +395,11 @@ impl AlignmentY {
     }
 }
 
-/// `Noesis::Stretch` (`NsGui/Enums.h`): how a tile's content is resized to fill
-/// its tile. Ordinals match the C++ enum.
+/// `Noesis::Stretch` (`NsGui/Enums.h`): how content is resized to fill its
+/// allocated space. Ordinals match the C++ enum.
+///
+/// This is the crate's single `Stretch` type — used both by tile brushes here
+/// and by [shapes](crate::shapes::Shape::set_stretch), which re-exports it.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Stretch {
@@ -411,7 +414,7 @@ pub enum Stretch {
 }
 
 impl Stretch {
-    fn from_ordinal(v: i32) -> Option<Self> {
+    pub(crate) fn from_ordinal(v: i32) -> Option<Self> {
         match v {
             0 => Some(Self::None),
             1 => Some(Self::Fill),

@@ -88,11 +88,11 @@ fn svg_path_and_document_round_trip() {
             "built rect bounds ~= (10,20,100,50), got {bb:?}"
         );
         assert!(
-            built.fill_contains(60.0, 45.0, FillRule::NonZero),
+            built.fill_contains(60.0, 45.0, FillRule::Nonzero),
             "center of built rect is filled"
         );
         assert!(
-            !built.fill_contains(0.0, 0.0, FillRule::NonZero),
+            !built.fill_contains(0.0, 0.0, FillRule::Nonzero),
             "origin is outside the built rect"
         );
 

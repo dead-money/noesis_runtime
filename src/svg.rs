@@ -34,13 +34,11 @@ use crate::ffi::{
 };
 
 /// The fill (winding) rule used by [`SvgPath::fill_contains`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum FillRule {
-    /// Even-odd rule (`Noesis::SVGPath::Fill_EvenOdd`). The default.
-    EvenOdd = 0,
-    /// Non-zero winding rule (`Noesis::SVGPath::Fill_NonZero`).
-    NonZero = 1,
-}
+///
+/// Re-exported from [`crate::geometry`] so the crate has a single `FillRule`
+/// type. Its ordinals (`EvenOdd` = 0, `Nonzero` = 1) match
+/// `Noesis::SVGPath::Fill_EvenOdd` / `Fill_NonZero`.
+pub use crate::geometry::FillRule;
 
 /// Stroke join style for [`Pen`] (`Noesis::SVGPath::StrokeJoinStyle`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
