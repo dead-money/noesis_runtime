@@ -1,4 +1,4 @@
-//! Render-device FFI surface — Rust mirrors of the C ABI types declared in
+//! Render-device FFI surface: Rust mirrors of the C ABI types declared in
 //! `cpp/noesis_shim.h`, plus extern decls for the factory and helpers.
 //!
 //! Lifecycle FFI lives at the top of the crate in `crate::ffi`; this module
@@ -43,7 +43,7 @@ const _: () = assert!(align_of::<RenderTargetBindingFfi>() == 8);
 /// Noesis to honor the frame protocol (Map/Unmap calls never nest, etc.).
 ///
 /// The C struct's `void*` parameters are typed here so trampolines can cast
-/// directly — `out_caps` is `*mut DeviceCaps`, `tile`/`tiles` are `*const Tile`,
+/// directly: `out_caps` is `*mut DeviceCaps`, `tile`/`tiles` are `*const Tile`,
 /// and `batch` is `*const Batch`.
 #[repr(C)]
 pub struct RenderDeviceVTable {

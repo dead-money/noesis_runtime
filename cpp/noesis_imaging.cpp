@@ -14,7 +14,7 @@
 // GPU notes: TextureSource::GetTexture and the BitmapSource pixel-size / dpi
 // getters resolve only once a real Texture / texture-provider has run on a
 // RenderDevice render pass. Headless they read back null / 0, which is the
-// correct outcome — see "Known SDK limitations" in LIMITATIONS.md.
+// correct outcome. See "Known SDK limitations" in LIMITATIONS.md.
 
 #include "noesis_shim.h"
 

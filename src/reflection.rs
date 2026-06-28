@@ -9,25 +9,25 @@
 //!
 //! # What each piece is for
 //!
-//! * [`register_enum`] — a named enum usable as a dependency-property value /
+//! * [`register_enum`]: a named enum usable as a dependency-property value /
 //!   `Style` setter / XAML enum string. Verify the registered string<->int
 //!   pairs with [`EnumType::value_from_name`] / [`EnumType::name_from_value`].
-//! * [`register_routed_event`] + [`raise_event`] — a [`RoutingStrategy`] routed
+//! * [`register_routed_event`] + [`raise_event`]: a [`RoutingStrategy`] routed
 //!   event on a Rust-backed [`crate::classes`] type, raised from Rust and
 //!   observed with [`crate::events::subscribe_event`].
-//! * [`is_component_registered`] / [`set_content_property`] — `Factory`
+//! * [`is_component_registered`] / [`set_content_property`]: `Factory`
 //!   introspection and `ContentProperty` attribution for Rust-backed types.
-//! * [`convert_from_string`] — drive `TypeConverter::Get` +
+//! * [`convert_from_string`]: drive `TypeConverter::Get` +
 //!   `TryConvertFromString` (the XAML-parse string→value coercion path) for any
-//!   built-in / reflected type. Custom converter *registration* is deferred — an
-//!   SDK limitation; see the section comment by [`convert_from_string`].
+//!   built-in / reflected type. Custom converter *registration* is deferred,
+//!   an SDK limitation; see the section comment by [`convert_from_string`].
 //!
 //! # Lifetime
 //!
 //! Registrations are process-global and live until [`crate::shutdown`]; there is
 //! no unregister (mirroring how compile-time reflection works).
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ffi::CStr;
 use core::ptr::{self, NonNull};
@@ -187,7 +187,7 @@ pub fn raise_event(element: &FrameworkElement, event_name: &str) -> bool {
 
 // ── (C) Factory / component metadata ──────────────────────────────────────────
 
-/// Whether a component named `name` is registered in `Noesis::Factory` — i.e.
+/// Whether a component named `name` is registered in `Noesis::Factory`, i.e.
 /// `<ns:name/>` can be instantiated by the XAML parser. Rust-backed classes
 /// register their factory creator in [`crate::classes::ClassBuilder::register`].
 #[must_use]
@@ -251,7 +251,7 @@ pub fn get_content_property(type_name: &str) -> Option<String> {
 ///
 /// `DependsOn` is attached at the *type* level (via `TypeMeta::AddMeta`), not
 /// per-property as in WPF, and `FindMeta` returns only the first matching
-/// record — so multiple `DependsOn` records on one type are not individually
+/// record, so multiple `DependsOn` records on one type are not individually
 /// retrievable. It DOES coexist with [`set_content_property`] on the same type:
 /// `FindMeta` is keyed by the metadata `TypeClass`, so a `ContentProperty` and a
 /// `DependsOn` record are stored and read back independently.
@@ -367,14 +367,14 @@ impl Drop for BoxedValue {
 }
 
 /// Resolve the `TypeConverter` registered for `type_name` (`TypeConverter::Get`)
-/// and convert `s` to a boxed value via `TryConvertFromString` — the exact
+/// and convert `s` to a boxed value via `TryConvertFromString`, the exact
 /// string→value path the XAML parser drives for a typed property. Returns
 /// `None` if the type / converter is unknown or the string does not convert.
 ///
 /// Works for any built-in / reflected type that has a converter (e.g. `Bool`,
 /// `Int32`, `Single`, `Color`, `Thickness`). A custom [`register_enum`]'d enum
 /// does NOT get an auto-resolved converter here (`TypeConverter::Get` returns
-/// null for runtime-registered types) — query enum members via
+/// null for runtime-registered types); query enum members via
 /// [`EnumType::value_from_name`] instead.
 ///
 /// # Panics

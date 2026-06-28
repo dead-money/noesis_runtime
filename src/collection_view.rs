@@ -1,11 +1,10 @@
 //! `ICollectionView` current-item navigation.
 //!
 //! A [`CollectionViewSource`] wraps a source list (e.g. an
-//! [`ObservableCollection`]) and lazily
-//! produces a [`CollectionView`] — an `ICollectionView` — over it. The view
-//! tracks a *current item*: the record-management surface WPF/Noesis controls
-//! (a `Selector`'s `IsSynchronizedWithCurrentItem`, master/detail bindings)
-//! resolve against.
+//! [`ObservableCollection`]) and lazily produces a [`CollectionView`], an
+//! `ICollectionView`, over it. The view tracks a *current item*: the
+//! record-management surface WPF/Noesis controls (a `Selector`'s
+//! `IsSynchronizedWithCurrentItem`, master/detail bindings) resolve against.
 //!
 //! ```no_run
 //! # use noesis_runtime::binding::ObservableCollection;
@@ -43,7 +42,7 @@ use crate::ffi::{
     noesis_collection_view_unsubscribe_current_changed, noesis_unbox_string,
 };
 
-/// A code-built `Noesis::CollectionViewSource` — the proxy that produces a
+/// A code-built `Noesis::CollectionViewSource`: the proxy that produces a
 /// [`CollectionView`] over a source list. Owns a `+1` reference released on
 /// drop.
 pub struct CollectionViewSource {
@@ -131,7 +130,7 @@ impl Drop for CollectionViewSource {
 /// [`current_position`](Self::current_position),
 /// [`current_item`](Self::current_item),
 /// [`is_current_before_first`](Self::is_current_before_first) and
-/// [`is_current_after_last`](Self::is_current_after_last) — these re-read the
+/// [`is_current_after_last`](Self::is_current_after_last), which re-read the
 /// live view after each move.
 pub struct CollectionView {
     ptr: NonNull<c_void>,
@@ -202,14 +201,14 @@ impl CollectionView {
     }
 
     /// Move the cursor to the next record (lands *after the last* when called at
-    /// the end — check [`is_current_after_last`](Self::is_current_after_last)).
+    /// the end; check [`is_current_after_last`](Self::is_current_after_last)).
     pub fn move_current_to_next(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
         unsafe { noesis_collection_view_move_current_to_next(self.ptr.as_ptr()) }
     }
 
     /// Move the cursor to the previous record (lands *before the first* when
-    /// called at the start — check
+    /// called at the start; check
     /// [`is_current_before_first`](Self::is_current_before_first)).
     pub fn move_current_to_previous(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
@@ -287,7 +286,7 @@ unsafe impl Send for CurrentItem {}
 
 impl CurrentItem {
     /// Raw `Noesis::BaseComponent*` of the item. Borrowed for the lifetime of
-    /// `self` — compare against an [`ObservableCollection::get`] pointer to
+    /// `self`. Compare against an [`ObservableCollection::get`] pointer to
     /// confirm identity.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {

@@ -2,7 +2,7 @@
 //
 // FormattedText (NsGui/FormattedText.h) is a BaseComponent that computes glyph
 // metrics and a text layout for a string + font properties at construction time
-// (the public ctors call CalculateMetrics internally — there are no separate
+// (the public ctors call CalculateMetrics internally; there are no separate
 // Set* layout mutators in 3.2.13, the constraints are constructor arguments).
 //
 // OWNERSHIP: this unit deliberately exposes NO public FontFamily entrypoint
@@ -17,7 +17,7 @@
 // (handout() idiom shared with cpp/noesis_brushes.cpp); the Rust handle's Drop
 // calls noesis_base_component_release.
 //
-// Read-back getters (GetBounds / GetNumLines / GetLineInfo / Measure / …) let
+// Read-back getters (GetBounds / GetNumLines / GetLineInfo / Measure / ...) let
 // tests prove metrics genuinely crossed into the live Noesis object: a stub
 // returning 0 fails the "width > 0 / longer string measures wider" assertions.
 
@@ -36,7 +36,7 @@
 #include <NsGui/FontProperties.h>   // FontWeight / FontStyle / FontStretch
 #include <NsGui/FormattedText.h>
 #include <NsGui/SolidColorBrush.h>
-#include <NsGui/TextProperties.h>   // TextAlignment / TextTrimming / TextWrapping / …
+#include <NsGui/TextProperties.h>   // TextAlignment / TextTrimming / TextWrapping / ...
 
 namespace {
 

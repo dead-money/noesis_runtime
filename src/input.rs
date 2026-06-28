@@ -1,4 +1,4 @@
-//! Input — keyboard/focus enums, input gestures and bindings, and the
+//! Input: keyboard/focus enums, input gestures and bindings, and the
 //! `FocusManager` / `KeyboardNavigation` static surfaces.
 //!
 //! The per-element knobs (mouse/touch capture, keyboard-state queries,
@@ -42,7 +42,7 @@ use crate::ffi::{
 };
 use crate::view::{FrameworkElement, Key};
 
-/// A typed bitset of `Noesis::ModifierKeys` — the chord modifiers held down
+/// A typed bitset of `Noesis::ModifierKeys`: the chord modifiers held down
 /// (`Alt` / `Control` / `Shift` / `Windows`). Compose with [`Self::with`] /
 /// [`FromIterator`] and test with [`Self::contains`].
 ///
@@ -116,9 +116,8 @@ impl FromIterator<ModifierKeys> for ModifierKeys {
     }
 }
 
-/// A typed bitset of `Noesis::KeyStates` — the state of a key as reported by
-/// the keyboard: `Down` (currently pressed) and/or `Toggled` (the toggle is on,
-/// e.g. `CapsLock`).
+/// A typed bitset of `Noesis::KeyStates`. Reports a key's state: `Down`
+/// (currently pressed) and/or `Toggled` (the toggle is on, e.g. `CapsLock`).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyStates(pub i32);
 
@@ -149,7 +148,7 @@ impl KeyStates {
     }
 }
 
-/// Mirror of `Noesis::MouseAction` — the pointer gesture a [`MouseGesture`] /
+/// Mirror of `Noesis::MouseAction`: the pointer gesture a [`MouseGesture`] /
 /// [`MouseBinding`] matches.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -165,7 +164,7 @@ pub enum MouseAction {
     MiddleDoubleClick = 7,
 }
 
-/// Mirror of `Noesis::CaptureMode` — how an element captures the mouse via
+/// Mirror of `Noesis::CaptureMode`: how an element captures the mouse via
 /// [`FrameworkElement::capture_mouse_mode`].
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -179,7 +178,7 @@ pub enum CaptureMode {
     SubTree = 2,
 }
 
-/// Mirror of `Noesis::FocusNavigationDirection` — the direction for
+/// Mirror of `Noesis::FocusNavigationDirection`: the direction for
 /// [`FrameworkElement::move_focus`] / [`FrameworkElement::predict_focus`].
 /// `Next` / `Previous` / `First` / `Last` are tab-order traversal (not supported
 /// by `predict_focus`), while `Left` / `Right` / `Up` / `Down` are directional.
@@ -197,7 +196,7 @@ pub enum FocusNavigationDirection {
     Down = 7,
 }
 
-/// Mirror of `Noesis::KeyboardNavigationMode` — how Tab / directional traversal
+/// Mirror of `Noesis::KeyboardNavigationMode`: how Tab / directional traversal
 /// behaves inside a container, for the [`KeyboardNavigation`] attached
 /// properties.
 #[repr(i32)]
@@ -212,13 +211,13 @@ pub enum KeyboardNavigationMode {
     Cycle = 2,
     /// Tab does not navigate within the container.
     None = 3,
-    /// Tab stays contained — it never leaves the container.
+    /// Tab stays contained: it never leaves the container.
     Contained = 4,
     /// Tab cycles locally but, unlike `Cycle`, restarts at the container start.
     Local = 5,
 }
 
-/// A `Noesis::KeyGesture` — a [`Key`] plus chord [`ModifierKeys`] that, when
+/// A `Noesis::KeyGesture`: a [`Key`] plus chord [`ModifierKeys`] that, when
 /// matched, fires a bound command. Owns a `+1` reference released on drop;
 /// hand it to [`InputBinding::with_gesture`] (or use the all-in-one
 /// [`KeyBinding`]).
@@ -254,7 +253,7 @@ impl Drop for KeyGesture {
     }
 }
 
-/// A `Noesis::MouseGesture` — a [`MouseAction`] plus chord [`ModifierKeys`].
+/// A `Noesis::MouseGesture`: a [`MouseAction`] plus chord [`ModifierKeys`].
 /// Owns a `+1` reference released on drop. See [`KeyGesture`].
 pub struct MouseGesture {
     ptr: NonNull<c_void>,
@@ -288,7 +287,7 @@ impl Drop for MouseGesture {
     }
 }
 
-/// A `Noesis::KeyBinding` — a [`Key`] + [`ModifierKeys`] chord bound to a
+/// A `Noesis::KeyBinding`: a [`Key`] + [`ModifierKeys`] chord bound to a
 /// command. Add it to an element with [`Self::add_to`]; when the focused element
 /// (or one routing through it) sees that key chord, the bound command's
 /// `Execute` runs. Owns a `+1` reference released on drop (the element's
@@ -335,7 +334,7 @@ impl Drop for KeyBinding {
     }
 }
 
-/// A `Noesis::MouseBinding` — a [`MouseAction`] + [`ModifierKeys`] chord bound
+/// A `Noesis::MouseBinding`: a [`MouseAction`] + [`ModifierKeys`] chord bound
 /// to a command. See [`KeyBinding`].
 pub struct MouseBinding {
     ptr: NonNull<c_void>,
@@ -381,7 +380,7 @@ impl Drop for MouseBinding {
     }
 }
 
-/// A `Noesis::InputBinding` — a command bound to a [`KeyGesture`] or
+/// A `Noesis::InputBinding`: a command bound to a [`KeyGesture`] or
 /// [`MouseGesture`] built separately. The general form of [`KeyBinding`] /
 /// [`MouseBinding`]; use it to reuse a single gesture across bindings. Owns a
 /// `+1` reference released on drop.
@@ -434,7 +433,7 @@ impl Drop for InputBinding {
     }
 }
 
-/// The `Noesis::FocusManager` static surface — attached-property helpers for
+/// The `Noesis::FocusManager` static surface: attached-property helpers for
 /// querying and steering logical focus within a *focus scope*. A focus scope
 /// (e.g. a `Window`, `Menu`, or `ToolBar`) remembers its own focused element
 /// independently of keyboard focus, so menus can restore selection on re-entry.
@@ -492,7 +491,7 @@ impl FocusManager {
     }
 }
 
-/// The `Noesis::KeyboardNavigation` static surface — attached properties that
+/// The `Noesis::KeyboardNavigation` static surface: attached properties that
 /// shape Tab / directional focus traversal (`TabIndex`, `IsTabStop`,
 /// `TabNavigation`, `ControlTabNavigation`, `DirectionalNavigation`,
 /// `AcceptsReturn`). Each is a round-trippable attached property: set it on any
@@ -501,7 +500,7 @@ impl FocusManager {
 pub struct KeyboardNavigation;
 
 impl KeyboardNavigation {
-    /// `KeyboardNavigation.TabIndex` — the element's position in tab order
+    /// `KeyboardNavigation.TabIndex`: the element's position in tab order
     /// (lower goes first).
     #[must_use]
     pub fn tab_index(element: &FrameworkElement) -> Option<i32> {
@@ -518,7 +517,7 @@ impl KeyboardNavigation {
         unsafe { noesis_keyboard_navigation_set_tab_index(element.raw(), value) }
     }
 
-    /// `KeyboardNavigation.IsTabStop` — whether Tab can land on the element.
+    /// `KeyboardNavigation.IsTabStop`: whether Tab can land on the element.
     #[must_use]
     pub fn is_tab_stop(element: &FrameworkElement) -> Option<bool> {
         let mut out = false;
@@ -534,7 +533,7 @@ impl KeyboardNavigation {
         unsafe { noesis_keyboard_navigation_set_is_tab_stop(element.raw(), value) }
     }
 
-    /// `KeyboardNavigation.TabNavigation` — how Tab traverses inside this
+    /// `KeyboardNavigation.TabNavigation`: how Tab traverses inside this
     /// container.
     #[must_use]
     pub fn tab_navigation(element: &FrameworkElement) -> Option<KeyboardNavigationMode> {
@@ -548,7 +547,7 @@ impl KeyboardNavigation {
         unsafe { noesis_keyboard_navigation_set_tab_navigation(element.raw(), mode as i32) }
     }
 
-    /// `KeyboardNavigation.ControlTabNavigation` — how Ctrl+Tab traverses.
+    /// `KeyboardNavigation.ControlTabNavigation`: how Ctrl+Tab traverses.
     #[must_use]
     pub fn control_tab_navigation(element: &FrameworkElement) -> Option<KeyboardNavigationMode> {
         Self::get_mode(
@@ -566,7 +565,7 @@ impl KeyboardNavigation {
         unsafe { noesis_keyboard_navigation_set_control_tab_navigation(element.raw(), mode as i32) }
     }
 
-    /// `KeyboardNavigation.DirectionalNavigation` — how arrow keys traverse.
+    /// `KeyboardNavigation.DirectionalNavigation`: how arrow keys traverse.
     #[must_use]
     pub fn directional_navigation(element: &FrameworkElement) -> Option<KeyboardNavigationMode> {
         Self::get_mode(
@@ -584,7 +583,7 @@ impl KeyboardNavigation {
         unsafe { noesis_keyboard_navigation_set_directional_navigation(element.raw(), mode as i32) }
     }
 
-    /// `KeyboardNavigation.AcceptsReturn` — whether the element consumes the
+    /// `KeyboardNavigation.AcceptsReturn`: whether the element consumes the
     /// Return key instead of letting it activate a default button.
     #[must_use]
     pub fn accepts_return(element: &FrameworkElement) -> Option<bool> {

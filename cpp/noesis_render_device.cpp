@@ -208,7 +208,7 @@ private:
     Noesis::Ptr<Noesis::RenderTarget> makeRenderTarget(
         const noesis_render_target_binding& b)
     {
-        // Resolve textures are always RGBA8 — that's what Noesis uses for the
+        // Resolve textures are always RGBA8. That's what Noesis uses for the
         // composited surface. (The Rust impl is free to pick a wgpu format
         // internally as long as that mapping is consistent with how it reads
         // back via UpdateTexture.)

@@ -12,7 +12,7 @@
 // (a BaseComponent*) and the getters return the live Brush* (borrowed, no +1) so
 // a test can prove the brush crossed into the Noesis object by pointer identity.
 //
-// Read-back getters (GetRadiusX / GetStrokeThickness / GetX1 / …) re-read from
+// Read-back getters (GetRadiusX / GetStrokeThickness / GetX1 / ...) re-read from
 // the live Noesis object so tests prove a value actually crossed the FFI rather
 // than echoing a Rust-side cache: a stubbed setter fails the round-trip.
 

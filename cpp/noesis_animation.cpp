@@ -244,7 +244,7 @@ extern "C" int32_t noesis_storyboard_child_count(void* sb) {
     return children ? children->Count() : 0;
 }
 
-// Storyboard.TargetName attached property — names the element a child animation
+// Storyboard.TargetName attached property: names the element a child animation
 // targets, resolved against the namescope passed to Begin. `timeline` is the
 // child animation (a DependencyObject).
 extern "C" bool noesis_storyboard_set_target_name(void* timeline, const char* name) {
@@ -254,7 +254,7 @@ extern "C" bool noesis_storyboard_set_target_name(void* timeline, const char* na
     return true;
 }
 
-// Storyboard.TargetProperty attached property — the property path the child
+// Storyboard.TargetProperty attached property: the property path the child
 // animation drives (e.g. "Opacity", "(UIElement.RenderTransform).(ScaleX)").
 extern "C" bool noesis_storyboard_set_target_property(void* timeline, const char* path) {
     auto* d = cast<Noesis::DependencyObject>(timeline);
@@ -264,7 +264,7 @@ extern "C" bool noesis_storyboard_set_target_property(void* timeline, const char
     return true;
 }
 
-// Storyboard.Target attached property — a direct object reference, an
+// Storyboard.Target attached property: a direct object reference, an
 // alternative to TargetName when the target isn't in a namescope.
 extern "C" bool noesis_storyboard_set_target(void* timeline, void* target) {
     auto* d = cast<Noesis::DependencyObject>(timeline);

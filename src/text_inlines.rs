@@ -1,6 +1,6 @@
 //! Code-built `TextBlock` inline content: construct the `Inline` element family
-//! — [`Run`], [`Span`], [`Bold`], [`Italic`], [`Underline`], [`Hyperlink`],
-//! [`LineBreak`], [`InlineUIContainer`] — from Rust and assemble them into a
+//! ([`Run`], [`Span`], [`Bold`], [`Italic`], [`Underline`], [`Hyperlink`],
+//! [`LineBreak`], [`InlineUIContainer`]) from Rust and assemble them into a
 //! `TextBlock`'s (or a `Span`'s) [`InlineCollection`].
 //!
 //! Each inline is an owning handle over a freshly-created Noesis object holding

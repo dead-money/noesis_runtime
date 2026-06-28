@@ -1,5 +1,5 @@
 // Diagnostics shim: error / assert handlers, memory-usage queries. All of these
-// are NsCore kernel functions — the kernel must be up (GUI::Init / noesis_init
+// are NsCore kernel functions. The kernel must be up (GUI::Init / noesis_init
 // has run) before they do anything meaningful.
 //
 // Two handler shapes:
@@ -13,14 +13,14 @@
 //     so a Rust RAII guard can restore a nested predecessor.
 //
 //   * SetThreadErrorHandler / ErrorHandler2 carries a void* user, so the boxed
-//     Rust closure threads straight through it — no global slot needed. The
+//     Rust closure threads straight through it, no global slot needed. The
 //     C struct noesis_error_context is binary-compatible with
 //     Noesis::ErrorContext, and noesis_error2_fn with Noesis::ErrorHandler2,
 //     so we reinterpret_cast across the ABI (static_assert'd below).
 //
 // The Invoke* entrypoints wrap the SDK's public invokers so Rust tests can
 // drive the registered handlers through the real Noesis dispatch path. Always
-// drive with fatal=false — a fatal error or a failed NS_ASSERT can abort.
+// drive with fatal=false: a fatal error or a failed NS_ASSERT can abort.
 
 #include "noesis_shim.h"
 

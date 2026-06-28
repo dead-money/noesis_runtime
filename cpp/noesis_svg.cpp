@@ -1,11 +1,11 @@
 // SVG / SVGPath parsing and geometry queries.
 //
-// Two real 3.2.13 surfaces are wrapped here, both fully CPU/headless — no GPU
+// Two real 3.2.13 surfaces are wrapped here, both fully CPU/headless. No GPU
 // RenderDevice or render pass is required to exercise either one:
 //
-//   * NsDrawing/SVGPath.h — Noesis::SVGPath. We own a heap SVGPath built either
+//   * NsDrawing/SVGPath.h: Noesis::SVGPath. We own a heap SVGPath built either
 //     by parsing an SVG path string (SVGPath::TryParse) or via the path-builder
-//     statics (MoveTo / LineTo / Close / AddRect / …). The path's `commands`
+//     statics (MoveTo / LineTo / Close / AddRect / ...). The path's `commands`
 //     member is a Vector<uint32_t> (a BaseVector<uint32_t>) that we feed to the
 //     static query API: CalculateBounds(ArrayRef<uint32_t>) -> Rect,
 //     FillContains(ArrayRef<uint32_t>, Point, Fill) -> bool, and
@@ -13,7 +13,7 @@
 //     command count + the query results to Rust; the raw command ints stay C++
 //     side (Rust never needs them).
 //
-//   * NsGui/SVG.h — Noesis::SVG::Parse(const char* svg, Image& image), the free
+//   * NsGui/SVG.h: Noesis::SVG::Parse(const char* svg, Image& image), the free
 //     function that parses a whole <svg> document into a Noesis::SVG::Image (a
 //     plain struct: width, height, Vector<Shape> shapes). We own that Image and
 //     expose its width/height + shape count + per-shape fill type so a test can

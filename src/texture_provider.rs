@@ -16,7 +16,7 @@
 //! - `GetTextureInfo(uri)`: return width / height (and optional atlas
 //!   rect + dpi scale) for the image at `uri`. Lets Noesis size an
 //!   `Image` element before the pixels are decoded. Return `None` to
-//!   signal "not found" — Noesis then falls back to the load path.
+//!   signal "not found"; Noesis then falls back to the load path.
 //!
 //! - `LoadTexture(uri, device)`: return the image as tightly-packed
 //!   RGBA8 bytes. The C++ shim immediately hands the bytes to
@@ -32,7 +32,7 @@
 //! that might call back into the provider. Keep it alive until after
 //! [`crate::shutdown`] returns.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
 use std::borrow::Cow;
@@ -112,7 +112,7 @@ unsafe fn provider<'a>(userdata: *mut c_void) -> &'a mut Box<dyn TextureProvider
     &mut *userdata.cast::<Box<dyn TextureProvider>>()
 }
 
-/// Decode a Noesis-supplied URI lossily — odd/non-UTF-8 engine input must not
+/// Decode a Noesis-supplied URI lossily. Odd/non-UTF-8 engine input must not
 /// panic across the C ABI, so invalid bytes become U+FFFD rather than aborting.
 fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {
@@ -161,8 +161,8 @@ unsafe extern "C" fn t_load_texture(
         if img.bytes.len() != expected {
             return false;
         }
-        // A >4 GiB buffer can't be represented to the shim — treat as failure
-        // rather than panicking inside the trampoline.
+        // A >4 GiB buffer can't be represented to the shim, so treat it as a
+        // failure rather than panicking inside the trampoline.
         let Ok(len) = u32::try_from(img.bytes.len()) else {
             return false;
         };
@@ -233,7 +233,7 @@ impl Drop for Registered {
 ///
 /// Panics if the C++ factory returns null.
 pub fn set_texture_provider<P: TextureProvider>(provider: P) -> Registered {
-    // SAFETY: install globally — Noesis retains its own +1.
+    // SAFETY: install globally; Noesis retains its own +1.
     register_with(provider, |handle| unsafe {
         noesis_set_texture_provider(handle)
     })

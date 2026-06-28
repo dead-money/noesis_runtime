@@ -1,6 +1,6 @@
 // TextBlock inline content model: the Inline element family that
-// ships in 3.2.13 — Run, Span, Bold, Italic, Underline, Hyperlink, LineBreak,
-// and InlineUIContainer — plus the InlineCollection (UICollection<Inline>) that
+// ships in 3.2.13 (Run, Span, Bold, Italic, Underline, Hyperlink, LineBreak,
+// and InlineUIContainer), plus the InlineCollection (UICollection<Inline>) that
 // TextBlock and Span expose so inlines can be assembled from Rust.
 //
 // Ownership mirrors cpp/noesis_brushes.cpp / cpp/noesis_collections.cpp:

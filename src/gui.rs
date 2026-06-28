@@ -10,7 +10,7 @@ use crate::ffi::{
 };
 
 /// Load a [`ResourceDictionary`] XAML via the installed XAML provider and
-/// install it as the process-global application resources — every
+/// install it as the process-global application resources. Every
 /// [`crate::view::View`] created afterwards inherits these styles and
 /// brushes. Replaces any previously-installed dictionary.
 ///
@@ -32,7 +32,7 @@ pub fn load_application_resources(uri: &str) -> bool {
 
 /// Install application resources by building the merged-dictionary
 /// chain manually, leaf by leaf. `uris` are the leaf
-/// `ResourceDictionary` URIs in dependency order — earlier entries
+/// `ResourceDictionary` URIs in dependency order; earlier entries
 /// must be loadable without referencing later entries.
 ///
 /// Sidesteps a Noesis behaviour where a top-level `LoadXaml` of a
@@ -43,20 +43,20 @@ pub fn load_application_resources(uri: &str) -> bool {
 /// Each leaf is created empty, added to the parent's
 /// `MergedDictionaries` collection (so the parent scope is wired in
 /// before parsing starts), then loaded by assigning its `Source`
-/// property — at which point the parent already contains every
+/// property, at which point the parent already contains every
 /// previously-loaded sibling.
 ///
 /// # Relative URIs in installed leaves
 ///
 /// Each leaf is loaded via `ResourceDictionary::SetSource(Uri)`,
-/// which means relative URIs *inside* a leaf — most notably
-/// `<FontFamily>Folder/#Family</FontFamily>` resources — resolve
+/// which means relative URIs *inside* a leaf (most notably
+/// `<FontFamily>Folder/#Family</FontFamily>` resources) resolve
 /// against the leaf's own location. A `Theme/Fonts.xaml` leaf
 /// declaring `<FontFamily>Fonts/#X</FontFamily>` will look for
 /// family `X` in folder `Theme/Fonts/`, not the project-root
 /// `Fonts/`. If your font provider's `register_font` calls register
 /// under `Fonts/`, the corresponding leaf needs to use a relative-up
-/// URI (`../Fonts/#X`) — or the leaf needs to live at the same
+/// URI (`../Fonts/#X`), or the leaf needs to live at the same
 /// directory level as the assets it references. Absolute URIs
 /// (`/Assets/Fonts/#X`) sidestep leaf-relative resolution entirely;
 /// the relative-up form is the alternative when assets live above the
@@ -81,7 +81,7 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
     unsafe { noesis_gui_install_app_resources_chain(ptrs.as_ptr(), ptrs.len() as u32) }
 }
 
-/// Load the XAML at `uri` into an existing component instance — the
+/// Load the XAML at `uri` into an existing component instance: the
 /// code-behind / `x:Class` pattern, where the root object already exists and
 /// `GUI::LoadComponent` populates its children and named fields in place
 /// (instead of constructing a fresh tree the way [`crate::view::FrameworkElement::load`]
@@ -99,7 +99,7 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
 /// mismatch leaves the instance untouched (and Noesis logs a type error).
 /// The custom-class registration surface ([`crate::classes`]) supplies exactly
 /// such a type: register a class as `"Nz.LoadTarget"`, instantiate it, and load
-/// XAML whose root carries `x:Class="Nz.LoadTarget"` — the parsed children and
+/// XAML whose root carries `x:Class="Nz.LoadTarget"`; the parsed children and
 /// named fields are grafted onto that instance (verified by `tests/parse_xaml`,
 /// which asserts a named child becomes resolvable through the instance only
 /// after this call). The caller is responsible for ensuring the registered type
@@ -110,7 +110,7 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
 ///
 /// `component` must be a live `Noesis::BaseComponent*` (for example a
 /// [`crate::classes::ClassInstance::raw`] value) that outlives the call, or
-/// null. The pointer is borrowed — ownership is not taken and the caller's
+/// null. The pointer is borrowed; ownership is not taken and the caller's
 /// reference is unaffected. Runs on the view-driving thread; no `VerifyAccess`
 /// is performed.
 ///

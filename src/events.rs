@@ -13,7 +13,7 @@
 //!
 //! Click callbacks fire from inside Noesis's input pump (typically
 //! `IView::MouseButtonUp` or `IView::Update`), on whatever thread is driving
-//! the view. The callback signature has no `Send` bound at the FFI level —
+//! the view. The callback signature has no `Send` bound at the FFI level;
 //! the safe wrapper enforces it on the Rust side via the trait. Keep work
 //! in the callback small: push to a queue / channel and process from a
 //! regular Bevy system step if you need anything heavier than a flag flip.
@@ -26,7 +26,7 @@
 //! stays valid even if the only other reference to the element was the
 //! [`crate::view::FrameworkElement`] you used to subscribe.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -113,7 +113,7 @@ impl Drop for ClickSubscription {
 ///
 /// # Panics
 ///
-/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the
 /// invariant explicit at the type level).
 pub fn subscribe_click<H: ClickHandler>(
@@ -126,7 +126,7 @@ pub fn subscribe_click<H: ClickHandler>(
     let userdata = Box::into_raw(outer);
 
     // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element pointer is borrowed for the call duration only — Noesis copies
+    // element pointer is borrowed for the call duration only; Noesis copies
     // whatever it needs into the routed-event handler list.
     let token = unsafe { noesis_subscribe_click(element.raw(), click_trampoline, userdata.cast()) };
 
@@ -177,7 +177,7 @@ unsafe extern "C" fn keydown_trampoline(userdata: *mut c_void, key: i32, out_han
         // Shared `&`: re-entrant handler box (see `KeyDownHandler`).
         let handler = &*userdata.cast::<Box<dyn KeyDownHandler>>();
         // Best-effort map of the raw ordinal back to our safe `Key` mirror.
-        // Anything outside the mirrored set arrives as `Key::None` — callers
+        // Anything outside the mirrored set arrives as `Key::None`; callers
         // can still observe the event and choose to ignore unmapped keys.
         let mapped = key_from_raw(key);
         let handled = handler.on_keydown(mapped);
@@ -352,7 +352,7 @@ impl Drop for KeyDownSubscription {
 }
 
 /// Subscribe `handler` to `UIElement::KeyDown` on `element`. Returns
-/// `None` if the element is not a `UIElement` (rare — essentially every
+/// `None` if the element is not a `UIElement` (rare: essentially every
 /// visual element is, but the cast is included so callers don't have to
 /// trust the FFI blindly).
 ///
@@ -360,12 +360,12 @@ impl Drop for KeyDownSubscription {
 /// as long as it lives; drop it (or replace it) to unsubscribe.
 ///
 /// Setting the handler's return value to `true` marks the routed event
-/// handled — useful for swallowing the backtick that opens the console
+/// handled, useful for swallowing the backtick that opens the console
 /// so it doesn't get typed into a focused `TextBox`.
 ///
 /// # Panics
 ///
-/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the
 /// invariant explicit at the type level).
 pub fn subscribe_keydown<H: KeyDownHandler>(
@@ -376,7 +376,7 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
     let userdata = Box::into_raw(outer);
 
     // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element pointer is borrowed for the call duration only — Noesis copies
+    // element pointer is borrowed for the call duration only; Noesis copies
     // whatever it needs into the routed-event handler list.
     let token =
         unsafe { noesis_subscribe_keydown(element.raw(), keydown_trampoline, userdata.cast()) };
@@ -404,7 +404,7 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
 ///
 /// The handler receives `&EventArgs`, never an owned value. The underlying C++
 /// args live on the stack of the Noesis input pump and are valid only while the
-/// callback runs — do not stash the borrow or the `source_ptr` beyond the call.
+/// callback runs; do not stash the borrow or the `source_ptr` beyond the call.
 /// (The type deliberately carries no lifetime parameter: a generic-lifetime
 /// arg type defeats closure HRTB inference, so the borrow is expressed through
 /// the `&EventArgs` the handler is handed instead.)
@@ -512,7 +512,7 @@ impl EventArgs {
     /// (`RoutedEventArgs::source`). `None` if there is no source.
     ///
     /// The pointer is NOT reference-counted and is valid only for the callback
-    /// duration — do not wrap it in a [`FrameworkElement`] (that would
+    /// duration; do not wrap it in a [`FrameworkElement`] (that would
     /// over-release) and do not let it escape the handler.
     pub fn source_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
@@ -605,7 +605,7 @@ impl EventArgs {
         ok.then_some((x, y))
     }
 
-    /// The most-recent manipulation transform — `deltaManipulation` on a
+    /// The most-recent manipulation transform: `deltaManipulation` on a
     /// `ManipulationDelta` event, `totalManipulation` on a
     /// `ManipulationCompleted` event. `None` for other kinds.
     pub fn manip_delta(&self) -> Option<ManipulationDelta> {
@@ -644,7 +644,7 @@ impl EventArgs {
         ok.then_some(d)
     }
 
-    /// Manipulation velocities — `velocities` (Delta), `finalVelocities`
+    /// Manipulation velocities: `velocities` (Delta), `finalVelocities`
     /// (Completed) or `initialVelocities` (`InertiaStarting`). `None` for other
     /// kinds.
     pub fn manip_velocities(&self) -> Option<ManipulationVelocities> {
@@ -676,7 +676,7 @@ impl EventArgs {
 }
 
 /// A typed bitset of `Noesis::DragDropEffects` (`DragEventArgs` effects /
-/// allowed-effects) — the operations a drag offers or reports. Compose with
+/// allowed-effects): the operations a drag offers or reports. Compose with
 /// [`Self::with`] / [`FromIterator`] and test with [`Self::contains`]; convert
 /// to/from the raw bitmask Noesis uses with [`Self::bits`] / [`Self::from_bits`].
 /// Modeled on [`crate::input::ModifierKeys`] / [`crate::view::RenderFlags`].
@@ -753,7 +753,7 @@ impl FromIterator<DragEffects> for DragEffects {
     }
 }
 
-/// A typed bitset of `Noesis::DragDropKeyStates` (`DragEventArgs::keyStates`) —
+/// A typed bitset of `Noesis::DragDropKeyStates` (`DragEventArgs::keyStates`):
 /// the modifier-key / mouse-button state during a drag. Compose and test like
 /// [`DragEffects`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1123,7 +1123,7 @@ impl RoutedEvent {
 ///
 /// # Panics
 ///
-/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
 /// explicit at the type level).
 pub fn subscribe_event<H: RoutedEventHandler>(
@@ -1135,11 +1135,11 @@ pub fn subscribe_event<H: RoutedEventHandler>(
     subscribe_event_by_name(element, event.as_str(), handled_too, handler)
 }
 
-/// Subscribe `handler` to the routed event named `event_name` on `element` — the
+/// Subscribe `handler` to the routed event named `event_name` on `element`, the
 /// `&str` escape hatch behind the typed [`subscribe_event`], for custom or
 /// not-yet-enumerated events.
 ///
-/// `event_name` uses the WPF/Noesis event names — `"MouseMove"`,
+/// `event_name` uses the WPF/Noesis event names: `"MouseMove"`,
 /// `"MouseLeftButtonDown"`, `"MouseWheel"`, `"KeyDown"`, `"KeyUp"`,
 /// `"GotFocus"`, `"LostFocus"`, `"Loaded"`, `"Unloaded"`, `"SizeChanged"`,
 /// `"TextInput"`, `"Drop"`, `"Tapped"`, and the `Preview*` variants, among
@@ -1158,7 +1158,7 @@ pub fn subscribe_event<H: RoutedEventHandler>(
 ///
 /// # Panics
 ///
-/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
 /// explicit at the type level).
 pub fn subscribe_event_by_name<H: RoutedEventHandler>(
@@ -1200,7 +1200,7 @@ pub fn subscribe_event_by_name<H: RoutedEventHandler>(
 }
 
 // `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
-// notifications are NOT routed events — they ride Noesis's `Event_<T>`
+// notifications are NOT routed events; they ride Noesis's `Event_<T>`
 // mechanism (`AddEventHandler(Symbol, EventHandler)`), so they go through a
 // separate name-keyed entrypoint rather than the routed `subscribe_event` path.
 // They carry no arguments we surface, so the handler is a bare `Fn()`.
@@ -1320,7 +1320,7 @@ impl LifecycleEvent {
 ///
 /// # Panics
 ///
-/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
 /// explicit at the type level).
 pub fn subscribe_lifecycle<H: LifecycleHandler>(
@@ -1332,7 +1332,7 @@ pub fn subscribe_lifecycle<H: LifecycleHandler>(
 }
 
 /// Subscribe `handler` to the non-routed lifecycle event named `name` on
-/// `element` — the `&str` escape hatch behind the typed [`subscribe_lifecycle`].
+/// `element`, the `&str` escape hatch behind the typed [`subscribe_lifecycle`].
 ///
 /// Supported names: `"Initialized"`, `"LayoutUpdated"`, `"DataContextChanged"`,
 /// `"IsEnabledChanged"`, `"IsVisibleChanged"`, `"IsHitTestVisibleChanged"`,
@@ -1348,7 +1348,7 @@ pub fn subscribe_lifecycle<H: LifecycleHandler>(
 ///
 /// # Panics
 ///
-/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
 /// explicit at the type level).
 pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
@@ -1478,10 +1478,10 @@ impl Drop for DataObjectSubscription {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DataObjectEvent {
-    /// `DataObject.Copying` — raised before data is placed on the clipboard
+    /// `DataObject.Copying`: raised before data is placed on the clipboard
     /// (e.g. by `Ctrl+C` in a `TextBox`).
     Copying,
-    /// `DataObject.Pasting` — raised before clipboard data is consumed (e.g. by
+    /// `DataObject.Pasting`: raised before clipboard data is consumed (e.g. by
     /// `Ctrl+V`).
     Pasting,
 }
@@ -1493,7 +1493,7 @@ pub enum DataObjectEvent {
 ///
 /// # Panics
 ///
-/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
 /// explicit at the type level).
 pub fn subscribe_data_object<H: DataObjectHandler>(

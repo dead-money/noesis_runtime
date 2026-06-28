@@ -1,4 +1,4 @@
-//! SVG parsing and geometry queries, all CPU-side and headless — no GPU
+//! SVG parsing and geometry queries, all CPU-side and headless. No GPU
 //! `RenderDevice` or render pass is needed, so you can use these in tests,
 //! tooling, or hit-testing without standing up a renderer.
 //!

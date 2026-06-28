@@ -9,7 +9,7 @@
 // Path's Data (via the generic FrameworkElement::set_component path) makes Noesis
 // take its own reference, so the Rust builder handle can be dropped afterwards.
 //
-// Read-back getters re-read from the LIVE Noesis object — GetBounds() /
+// Read-back getters re-read from the LIVE Noesis object. GetBounds() /
 // GetRenderBounds() prove a real path was built (a no-op constructor yields empty
 // bounds), figure/segment/child counts prove collection wiring crossed the FFI,
 // and CombinedGeometry mode / FillRule prove enum round-trips. A stubbed

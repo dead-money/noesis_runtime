@@ -8,7 +8,7 @@
 //   * Thin extern "C" entrypoints over `GUI::LoadXaml`, `GUI::CreateView`,
 //     and the `IView` / `IRenderer` methods.
 //
-// No Rust callback fires on XamlProvider teardown — the Rust side manages
+// No Rust callback fires on XamlProvider teardown. The Rust side manages
 // the boxed trait object's lifetime via its `Drop` impl (mirrors the
 // `Registered` pattern for RenderDevice).
 
@@ -103,7 +103,7 @@ extern "C" void* noesis_gui_load_xaml(const char* uri) {
 
 extern "C" void* noesis_gui_parse_xaml(const char* text) {
     if (!text) return nullptr;
-    // ParseXaml builds an object tree directly from the string — no
+    // ParseXaml builds an object tree directly from the string. No
     // XamlProvider URI round-trip. Mirrors noesis_gui_load_xaml's
     // ownership: cast the root to FrameworkElement and hand out a +1 ref.
     // Malformed XAML yields a null Ptr (the error is routed through the log
@@ -144,7 +144,7 @@ extern "C" void* noesis_base_component_add_reference(void* obj) {
 
 // Current strong reference count of any BaseComponent (BaseRefCounted::
 // GetNumReferences). Returns 0 on NULL input. The absolute value is an internal
-// detail — callers should reason about deltas (AddReference => +1, Release =>
+// detail. Callers should reason about deltas (AddReference => +1, Release =>
 // -1), not the raw number.
 extern "C" int32_t noesis_base_component_get_num_references(void* obj) {
     if (!obj) return 0;
@@ -166,7 +166,7 @@ extern "C" bool noesis_gui_load_application_resources(const char* uri) {
 //
 // Why: `LoadXaml<ResourceDictionary>(parent_uri)` parses the parent and
 // recursively parses each `<ResourceDictionary Source="..."/>` in
-// `MergedDictionaries`. The leaves are parsed in isolation — their
+// `MergedDictionaries`. The leaves are parsed in isolation. Their
 // internal `{StaticResource SiblingKey}` lookups can't see siblings that
 // haven't been parsed yet (or even the ones that already have, if the
 // resolver only walks the leaf's own logical tree). This is the
@@ -504,7 +504,7 @@ extern "C" void noesis_view_set_emulate_touch(void* view, bool emulate) {
 
 // ── Stereo / VR ─────────────────────────────────────────────────────────────
 // Adjusts the offscreen-phase scale used when stereo eye matrices differ from
-// the view projection. Must be 1.0 for non-VR; 2–3 is recommended for VR.
+// the view projection. Must be 1.0 for non-VR; 2-3 is recommended for VR.
 
 extern "C" void noesis_view_set_stereo_offscreen_scale_factor(void* view, float factor) {
     if (!view) return;
@@ -547,7 +547,7 @@ namespace {
 // other view handles (the only constraint is dropping it before the Noesis
 // runtime shuts down, like every other owning handle in this crate). Noesis
 // stores a copy of the `Delegate` bound to this object until CancelTimer, so
-// the object must stay alive until then — which the Rust RAII handle enforces.
+// the object must stay alive until then, which the Rust RAII handle enforces.
 class RustTimer {
 public:
     RustTimer(Noesis::IView* view, noesis_timer_fn cb, void* userdata,
@@ -590,7 +590,7 @@ public:
     Noesis::IView* view() const { return mView; }
 
 private:
-    Noesis::IView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
+    Noesis::IView* mView;  // raw + manual AddRef/Release; see ctor/dtor.
     noesis_timer_fn mCb;
     void* mUserdata;
     noesis_timer_free_fn mFree;
@@ -632,7 +632,7 @@ extern "C" void noesis_view_cancel_timer(void* token) {
 
 namespace {
 
-// Trampoline for `IView::Rendering()` — a `Delegate<void(IView*)>` fired after
+// Trampoline for `IView::Rendering()`, a `Delegate<void(IView*)>` fired after
 // animation/layout, just before the composition tree is rendered. Lifetime
 // mirrors RustTimer: the donated Rust handler box is owned here and freed via
 // `mFree` in the destructor exactly once, and a +1 ref on the IView keeps the
@@ -670,7 +670,7 @@ private:
         }
     }
 
-    Noesis::IView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
+    Noesis::IView* mView;  // raw + manual AddRef/Release; see ctor/dtor.
     noesis_rendering_fn mCb;
     void* mUserdata;
     noesis_rendering_free_fn mFree;

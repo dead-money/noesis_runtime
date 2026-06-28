@@ -1,5 +1,5 @@
 //! Rust-side [`FontProvider`] trait + [`set_font_provider`] registration.
-//! Mirrors [`crate::xaml_provider`] — a boxed trait object is handed to the
+//! Mirrors [`crate::xaml_provider`]: a boxed trait object is handed to the
 //! C++ `RustFontProvider` subclass via a vtable of trampolines; the
 //! returned [`Registered`] guard owns both the boxed impl and the C++
 //! provider handle.
@@ -26,7 +26,7 @@
 //! that might call back into the provider. In practice that means keeping
 //! it alive until after [`crate::shutdown`] returns.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
 use std::borrow::Cow;
@@ -67,7 +67,7 @@ unsafe fn provider<'a>(userdata: *mut c_void) -> &'a mut Box<dyn FontProvider> {
     &mut *userdata.cast::<Box<dyn FontProvider>>()
 }
 
-/// Decode a Noesis-supplied string lossily — odd/non-UTF-8 engine input must not
+/// Decode a Noesis-supplied string lossily. Odd/non-UTF-8 engine input must not
 /// panic across the C ABI, so invalid bytes become U+FFFD rather than aborting.
 fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {
@@ -111,7 +111,7 @@ unsafe extern "C" fn t_open_font(
         let Some(bytes) = provider(userdata).open_font(&folder, &name) else {
             return false;
         };
-        // A >4 GiB font file can't be represented to the shim — treat as failure
+        // A >4 GiB font file can't be represented to the shim, so treat as failure
         // rather than panicking inside the trampoline.
         let Ok(len) = u32::try_from(bytes.len()) else {
             return false;
@@ -140,7 +140,7 @@ pub struct Registered {
 unsafe impl Send for Registered {}
 
 impl Registered {
-    /// Raw `Noesis::FontProvider*` — useful for other Noesis APIs that
+    /// Raw `Noesis::FontProvider*`. Useful for other Noesis APIs that
     /// take a font provider.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
@@ -167,7 +167,7 @@ impl Registered {
     /// `ScanFolder` model. Once registered, any later
     /// `FontFamily="folder_uri/#Family"` lookup whose face metadata
     /// matches will resolve through this provider's
-    /// [`FontProvider::open_font`] callback — even if the cache has
+    /// [`FontProvider::open_font`] callback, even if the cache has
     /// already been scanned.
     ///
     /// Calling this for a `(folder_uri, filename)` already registered is
@@ -219,7 +219,7 @@ impl Drop for Registered {
 ///
 /// Panics if the C++ factory returns null.
 pub fn set_font_provider<P: FontProvider>(provider: P) -> Registered {
-    // SAFETY: install globally — Noesis retains its own +1.
+    // SAFETY: install globally; Noesis retains its own +1.
     register_with(provider, |handle| unsafe {
         noesis_set_font_provider(handle)
     })
@@ -296,12 +296,12 @@ pub fn set_scheme_assembly_font_provider<P: FontProvider>(
     })
 }
 
-/// Register the global font fallback chain — each entry is a family name
+/// Register the global font fallback chain. Each entry is a family name
 /// Noesis will search when an element's explicit `FontFamily` lacks a
 /// requested glyph. Fallbacks can be bare family names (`"Arial"`) or
 /// path-rooted references to a font already known to the font provider
 /// (`"Fonts/#Bitter"`). Also acts as the de-facto *default* font for
-/// elements that don't specify any `FontFamily` at all — Noesis walks the
+/// elements that don't specify any `FontFamily` at all; Noesis walks the
 /// fallback chain in order.
 ///
 /// This is a process-global Noesis setting; call once per run (typically

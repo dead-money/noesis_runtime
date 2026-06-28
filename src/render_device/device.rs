@@ -2,7 +2,7 @@
 //! plus the handle / desc / binding plain-data types that flow through it.
 //!
 //! Implement [`RenderDevice`] to back a Noesis view with your own GPU backend
-//! (a `wgpu` device, say). This layer is pure Rust — no FFI. A C++ shim
+//! (a `wgpu` device, say). This layer is pure Rust, no FFI. A C++ shim
 //! translates Noesis's pure-virtual `RenderDevice` surface into calls on this
 //! trait through a vtable of `extern "C"` trampolines.
 
@@ -11,7 +11,7 @@ use core::num::NonZeroU64;
 use crate::render_device::types::{Batch, DeviceCaps, TextureFormat, Tile};
 
 // ────────────────────────────────────────────────────────────────────────────
-// Handles — opaque IDs the device owns. NonZeroU64 lets `Option<Handle>` reuse
+// Handles: opaque IDs the device owns. NonZeroU64 lets `Option<Handle>` reuse
 // the handle's niche.
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ pub struct RenderTargetBinding {
 /// The `Send + Sync` supertrait bounds make the boxed impl behind the
 /// [`Registered`] guard `Send` (so the guard can be *moved* to the thread
 /// that owns the Noesis view) and let Noesis invoke the device trampolines
-/// from its render thread. The guard itself is `Send` but **not** `Sync` —
+/// from its render thread. The guard itself is `Send` but **not** `Sync`:
 /// it exposes `&self` accessors (e.g. [`Registered::offscreen_width`]) that
 /// read live Noesis state, so it must not be shared across threads. See the
 /// crate-level "Thread affinity" docs; store it in a `NonSend` resource, not

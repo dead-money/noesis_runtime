@@ -1,10 +1,10 @@
-//! Code-built geometry object model: construct `Geometry` objects —
-//! `StreamGeometry`, `PathGeometry` (figures + segments), the primitive
-//! `Ellipse`/`Rectangle`/`Line` geometries, `CombinedGeometry`, and
-//! `GeometryGroup` — from Rust without authoring XAML.
+//! Code-built geometry object model. Construct `Geometry` objects from Rust
+//! without authoring XAML: `StreamGeometry`, `PathGeometry` (figures +
+//! segments), the primitive `Ellipse`/`Rectangle`/`Line` geometries,
+//! `CombinedGeometry`, and `GeometryGroup`.
 //!
 //! Every type here is an owning handle over a freshly-created Noesis object
-//! holding a single `+1` reference, released on [`Drop`] — the same pattern as
+//! holding a single `+1` reference, released on [`Drop`], the same pattern as
 //! [`crate::brushes`] / [`crate::transforms`]. Assigning a finished geometry to
 //! a `Path`'s `Data` (or any `Geometry`-typed property) makes Noesis take its
 //! own reference, so the Rust handle may be dropped right after assignment. Use
@@ -213,7 +213,7 @@ pub trait Geometry {
     /// internal type mismatch.
     ///
     /// Takes `&dyn Transform` (rather than a generic) so this trait stays
-    /// object-safe — `&dyn Geometry` is the shape argument of
+    /// object-safe. `&dyn Geometry` is the shape argument of
     /// [`DrawingContext::draw_geometry`](crate::drawing::DrawingContext::draw_geometry)
     /// / [`push_clip`](crate::drawing::DrawingContext::push_clip).
     fn set_transform(&mut self, transform: &dyn Transform) -> bool {
@@ -468,7 +468,7 @@ impl StreamGeometryContext {
 
 impl Drop for StreamGeometryContext {
     fn drop(&mut self) {
-        // SAFETY: not closed — free the heap context without flushing. close()
+        // SAFETY: not closed, so free the heap context without flushing. close()
         // forgets self, so this never double-frees.
         unsafe { noesis_stream_geometry_context_destroy(self.ctx.as_ptr()) };
     }
@@ -924,7 +924,7 @@ impl RectangleGeometry {
         }
     }
 
-    /// Create a rectangle from a [`Rect`] and corner radii `(rx, ry)` — the
+    /// Create a rectangle from a [`Rect`] and corner radii `(rx, ry)`. The
     /// ergonomic alternative to the 6-positional-argument [`new`](Self::new).
     /// Round-trips with [`rect`](Self::rect) / [`radii`](Self::radii).
     ///

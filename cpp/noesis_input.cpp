@@ -1,4 +1,4 @@
-// Input — finer control.
+// Input: finer control.
 //
 // Element-level mouse/touch capture, keyboard-state queries, focus-state DPs,
 // focus engagement + traversal (MoveFocus / PredictFocus), the FocusManager and
@@ -8,7 +8,7 @@
 //
 // Everything here narrows an opaque `Noesis::BaseComponent*` to the concrete
 // type it needs via DynamicCast and null-checks first, returning false / null /
-// a no-op on a type mismatch — never dereferencing blind. Borrowed pointers
+// a no-op on a type mismatch, never dereferencing blind. Borrowed pointers
 // (GetCaptured, GetFocused, GetFocusedElement, GetFocusScope, PredictFocus) are
 // returned WITHOUT an extra reference; the create entrypoints (gestures /
 // bindings) return a fresh object at +1 that Rust releases on drop, mirroring

@@ -5,7 +5,7 @@
 //! [`View`](crate::view::View) clock.
 //!
 //! Each handle here owns a freshly-created Noesis object holding a single `+1`
-//! reference, released on [`Drop`] via `noesis_base_component_release` — the
+//! reference, released on [`Drop`] via `noesis_base_component_release`, the
 //! same idiom as [`crate::brushes`]. Adding an animation to a [`Storyboard`], or
 //! a key frame / easing function to its parent, makes Noesis take its own
 //! reference, so the Rust builder handle may be dropped after wiring.
@@ -121,9 +121,9 @@ use crate::view::FrameworkElement;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EasingMode {
-    /// `100% - f(t)` — decelerating.
+    /// `100% - f(t)`, decelerating.
     EaseOut = 0,
-    /// `f(t)` — accelerating.
+    /// `f(t)`, accelerating.
     EaseIn = 1,
     /// `EaseIn` for the first half, `EaseOut` for the second.
     EaseInOut = 2,
@@ -263,7 +263,7 @@ macro_rules! base_component_handle {
 }
 
 /// Common `Timeline` knobs shared by every animation type (duration, repeat,
-/// auto-reverse, …). Implemented through the object's raw `Timeline*`.
+/// auto-reverse, ...). Implemented through the object's raw `Timeline*`.
 pub trait Timeline {
     /// Borrowed `Noesis::Timeline*` for `self`.
     fn timeline_raw(&self) -> *mut c_void;
@@ -343,7 +343,7 @@ pub trait Animation: Timeline {
     /// Borrowed `Noesis::AnimationTimeline*` for `self`.
     fn animation_raw(&self) -> *mut c_void;
 
-    /// Set this animation's `Storyboard.TargetName` — the `x:Name` of the
+    /// Set this animation's `Storyboard.TargetName`: the `x:Name` of the
     /// element it drives, resolved against the namescope passed to
     /// [`Storyboard::begin`].
     ///
@@ -356,7 +356,7 @@ pub trait Animation: Timeline {
         unsafe { noesis_storyboard_set_target_name(self.animation_raw(), c.as_ptr()) }
     }
 
-    /// Set this animation's `Storyboard.TargetProperty` — the property path it
+    /// Set this animation's `Storyboard.TargetProperty`: the property path it
     /// drives (e.g. `"Opacity"`,
     /// `"(UIElement.RenderTransform).(ScaleTransform.ScaleX)"`).
     ///
@@ -406,8 +406,7 @@ pub trait Animation: Timeline {
     }
 }
 
-/// A `Storyboard` — a container timeline that targets and runs its child
-/// animations.
+/// A container timeline that targets and runs its child animations.
 pub struct Storyboard {
     ptr: NonNull<c_void>,
 }
@@ -606,8 +605,8 @@ macro_rules! animation_impls {
     };
 }
 
-/// A `DoubleAnimation` — interpolates a `float` property linearly between
-/// `From` and `To` over the duration.
+/// Interpolates a `float` property linearly between `From` and `To` over the
+/// duration.
 pub struct DoubleAnimation {
     ptr: NonNull<c_void>,
 }
@@ -659,8 +658,8 @@ impl DoubleAnimation {
     }
 }
 
-/// A `ColorAnimation` — interpolates a `Color` property linearly between `From`
-/// and `To`. Colors are `[r, g, b, a]`, each `0..=1`.
+/// Interpolates a `Color` property linearly between `From` and `To`. Colors are
+/// `[r, g, b, a]`, each `0..=1`.
 pub struct ColorAnimation {
     ptr: NonNull<c_void>,
 }
@@ -713,8 +712,7 @@ impl ColorAnimation {
     }
 }
 
-/// A `ThicknessAnimation` — interpolates a `Thickness` property
-/// (`[left, top, right, bottom]`).
+/// Interpolates a `Thickness` property (`[left, top, right, bottom]`).
 pub struct ThicknessAnimation {
     ptr: NonNull<c_void>,
 }
@@ -767,7 +765,7 @@ impl ThicknessAnimation {
     }
 }
 
-/// A `PointAnimation` — interpolates a `Point` property (`(x, y)`).
+/// Interpolates a `Point` property (`(x, y)`).
 pub struct PointAnimation {
     ptr: NonNull<c_void>,
 }
@@ -820,8 +818,8 @@ impl PointAnimation {
     }
 }
 
-/// A `DoubleAnimationUsingKeyFrames` — animates a `float` property through a
-/// sequence of discrete / linear / eased key frames.
+/// Animates a `float` property through a sequence of discrete / linear / eased
+/// key frames.
 pub struct DoubleAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -874,8 +872,7 @@ impl DoubleAnimationUsingKeyFrames {
     }
 }
 
-/// A `ColorAnimationUsingKeyFrames` — animates a `Color` property through a
-/// sequence of color key frames.
+/// Animates a `Color` property through a sequence of color key frames.
 pub struct ColorAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -927,8 +924,8 @@ impl ColorAnimationUsingKeyFrames {
     }
 }
 
-/// A `RectAnimation` — interpolates a `Rect` property between `From` and `To`.
-/// Rects are `[x, y, width, height]`.
+/// Interpolates a `Rect` property between `From` and `To`. Rects are
+/// `[x, y, width, height]`.
 pub struct RectAnimation {
     ptr: NonNull<c_void>,
 }
@@ -1008,8 +1005,8 @@ impl RectAnimation {
     }
 }
 
-/// A `SizeAnimation` — interpolates a `Size` property between `From` and `To`.
-/// Sizes are `[width, height]`.
+/// Interpolates a `Size` property between `From` and `To`. Sizes are
+/// `[width, height]`.
 pub struct SizeAnimation {
     ptr: NonNull<c_void>,
 }
@@ -1089,8 +1086,8 @@ impl SizeAnimation {
     }
 }
 
-/// An `Int16Animation` — interpolates an `int16` property between `From` and
-/// `To` (Noesis rounds the interpolated value).
+/// Interpolates an `int16` property between `From` and `To` (Noesis rounds the
+/// interpolated value).
 pub struct Int16Animation {
     ptr: NonNull<c_void>,
 }
@@ -1185,8 +1182,7 @@ impl Int16Animation {
     }
 }
 
-/// An `Int32Animation` — interpolates an `int32` property between `From` and
-/// `To`.
+/// Interpolates an `int32` property between `From` and `To`.
 pub struct Int32Animation {
     ptr: NonNull<c_void>,
 }
@@ -1273,8 +1269,7 @@ impl Int32Animation {
     }
 }
 
-/// An `Int64Animation` — interpolates an `int64` property between `From` and
-/// `To`.
+/// Interpolates an `int64` property between `From` and `To`.
 pub struct Int64Animation {
     ptr: NonNull<c_void>,
 }
@@ -1361,9 +1356,9 @@ impl Int64Animation {
     }
 }
 
-/// A `KeySpline` — the two cubic-Bezier control points (each in the unit square)
-/// that shape a spline key frame's progress curve. Used with
-/// [`KeyFrameKind::Spline`] via [`KeyFrameInterp::Spline`].
+/// The two cubic-Bezier control points (each in the unit square) that shape a
+/// spline key frame's progress curve. Used with [`KeyFrameKind::Spline`] via
+/// [`KeyFrameInterp::Spline`].
 pub struct KeySpline {
     ptr: NonNull<c_void>,
 }
@@ -1427,8 +1422,8 @@ impl KeySpline {
     }
 }
 
-/// A `RectAnimationUsingKeyFrames` — animates a `Rect` property through
-/// discrete / linear / eased / splined key frames.
+/// Animates a `Rect` property through discrete / linear / eased / splined key
+/// frames.
 pub struct RectAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -1507,8 +1502,8 @@ impl RectAnimationUsingKeyFrames {
     }
 }
 
-/// A `SizeAnimationUsingKeyFrames` — animates a `Size` property through
-/// discrete / linear / eased / splined key frames.
+/// Animates a `Size` property through discrete / linear / eased / splined key
+/// frames.
 pub struct SizeAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -1587,8 +1582,8 @@ impl SizeAnimationUsingKeyFrames {
     }
 }
 
-/// An `Int16AnimationUsingKeyFrames` — animates an `int16` property through
-/// discrete / linear / eased / splined key frames.
+/// Animates an `int16` property through discrete / linear / eased / splined key
+/// frames.
 pub struct Int16AnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -1667,8 +1662,8 @@ impl Int16AnimationUsingKeyFrames {
     }
 }
 
-/// An `Int32AnimationUsingKeyFrames` — animates an `int32` property through
-/// discrete / linear / eased / splined key frames.
+/// Animates an `int32` property through discrete / linear / eased / splined key
+/// frames.
 pub struct Int32AnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -1747,8 +1742,8 @@ impl Int32AnimationUsingKeyFrames {
     }
 }
 
-/// An `Int64AnimationUsingKeyFrames` — animates an `int64` property through
-/// discrete / linear / eased / splined key frames.
+/// Animates an `int64` property through discrete / linear / eased / splined key
+/// frames.
 pub struct Int64AnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -1827,8 +1822,8 @@ impl Int64AnimationUsingKeyFrames {
     }
 }
 
-/// A `PointAnimationUsingKeyFrames` — animates a `Point` property (`(x, y)`)
-/// through discrete / linear / eased / splined key frames.
+/// Animates a `Point` property (`(x, y)`) through discrete / linear / eased /
+/// splined key frames.
 pub struct PointAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -1909,9 +1904,8 @@ impl PointAnimationUsingKeyFrames {
     }
 }
 
-/// A `ThicknessAnimationUsingKeyFrames` — animates a `Thickness` property
-/// (`[left, top, right, bottom]`) through discrete / linear / eased / splined
-/// key frames.
+/// Animates a `Thickness` property (`[left, top, right, bottom]`) through
+/// discrete / linear / eased / splined key frames.
 pub struct ThicknessAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -1996,9 +1990,8 @@ impl ThicknessAnimationUsingKeyFrames {
     }
 }
 
-/// A `BooleanAnimationUsingKeyFrames` — animates a `bool` property through
-/// discrete key frames (a bool can't be interpolated, so only discrete frames
-/// exist).
+/// Animates a `bool` property through discrete key frames (a bool can't be
+/// interpolated, so only discrete frames exist).
 pub struct BooleanAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -2062,9 +2055,8 @@ impl BooleanAnimationUsingKeyFrames {
     }
 }
 
-/// A `StringAnimationUsingKeyFrames` — animates a `String` property through
-/// discrete key frames (a string can't be interpolated, so only discrete frames
-/// exist).
+/// Animates a `String` property through discrete key frames (a string can't be
+/// interpolated, so only discrete frames exist).
 pub struct StringAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -2142,9 +2134,8 @@ pub struct OwnedComponent {
 
 base_component_handle!(OwnedComponent);
 
-/// An `ObjectAnimationUsingKeyFrames` — animates an `Object` (arbitrary
-/// `BaseComponent`) property through discrete key frames. Objects can't be
-/// interpolated, so only discrete frames exist.
+/// Animates an `Object` (arbitrary `BaseComponent`) property through discrete
+/// key frames. Objects can't be interpolated, so only discrete frames exist.
 pub struct ObjectAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -2209,10 +2200,9 @@ impl ObjectAnimationUsingKeyFrames {
     }
 }
 
-/// A `MatrixAnimationUsingKeyFrames` — animates a `Matrix` (`MatrixTransform`)
-/// property through discrete key frames. A matrix is not componentwise
-/// interpolated, so only discrete frames exist. Matrices are
-/// `[m00, m01, m10, m11, m20, m21]`.
+/// Animates a `Matrix` (`MatrixTransform`) property through discrete key frames.
+/// A matrix is not componentwise interpolated, so only discrete frames exist.
+/// Matrices are `[m00, m01, m10, m11, m20, m21]`.
 pub struct MatrixAnimationUsingKeyFrames {
     ptr: NonNull<c_void>,
 }
@@ -2275,7 +2265,7 @@ impl MatrixAnimationUsingKeyFrames {
     }
 }
 
-/// A `BeginStoryboard` trigger action — begins a [`Storyboard`] with a chosen
+/// A `BeginStoryboard` trigger action: begins a [`Storyboard`] with a chosen
 /// [`HandoffBehavior`] when the owning trigger fires. Useful inside a trigger's
 /// action list; code-driven [`Storyboard::begin`] covers the rest.
 pub struct BeginStoryboard {
@@ -2373,10 +2363,10 @@ impl BeginStoryboard {
     }
 }
 
-/// A `ParallelTimeline` — a code-built, nestable timeline group whose children
-/// (any [`Timeline`], including animations or nested `ParallelTimeline`s) run in
-/// parallel off the group's clock. Shares the [`Timeline`] knobs (duration,
-/// repeat, auto-reverse, …) with every animation type.
+/// A code-built, nestable timeline group whose children (any [`Timeline`],
+/// including animations or nested `ParallelTimeline`s) run in parallel off the
+/// group's clock. Shares the [`Timeline`] knobs (duration, repeat, auto-reverse,
+/// ...) with every animation type.
 pub struct ParallelTimeline {
     ptr: NonNull<c_void>,
 }
@@ -2444,7 +2434,7 @@ macro_rules! fromto_builder {
             }
         }
 
-        #[doc = concat!("Fluent builder for a [`", stringify!($anim), "`] — sets the ", $vname,
+        #[doc = concat!("Fluent builder for a [`", stringify!($anim), "`]. Sets the ", $vname,
                     " `from`/`to`/`by` plus the common timeline knobs (duration, begin time,\n\
              auto-reverse, repeat, fill behavior, speed) and an easing function, then\n\
              [`build`](Self::build)s the animation.")]

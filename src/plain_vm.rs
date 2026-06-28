@@ -3,7 +3,7 @@
 //! The bevy-bridge unblocker. A plain view model is a Rust-owned binding
 //! source that is **not** a `DependencyObject`: a plain Noesis `BaseComponent`
 //! that implements `INotifyPropertyChanged` and carries a synthetic reflection
-//! type whose properties resolve — through reflection — to a per-instance value
+//! type whose properties resolve (through reflection) to a per-instance value
 //! store that Rust pushes into. That is what makes `{Binding Title}` work
 //! against a Rust view model used as a `DataContext`, and, paired with a
 //! [`PlainInstance::notify`] call, what refreshes a bound UI target when Rust
@@ -15,7 +15,7 @@
 //! be *instantiated from XAML* and participate in the visual tree), a plain VM
 //! is purely a binding *source*. Use a plain VM when all you need is to expose
 //! Rust state to `{Binding}` (the common Bevy case: feed game state into the UI)
-//! without the weight — or the `DependencyObject` thread affinity — of a full
+//! without the weight (or the `DependencyObject` thread affinity) of a full
 //! control.
 //!
 //! # Lifecycle
@@ -38,7 +38,7 @@
 //! [`PlainSetHandler`] (a `TwoWay` writeback hook) fires from inside the binding
 //! pump on that same thread.
 
-#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
+#![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ffi::CStr;
 use core::ptr::{self, NonNull};
@@ -61,7 +61,7 @@ pub enum PlainType {
     Int32 = 0,
     Double = 1,
     Bool = 2,
-    /// The most common case — bind a `TextBlock.Text` to a Rust `String`.
+    /// The most common case: bind a `TextBlock.Text` to a Rust `String`.
     String = 3,
     /// An opaque `BaseComponent*` (e.g. a nested view model or a boxed object).
     BaseComponent = 4,
@@ -250,7 +250,7 @@ impl PlainVmBuilder {
         idx
     }
 
-    /// Install a `TwoWay` writeback hook (see [`PlainSetHandler`]). Optional —
+    /// Install a `TwoWay` writeback hook (see [`PlainSetHandler`]). Optional;
     /// omit it for read-only / `OneWay` view models.
     #[must_use]
     pub fn on_set<H: PlainSetHandler>(mut self, handler: H) -> Self {
@@ -284,7 +284,7 @@ impl PlainVmBuilder {
         let token = unsafe { noesis_plain_vm_register(self.name.as_ptr(), on_set, userdata, free) };
 
         let Some(token) = NonNull::new(token) else {
-            // Registration failed — reclaim the leaked handler box, since C++
+            // Registration failed; reclaim the leaked handler box, since C++
             // took no ownership.
             if !userdata.is_null() {
                 // SAFETY: userdata came from Box::into_raw above and C++ never
@@ -301,7 +301,7 @@ impl PlainVmBuilder {
                 noesis_plain_vm_register_property(token.as_ptr(), pname.as_ptr(), *kind as u32)
             };
             if idx == u32::MAX {
-                // A property failed — unregister to release our +1 (and free the
+                // A property failed; unregister to release our +1 (and free the
                 // handler box) rather than leak a half-built type.
                 // SAFETY: token is live and owned by us here.
                 unsafe { noesis_plain_vm_unregister(token.as_ptr()) };
@@ -353,7 +353,7 @@ impl Drop for PlainVmClass {
     fn drop(&mut self) {
         // SAFETY: token came from noesis_plain_vm_register with +1; this
         // releases exactly that ref. The handler box (if any) is freed once the
-        // last reference — possibly a live instance — drops.
+        // last reference (possibly a live instance) drops.
         unsafe { noesis_plain_vm_unregister(self.token.as_ptr()) }
     }
 }
@@ -377,7 +377,7 @@ impl PlainInstance {
     }
 
     /// Store `value` as property `prop_index`'s current value. Does **not**
-    /// raise the change notification — call [`Self::notify`] (or use
+    /// raise the change notification; call [`Self::notify`] (or use
     /// [`Self::set_and_notify`]). Returns `false` if `prop_index` is out of
     /// range.
     pub fn set(&self, prop_index: u32, value: PlainValue) -> bool {
@@ -421,7 +421,7 @@ impl PlainInstance {
 
     /// Read the current boxed value of `prop_index` back as a `String` (copying
     /// it). `None` if unset, out of range, or not a boxed string. Reads the
-    /// reflection-visible store directly (not through any binding) — handy for
+    /// reflection-visible store directly (not through any binding), handy for
     /// verifying a `TwoWay` writeback landed.
     #[must_use]
     pub fn get_string(&self, prop_index: u32) -> Option<String> {

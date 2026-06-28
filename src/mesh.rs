@@ -3,13 +3,13 @@
 //! [`MeshData`] is the low-level CPU geometry payload Noesis submits straight to
 //! the GPU: interleaved `(x, y)` vertices, optional `(u, v)` texture
 //! coordinates, a 16-bit triangle index buffer, and an explicit bounding box. It
-//! is consumed two ways — by
+//! is consumed two ways: by
 //! [`DrawingContext::draw_mesh`](crate::drawing::DrawingContext::draw_mesh) in an
 //! `OnRender` callback, or hosted in a [`Mesh`] [`FrameworkElement`](crate::view::FrameworkElement) in the
 //! element tree.
 //!
 //! Both handles own a freshly-created Noesis object holding a single `+1`
-//! reference released on [`Drop`] — the same ownership idiom as
+//! reference released on [`Drop`], the same ownership idiom as
 //! [`crate::brushes`] / [`crate::shapes`].
 //!
 //! # Read-back
@@ -18,7 +18,7 @@
 //! buffer with [`MeshData::set_vertices`] / [`set_uvs`](MeshData::set_uvs) /
 //! [`set_indices`](MeshData::set_indices) and read the same values back with the
 //! matching getter, and the bounds round-trip through [`MeshData::bounds`].
-//! Noesis 3.2.13 exposes no `GetNumVertices`/`…` getter, so the element count is
+//! Noesis 3.2.13 exposes no `GetNumVertices`/`...` getter, so the element count is
 //! proven by the buffer data that reads back at that length (the handle tracks
 //! the count it last set so the getters know how many elements to read).
 
@@ -205,7 +205,7 @@ impl Drop for MeshData {
     }
 }
 
-/// An owning handle to a Noesis `Mesh` — a [`FrameworkElement`] that renders a
+/// An owning handle to a Noesis `Mesh`: a [`FrameworkElement`] that renders a
 /// [`MeshData`] filled with a [`Brush`]. Hand its [`raw`](Mesh::raw) pointer to
 /// the element tree (Noesis takes its own reference) and the handle may then be
 /// dropped.

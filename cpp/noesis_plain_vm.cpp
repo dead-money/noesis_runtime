@@ -2,15 +2,15 @@
 //
 // Three cooperating pieces:
 //
-//   * RustPlainVm — a plain `Noesis::BaseComponent` (NOT a DependencyObject)
+//   * RustPlainVm, a plain `Noesis::BaseComponent` (NOT a DependencyObject)
 //     that implements `INotifyPropertyChanged` and reports a per-registration
 //     synthetic `TypeClass`. Its properties resolve through reflection to
 //     per-instance boxed values that Rust pushes in. This is what makes
 //     `{Binding Title}` work against a Rust view model used as a DataContext,
-//     and — paired with PropertyChanged notifications — what makes a bound UI
+//     and, paired with PropertyChanged notifications, what makes a bound UI
 //     target refresh when Rust mutates the model.
 //
-//   * RustPlainProperty : Noesis::TypeProperty — a custom reflected property
+//   * RustPlainProperty : Noesis::TypeProperty. A custom reflected property
 //     (the NsProp-equivalent) whose accessors (GetComponent / SetComponent)
 //     read/write the owning instance's boxed value store instead of a C++
 //     member offset. This is the "install property accessors that resolve into
@@ -18,7 +18,7 @@
 //     binding engine reaches it purely through reflection.
 //
 //   * RustMultiValueConverter : Noesis::BaseMultiValueConverter + MultiBinding
-//     construction — combine N child Bindings through a Rust converter over an
+//     construction. Combine N child Bindings through a Rust converter over an
 //     array of boxed values.
 //
 // Lifetime mirrors the synthetic-class registry in noesis_classes.cpp (refcounted
@@ -69,7 +69,7 @@ struct PlainProp {
 };
 
 // Per-registered-class state. Refcount + free-handler lifetime model copied
-// verbatim from `ClassData` in noesis_classes.cpp — see that file for the full
+// verbatim from `ClassData` in noesis_classes.cpp. See that file for the full
 // rationale (deferred free so a property write fired during instance teardown
 // always sees a live `userdata`).
 struct PlainClassData {
@@ -99,8 +99,8 @@ struct PlainClassData {
     }
 };
 
-// Every successfully-registered PlainClassData, ever — for the shutdown sweep
-// (see noesis_classes_force_free_at_shutdown for the rationale). Unlike the
+// Every PlainClassData ever successfully registered, tracked for the shutdown
+// sweep (see noesis_classes_force_free_at_shutdown for the rationale). Unlike the
 // synthetic-control registry in noesis_classes.cpp, plain VMs are never created
 // by name through the Factory (they're instantiated directly from the Rust
 // token), so no Symbol→ClassData lookup map is needed.
@@ -130,7 +130,7 @@ const Noesis::Type* plain_content_type(noesis_plain_type t) {
 // instance reports its per-registration synthetic TypeClass, while the static
 // "DmNoesis.RustPlainVm" base type carries the INotifyPropertyChanged interface
 // registration (so `DynamicCast<INotifyPropertyChanged*>(vm)` resolves through
-// the synthetic class's base chain — that's how the binding engine discovers the
+// the synthetic class's base chain. That's how the binding engine discovers the
 // model is observable).
 
 class RustPlainVm: public Noesis::BaseComponent, public Noesis::INotifyPropertyChanged {
@@ -378,7 +378,7 @@ extern "C" void* noesis_plain_vm_create_instance(void* token) {
     cd->hasInstances = true;
     auto* instance = new RustPlainVm();
     instance->BindClassData(cd);  // +1 share of cd
-    // `new` started the BaseComponent at refcount 1 — that IS the caller's +1.
+    // `new` started the BaseComponent at refcount 1. That IS the caller's +1.
     return static_cast<Noesis::BaseComponent*>(instance);
 }
 

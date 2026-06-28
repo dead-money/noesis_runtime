@@ -2,19 +2,19 @@
 //
 //   `RustFontProvider` subclasses `Noesis::CachedFontProvider`. Two virtuals
 //   are overridden:
-//     - `ScanFolder(folder)` — called the first time a font is requested
+//     - `ScanFolder(folder)`: called the first time a font is requested
 //       from a folder. Trampolines into Rust, which walks its own registry
 //       and calls `register_fn(cx, filename)` once per font; the C++ side
 //       forwards each call to `CachedFontProvider::RegisterFont(folder,
 //       filename)`. Noesis then opens the returned stream to scan face
 //       metadata.
-//     - `OpenFont(folder, filename)` — called by `MatchFont` once a face
+//     - `OpenFont(folder, filename)`: called by `MatchFont` once a face
 //       has been registered and Noesis needs the bytes. Trampolines to
 //       Rust, which returns a borrowed slice; we wrap it in a MemoryStream
 //       without copying. The Rust provider is responsible for keeping the
 //       bytes alive for the duration of Noesis's scan/parse.
 //
-//   The Rust side doesn't see FontWeight/Stretch/Style — CachedFontProvider
+//   The Rust side doesn't see FontWeight/Stretch/Style; CachedFontProvider
 //   handles matching internally after RegisterFont(folder, filename) scans
 //   the file for face metadata.
 
@@ -32,7 +32,7 @@
 
 namespace {
 
-// RustFontProvider — subclass of CachedFontProvider. We expose
+// RustFontProvider: subclass of CachedFontProvider. We expose
 // `scan_folder` and `open_font` through the Rust vtable; the rest of the
 // base class handles font matching / weight-stretch-style lookup.
 class RustFontProvider final : public Noesis::CachedFontProvider {
@@ -41,7 +41,7 @@ public:
         : mVtable(*vtable), mUserdata(userdata)
     {}
 
-    // Public trampoline helper — the Rust scan_folder callback hands us
+    // Public trampoline helper: the Rust scan_folder callback hands us
     // filenames one at a time; we forward each to the base class's
     // protected RegisterFont. Callable only through our own subclass so
     // the protected-access check is satisfied.

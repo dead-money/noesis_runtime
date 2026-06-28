@@ -1,4 +1,4 @@
-//! Standalone `NameScope` — the freestanding XAML namescope object,
+//! Standalone `NameScope`: the freestanding XAML namescope object,
 //! distinct from the per-`FrameworkElement` `RegisterName`/`UnregisterName`
 //! path (which routes through whatever scope already hosts the element).
 //!
@@ -122,7 +122,7 @@ impl NameScope {
     #[must_use]
     pub fn find_object(&self, obj: &FrameworkElement) -> Option<String> {
         // SAFETY: both pointers are live; the returned C string is owned by the
-        // scope and valid until the scope is mutated — we copy it immediately.
+        // scope and valid until the scope is mutated. We copy it immediately.
         let p = unsafe { noesis_name_scope_find_object(self.ptr.as_ptr(), obj.raw()) };
         if p.is_null() {
             return None;
@@ -134,7 +134,7 @@ impl NameScope {
 
     /// Call `f` for each `(name, object)` pair registered in this scope
     /// (`NameScope::EnumNamedObjects`). The element passed to `f` is **borrowed**
-    /// and valid only for that call — use
+    /// and valid only for that call. Use
     /// [`clone_ref`](FrameworkElement::clone_ref) to keep it.
     pub fn for_each<F: FnMut(&str, &FrameworkElement)>(&self, mut f: F) {
         let mut callback: &mut dyn FnMut(&str, &FrameworkElement) = &mut f;

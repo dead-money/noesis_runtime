@@ -41,7 +41,7 @@ extern "C" void noesis_set_log_handler(noesis_log_fn cb, void* userdata)
 // All GUI:: free calls. The Disable* trio MUST run before GUI::Init (i.e.
 // before noesis_init); the query + pump are runtime calls. On a Release
 // dylib the Inspector is compiled out, so these degrade to no-ops /
-// always-false — see the header for the full reality check.
+// always-false. See the header for the full reality check.
 
 extern "C" void noesis_disable_hot_reload(void)
 {
@@ -85,7 +85,7 @@ extern "C" void noesis_shutdown(void)
     // live DependencyObject (which fires their refcount-driven Release
     // calls into our trampolines, naturally freeing most handler boxes).
     // The sweeps then defensively free any handler boxes whose owning
-    // instances bypassed normal teardown — a belt-and-suspenders for
+    // instances bypassed normal teardown, a belt-and-suspenders for
     // orphaned-View paths that never `drop`-ed before shutdown.
     Noesis::Shutdown();
     noesis_classes_force_free_at_shutdown();

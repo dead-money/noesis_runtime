@@ -3,15 +3,15 @@
 //   `RustTextureProvider` subclasses `Noesis::TextureProvider`. Two virtuals
 //   are overridden:
 //
-//     - `GetTextureInfo(uri)` — returns dimensions + optional atlas rect
+//     - `GetTextureInfo(uri)`: returns dimensions + optional atlas rect
 //       without decoding pixels. Trampolines to `vtable.get_info`; on a
 //       `false` / null return Noesis falls back to LoadTexture.
 //
-//     - `LoadTexture(uri, device)` — decodes the image bytes through the
+//     - `LoadTexture(uri, device)`: decodes the image bytes through the
 //       Rust vtable, then calls the *same device Noesis passed us* to
 //       create a `Ptr<Texture>` from the RGBA8 payload. That device is our
 //       RustRenderDevice, so the created texture is a `RustTexture`
-//       referenced back into our Rust-side `textures` map — the same
+//       referenced back into our Rust-side `textures` map, the same
 //       lifecycle as textures Noesis creates for its own glyph / ramps
 //       atlases.
 //
