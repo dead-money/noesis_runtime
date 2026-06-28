@@ -26,8 +26,6 @@ don't keep re-discovering them.
 
 ## 3. Data binding
 
-- **`RelativeSource` ancestor modes** (`FindAncestor` with `AncestorType`/`AncestorLevel`, `PreviousData`, `TemplatedParent`) — only the `Self` convenience is wrapped. Cheap.
-- **`BindingExpression` inspection** — `BindingOperations::GetBindingExpression`, explicit `UpdateSource`/`UpdateTarget`. Cheap; completes the already-wrapped `UpdateSourceTrigger::Explicit` (nothing currently commits an explicit-trigger binding).
 - **`IMultiValueConverter` + `MultiBinding`** (runtime construction; `TryConvert` over an array of values).
 - **`PriorityBinding`, `TemplateBinding`** (runtime construction).
 - **`INotifyPropertyChanged` for plain (non-`DependencyObject`) view models.** Large: Noesis resolves non-DP binding paths only through registered `TypeProperty` reflection (no getter-by-name), so this needs the runtime reflection registration from §9. The `DependencyObject`-backed VM path already covers the notification need.
@@ -40,7 +38,6 @@ don't keep re-discovering them.
 
 ## 5. Routed events
 
-- **Non-routed lifecycle events.** `Initialized`, `LayoutUpdated`, and the `Is*Changed` notifications use `AddEventHandler(Symbol, EventHandler)` (the `Event_` mechanism), not `AddHandler(RoutedEvent, …)`. Cheap: one `EventHandler`/Symbol trampoline covers all of them.
 - **Richer typed arg accessors.** Focus-changed (`old`/`new` element — 2 fields, cheap), manipulation (delta/velocity/inertia — ~6 nested structs), and drag (effects/key-states bitmasks). Currently reachable only as base `RoutedEventArgs` (source/handled).
 - **`DragDrop` source side** (`DoDragDrop`) and the copy/paste `DataObject` handlers.
 
@@ -161,8 +158,8 @@ Ordered to finish the crate with the least rework — cheap completions and high
 primitives first, big rocks once their prerequisites exist. Each phase is a natural batch.
 
 **Phase A — finish the core + cheap wins.**
-1. §3 `RelativeSource FindAncestor` + `BindingExpression` `UpdateSource`/`UpdateTarget`, and §5 `Initialized`/`LayoutUpdated`/`Is*Changed` — all cheap, complementary; one small PR.
-2. ~~§1 View timers (`CreateTimer`) + `RenderFlags`/`ViewStats`/quality. **Timers unlock §2 queued-invoke and §6 animation**, so do them before those.~~ (done — timers, typed `RenderFlags`+`GetFlags`, `ViewStats`, tessellation quality, `MouseHWheel`)
+1. ~~§3 `RelativeSource FindAncestor` + `BindingExpression` `UpdateSource`/`UpdateTarget`, and §5 `Initialized`/`LayoutUpdated`/`Is*Changed` — all cheap, complementary; one small PR.~~ ✅ done
+2. ~~§1 View timers (`CreateTimer`) + `RenderFlags`/`ViewStats`/quality.~~ ✅ done — timers, typed `RenderFlags`+`GetFlags`, `ViewStats`, tessellation quality, `MouseHWheel`.
 3. §15 `ParseXaml` (+ `LoadComponent`) and §17 inspector-enable — both cheap and broadly useful for dev/tests.
 
 **Phase B — presentation.**

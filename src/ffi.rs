@@ -230,6 +230,17 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn dm_noesis_unsubscribe_event(token: *mut c_void);
 
+    // ── Non-routed lifecycle events (TODO §5) ─────────────────────────────────
+    // The callback is the same shape as `ClickFn` (a bare `void(userdata)`), so
+    // it is reused here.
+    pub fn dm_noesis_subscribe_lifecycle(
+        element: *mut c_void,
+        event_name: *const c_char,
+        cb: ClickFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_unsubscribe_lifecycle(token: *mut c_void);
+
     pub fn dm_noesis_mouse_args_position(args: *const c_void, x: *mut f32, y: *mut f32) -> bool;
     pub fn dm_noesis_mouse_button_args_button(args: *const c_void) -> i32;
     pub fn dm_noesis_mouse_wheel_args_delta(args: *const c_void) -> i32;
@@ -447,6 +458,19 @@ unsafe extern "C" {
     pub fn dm_noesis_binding_set_fallback_value(binding: *mut c_void, value: *mut c_void);
     pub fn dm_noesis_binding_set_update_source_trigger(binding: *mut c_void, trigger: i32);
     pub fn dm_noesis_binding_set_relative_source_self(binding: *mut c_void);
+    pub fn dm_noesis_binding_set_relative_source_find_ancestor(
+        binding: *mut c_void,
+        type_name: *const c_char,
+        level: u32,
+    ) -> bool;
+    pub fn dm_noesis_binding_set_relative_source_previous_data(binding: *mut c_void);
+    pub fn dm_noesis_binding_set_relative_source_templated_parent(binding: *mut c_void);
+    pub fn dm_noesis_get_binding_expression(
+        element: *mut c_void,
+        dp_name: *const c_char,
+    ) -> *mut c_void;
+    pub fn dm_noesis_binding_expression_update_target(expr: *mut c_void);
+    pub fn dm_noesis_binding_expression_update_source(expr: *mut c_void);
     pub fn dm_noesis_set_binding(
         element: *mut c_void,
         dp_name: *const c_char,
