@@ -9,6 +9,8 @@
 //!     (via `keyboard_focused()`) point at the focused element.
 //!   * `FocusManager` focus-scope set/get round-trips, and `focused_element`
 //!     reports the focused button.
+//!   * `capture_touch` binds an active touch device (and is refused with none),
+//!     and `predict_focus(Down)` resolves to the stacked sibling button.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
 //!   cargo test --test `input_capture_focus` -- --nocapture
@@ -206,6 +208,54 @@ fn capture_focus_roundtrip() {
         assert!(one.focus_engage(false), "focus_engage focuses the element");
         let _ = view.update(0.16);
         assert!(one.is_keyboard_focused(), "engage path focused `one`");
+
+        // ── Touch capture (UIElement::CaptureTouch) ─────────────────────────
+        // CaptureTouch binds an *active* touch device id to the element. With no
+        // active touch, an arbitrary id can't be captured — a real negative.
+        assert!(
+            !one.capture_touch(99),
+            "no active touch device #99 to capture"
+        );
+        // Bring a touch device live over `one`, then capture it. touch_down's
+        // own bool is just whether an element handled the press (no Click
+        // handler ⇒ false); the device is registered regardless, so the capture
+        // must now succeed.
+        let _ = view.touch_down(60, 100, 7);
+        let _ = view.update(0.176);
+        assert!(
+            one.capture_touch(7),
+            "CaptureTouch(7) succeeds once the touch device is active"
+        );
+        // Headless note: touch capture is tracked per-TouchDevice, distinct from
+        // Mouse capture, so it does NOT surface through GetIsMouseCaptured /
+        // Mouse::GetCaptured — those stay clear (the observable, asserted fact).
+        let _ = view.update(0.184);
+        assert!(
+            !one.is_mouse_captured(),
+            "touch capture is separate from mouse capture"
+        );
+        let _ = view.touch_up(60, 100, 7);
+        let _ = view.update(0.192);
+
+        // ── PredictFocus (directional) ──────────────────────────────────────
+        // `one` is focused; the only sibling below it is `two`, so directional
+        // PredictFocus(Down) resolves to `two` without moving focus. (The
+        // tab-order directions Next/Previous/First/Last are unsupported and
+        // return None — asserted here too.)
+        assert!(one.focus());
+        let _ = view.update(0.2);
+        let predicted = one
+            .predict_focus(FocusNavigationDirection::Down)
+            .expect("PredictFocus(Down) resolves to a candidate");
+        assert_eq!(
+            predicted.as_ptr(),
+            two.raw(),
+            "PredictFocus(Down) points at the button below"
+        );
+        assert!(
+            one.predict_focus(FocusNavigationDirection::Next).is_none(),
+            "PredictFocus does not support tab-order Next"
+        );
 
         drop(view);
     }

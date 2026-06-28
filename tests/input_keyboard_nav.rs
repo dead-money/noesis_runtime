@@ -5,6 +5,7 @@
 //!     `Keyboard::IsKeyDown(A) == true` and that `GetKeyStates(A)` contains
 //!     `Down`; `key_up` flips it back to `IsKeyUp`.
 //!   * Hold Shift and observe `GetModifiers()` contains `Shift`.
+//!   * Press `CapsLock` and observe `IsKeyToggled` / the `Toggled` key state.
 //!   * Round-trip every `KeyboardNavigation` attached property (`TabIndex`,
 //!     `IsTabStop`, the three navigation modes, `AcceptsReturn`) — set then read
 //!     back the Noesis-stored value.
@@ -114,6 +115,28 @@ fn keyboard_state_modifiers_and_navigation() {
                 .contains(ModifierKeys::SHIFT),
             "Shift cleared after release"
         );
+
+        // ── Toggled key state via CapsLock ───────────────────────────────────
+        // CapsLock starts untoggled; pressing it turns the toggle on, observable
+        // through both IsKeyToggled and the TOGGLED bit of GetKeyStates.
+        assert!(
+            !edit.is_key_toggled(Key::CapsLock),
+            "CapsLock not toggled before pressing"
+        );
+        let _ = view.key_down(Key::CapsLock);
+        let _ = view.update(0.096);
+        assert!(
+            edit.is_key_toggled(Key::CapsLock),
+            "Keyboard::IsKeyToggled(CapsLock) true after press"
+        );
+        let caps_states = edit.key_states(Key::CapsLock).expect("CapsLock key_states");
+        assert!(
+            caps_states.contains(KeyStates::TOGGLED),
+            "GetKeyStates(CapsLock) contains Toggled (raw bits {})",
+            caps_states.bits()
+        );
+        let _ = view.key_up(Key::CapsLock);
+        let _ = view.update(0.104);
 
         drop(view);
 
