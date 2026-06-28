@@ -96,12 +96,14 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
 /// instance's reflected type must match the XAML root's `x:Class`. Noesis maps
 /// the root element back onto the supplied instance by type identity; a
 /// mismatch leaves the instance untouched (and Noesis logs a type error).
-/// Producing a Rust-side instance whose reflected type carries a matching
-/// `x:Class` needs the custom-class registration surface
-/// ([`crate::classes`]) wired to declare that class name — which this entry
-/// point does not set up on its own. As shipped this is primarily a linkage /
-/// plumbing primitive; full code-behind round-tripping is left to a consumer
-/// that registers a matching type.
+/// The custom-class registration surface ([`crate::classes`]) supplies exactly
+/// such a type: register a class as `"DM.LoadTarget"`, instantiate it, and load
+/// XAML whose root carries `x:Class="DM.LoadTarget"` — the parsed children and
+/// named fields are grafted onto that instance (verified by `tests/parse_xaml`,
+/// which asserts a named child becomes resolvable through the instance only
+/// after this call). The caller is responsible for ensuring the registered type
+/// name and the XAML `x:Class` agree; this entry point does not synthesize that
+/// pairing on its own.
 ///
 /// # Safety
 ///

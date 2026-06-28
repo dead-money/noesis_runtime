@@ -5,14 +5,26 @@
 //! per process, so both surfaces share one `#[test]` inside a single
 //! init/shutdown, with every owning wrapper dropped before `shutdown`.
 //!
+//! `LoadComponent` is pinned by its observable effect: a class registered as
+//! `DM.LoadTarget` is instantiated, then XAML whose root carries
+//! `x:Class="DM.LoadTarget"` and a named child is loaded into that instance;
+//! the test asserts the child is absent before and present after the call, so
+//! removing the `GUI::LoadComponent` invocation fails the test. The C-layer
+//! null-URI guard is exercised directly via the raw FFI (the Rust wrapper can
+//! never pass a null URI).
+//!
 //! Run with `NOESIS_SDK_DIR` set:
 //!   `cargo test -p dm_noesis_runtime --test parse_xaml -- --nocapture`
 
 use std::collections::HashMap;
+use std::ffi::{CString, c_void};
 use std::ptr;
 
 use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::ClassBase;
+use dm_noesis_runtime::ffi::{
+    ClassBase, dm_noesis_base_component_release, dm_noesis_framework_element_find_name,
+    dm_noesis_gui_load_component,
+};
 use dm_noesis_runtime::gui::load_component;
 use dm_noesis_runtime::view::{FrameworkElement, View};
 use dm_noesis_runtime::xaml_provider::XamlProvider;
@@ -38,11 +50,17 @@ const DICT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 // than crash.
 const BROKEN_XAML: &str = "this is definitely not xaml @@@ <<< >>>";
 
-// XAML served by URI for the LoadComponent smoke. A ContentControl root so it
-// is at least shape-compatible with the registered ContentControl-based class.
+// XAML served by URI for the LoadComponent test. The `x:Class` names the
+// Rust-registered class (`DM.LoadTarget`, a ContentControl) so Noesis maps the
+// root onto the supplied instance by type identity and grafts the parsed body
+// — here a single named Button — onto it. We then assert that named child is
+// reachable from the instance, which is the observable proof LoadComponent ran.
 const COMPONENT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
-<ContentControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"/>"##;
+<ContentControl x:Class="DM.LoadTarget"
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Button x:Name="GRAFTED" Content="grafted"/>
+</ContentControl>"##;
 
 struct InMem(HashMap<String, Vec<u8>>);
 impl XamlProvider for InMem {
@@ -59,6 +77,25 @@ impl XamlProvider for InMem {
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
     fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+}
+
+/// Resolve an `x:Name` directly against a borrowed `BaseComponent*` (a live
+/// class instance) without taking ownership of it. Returns whether the name
+/// resolves to a `FrameworkElement`, releasing the `+1` ref the lookup hands
+/// out. Used to observe `LoadComponent`'s grafting effect on the instance.
+fn instance_has_named_child(raw: *mut c_void, name: &str) -> bool {
+    let c = CString::new(name).expect("name contained NUL");
+    // SAFETY: `raw` is a live BaseComponent* (a FrameworkElement subclass) for
+    // the duration of the call; find_name returns NULL or a +1 ref we release.
+    let found = unsafe { dm_noesis_framework_element_find_name(raw, c.as_ptr()) };
+    if found.is_null() {
+        false
+    } else {
+        // SAFETY: `found` is a freshly-AddRef'd BaseComponent* we now own and
+        // must release exactly once.
+        unsafe { dm_noesis_base_component_release(found) };
+        true
+    }
 }
 
 #[test]
@@ -118,18 +155,36 @@ fn parse_xaml_and_load_component() {
         );
 
         // ── LoadComponent ──────────────────────────────────────────────────
-        // Null component → false, no FFI call into Noesis.
+        // Null component → false, short-circuited in the Rust wrapper before
+        // any FFI call into Noesis.
         // SAFETY: null is an explicitly-handled input for load_component.
         assert!(
             !unsafe { load_component(ptr::null_mut(), "component.xaml") },
             "load_component(null, ...) must be false"
         );
 
-        // A real, type-registered instance + a resolvable URI: confirm the
-        // call links and runs and returns true. Deeper assertions (that the
-        // parsed tree is grafted onto the instance) aren't feasible here —
-        // that requires the instance's reflected type to carry an x:Class
-        // matching the XAML root, which this entry point doesn't wire up.
+        // Null URI exercises the C-layer `if (!component || !uri)` guard that
+        // the Rust wrapper never reaches (it CStrings every &str). Call the raw
+        // FFI directly with a valid component but a null uri.
+        let registration =
+            ClassBuilder::new("DM.LoadTarget", ClassBase::ContentControl, NoopHandler)
+                .register()
+                .expect("class registration failed");
+        let instance = registration
+            .create_instance()
+            .expect("create_instance returned None");
+        // SAFETY: instance.raw() is live; uri is intentionally null to hit the
+        // C-side guard, which must return false without dereferencing it.
+        assert!(
+            !unsafe { dm_noesis_gui_load_component(instance.raw(), ptr::null()) },
+            "dm_noesis_gui_load_component(instance, null uri) must be false"
+        );
+
+        // The real grafting effect: with `x:Class=\"DM.LoadTarget\"` matching the
+        // registered class, LoadComponent must populate the existing instance
+        // with the parsed body (a named Button). This is the observable proof
+        // the GUI::LoadComponent call actually ran — removing it leaves the
+        // instance empty and this assertion fails.
         let mut provider = HashMap::new();
         provider.insert(
             "component.xaml".to_string(),
@@ -138,13 +193,11 @@ fn parse_xaml_and_load_component() {
         let _registered_provider =
             dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(provider));
 
-        let registration =
-            ClassBuilder::new("DM.LoadTarget", ClassBase::ContentControl, NoopHandler)
-                .register()
-                .expect("class registration failed");
-        let instance = registration
-            .create_instance()
-            .expect("create_instance returned None");
+        // Before loading, the instance is empty — the named child does not exist.
+        assert!(
+            !instance_has_named_child(instance.raw(), "GRAFTED"),
+            "instance must not contain the named child before LoadComponent"
+        );
 
         // SAFETY: instance.raw() is a live BaseComponent* for the lifetime of
         // `instance`; the URI resolves through the installed provider.
@@ -154,9 +207,12 @@ fn parse_xaml_and_load_component() {
             "load_component on a live instance + valid URI returned false"
         );
 
-        // A missing URI still returns true (the call ran); Noesis logs the
-        // unresolved-resource error internally. We assert the null-arg guard
-        // above for the meaningful negative case.
+        // After loading, the parsed Button (x:Name=\"GRAFTED\") must be grafted
+        // onto the instance and resolvable through its namescope.
+        assert!(
+            instance_has_named_child(instance.raw(), "GRAFTED"),
+            "LoadComponent did not graft the named child onto the instance"
+        );
 
         drop(instance);
         drop(registration);
