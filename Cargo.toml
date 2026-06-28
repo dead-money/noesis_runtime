@@ -24,7 +24,6 @@ default = []
 test-utils = []
 
 [dependencies]
-thiserror = "2"
 
 [build-dependencies]
 cc = "1"
