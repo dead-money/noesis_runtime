@@ -27,14 +27,18 @@
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
+use core::marker::PhantomData;
 use core::ptr::NonNull;
-use std::ffi::c_void;
+use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_subscribe_click, dm_noesis_subscribe_keydown, dm_noesis_unsubscribe_click,
-    dm_noesis_unsubscribe_keydown,
+    dm_noesis_key_args_key, dm_noesis_mouse_args_position, dm_noesis_mouse_button_args_button,
+    dm_noesis_mouse_wheel_args_delta, dm_noesis_routed_args_source,
+    dm_noesis_size_changed_args_new_size, dm_noesis_subscribe_click, dm_noesis_subscribe_event,
+    dm_noesis_subscribe_keydown, dm_noesis_text_args_ch, dm_noesis_unsubscribe_click,
+    dm_noesis_unsubscribe_event, dm_noesis_unsubscribe_keydown,
 };
-use crate::view::{FrameworkElement, Key};
+use crate::view::{FrameworkElement, Key, MouseButton};
 
 /// Rust-side click handler. Implementors receive a single `()` notification
 /// per fired click; if you need the sender / event args, extend the FFI
@@ -377,6 +381,237 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
         // userdata we leaked above so we don't leak the handler.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing
         // else ever saw the pointer.
+        unsafe { drop(Box::from_raw(userdata)) };
+        None
+    }
+}
+
+// ── Generic routed-event subscription (TODO §5) ─────────────────────────────
+
+/// Borrowed view over a routed event's arguments, handed to a
+/// [`RoutedEventHandler`] **by reference** for the duration of one callback.
+/// Backed by the opaque C++ `args` pointer; the typed accessors read whichever
+/// concrete arg struct actually fired (a generic callback can probe several and
+/// act on the one that returns `Some`).
+///
+/// The handler receives `&EventArgs`, never an owned value. The underlying C++
+/// args live on the stack of the Noesis input pump and are valid only while the
+/// callback runs — do not stash the borrow or the `source_ptr` beyond the call.
+/// (The type deliberately carries no lifetime parameter: a generic-lifetime
+/// arg type defeats closure HRTB inference, so the borrow is expressed through
+/// the `&EventArgs` the handler is handed instead.)
+pub struct EventArgs {
+    raw: *const c_void,
+    _not_send: PhantomData<*const c_void>,
+}
+
+impl EventArgs {
+    /// Pointer position in the source element's coordinate space, for mouse,
+    /// mouse-button and mouse-wheel events. `None` for other event kinds.
+    pub fn position(&self) -> Option<(f32, f32)> {
+        let mut x = 0.0f32;
+        let mut y = 0.0f32;
+        // SAFETY: `raw` is the opaque handle the trampoline received; the
+        // accessor validates the arg kind and writes only on a match.
+        let ok = unsafe { dm_noesis_mouse_args_position(self.raw, &mut x, &mut y) };
+        ok.then_some((x, y))
+    }
+
+    /// Changed mouse button for a mouse-button event; `None` otherwise.
+    pub fn mouse_button(&self) -> Option<MouseButton> {
+        // SAFETY: opaque handle; accessor returns -1 unless it's a button event.
+        let raw = unsafe { dm_noesis_mouse_button_args_button(self.raw) };
+        match raw {
+            0 => Some(MouseButton::Left),
+            1 => Some(MouseButton::Right),
+            2 => Some(MouseButton::Middle),
+            3 => Some(MouseButton::XButton1),
+            4 => Some(MouseButton::XButton2),
+            _ => None,
+        }
+    }
+
+    /// Wheel rotation delta for a mouse-wheel event (signed, ~120 per notch).
+    /// `None` for non-wheel events. The kind check happens inside the C
+    /// accessor, so only genuine wheel events yield `Some`.
+    pub fn wheel_delta(&self) -> Option<i32> {
+        // Only mouse-class events carry a position; a wheel event always does.
+        // Combined with the accessor's kind gate, this disambiguates the
+        // 0-delta sentinel from "not a wheel event".
+        if !self.is_wheel() {
+            return None;
+        }
+        // SAFETY: opaque handle; accessor returns 0 unless it's a wheel event.
+        Some(unsafe { dm_noesis_mouse_wheel_args_delta(self.raw) })
+    }
+
+    /// Whether the live args are a mouse-wheel event. A wheel event is the only
+    /// mouse-class event that reports a position but no changed button, so we
+    /// classify on that pair rather than the ambiguous 0-delta sentinel.
+    fn is_wheel(&self) -> bool {
+        self.position().is_some() && self.mouse_button().is_none()
+    }
+
+    /// Pressed/released key for a key event, mapped to the safe [`Key`] mirror.
+    /// `None` for non-key events. Keys outside the mirrored set arrive as
+    /// `Some(Key::None)`.
+    pub fn key(&self) -> Option<Key> {
+        // SAFETY: opaque handle; accessor returns -1 unless it's a key event.
+        let raw = unsafe { dm_noesis_key_args_key(self.raw) };
+        (raw >= 0).then(|| key_from_raw(raw))
+    }
+
+    /// Input character (UTF-32 code point) for a `TextInput` event; `None`
+    /// otherwise.
+    pub fn text_char(&self) -> Option<char> {
+        // SAFETY: opaque handle; accessor returns -1 unless it's text input.
+        let raw = unsafe { dm_noesis_text_args_ch(self.raw) };
+        if raw < 0 {
+            return None;
+        }
+        char::from_u32(raw as u32)
+    }
+
+    /// New size for a `SizeChanged` event (DIPs); `None` otherwise.
+    pub fn new_size(&self) -> Option<(f32, f32)> {
+        let mut w = 0.0f32;
+        let mut h = 0.0f32;
+        // SAFETY: opaque handle; accessor validates the kind and writes on match.
+        let ok = unsafe { dm_noesis_size_changed_args_new_size(self.raw, &mut w, &mut h) };
+        ok.then_some((w, h))
+    }
+
+    /// Borrowed raw pointer to the event's originating element
+    /// (`RoutedEventArgs::source`). `None` if there is no source.
+    ///
+    /// The pointer is NOT reference-counted and is valid only for the callback
+    /// duration — do not wrap it in a [`FrameworkElement`] (that would
+    /// over-release) and do not let it escape the handler.
+    pub fn source_ptr(&self) -> Option<*mut c_void> {
+        // SAFETY: opaque handle; returns a borrowed pointer or null.
+        let p = unsafe { dm_noesis_routed_args_source(self.raw) };
+        (!p.is_null()).then_some(p)
+    }
+}
+
+/// Rust-side handler for the generic routed-event path. Receives a borrowed
+/// [`EventArgs`] and returns `true` to mark the routed event handled (stops
+/// same-element handlers that opted out of `handled_too`, plus cross-element
+/// bubbling/tunneling).
+///
+/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
+/// or be moved onto the render thread.
+pub trait RoutedEventHandler: Send + 'static {
+    fn on_event(&mut self, args: &EventArgs) -> bool;
+}
+
+impl<F: FnMut(&EventArgs) -> bool + Send + 'static> RoutedEventHandler for F {
+    fn on_event(&mut self, args: &EventArgs) -> bool {
+        self(args)
+    }
+}
+
+/// SAFETY: `userdata` must be a pointer produced by [`subscribe_event`] and
+/// still alive (the [`EventSubscription`] hasn't been dropped). `args` is the
+/// opaque handle the C++ shim passes; it is valid only for this call.
+/// `out_handled` must be a non-null pointer to a writable bool.
+unsafe extern "C" fn event_trampoline(
+    userdata: *mut c_void,
+    args: *const c_void,
+    out_handled: *mut bool,
+) {
+    let handler = &mut *userdata.cast::<Box<dyn RoutedEventHandler>>();
+    let ev = EventArgs {
+        raw: args,
+        _not_send: PhantomData,
+    };
+    let handled = handler.on_event(&ev);
+    if !out_handled.is_null() {
+        *out_handled = handled;
+    }
+}
+
+/// RAII subscription token for [`subscribe_event`]. Drop to unsubscribe and
+/// free the boxed handler. Mirrors [`ClickSubscription`] / [`KeyDownSubscription`].
+pub struct EventSubscription {
+    token: NonNull<c_void>,
+    userdata: NonNull<Box<dyn RoutedEventHandler>>,
+}
+
+// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
+// Box<dyn RoutedEventHandler> is `Send`, and the C++ subscription is bound to a
+// single element whose access is serialised by Noesis.
+unsafe impl Send for EventSubscription {}
+unsafe impl Sync for EventSubscription {}
+
+impl Drop for EventSubscription {
+    fn drop(&mut self) {
+        // SAFETY: token + userdata produced together by subscribe_event;
+        // freed exactly once here.
+        unsafe {
+            dm_noesis_unsubscribe_event(self.token.as_ptr());
+            drop(Box::from_raw(self.userdata.as_ptr()));
+        }
+    }
+}
+
+/// Subscribe `handler` to the routed event named `event_name` on `element`.
+///
+/// `event_name` uses the WPF/Noesis event names — `"MouseMove"`,
+/// `"MouseLeftButtonDown"`, `"MouseWheel"`, `"KeyDown"`, `"KeyUp"`,
+/// `"GotFocus"`, `"LostFocus"`, `"Loaded"`, `"Unloaded"`, `"SizeChanged"`,
+/// `"TextInput"`, `"Drop"`, `"Tapped"`, and the `Preview*` variants, among
+/// others. Unknown-but-reflected names fall back to the SDK's `FindRoutedEvent`
+/// lookup (only [`EventArgs::source_ptr`] applies to those).
+///
+/// `handled_too`: when `false`, the handler is skipped if a prior handler on
+/// the same element already marked the event handled. (This SDK's `AddHandler`
+/// has no `handledEventsToo` parameter, so already-handled events are never
+/// re-routed across elements regardless; the flag governs the per-element
+/// handler chain.)
+///
+/// Returns `None` if `element` is not a `UIElement`, `event_name` is unknown
+/// or contains an interior NUL, or the C++ subscription fails. The returned
+/// [`EventSubscription`] keeps the handler installed until dropped.
+///
+/// # Panics
+///
+/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
+/// explicit at the type level).
+pub fn subscribe_event<H: RoutedEventHandler>(
+    element: &FrameworkElement,
+    event_name: &str,
+    handled_too: bool,
+    handler: H,
+) -> Option<EventSubscription> {
+    let cname = CString::new(event_name).ok()?;
+
+    let outer: Box<Box<dyn RoutedEventHandler>> = Box::new(Box::new(handler));
+    let userdata = Box::into_raw(outer);
+
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
+    // element + name pointers are borrowed for the call duration only.
+    let token = unsafe {
+        dm_noesis_subscribe_event(
+            element.raw(),
+            cname.as_ptr(),
+            handled_too,
+            event_trampoline,
+            userdata.cast(),
+        )
+    };
+
+    if let Some(token) = NonNull::new(token) {
+        Some(EventSubscription {
+            token,
+            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
+        })
+    } else {
+        // Subscription failed (unknown event / not a UIElement). Free the
+        // userdata we leaked above so we don't leak the handler.
+        // SAFETY: userdata came from Box::into_raw moments ago; nothing else
+        // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
         None
     }
