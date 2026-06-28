@@ -19,7 +19,8 @@
 use dm_noesis_runtime::geometry::{
     ArcSegment, BezierSegment, CombinedGeometry, EllipseGeometry, FillRule, Geometry,
     GeometryCombineMode, GeometryGroup, LineGeometry, LineSegment, PathFigure, PathGeometry,
-    PolyLineSegment, QuadraticBezierSegment, RectangleGeometry, StreamGeometry, SweepDirection,
+    PolyBezierSegment, PolyLineSegment, PolyQuadraticBezierSegment, QuadraticBezierSegment,
+    RectangleGeometry, StreamGeometry, SweepDirection,
 };
 use dm_noesis_runtime::transforms::TranslateTransform;
 use dm_noesis_runtime::view::FrameworkElement;
@@ -56,6 +57,17 @@ fn geometry_object_model_round_trip() {
             "ellipse bounds size"
         );
         assert!(!ellipse.is_empty(), "ellipse non-empty");
+        // render_bounds() (GetRenderBounds with a null pen) equals the fill
+        // bounds; calling it proves the headline accessor crosses the FFI rather
+        // than going untested. A stub returning an empty rect fails here.
+        let erb = ellipse.render_bounds();
+        assert!(
+            approx(erb.x, 10.0)
+                && approx(erb.y, 30.0)
+                && approx(erb.width, 80.0)
+                && approx(erb.height, 60.0),
+            "ellipse render bounds (null pen == fill bounds): {erb:?}"
+        );
 
         // ── RectangleGeometry ───────────────────────────────────────────────
         let rectg = RectangleGeometry::new(5.0, 6.0, 20.0, 10.0, 2.0, 3.0);
@@ -124,9 +136,107 @@ fn geometry_object_model_round_trip() {
             "dropped (unclosed) context leaves geometry empty"
         );
 
-        // FillRule round-trips on the live object.
+        // ── Context curve commands: cubic_to / quadratic_to / arc_to ─────────
+        // The context exposes no getter — its only observable is the resulting
+        // geometry's bounds. Each command is driven on its own geometry from
+        // (0,0) with an end point at x=100 and control/bulge points that push the
+        // box past the begin point, so a no-op entrypoint collapses the width to
+        // 0 (only the start point survives) or flattens the height and fails.
+        let quad = StreamGeometry::new();
+        {
+            let ctx = quad.open();
+            ctx.begin_figure(0.0, 0.0, false);
+            ctx.quadratic_to((50.0, 120.0), (100.0, 0.0));
+            ctx.close();
+        }
+        let qb = quad.bounds();
+        assert!(
+            approx(qb.width, 100.0) && qb.height > 50.0,
+            "quadratic_to curve reaches the end point and bulges past y=50: {qb:?}"
+        );
+
+        let cubic = StreamGeometry::new();
+        {
+            let ctx = cubic.open();
+            ctx.begin_figure(0.0, 0.0, false);
+            ctx.cubic_to((0.0, 150.0), (100.0, 150.0), (100.0, 0.0));
+            ctx.close();
+        }
+        let cub = cubic.bounds();
+        assert!(
+            approx(cub.width, 100.0) && cub.height > 50.0,
+            "cubic_to curve reaches the end point and bulges past y=50: {cub:?}"
+        );
+
+        let arc = StreamGeometry::new();
+        {
+            let ctx = arc.open();
+            ctx.begin_figure(0.0, 0.0, false);
+            // A semicircular arc (chord 100, radii 50) bulges to y≈50.
+            ctx.arc_to(
+                100.0,
+                0.0,
+                50.0,
+                50.0,
+                0.0,
+                false,
+                SweepDirection::Clockwise,
+            );
+            ctx.close();
+        }
+        let ab = arc.bounds();
+        assert!(
+            approx(ab.width, 100.0) && ab.height > 10.0,
+            "arc_to curve reaches the end point and bulges into a real box: {ab:?}"
+        );
+
+        // ── Context set_is_closed ────────────────────────────────────────────
+        // Drive set_is_closed inside a real build: open the figure (is_closed =
+        // false), then override it to closed before flushing. Closing a figure
+        // joins its last point back to the start, which lies inside the existing
+        // fill box, so GetBounds is identical for open vs closed in 3.2.13 — the
+        // proof that the command crossed the FFI is that the build still flushes
+        // a correctly-bounded geometry rather than panicking or corrupting it.
+        let closed = StreamGeometry::new();
+        {
+            let ctx = closed.open();
+            ctx.begin_figure(10.0, 10.0, false);
+            ctx.line_to(60.0, 10.0);
+            ctx.line_to(60.0, 40.0);
+            ctx.set_is_closed(true);
+            ctx.close();
+        }
+        let clb = closed.bounds();
+        assert!(
+            !closed.is_empty() && approx(clb.width, 50.0) && approx(clb.height, 30.0),
+            "set_is_closed figure flushes a correctly-bounded geometry: {clb:?}"
+        );
+
+        // FillRule round-trips on the live object: assert the EvenOdd default
+        // first, then flip to the non-default Nonzero and read it back, so a
+        // hardcoded getter + no-op setter cannot pass.
+        assert_eq!(
+            stream.fill_rule(),
+            FillRule::EvenOdd,
+            "stream default fill rule"
+        );
         stream.set_fill_rule(FillRule::Nonzero);
         assert_eq!(stream.fill_rule(), FillRule::Nonzero, "stream fill rule");
+
+        // set_data() rebuilds the geometry in place: the bounds must follow the
+        // new path-data, proving the rebuild setter crossed the FFI.
+        let mut reshaped = StreamGeometry::from_data("M 0,0 L 10,0 10,10 Z");
+        let r0 = reshaped.bounds();
+        assert!(
+            approx(r0.width, 10.0) && approx(r0.height, 10.0),
+            "initial path-data bounds: {r0:?}"
+        );
+        reshaped.set_data("M 0,0 L 40,0 40,20 0,20 Z");
+        let r1 = reshaped.bounds();
+        assert!(
+            approx(r1.width, 40.0) && approx(r1.height, 20.0),
+            "set_data rebuilds the geometry bounds: {r1:?}"
+        );
 
         // SVG path-data constructor.
         let svg = StreamGeometry::from_data("M 0,0 L 60,0 60,60 0,60 Z");
@@ -183,17 +293,58 @@ fn geometry_object_model_round_trip() {
         assert_eq!(figure.add_segment(&aseg), 3, "add arc segment index");
 
         let poly = PolyLineSegment::new(&[(5.0, 5.0), (6.0, 7.0), (8.0, 9.0)]);
-        assert_eq!(poly.point_count(), 3, "poly point count");
-        assert_eq!(poly.point(1), Some((6.0, 7.0)), "poly point read back");
-        assert_eq!(poly.point(9), None, "poly point out of range");
-        assert_eq!(figure.add_segment(&poly), 4, "add poly segment index");
+        assert_eq!(poly.point_count(), 3, "poly line point count");
+        assert_eq!(poly.point(1), Some((6.0, 7.0)), "poly line point read back");
+        assert_eq!(poly.point(9), None, "poly line point out of range");
+        assert_eq!(figure.add_segment(&poly), 4, "add poly line segment index");
 
-        assert_eq!(figure.segment_count(), 5, "figure has five segments");
+        // PolyBezierSegment (points in groups of three) and
+        // PolyQuadraticBezierSegment (pairs) have distinct create entrypoints
+        // from PolyLineSegment; construct and round-trip each so a stub/no-op of
+        // dm_noesis_poly_bezier_segment_create /
+        // dm_noesis_poly_quadratic_bezier_segment_create is caught.
+        let pbez = PolyBezierSegment::new(&[(120.0, 10.0), (140.0, 30.0), (120.0, 50.0)]);
+        assert_eq!(pbez.point_count(), 3, "poly bezier point count");
+        assert_eq!(
+            pbez.point(2),
+            Some((120.0, 50.0)),
+            "poly bezier point read back"
+        );
+        assert_eq!(pbez.point(3), None, "poly bezier point out of range");
+        assert_eq!(
+            figure.add_segment(&pbez),
+            5,
+            "add poly bezier segment index"
+        );
+
+        let pquad = PolyQuadraticBezierSegment::new(&[(130.0, 20.0), (140.0, 45.0)]);
+        assert_eq!(pquad.point_count(), 2, "poly quadratic point count");
+        assert_eq!(
+            pquad.point(0),
+            Some((130.0, 20.0)),
+            "poly quadratic point read back"
+        );
+        assert_eq!(pquad.point(2), None, "poly quadratic point out of range");
+        assert_eq!(
+            figure.add_segment(&pquad),
+            6,
+            "add poly quadratic segment index"
+        );
+
+        assert_eq!(figure.segment_count(), 7, "figure has seven segments");
 
         let mut path = PathGeometry::new();
         assert_eq!(path.figure_count(), 0, "path starts with no figures");
         assert_eq!(path.add_figure(&figure), 0, "add figure index");
         assert_eq!(path.figure_count(), 1, "path has one figure");
+        // FillRule: assert the EvenOdd default first, then flip to the
+        // non-default Nonzero and read it back (a hardcoded getter + no-op setter
+        // cannot satisfy both).
+        assert_eq!(
+            path.fill_rule(),
+            FillRule::EvenOdd,
+            "path default fill rule"
+        );
         path.set_fill_rule(FillRule::Nonzero);
         assert_eq!(path.fill_rule(), FillRule::Nonzero, "path fill rule");
         assert!(!path.is_empty(), "path geometry non-empty");
@@ -204,6 +355,8 @@ fn geometry_object_model_round_trip() {
         drop(bseg);
         drop(aseg);
         drop(poly);
+        drop(pbez);
+        drop(pquad);
         assert_eq!(
             path.figure_count(),
             1,
@@ -248,8 +401,34 @@ fn geometry_object_model_round_trip() {
             approx(ib.width, 25.0) && approx(ib.height, 25.0),
             "combined intersect bounds: {ib:?}"
         );
+
+        // set_geometry1 / set_geometry2 replace the operands in place. Prove each
+        // crossed the FFI via pointer identity of the read-back operand AND a
+        // bounds change: with mode still Intersect, c∩d collapses the box to
+        // 30x30 (c ⊂ d), so a no-op setter that left the old 25x25 box fails.
+        let c = RectangleGeometry::new(0.0, 0.0, 30.0, 30.0, 0.0, 0.0);
+        let d = RectangleGeometry::new(0.0, 0.0, 40.0, 40.0, 0.0, 0.0);
+        combined.set_geometry1(&c);
+        combined.set_geometry2(&d);
+        assert_eq!(
+            combined.geometry1_raw(),
+            c.geometry_raw(),
+            "set_geometry1 replaced operand 1 (identity)"
+        );
+        assert_eq!(
+            combined.geometry2_raw(),
+            d.geometry_raw(),
+            "set_geometry2 replaced operand 2 (identity)"
+        );
+        let ncb = combined.bounds();
+        assert!(
+            approx(ncb.width, 30.0) && approx(ncb.height, 30.0),
+            "bounds follow the replaced operands: {ncb:?}"
+        );
         drop(a);
         drop(b);
+        drop(c);
+        drop(d);
 
         // ── GeometryGroup ───────────────────────────────────────────────────
         let mut group = GeometryGroup::new();
@@ -259,8 +438,15 @@ fn geometry_object_model_round_trip() {
         assert_eq!(group.add_child(&g1), 0, "add child 0");
         assert_eq!(group.add_child(&g2), 1, "add child 1");
         assert_eq!(group.child_count(), 2, "group has two children");
-        group.set_fill_rule(FillRule::EvenOdd);
-        assert_eq!(group.fill_rule(), FillRule::EvenOdd, "group fill rule");
+        // Assert the EvenOdd default first, then flip to the non-default Nonzero
+        // and read it back (a hardcoded getter + no-op setter cannot pass both).
+        assert_eq!(
+            group.fill_rule(),
+            FillRule::EvenOdd,
+            "group default fill rule"
+        );
+        group.set_fill_rule(FillRule::Nonzero);
+        assert_eq!(group.fill_rule(), FillRule::Nonzero, "group fill rule");
         // (GeometryGroup.GetBounds builds its path lazily and reports empty until
         // rendered in 3.2.13, so child_count is the FFI-crossing proof here.)
         drop(g1);
