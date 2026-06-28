@@ -24,16 +24,18 @@ Most of `IView` is unexposed beyond the basics. From `NsGui/IView.h`:
 
 ## 2. Element tree access (DependencyObject / generic properties)
 
-Building on the generic name-keyed property accessors, the remaining tree-access surface:
+Generic name-keyed property access, attached properties (owner-qualified, incl. `uint32`
+layout props like `Grid.Row`), visual + logical tree traversal, single-point hit testing,
+name-scope register/unregister, value-source helpers (`ClearLocalValue` / `SetCurrentValue` /
+`GetBaseValue`), `Type*`→tag inference, and typed `FrameworkElement` sugar (`ActualWidth/Height`,
+`Width/Height/Opacity`, `IsEnabled`, `Focusable`, `Tag`, alignment, `DataContext`) are wrapped.
+Remaining:
 
-- **Attached properties.** Same `FindDependencyProperty` mechanism but needs owner-type-qualified name resolution (e.g. `Grid.Row`, `Canvas.Left`).
-- **`ClearValue` / `SetCurrentValue` / `GetBaseValue`** and animation/expression destinations — the generic path only does plain local `SetValue`/`GetValue`.
-- **Dynamic tag inference.** A fully dynamic getter that infers the FFI tag from `dp->GetType()` (would need a `Type*`→tag table) rather than the caller supplying it.
-- **`FrameworkElement` common props as first-class typed wrappers** (optional sugar over the name-keyed accessors): `ActualWidth`/`ActualHeight`, `HorizontalAlignment`/`VerticalAlignment`, `RenderTransform`, `DataContext`, `Tag`, `Style`, `IsEnabled`, `Focusable`.
-- **`DataContext`** set/get (prerequisite for any binding-driven workflow).
-- **Tree traversal.** `VisualTreeHelper` (GetChild/GetParent/GetChildrenCount/HitTest), `LogicalTreeHelper`, `FrameworkElement::GetParent`/`GetTemplateChild`.
-- **Name scopes.** `INameScope` register/unregister; `FindName` exists, register does not.
-- **`Dispatcher`** / `DispatcherObject` thread-affinity helpers (BeginInvoke onto the UI thread).
+- **`Dispatcher` queued invoke.** `CheckAccess` / thread-id affinity queries are exposed, but `BeginInvoke`-style cross-thread marshalling has no NsGui surface — it routes through the View's timer API (`CreateTimer`, §1).
+- **Base value for reference-typed properties.** `GetBaseValue` has no boxed/object form in the SDK, so the base-value getter covers value/struct/string tags only, not component/brush DPs.
+- **`Style` / `RenderTransform` first-class typed wrappers.** Reachable today via the generic component accessors; no dedicated sugar yet.
+- **Filtered hit testing.** Only the single-point `VisualTreeHelper::HitTest` is wrapped; the `HitTestFilterCallback` / result-callback overload is not.
+- **Standalone `INameScope` / `NameScope` object.** Registration goes through `FrameworkElement::RegisterName`/`UnregisterName`; the freestanding scope object isn't exposed.
 
 ## 3. Data binding
 
@@ -178,11 +180,8 @@ From `IntegrationAPI.h`, none are wired:
 
 ### Notes on prioritization
 
-If we wrap nothing else, the two changes that unlock the most are:
-
-1. **Generic `DependencyProperty` get/set** (§2) — removes the need for bespoke per-property
-   accessors and is the foundation for almost everything else.
-2. **A binding bridge** (§3) — `INotifyPropertyChanged` + `ObservableCollection` from Rust,
-   so XAML can be data-driven instead of poked imperatively.
-
-Generic `AddHandler` routed events (§5) are the next most broadly useful, low-surface-area win.
+The two foundations are now in place: generic `DependencyProperty` get/set plus the broader
+element-tree surface (§2), and the binding bridge (§3, `DataContext` + `ObservableCollection`
+from Rust). With those wrapped, the next most broadly useful, low-surface-area win is
+**generic `AddHandler` / `RemoveHandler` routed events** (§5) — it unlocks every mouse, keyboard,
+focus, and lifecycle event from one mechanism instead of bespoke per-event wrappers.

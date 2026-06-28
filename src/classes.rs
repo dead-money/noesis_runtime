@@ -109,6 +109,7 @@ pub trait PropertyChangeHandler: Send + 'static {
 #[derive(Debug)]
 pub enum PropertyValue<'a> {
     Int32(i32),
+    UInt32(u32),
     Float(f32),
     Double(f64),
     Bool(bool),
@@ -148,6 +149,7 @@ pub struct ClassBuilder<H: PropertyChangeHandler> {
 enum OwnedDefault {
     None,
     Int32(i32),
+    UInt32(u32),
     Float(f32),
     Double(f64),
     Bool(bool),
@@ -270,6 +272,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
 pub enum PropertyDefault<'a> {
     None,
     Int32(i32),
+    UInt32(u32),
     Float(f32),
     Double(f64),
     Bool(bool),
@@ -299,6 +302,7 @@ impl PropertyDefault<'_> {
         match self {
             PropertyDefault::None => OwnedDefault::None,
             PropertyDefault::Int32(v) => OwnedDefault::Int32(v),
+            PropertyDefault::UInt32(v) => OwnedDefault::UInt32(v),
             PropertyDefault::Float(v) => OwnedDefault::Float(v),
             PropertyDefault::Double(v) => OwnedDefault::Double(v),
             PropertyDefault::Bool(v) => OwnedDefault::Bool(v),
@@ -329,6 +333,7 @@ impl OwnedDefault {
         match self {
             OwnedDefault::None => ptr::null(),
             OwnedDefault::Int32(v) => (v as *const i32).cast(),
+            OwnedDefault::UInt32(v) => (v as *const u32).cast(),
             OwnedDefault::Float(v) => (v as *const f32).cast(),
             OwnedDefault::Double(v) => (v as *const f64).cast(),
             OwnedDefault::Bool(v) => (v as *const bool).cast(),
@@ -702,6 +707,7 @@ unsafe fn decode_value<'a>(
             PropType::ImageSource => PropertyValue::ImageSource(None),
             PropType::BaseComponent => PropertyValue::BaseComponent(None),
             PropType::Int32 => PropertyValue::Int32(0),
+            PropType::UInt32 => PropertyValue::UInt32(0),
             PropType::Float => PropertyValue::Float(0.0),
             PropType::Double => PropertyValue::Double(0.0),
             PropType::Bool => PropertyValue::Bool(false),
@@ -727,6 +733,7 @@ unsafe fn decode_value<'a>(
     }
     match kind {
         PropType::Int32 => PropertyValue::Int32(*value_ptr.cast::<i32>()),
+        PropType::UInt32 => PropertyValue::UInt32(*value_ptr.cast::<u32>()),
         PropType::Float => PropertyValue::Float(*value_ptr.cast::<f32>()),
         PropType::Double => PropertyValue::Double(*value_ptr.cast::<f64>()),
         PropType::Bool => PropertyValue::Bool(*value_ptr.cast::<bool>()),

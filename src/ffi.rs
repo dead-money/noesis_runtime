@@ -298,6 +298,77 @@ unsafe extern "C" {
     ) -> bool;
     pub fn dm_noesis_items_control_items_count(element: *mut c_void) -> i32;
     pub fn dm_noesis_items_control_realized_count(element: *mut c_void) -> i32;
+
+    // ── Element tree access (TODO §2). See cpp/noesis_shim.h for pointer-
+    // ownership + tag-validation contracts. ──────────────────────────────────
+
+    // A. Tree traversal.
+    pub fn dm_noesis_visual_children_count(element: *mut c_void) -> u32;
+    pub fn dm_noesis_visual_child(element: *mut c_void, index: u32) -> *mut c_void;
+    pub fn dm_noesis_visual_parent(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_visual_hit_test(element: *mut c_void, x: f32, y: f32) -> *mut c_void;
+    pub fn dm_noesis_framework_element_logical_parent(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_logical_children_count(element: *mut c_void) -> u32;
+    pub fn dm_noesis_logical_child(element: *mut c_void, index: u32) -> *mut c_void;
+    pub fn dm_noesis_framework_element_template_child(
+        element: *mut c_void,
+        name: *const c_char,
+    ) -> *mut c_void;
+
+    // B. Attached properties.
+    pub fn dm_noesis_dependency_object_set_attached(
+        obj: *mut c_void,
+        owner_type: *const c_char,
+        prop_name: *const c_char,
+        prop_type: PropType,
+        value_ptr: *const c_void,
+    ) -> bool;
+    pub fn dm_noesis_dependency_object_get_attached(
+        obj: *mut c_void,
+        owner_type: *const c_char,
+        prop_name: *const c_char,
+        prop_type: PropType,
+        out_value: *mut c_void,
+    ) -> bool;
+
+    // C. ClearValue / SetCurrentValue / GetBaseValue.
+    pub fn dm_noesis_dependency_object_clear_value(obj: *mut c_void, name: *const c_char) -> bool;
+    pub fn dm_noesis_dependency_object_set_current_value(
+        obj: *mut c_void,
+        name: *const c_char,
+        prop_type: PropType,
+        value_ptr: *const c_void,
+    ) -> bool;
+    pub fn dm_noesis_dependency_object_get_base_value(
+        obj: *mut c_void,
+        name: *const c_char,
+        prop_type: PropType,
+        out_value: *mut c_void,
+    ) -> bool;
+
+    // D. Dynamic tag inference.
+    pub fn dm_noesis_dependency_object_property_tag(obj: *mut c_void, name: *const c_char) -> i32;
+
+    // E. Alignment.
+    pub fn dm_noesis_framework_element_set_halign(element: *mut c_void, value: i32);
+    pub fn dm_noesis_framework_element_set_valign(element: *mut c_void, value: i32);
+    pub fn dm_noesis_framework_element_get_halign(element: *mut c_void) -> i32;
+    pub fn dm_noesis_framework_element_get_valign(element: *mut c_void) -> i32;
+
+    // F. Namescope register / unregister.
+    pub fn dm_noesis_framework_element_register_name(
+        element: *mut c_void,
+        name: *const c_char,
+        object: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_framework_element_unregister_name(
+        element: *mut c_void,
+        name: *const c_char,
+    ) -> bool;
+
+    // G. Thread affinity.
+    pub fn dm_noesis_dependency_object_check_access(obj: *mut c_void) -> bool;
+    pub fn dm_noesis_dependency_object_thread_id(obj: *mut c_void) -> u32;
 }
 
 /// Free callback invoked exactly once per registered markup extension
@@ -360,6 +431,7 @@ pub enum PropType {
     Rect = 7,
     ImageSource = 8,
     BaseComponent = 9,
+    UInt32 = 10,
 }
 
 /// Property-changed callback. Fired from inside Noesis's property pump

@@ -19,25 +19,34 @@ use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    PropType, dm_noesis_base_component_release, dm_noesis_dependency_object_get_property,
-    dm_noesis_dependency_object_set_property, dm_noesis_focus_element,
+    PropType, dm_noesis_base_component_release, dm_noesis_dependency_object_check_access,
+    dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
+    dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
+    dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
+    dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
+    dm_noesis_dependency_object_thread_id, dm_noesis_focus_element,
     dm_noesis_framework_element_find_name, dm_noesis_framework_element_get_data_context,
-    dm_noesis_framework_element_get_name, dm_noesis_framework_element_set_data_context,
-    dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_visibility,
+    dm_noesis_framework_element_get_halign, dm_noesis_framework_element_get_name,
+    dm_noesis_framework_element_get_valign, dm_noesis_framework_element_logical_parent,
+    dm_noesis_framework_element_register_name, dm_noesis_framework_element_set_data_context,
+    dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
+    dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
+    dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
     dm_noesis_gui_load_xaml, dm_noesis_items_control_items_count,
     dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
-    dm_noesis_path_set_points, dm_noesis_renderer_init, dm_noesis_renderer_render,
-    dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
-    dm_noesis_renderer_update_render_tree, dm_noesis_text_caret_to_end, dm_noesis_text_get,
-    dm_noesis_text_set, dm_noesis_view_activate, dm_noesis_view_char, dm_noesis_view_create,
-    dm_noesis_view_deactivate, dm_noesis_view_destroy, dm_noesis_view_get_content,
-    dm_noesis_view_get_renderer, dm_noesis_view_hscroll, dm_noesis_view_key_down,
-    dm_noesis_view_key_up, dm_noesis_view_mouse_button_down, dm_noesis_view_mouse_button_up,
-    dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_move, dm_noesis_view_mouse_wheel,
-    dm_noesis_view_scroll, dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix,
-    dm_noesis_view_set_scale, dm_noesis_view_set_size, dm_noesis_view_touch_down,
-    dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
-    dm_noesis_visual_state_go_to_state,
+    dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_path_set_points,
+    dm_noesis_renderer_init, dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
+    dm_noesis_renderer_shutdown, dm_noesis_renderer_update_render_tree,
+    dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_view_activate,
+    dm_noesis_view_char, dm_noesis_view_create, dm_noesis_view_deactivate, dm_noesis_view_destroy,
+    dm_noesis_view_get_content, dm_noesis_view_get_renderer, dm_noesis_view_hscroll,
+    dm_noesis_view_key_down, dm_noesis_view_key_up, dm_noesis_view_mouse_button_down,
+    dm_noesis_view_mouse_button_up, dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_move,
+    dm_noesis_view_mouse_wheel, dm_noesis_view_scroll, dm_noesis_view_set_flags,
+    dm_noesis_view_set_projection_matrix, dm_noesis_view_set_scale, dm_noesis_view_set_size,
+    dm_noesis_view_touch_down, dm_noesis_view_touch_move, dm_noesis_view_touch_up,
+    dm_noesis_view_update, dm_noesis_visual_child, dm_noesis_visual_children_count,
+    dm_noesis_visual_hit_test, dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
 
@@ -315,6 +324,17 @@ impl FrameworkElement {
         self.set_prop(name, PropType::Int32, (&value as *const i32).cast())
     }
 
+    /// Set a `UInt32` dependency property by name. Noesis declares several
+    /// integer DPs as `uint32_t` (notably the `Grid.Row` / `Grid.Column`
+    /// family) — the `Int32` tag rejects those, so reach for this instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_u32(&mut self, name: &str, value: u32) -> bool {
+        self.set_prop(name, PropType::UInt32, (&value as *const u32).cast())
+    }
+
     /// Set a `Float` (single-precision) dependency property by name. Most
     /// `FrameworkElement` scalars Noesis exposes — `Width`, `Height`,
     /// `Opacity` — are `float`, so this is the common case.
@@ -393,6 +413,19 @@ impl FrameworkElement {
     pub fn get_i32(&self, name: &str) -> Option<i32> {
         let mut out: i32 = 0;
         self.get_prop(name, PropType::Int32, (&mut out as *mut i32).cast())
+            .then_some(out)
+    }
+
+    /// Read a `UInt32` dependency property by name. `None` on unknown name or
+    /// type mismatch. The `uint32_t` counterpart to [`get_i32`](Self::get_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_u32(&self, name: &str) -> Option<u32> {
+        let mut out: u32 = 0;
+        self.get_prop(name, PropType::UInt32, (&mut out as *mut u32).cast())
             .then_some(out)
     }
 
@@ -599,6 +632,760 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*.
         let n = unsafe { dm_noesis_items_control_realized_count(self.ptr.as_ptr()) };
         (n >= 0).then_some(n as usize)
+    }
+
+    // ── Tree traversal (TODO §2.A) ──────────────────────────────────────────
+    //
+    // Walk the visual and logical trees from this element. Returned elements
+    // hold an independent `+1` reference (dropping them does not affect
+    // `self`). Visual-tree children may be plain `Visual`s rather than
+    // `FrameworkElement`s, but the wrapper is just an owned `BaseComponent*`
+    // whose `FrameworkElement` methods `DynamicCast` internally, so a `Visual`
+    // round-trips fine — its FE-specific accessors simply return `None` /
+    // no-op.
+
+    /// Number of visual children. `0` if this element is not a `Visual`.
+    #[must_use]
+    pub fn visual_children_count(&self) -> u32 {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts
+        // to Visual* and returns 0 on mismatch.
+        unsafe { dm_noesis_visual_children_count(self.ptr.as_ptr()) }
+    }
+
+    /// Visual child at `index`, or `None` if out of bounds / not a `Visual`.
+    #[must_use]
+    pub fn visual_child(&self, index: u32) -> Option<Self> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side bounds-checks
+        // and hands back a +1 child or NULL.
+        let ptr = unsafe { dm_noesis_visual_child(self.ptr.as_ptr(), index) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Visual parent, or `None` at the visual-tree root / not a `Visual`.
+    #[must_use]
+    pub fn visual_parent(&self) -> Option<Self> {
+        // SAFETY: self.ptr is a live BaseComponent*; +1 parent or NULL.
+        let ptr = unsafe { dm_noesis_visual_parent(self.ptr.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Hit-test a single point in this element's local coordinate space (DIPs).
+    /// Returns the topmost hit element (`+1`), or `None` when nothing is hit /
+    /// this element is not a `Visual`.
+    #[must_use]
+    pub fn hit_test(&self, x: f32, y: f32) -> Option<Self> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side runs
+        // VisualTreeHelper::HitTest and hands back a +1 hit or NULL.
+        let ptr = unsafe { dm_noesis_visual_hit_test(self.ptr.as_ptr(), x, y) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Logical parent (`FrameworkElement::GetParent`), or `None` if this is not
+    /// a `FrameworkElement` or has no logical parent.
+    #[must_use]
+    pub fn logical_parent(&self) -> Option<Self> {
+        // SAFETY: self.ptr is a live BaseComponent*; +1 parent or NULL.
+        let ptr = unsafe { dm_noesis_framework_element_logical_parent(self.ptr.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Number of logical children. `0` if this is not a `FrameworkElement`.
+    #[must_use]
+    pub fn logical_children_count(&self) -> u32 {
+        // SAFETY: self.ptr is a live BaseComponent*; 0 on mismatch.
+        unsafe { dm_noesis_logical_children_count(self.ptr.as_ptr()) }
+    }
+
+    /// Logical child at `index`, or `None` if out of bounds / not a
+    /// `FrameworkElement`.
+    #[must_use]
+    pub fn logical_child(&self, index: u32) -> Option<Self> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side bounds-checks
+        // and hands back a +1 child or NULL.
+        let ptr = unsafe { dm_noesis_logical_child(self.ptr.as_ptr(), index) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Named part from this control's applied template
+    /// (`FrameworkElement::GetTemplateChild`). `None` if this is not a
+    /// `FrameworkElement` or no such named part exists.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn template_child(&self, name: &str) -> Option<Self> {
+        let c = CString::new(name).expect("name contained interior NUL");
+        // SAFETY: self.ptr is a live BaseComponent*; c lives for the call; the
+        // C side AddRefs the result so Rust owns the +1.
+        let ptr =
+            unsafe { dm_noesis_framework_element_template_child(self.ptr.as_ptr(), c.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    // ── Attached properties (TODO §2.B) ─────────────────────────────────────
+    //
+    // Resolve a DependencyProperty registered on `owner` (e.g. `Grid` / `Row`,
+    // `Canvas` / `Left`) and set / get it on this object. The owner type must
+    // already be registered with Noesis Reflection (referencing it from XAML
+    // forces registration). Same per-tag validation as the generic accessors.
+
+    /// Internal: forward a typed attached-property set.
+    fn set_attached(
+        &self,
+        owner: &str,
+        prop: &str,
+        kind: PropType,
+        value_ptr: *const c_void,
+    ) -> bool {
+        let o = CString::new(owner).expect("owner type contained interior NUL");
+        let p = CString::new(prop).expect("attached property name contained interior NUL");
+        // SAFETY: self.ptr is a live DependencyObject*; both C strings live for
+        // the call; `value_ptr` matches the per-tag FFI layout.
+        unsafe {
+            dm_noesis_dependency_object_set_attached(
+                self.ptr.as_ptr(),
+                o.as_ptr(),
+                p.as_ptr(),
+                kind,
+                value_ptr,
+            )
+        }
+    }
+
+    /// Internal: forward a typed attached-property get into `out`.
+    fn get_attached(&self, owner: &str, prop: &str, kind: PropType, out: *mut c_void) -> bool {
+        let o = CString::new(owner).expect("owner type contained interior NUL");
+        let p = CString::new(prop).expect("attached property name contained interior NUL");
+        // SAFETY: self.ptr is a live DependencyObject*; both C strings live for
+        // the call; `out` matches the per-tag FFI layout.
+        unsafe {
+            dm_noesis_dependency_object_get_attached(
+                self.ptr.as_ptr(),
+                o.as_ptr(),
+                p.as_ptr(),
+                kind,
+                out,
+            )
+        }
+    }
+
+    /// Set an `Int32` attached property (e.g. `Grid` / `Row`). `false` on
+    /// unknown owner / property, tag mismatch, or read-only.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    pub fn set_attached_i32(&mut self, owner: &str, prop: &str, v: i32) -> bool {
+        self.set_attached(owner, prop, PropType::Int32, (&v as *const i32).cast())
+    }
+
+    /// Read an `Int32` attached property. `None` on unknown owner / property or
+    /// tag mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_attached_i32(&self, owner: &str, prop: &str) -> Option<i32> {
+        let mut out: i32 = 0;
+        self.get_attached(owner, prop, PropType::Int32, (&mut out as *mut i32).cast())
+            .then_some(out)
+    }
+
+    /// Set a `UInt32` attached property. The `uint32_t` counterpart to
+    /// [`set_attached_i32`](Self::set_attached_i32) — needed for the
+    /// `Grid.Row` / `Grid.Column` / `Grid.RowSpan` / `Grid.ColumnSpan` family,
+    /// which Noesis declares as `uint32_t`. `false` on unknown owner /
+    /// property, tag mismatch, or read-only.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    pub fn set_attached_u32(&mut self, owner: &str, prop: &str, v: u32) -> bool {
+        self.set_attached(owner, prop, PropType::UInt32, (&v as *const u32).cast())
+    }
+
+    /// Read a `UInt32` attached property (e.g. `Grid` / `Row`). `None` on
+    /// unknown owner / property or tag mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_attached_u32(&self, owner: &str, prop: &str) -> Option<u32> {
+        let mut out: u32 = 0;
+        self.get_attached(owner, prop, PropType::UInt32, (&mut out as *mut u32).cast())
+            .then_some(out)
+    }
+
+    /// Set a `Float` attached property (e.g. `Canvas` / `Left`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    pub fn set_attached_f32(&mut self, owner: &str, prop: &str, v: f32) -> bool {
+        self.set_attached(owner, prop, PropType::Float, (&v as *const f32).cast())
+    }
+
+    /// Read a `Float` attached property. `None` on unknown owner / property or
+    /// tag mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_attached_f32(&self, owner: &str, prop: &str) -> Option<f32> {
+        let mut out: f32 = 0.0;
+        self.get_attached(owner, prop, PropType::Float, (&mut out as *mut f32).cast())
+            .then_some(out)
+    }
+
+    /// Set a `Bool` attached property.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    pub fn set_attached_bool(&mut self, owner: &str, prop: &str, v: bool) -> bool {
+        self.set_attached(owner, prop, PropType::Bool, (&v as *const bool).cast())
+    }
+
+    /// Read a `Bool` attached property. `None` on unknown owner / property or
+    /// tag mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_attached_bool(&self, owner: &str, prop: &str) -> Option<bool> {
+        let mut out: bool = false;
+        self.get_attached(owner, prop, PropType::Bool, (&mut out as *mut bool).cast())
+            .then_some(out)
+    }
+
+    // ── ClearValue / SetCurrentValue / GetBaseValue (TODO §2.C) ─────────────
+
+    /// Clear the local value of the named dependency property
+    /// (`ClearLocalValue`), reverting it to its default / inherited / styled
+    /// value. `false` if the property is unknown or read-only.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn clear_value(&mut self, name: &str) -> bool {
+        let c = CString::new(name).expect("property name contained interior NUL");
+        // SAFETY: self.ptr is a live DependencyObject*; c lives for the call.
+        unsafe { dm_noesis_dependency_object_clear_value(self.ptr.as_ptr(), c.as_ptr()) }
+    }
+
+    /// Internal: forward a typed `SetCurrentValue`.
+    fn set_current(&self, name: &str, kind: PropType, value_ptr: *const c_void) -> bool {
+        let c = CString::new(name).expect("property name contained interior NUL");
+        // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
+        // `value_ptr` matches the per-tag FFI layout.
+        unsafe {
+            dm_noesis_dependency_object_set_current_value(
+                self.ptr.as_ptr(),
+                c.as_ptr(),
+                kind,
+                value_ptr,
+            )
+        }
+    }
+
+    /// Internal: forward a typed `GetBaseValue` into `out`.
+    fn get_base(&self, name: &str, kind: PropType, out: *mut c_void) -> bool {
+        let c = CString::new(name).expect("property name contained interior NUL");
+        // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
+        // `out` matches the per-tag FFI layout.
+        unsafe {
+            dm_noesis_dependency_object_get_base_value(self.ptr.as_ptr(), c.as_ptr(), kind, out)
+        }
+    }
+
+    /// Set the current value of an `Int32` dependency property
+    /// (`SetCurrentValue` — sets the coerced value without overwriting the
+    /// local / source value).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_i32(&mut self, name: &str, value: i32) -> bool {
+        self.set_current(name, PropType::Int32, (&value as *const i32).cast())
+    }
+
+    /// Set the current value of a `UInt32` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_u32(&mut self, name: &str, value: u32) -> bool {
+        self.set_current(name, PropType::UInt32, (&value as *const u32).cast())
+    }
+
+    /// Set the current value of a `Float` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_f32(&mut self, name: &str, value: f32) -> bool {
+        self.set_current(name, PropType::Float, (&value as *const f32).cast())
+    }
+
+    /// Set the current value of a `Double` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_f64(&mut self, name: &str, value: f64) -> bool {
+        self.set_current(name, PropType::Double, (&value as *const f64).cast())
+    }
+
+    /// Set the current value of a `Bool` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_bool(&mut self, name: &str, value: bool) -> bool {
+        self.set_current(name, PropType::Bool, (&value as *const bool).cast())
+    }
+
+    /// Set the current value of a `String` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` or `value` contains an interior NUL byte.
+    pub fn set_current_string(&mut self, name: &str, value: &str) -> bool {
+        let v = CString::new(value).expect("string value contained interior NUL");
+        let ptr: *const i8 = v.as_ptr();
+        self.set_current(name, PropType::String, (&ptr as *const *const i8).cast())
+    }
+
+    /// Read the base value (pre-animation / pre-coerce) of an `Int32`
+    /// dependency property (`GetBaseValue`). `None` on unknown name or tag
+    /// mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_i32(&self, name: &str) -> Option<i32> {
+        let mut out: i32 = 0;
+        self.get_base(name, PropType::Int32, (&mut out as *mut i32).cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `UInt32` dependency property. See
+    /// [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_u32(&self, name: &str) -> Option<u32> {
+        let mut out: u32 = 0;
+        self.get_base(name, PropType::UInt32, (&mut out as *mut u32).cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `Float` dependency property. See
+    /// [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_f32(&self, name: &str) -> Option<f32> {
+        let mut out: f32 = 0.0;
+        self.get_base(name, PropType::Float, (&mut out as *mut f32).cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `Double` dependency property. See
+    /// [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_f64(&self, name: &str) -> Option<f64> {
+        let mut out: f64 = 0.0;
+        self.get_base(name, PropType::Double, (&mut out as *mut f64).cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `Bool` dependency property. See
+    /// [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_bool(&self, name: &str) -> Option<bool> {
+        let mut out: bool = false;
+        self.get_base(name, PropType::Bool, (&mut out as *mut bool).cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `String` dependency property, copying it into
+    /// an owned [`String`]. See [`get_base_i32`](Self::get_base_i32). The
+    /// pointer Noesis returns is borrowed; we copy immediately.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_string(&self, name: &str) -> Option<String> {
+        let mut p: *const i8 = core::ptr::null();
+        if !self.get_base(name, PropType::String, (&mut p as *mut *const i8).cast()) {
+            return None;
+        }
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: p is a live NUL-terminated UTF-8 string borrowed from
+        // Noesis-owned storage while we hold our element reference; copy out
+        // before yielding control.
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+    }
+
+    // ── Dynamic tag inference (TODO §2.D) ───────────────────────────────────
+
+    /// The [`PropType`] tag of the named dependency property, or `None` if this
+    /// is not a `DependencyObject`, the property is unknown, or its reflected
+    /// type maps to no tag. The inverse of the validation the typed setters
+    /// apply.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn property_tag(&self, name: &str) -> Option<PropType> {
+        let c = CString::new(name).expect("property name contained interior NUL");
+        // SAFETY: self.ptr is a live BaseComponent*; c lives for the call; the
+        // C side returns -1 or a valid tag ordinal.
+        let tag =
+            unsafe { dm_noesis_dependency_object_property_tag(self.ptr.as_ptr(), c.as_ptr()) };
+        match tag {
+            0 => Some(PropType::Int32),
+            1 => Some(PropType::Float),
+            2 => Some(PropType::Double),
+            3 => Some(PropType::Bool),
+            4 => Some(PropType::String),
+            5 => Some(PropType::Thickness),
+            6 => Some(PropType::Color),
+            7 => Some(PropType::Rect),
+            8 => Some(PropType::ImageSource),
+            9 => Some(PropType::BaseComponent),
+            10 => Some(PropType::UInt32),
+            _ => None,
+        }
+    }
+
+    /// Read the named dependency property as a [`DynValue`], inferring the type
+    /// via [`property_tag`](Self::property_tag) and dispatching to the matching
+    /// typed getter. `None` if the property is unknown / untyped, or the
+    /// resolved value is null (for component types).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_dynamic(&self, name: &str) -> Option<DynValue> {
+        match self.property_tag(name)? {
+            PropType::Int32 => self.get_i32(name).map(DynValue::I32),
+            PropType::UInt32 => self.get_u32(name).map(DynValue::U32),
+            PropType::Float => self.get_f32(name).map(DynValue::F32),
+            PropType::Double => self.get_f64(name).map(DynValue::F64),
+            PropType::Bool => self.get_bool(name).map(DynValue::Bool),
+            PropType::String => self.get_string(name).map(DynValue::Str),
+            PropType::Thickness => self.get_thickness(name).map(DynValue::Thickness),
+            PropType::Color => self.get_color(name).map(DynValue::Color),
+            PropType::Rect => self.get_rect(name).map(DynValue::Rect),
+            PropType::ImageSource | PropType::BaseComponent => {
+                self.get_component(name).map(DynValue::Component)
+            }
+        }
+    }
+
+    // ── Typed FrameworkElement sugar (TODO §2.E) ────────────────────────────
+    //
+    // Thin wrappers over the generic name-keyed accessors for the common
+    // `FrameworkElement` scalars, plus a bespoke alignment path (the alignment
+    // enums don't match the generic INT32 tag's reflected type).
+
+    /// Rendered width after the last layout pass (`ActualWidth`, read-only).
+    #[must_use]
+    pub fn actual_width(&self) -> Option<f32> {
+        self.get_f32("ActualWidth")
+    }
+
+    /// Rendered height after the last layout pass (`ActualHeight`, read-only).
+    #[must_use]
+    pub fn actual_height(&self) -> Option<f32> {
+        self.get_f32("ActualHeight")
+    }
+
+    /// Requested `Width` (may be `NaN` for "auto").
+    #[must_use]
+    pub fn width(&self) -> Option<f32> {
+        self.get_f32("Width")
+    }
+
+    /// Set the requested `Width`.
+    pub fn set_width(&mut self, value: f32) -> bool {
+        self.set_f32("Width", value)
+    }
+
+    /// Requested `Height` (may be `NaN` for "auto").
+    #[must_use]
+    pub fn height(&self) -> Option<f32> {
+        self.get_f32("Height")
+    }
+
+    /// Set the requested `Height`.
+    pub fn set_height(&mut self, value: f32) -> bool {
+        self.set_f32("Height", value)
+    }
+
+    /// `Opacity` in `0.0..=1.0`.
+    #[must_use]
+    pub fn opacity(&self) -> Option<f32> {
+        self.get_f32("Opacity")
+    }
+
+    /// Set `Opacity`.
+    pub fn set_opacity(&mut self, value: f32) -> bool {
+        self.set_f32("Opacity", value)
+    }
+
+    /// `IsEnabled` — whether the element accepts input.
+    #[must_use]
+    pub fn is_enabled(&self) -> Option<bool> {
+        self.get_bool("IsEnabled")
+    }
+
+    /// Set `IsEnabled`.
+    pub fn set_enabled(&mut self, value: bool) -> bool {
+        self.set_bool("IsEnabled", value)
+    }
+
+    /// `Focusable` — whether the element can receive keyboard focus.
+    #[must_use]
+    pub fn focusable(&self) -> Option<bool> {
+        self.get_bool("Focusable")
+    }
+
+    /// Set `Focusable`.
+    pub fn set_focusable(&mut self, value: bool) -> bool {
+        self.set_bool("Focusable", value)
+    }
+
+    /// The element's `Tag` (an arbitrary `BaseComponent`), as a borrowed opaque
+    /// pointer with no `+1` reference. `None` if unset. See
+    /// [`get_component`](Self::get_component) for the borrow contract.
+    #[must_use]
+    pub fn tag(&self) -> Option<NonNull<c_void>> {
+        self.get_component("Tag")
+    }
+
+    /// Set the element's `Tag` to another live element (stored as a
+    /// `BaseComponent`). Noesis stores its own reference. Returns `false` on a
+    /// tag mismatch (should not happen for `Tag`) or if this is not a
+    /// `DependencyObject`.
+    pub fn set_tag(&mut self, value: &Self) -> bool {
+        // SAFETY: `value` is a live FrameworkElement we borrow for the call.
+        unsafe { self.set_component("Tag", value.ptr.as_ptr()) }
+    }
+
+    /// Set a reference-typed (`BaseComponent`) dependency property by name to a
+    /// raw `Noesis::BaseComponent*`. Noesis stores its own reference; pass null
+    /// to clear. `false` on unknown name, tag mismatch, or read-only.
+    ///
+    /// # Safety
+    ///
+    /// `value` must be a valid live `Noesis::BaseComponent*` or null.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub unsafe fn set_component(&mut self, name: &str, value: *mut c_void) -> bool {
+        // The BASE_COMPONENT layout is a pointer-to-pointer (`BaseComponent**`).
+        self.set_prop(
+            name,
+            PropType::BaseComponent,
+            (&value as *const *mut c_void).cast(),
+        )
+    }
+
+    /// `HorizontalAlignment`, or `None` if this is not a `FrameworkElement`.
+    #[must_use]
+    pub fn horizontal_alignment(&self) -> Option<HAlign> {
+        // SAFETY: self.ptr is a live BaseComponent*; -1 on non-FE.
+        let v = unsafe { dm_noesis_framework_element_get_halign(self.ptr.as_ptr()) };
+        HAlign::from_ordinal(v)
+    }
+
+    /// Set `HorizontalAlignment`. No-op if this is not a `FrameworkElement`.
+    pub fn set_horizontal_alignment(&mut self, a: HAlign) {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts
+        // and no-ops on mismatch.
+        unsafe { dm_noesis_framework_element_set_halign(self.ptr.as_ptr(), a as i32) }
+    }
+
+    /// `VerticalAlignment`, or `None` if this is not a `FrameworkElement`.
+    #[must_use]
+    pub fn vertical_alignment(&self) -> Option<VAlign> {
+        // SAFETY: self.ptr is a live BaseComponent*; -1 on non-FE.
+        let v = unsafe { dm_noesis_framework_element_get_valign(self.ptr.as_ptr()) };
+        VAlign::from_ordinal(v)
+    }
+
+    /// Set `VerticalAlignment`. No-op if this is not a `FrameworkElement`.
+    pub fn set_vertical_alignment(&mut self, a: VAlign) {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts
+        // and no-ops on mismatch.
+        unsafe { dm_noesis_framework_element_set_valign(self.ptr.as_ptr(), a as i32) }
+    }
+
+    // ── Namescope register / unregister (TODO §2.F) ─────────────────────────
+
+    /// Register `name` for `object` in the namescope hosting this element, so
+    /// that subsequent [`find_name`](Self::find_name) lookups resolve it. The
+    /// scope takes its own reference to `object`. Returns `false` if this is
+    /// not a `FrameworkElement`. Registering a name already present updates it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn register_name(&mut self, name: &str, object: &Self) -> bool {
+        let c = CString::new(name).expect("name contained interior NUL");
+        // SAFETY: self.ptr is a live BaseComponent*; c lives for the call;
+        // `object` is a live element we borrow; the scope stores its own ref.
+        unsafe {
+            dm_noesis_framework_element_register_name(
+                self.ptr.as_ptr(),
+                c.as_ptr(),
+                object.ptr.as_ptr(),
+            )
+        }
+    }
+
+    /// Remove `name` from the namescope hosting this element. Returns `false`
+    /// if this is not a `FrameworkElement`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn unregister_name(&mut self, name: &str) -> bool {
+        let c = CString::new(name).expect("name contained interior NUL");
+        // SAFETY: self.ptr is a live BaseComponent*; c lives for the call.
+        unsafe { dm_noesis_framework_element_unregister_name(self.ptr.as_ptr(), c.as_ptr()) }
+    }
+
+    // ── Thread affinity (TODO §2.G) ─────────────────────────────────────────
+
+    /// Whether the calling thread owns this object
+    /// (`DispatcherObject::CheckAccess`). `false` if this is not a
+    /// `DispatcherObject`.
+    #[must_use]
+    pub fn check_access(&self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; false on non-DO.
+        unsafe { dm_noesis_dependency_object_check_access(self.ptr.as_ptr()) }
+    }
+
+    /// The id of the thread this object is attached to
+    /// (`DispatcherObject::GetThreadId`). `u32::MAX` when unattached or not a
+    /// `DispatcherObject`.
+    #[must_use]
+    pub fn thread_id(&self) -> u32 {
+        // SAFETY: self.ptr is a live BaseComponent*; UINT32_MAX on non-DO.
+        unsafe { dm_noesis_dependency_object_thread_id(self.ptr.as_ptr()) }
+    }
+}
+
+/// A dependency-property value whose type was inferred at runtime via
+/// [`FrameworkElement::property_tag`]. Returned by
+/// [`FrameworkElement::get_dynamic`]. Each variant mirrors a [`PropType`] tag
+/// and its FFI value layout.
+#[derive(Debug)]
+pub enum DynValue {
+    /// `Int32`.
+    I32(i32),
+    /// `UInt32`.
+    U32(u32),
+    /// `Float` (single-precision).
+    F32(f32),
+    /// `Double` (double-precision).
+    F64(f64),
+    /// `Bool`.
+    Bool(bool),
+    /// `String` (copied into an owned [`String`]).
+    Str(String),
+    /// `Thickness` as `[left, top, right, bottom]`.
+    Thickness([f32; 4]),
+    /// `Color` as `[r, g, b, a]` (each in `0..=1`).
+    Color([f32; 4]),
+    /// `Rect` as `[x, y, width, height]`.
+    Rect([f32; 4]),
+    /// A reference-typed value (`ImageSource` / `BaseComponent` subclass) as a
+    /// borrowed opaque pointer (no `+1` ref — see
+    /// [`FrameworkElement::get_component`]).
+    Component(NonNull<c_void>),
+}
+
+/// `Noesis::HorizontalAlignment` (`NsGui/Enums.h`). Ordinals match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum HAlign {
+    Left = 0,
+    Center = 1,
+    Right = 2,
+    Stretch = 3,
+}
+
+impl HAlign {
+    /// Map a raw C++ ordinal (or `-1` for "not a `FrameworkElement`") to a
+    /// variant, returning `None` outside `0..=3`.
+    #[must_use]
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Left),
+            1 => Some(Self::Center),
+            2 => Some(Self::Right),
+            3 => Some(Self::Stretch),
+            _ => None,
+        }
+    }
+}
+
+/// `Noesis::VerticalAlignment` (`NsGui/Enums.h`). Ordinals match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum VAlign {
+    Top = 0,
+    Center = 1,
+    Bottom = 2,
+    Stretch = 3,
+}
+
+impl VAlign {
+    /// Map a raw C++ ordinal (or `-1` for "not a `FrameworkElement`") to a
+    /// variant, returning `None` outside `0..=3`.
+    #[must_use]
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Top),
+            1 => Some(Self::Center),
+            2 => Some(Self::Bottom),
+            3 => Some(Self::Stretch),
+            _ => None,
+        }
     }
 }
 

@@ -596,6 +596,8 @@ typedef enum dm_noesis_class_base {
 // `default_ptr` / `out_value` buffers in the FFI:
 //
 //   INT32         → const int32_t*
+//   UINT32        → const uint32_t* (4 bytes; e.g. Grid.Row / Grid.Column,
+//                   declared uint32_t in Noesis)
 //   FLOAT         → const float*
 //   DOUBLE        → const double*
 //   BOOL          → const bool* (one byte; nonzero = true)
@@ -623,7 +625,8 @@ typedef enum dm_noesis_prop_type {
     DM_NOESIS_PROP_COLOR          = 6,
     DM_NOESIS_PROP_RECT           = 7,
     DM_NOESIS_PROP_IMAGE_SOURCE   = 8,
-    DM_NOESIS_PROP_BASE_COMPONENT = 9
+    DM_NOESIS_PROP_BASE_COMPONENT = 9,
+    DM_NOESIS_PROP_UINT32         = 10
 } dm_noesis_prop_type;
 
 // Callback fired by the trampoline subclass's `OnPropertyChanged` override.
@@ -751,6 +754,116 @@ bool dm_noesis_dependency_object_get_property(
     const char* name,
     uint32_t prop_type,
     void* out_value);
+
+// ── Element tree access (TODO §2) ───────────────────────────────────────────
+//
+// Visual / logical tree traversal, attached + advanced dependency-property
+// access, dynamic type inference, alignment, namescope register/unregister, and
+// thread-affinity queries. Owning returns hand the caller a +1 BaseComponent*
+// (release via dm_noesis_base_component_release), matching find_name. None of
+// these call VerifyAccess(); respect the View's thread affinity.
+
+// ── A. Tree traversal ───────────────────────────────────────────────────────
+//
+// VisualTreeHelper variants treat `element` as a `Visual*`. Children may be
+// plain Visuals (not FrameworkElements); they're returned as raw +1
+// BaseComponent* handles without null-filtering, so indexed traversal has no
+// holes. All return NULL on null / not-a-Visual / out-of-bounds.
+
+// Number of visual children, or 0 if `element` is not a Visual.
+uint32_t dm_noesis_visual_children_count(void* element);
+// Visual child at `index` (+1), or NULL.
+void* dm_noesis_visual_child(void* element, uint32_t index);
+// Visual parent (+1), or NULL.
+void* dm_noesis_visual_parent(void* element);
+// Hit-test a single point in `element`-local DIPs; returns the topmost hit
+// Visual* (+1) or NULL.
+void* dm_noesis_visual_hit_test(void* element, float x, float y);
+
+// Logical-tree + FrameworkElement navigation.
+//
+// Logical parent (+1), via FrameworkElement::GetParent. NULL if `element` is
+// not a FrameworkElement or has no logical parent.
+void* dm_noesis_framework_element_logical_parent(void* element);
+// Number of logical children (LogicalTreeHelper::GetChildrenCount), or 0 if
+// `element` is not a FrameworkElement.
+uint32_t dm_noesis_logical_children_count(void* element);
+// Logical child at `index` (+1), or NULL. (GetChild returns a Ptr<> already
+// at +1; the shim AddReference()s so the caller nets +1.)
+void* dm_noesis_logical_child(void* element, uint32_t index);
+// Templated child named `name` from this control's applied template (+1), via
+// FrameworkElement::GetTemplateChild. NULL if not a FrameworkElement or no such
+// named part exists.
+void* dm_noesis_framework_element_template_child(void* element, const char* name);
+
+// ── B. Attached properties ──────────────────────────────────────────────────
+//
+// Resolve `prop_name` on `owner_type`'s reflected TypeClass (e.g.
+// owner="Grid", prop="Row"; owner="Canvas", prop="Left"), then set / get on
+// `obj`. Same prop_type tag layout + validation as the generic name-keyed
+// path. The owner type must already be registered with Reflection (referencing
+// it from XAML forces registration). Returns false on null, obj-not-a-
+// DependencyObject, unknown owner type, unknown property, tag mismatch, or
+// (set) a read-only property.
+bool dm_noesis_dependency_object_set_attached(
+    void* obj, const char* owner_type, const char* prop_name,
+    uint32_t prop_type, const void* value_ptr);
+bool dm_noesis_dependency_object_get_attached(
+    void* obj, const char* owner_type, const char* prop_name,
+    uint32_t prop_type, void* out_value);
+
+// ── C. ClearValue / SetCurrentValue / GetBaseValue ──────────────────────────
+//
+// clear_value resolves the DP by name and calls ClearLocalValue (returns false
+// if unknown / read-only). set_current_value marshals like the generic setter
+// but calls SetCurrentValue<T> / SetCurrentValueObject (coerce field only,
+// leaving any local / source value intact). get_base_value reads
+// GetBaseValue<T> (value before animation / coerce); since Noesis exposes no
+// boxed GetBaseValueObject, the IMAGE_SOURCE / BASE_COMPONENT tags are
+// unsupported and return false.
+bool dm_noesis_dependency_object_clear_value(void* obj, const char* name);
+bool dm_noesis_dependency_object_set_current_value(
+    void* obj, const char* name, uint32_t prop_type, const void* value_ptr);
+bool dm_noesis_dependency_object_get_base_value(
+    void* obj, const char* name, uint32_t prop_type, void* out_value);
+
+// ── D. Dynamic tag inference ────────────────────────────────────────────────
+//
+// Returns the dm_noesis_prop_type tag (>=0) for the named DP on `obj`, or -1 if
+// `obj` is not a DependencyObject, the property is unknown, or its reflected
+// type maps to no tag. The inverse of the tag validation the setters apply.
+int32_t dm_noesis_dependency_object_property_tag(void* obj, const char* name);
+
+// ── E. HorizontalAlignment / VerticalAlignment ──────────────────────────────
+//
+// A bespoke path: the alignment enums don't match the generic INT32 tag's
+// reflected Type, so these go through the FrameworkElement accessors. `value`
+// mirrors Noesis::HorizontalAlignment (Left/Center/Right/Stretch, 0..=3) and
+// Noesis::VerticalAlignment (Top/Center/Bottom/Stretch, 0..=3). Getters return
+// -1 if `element` is not a FrameworkElement; setters no-op.
+void dm_noesis_framework_element_set_halign(void* element, int32_t value);
+void dm_noesis_framework_element_set_valign(void* element, int32_t value);
+int32_t dm_noesis_framework_element_get_halign(void* element);
+int32_t dm_noesis_framework_element_get_valign(void* element);
+
+// ── F. Namescope register / unregister ──────────────────────────────────────
+//
+// Register / unregister an x:Name in the namescope hosting `element`. `object`
+// is a borrowed BaseComponent* (the scope takes its own ref). Returns false if
+// `element` is not a FrameworkElement. The element must live within a namescope
+// (the XAML root hosts one); registering a name already present updates it.
+bool dm_noesis_framework_element_register_name(void* element, const char* name, void* object);
+bool dm_noesis_framework_element_unregister_name(void* element, const char* name);
+
+// ── G. Thread affinity (DispatcherObject) ───────────────────────────────────
+//
+// Only the affinity queries are exposed — NsGui has no public BeginInvoke
+// surface (cross-thread marshalling would need IView timers, TODO §1). True if
+// the calling thread owns `obj` (DispatcherObject::CheckAccess); false if `obj`
+// is not a DispatcherObject. thread_id returns the owning thread id
+// (GetThreadId), or UINT32_MAX when unattached or not a DispatcherObject.
+bool dm_noesis_dependency_object_check_access(void* obj);
+uint32_t dm_noesis_dependency_object_thread_id(void* obj);
 
 // ── Custom MarkupExtension registration (Phase 5.D) ────────────────────────
 //

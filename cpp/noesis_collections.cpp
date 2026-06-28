@@ -32,11 +32,17 @@
 #include <NsCore/BaseComponent.h>
 #include <NsCore/DynamicCast.h>
 #include <NsCore/Ptr.h>
+#include <NsDrawing/Point.h>
+#include <NsGui/DispatcherObject.h>
+#include <NsGui/Enums.h>
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/ItemCollection.h>
 #include <NsGui/ItemContainerGenerator.h>
 #include <NsGui/ItemsControl.h>
+#include <NsGui/LogicalTreeHelper.h>
 #include <NsGui/ObservableCollection.h>
+#include <NsGui/Visual.h>
+#include <NsGui/VisualTreeHelper.h>
 
 namespace {
 
@@ -189,4 +195,160 @@ extern "C" int32_t dm_noesis_items_control_realized_count(void* element) {
         if (gen->ContainerFromIndex(i) != nullptr) ++realized;
     }
     return realized;
+}
+
+// ── Visual / logical tree traversal (TODO §2.A) ─────────────────────────────
+//
+// VisualTreeHelper operates on `Visual*` — children may be plain Visuals, not
+// FrameworkElements, so these return raw +1 BaseComponent* handles without
+// null-filtering non-FE nodes (filtering would punch holes in indexed
+// traversal). The Rust `FrameworkElement` handle is just an owned
+// BaseComponent* whose FE-specific methods DynamicCast internally, so handing
+// back a Visual* is fine. All owning returns AddReference() once for the
+// caller (matching `find_name`); the Rust drop releases.
+
+extern "C" uint32_t dm_noesis_visual_children_count(void* element) {
+    if (!element) return 0;
+    auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
+    if (!v) return 0;
+    return Noesis::VisualTreeHelper::GetChildrenCount(v);
+}
+
+extern "C" void* dm_noesis_visual_child(void* element, uint32_t index) {
+    if (!element) return nullptr;
+    auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
+    if (!v || index >= Noesis::VisualTreeHelper::GetChildrenCount(v)) return nullptr;
+    Noesis::Visual* child = Noesis::VisualTreeHelper::GetChild(v, index);
+    if (!child) return nullptr;
+    child->AddReference();
+    return static_cast<Noesis::BaseComponent*>(child);
+}
+
+extern "C" void* dm_noesis_visual_parent(void* element) {
+    if (!element) return nullptr;
+    auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
+    if (!v) return nullptr;
+    Noesis::Visual* parent = Noesis::VisualTreeHelper::GetParent(v);
+    if (!parent) return nullptr;
+    parent->AddReference();
+    return static_cast<Noesis::BaseComponent*>(parent);
+}
+
+// Hit-test a single point in `element`-local DIPs. Returns the topmost hit
+// Visual* (+1) or null when nothing was hit / `element` is not a Visual.
+extern "C" void* dm_noesis_visual_hit_test(void* element, float x, float y) {
+    if (!element) return nullptr;
+    auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
+    if (!v) return nullptr;
+    Noesis::HitTestResult result = Noesis::VisualTreeHelper::HitTest(v, Noesis::Point(x, y));
+    if (!result.visualHit) return nullptr;
+    result.visualHit->AddReference();
+    return static_cast<Noesis::BaseComponent*>(result.visualHit);
+}
+
+extern "C" void* dm_noesis_framework_element_logical_parent(void* element) {
+    if (!element) return nullptr;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return nullptr;
+    Noesis::FrameworkElement* parent = fe->GetParent();
+    if (!parent) return nullptr;
+    parent->AddReference();
+    return static_cast<Noesis::BaseComponent*>(parent);
+}
+
+extern "C" uint32_t dm_noesis_logical_children_count(void* element) {
+    if (!element) return 0;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return 0;
+    return Noesis::LogicalTreeHelper::GetChildrenCount(fe);
+}
+
+extern "C" void* dm_noesis_logical_child(void* element, uint32_t index) {
+    if (!element) return nullptr;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe || index >= Noesis::LogicalTreeHelper::GetChildrenCount(fe)) return nullptr;
+    // GetChild returns a Ptr<BaseComponent> already at +1. The local Ptr
+    // releases at scope end, so AddReference() the raw pointer here to leave
+    // the caller a net +1 after the Ptr destructs.
+    Noesis::Ptr<Noesis::BaseComponent> child = Noesis::LogicalTreeHelper::GetChild(fe, index);
+    if (!child) return nullptr;
+    child->AddReference();
+    return child.GetPtr();
+}
+
+extern "C" void* dm_noesis_framework_element_template_child(void* element, const char* name) {
+    if (!element || !name) return nullptr;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return nullptr;
+    // GetTemplateChild returns a non-owning raw pointer — AddReference() to
+    // hand the caller a +1, matching the rest of this surface.
+    Noesis::BaseComponent* child = fe->GetTemplateChild(name);
+    if (!child) return nullptr;
+    child->AddReference();
+    return child;
+}
+
+// ── HorizontalAlignment / VerticalAlignment (TODO §2.E) ─────────────────────
+//
+// A bespoke path: the generic INT32 tag won't match the enum's reflected Type,
+// so go through the FrameworkElement accessors directly. Values mirror
+// `Noesis::HorizontalAlignment` / `VerticalAlignment` (Left/Center/Right/
+// Stretch, Top/Center/Bottom/Stretch — 0..=3). Getters return -1 if `element`
+// is not a FrameworkElement; setters no-op.
+
+extern "C" void dm_noesis_framework_element_set_halign(void* element, int32_t value) {
+    if (!element) return;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return;
+    fe->SetHorizontalAlignment(static_cast<Noesis::HorizontalAlignment>(value));
+}
+
+extern "C" void dm_noesis_framework_element_set_valign(void* element, int32_t value) {
+    if (!element) return;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return;
+    fe->SetVerticalAlignment(static_cast<Noesis::VerticalAlignment>(value));
+}
+
+extern "C" int32_t dm_noesis_framework_element_get_halign(void* element) {
+    if (!element) return -1;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return -1;
+    return static_cast<int32_t>(fe->GetHorizontalAlignment());
+}
+
+extern "C" int32_t dm_noesis_framework_element_get_valign(void* element) {
+    if (!element) return -1;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return -1;
+    return static_cast<int32_t>(fe->GetVerticalAlignment());
+}
+
+// ── Thread affinity / DispatcherObject (TODO §2.G) ──────────────────────────
+//
+// Only the affinity queries are exposed: NsGui has no public BeginInvoke
+// surface (cross-thread marshalling would need IView timers — TODO §1).
+
+extern "C" bool dm_noesis_dependency_object_check_access(void* obj) {
+    if (!obj) return false;
+    auto* d = Noesis::DynamicCast<Noesis::DispatcherObject*>(
+        static_cast<Noesis::BaseComponent*>(obj));
+    if (!d) return false;
+    return d->CheckAccess();
+}
+
+extern "C" uint32_t dm_noesis_dependency_object_thread_id(void* obj) {
+    if (!obj) return UINT32_MAX;
+    auto* d = Noesis::DynamicCast<Noesis::DispatcherObject*>(
+        static_cast<Noesis::BaseComponent*>(obj));
+    if (!d) return UINT32_MAX;
+    return d->GetThreadId();
 }
