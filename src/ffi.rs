@@ -466,11 +466,22 @@ unsafe extern "C" {
         read_only: bool,
         coerce: bool,
     ) -> u32;
+    pub fn dm_noesis_class_register_enum_property(
+        class_token: *mut c_void,
+        prop_name: *const c_char,
+        enum_type_name: *const c_char,
+        default_value: i32,
+        fpm_options: u32,
+        read_only: bool,
+    ) -> u32;
     pub fn dm_noesis_instance_set_readonly_property(
         instance: *mut c_void,
         prop_index: u32,
         value_ptr: *const c_void,
     ) -> bool;
+    pub fn dm_noesis_freezable_freeze(freezable: *mut c_void) -> bool;
+    pub fn dm_noesis_freezable_is_frozen(freezable: *mut c_void) -> bool;
+    pub fn dm_noesis_freezable_can_freeze(freezable: *mut c_void) -> bool;
     pub fn dm_noesis_class_set_coerce(
         class_token: *mut c_void,
         cb: CoerceFn,
@@ -2086,6 +2097,11 @@ pub enum ClassBase {
     UserControl = 3,
     Panel = 4,
     Decorator = 5,
+    /// A custom `Noesis::Freezable` (a `DependencyObject` with freeze/clone
+    /// semantics, NOT a `UIElement`): custom DPs work, but there is no layout /
+    /// render / routed-event surface. The other `Animatable` subtrees
+    /// (`Brush`/`Geometry`/`Transform`/`Effect`) are not subclassable this way.
+    Freezable = 6,
 }
 
 /// FFI value-type tag. The buffer layout for `value_ptr` / `default_ptr` /
@@ -2105,6 +2121,15 @@ pub enum PropType {
     ImageSource = 8,
     BaseComponent = 9,
     UInt32 = 10,
+    /// `Noesis::Point` value DP — `value_ptr` is `const float[2]` (x, y).
+    Point = 11,
+    /// `Noesis::Size` value DP — `value_ptr` is `const float[2]` (width, height).
+    Size = 12,
+    /// `Noesis::Vector2` value DP — `value_ptr` is `const float[2]` (x, y).
+    Vector = 13,
+    /// Runtime-enum-typed DP — int32 storage; register via
+    /// `dm_noesis_class_register_enum_property` (it needs the enum type name).
+    Enum = 14,
 }
 
 /// Property-changed callback. Fired from inside Noesis's property pump
@@ -2603,6 +2628,18 @@ unsafe extern "C" {
     pub fn dm_noesis_type_set_content_property(
         type_name: *const c_char,
         prop_name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_type_get_content_property(
+        type_name: *const c_char,
+        out_name: *mut *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_type_add_depends_on(
+        type_name: *const c_char,
+        prop_name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_type_get_depends_on(
+        type_name: *const c_char,
+        out_name: *mut *const c_char,
     ) -> bool;
 
     // TextBlock inline content model (TODO §13). Constructors hand out a +1

@@ -44,17 +44,22 @@
 #include <NsCore/Symbol.h>
 #include <NsCore/TypeClass.h>
 #include <NsCore/TypeClassBuilder.h>
+#include <NsCore/TypeEnum.h>
 #include <NsCore/TypeOf.h>
 #include <NsDrawing/Color.h>
+#include <NsDrawing/Point.h>
 #include <NsDrawing/Rect.h>
 #include <NsDrawing/Size.h>
 #include <NsDrawing/Thickness.h>
+#include <NsMath/Vector.h>
 #include <NsGui/ContentControl.h>
 #include <NsGui/Control.h>
 #include <NsGui/Decorator.h>
+#include <NsGui/DependencyData.h>
 #include <NsGui/DependencyObject.h>
 #include <NsGui/DrawingContext.h>
 #include <NsGui/DependencyProperty.h>
+#include <NsGui/Freezable.h>
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/FrameworkPropertyMetadata.h>
 #include <NsGui/ImageSource.h>
@@ -108,7 +113,11 @@ struct ClassData {
     // owned by Noesis's Reflection registry (Reflection::RegisterType +
     // Reflection::Unregister handle the lifecycle).
     Noesis::TypeClassBuilder*           typeClass;
-    Noesis::Ptr<Noesis::UIElementData>  uiData;
+    // DP metadata container attached to `typeClass`. For UIElement bases this is
+    // a UIElementData (which IS-A DependencyData and also carries routed events);
+    // for the Freezable base it is a plain DependencyData. DP registration only
+    // needs DependencyData::InsertProperty, so we store the base type.
+    Noesis::Ptr<Noesis::DependencyData>  uiData;
     std::vector<PropEntry>              properties;
     dm_noesis_prop_changed_fn           cb;
     void*                               userdata;
@@ -310,7 +319,12 @@ void invoke_cb(ClassData* cd, void* instance, uint32_t idx,
         case DM_NOESIS_PROP_THICKNESS:
         case DM_NOESIS_PROP_COLOR:
         case DM_NOESIS_PROP_RECT:
-            // Pass through directly — `raw` already points to the typed value.
+        case DM_NOESIS_PROP_POINT:
+        case DM_NOESIS_PROP_SIZE:
+        case DM_NOESIS_PROP_VECTOR:
+        case DM_NOESIS_PROP_ENUM:
+            // Pass through directly — `raw` already points to the typed value
+            // (POINT/SIZE/VECTOR: float[2]; ENUM: int32).
             cd->cb(cd->userdata, instance, idx, raw);
             return;
 
@@ -397,6 +411,38 @@ void apply_set_readonly(Obj* obj, const Noesis::DependencyProperty* dp,
             obj->template SetReadOnlyProperty<Rect>(dp, r);
             return;
         }
+        case DM_NOESIS_PROP_POINT: {
+            Point p;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                p = Point(f[0], f[1]);
+            }
+            obj->template SetReadOnlyProperty<Point>(dp, p);
+            return;
+        }
+        case DM_NOESIS_PROP_SIZE: {
+            Size s;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                s = Size(f[0], f[1]);
+            }
+            obj->template SetReadOnlyProperty<Size>(dp, s);
+            return;
+        }
+        case DM_NOESIS_PROP_VECTOR: {
+            Vector2 v;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                v = Vector2(f[0], f[1]);
+            }
+            obj->template SetReadOnlyProperty<Vector2>(dp, v);
+            return;
+        }
+        case DM_NOESIS_PROP_ENUM:
+            // Enum storage is int32 — the DP's reflected Type is the runtime enum.
+            obj->template SetReadOnlyProperty<int32_t>(
+                dp, value_ptr ? *static_cast<const int32_t*>(value_ptr) : 0);
+            return;
         case DM_NOESIS_PROP_IMAGE_SOURCE:
         case DM_NOESIS_PROP_BASE_COMPONENT:
             // No boxed SetReadOnly form — unsupported.
@@ -525,6 +571,65 @@ DM_RUST_TRAMPOLINE(RustDecorator, Noesis::Decorator, "DmNoesis.RustDecorator")
 
 #undef DM_RUST_TRAMPOLINE
 
+// Forward decl: the Freezable trampoline's CreateInstanceCore clones via the
+// same factory path used for fresh instances.
+Noesis::BaseComponent* make_trampoline(ClassData* cd);
+
+// Freezable trampoline. A Freezable is NOT a UIElement, so there is no
+// Measure/Arrange/Render/routed-event surface — only DP change forwarding plus
+// the one pure virtual a Freezable subclass must supply (CreateInstanceCore).
+// This proves the synthetic-TypeClass reflection machinery extends to the
+// DependencyObject side of the hierarchy beyond UIElement. The other Animatable
+// subtrees (Brush/Geometry/Transform/Effect) add IRenderProxyCreator's three
+// pure render-tree virtuals and are NOT subclassable this way (see TODO.md).
+class RustFreezable final : public Noesis::Freezable, public RustClassInstance {
+public:
+    RustFreezable() = default;
+    using Noesis::DependencyObject::SetReadOnlyProperty;
+    void RustSetReadOnly(const Noesis::DependencyProperty* dp,
+        dm_noesis_prop_type type, const void* value_ptr) override {
+        apply_set_readonly(this, dp, type, value_ptr);
+    }
+    static const Noesis::TypeClass* StaticGetClassType(Noesis::TypeTag<RustFreezable>*);
+    const Noesis::TypeClass* GetClassType() const override {
+        if (mClassData && mClassData->typeClass)
+            return static_cast<const Noesis::TypeClass*>(mClassData->typeClass);
+        return StaticGetClassType((Noesis::TypeTag<RustFreezable>*)nullptr);
+    }
+
+protected:
+    bool OnPropertyChanged(const Noesis::DependencyPropertyChangedEventArgs& args) override {
+        bool processed = Freezable::OnPropertyChanged(args);
+        rust_forward_change(this, args);
+        return processed;
+    }
+    // Required pure virtual: produce a fresh instance of the same dynamic type,
+    // bound to the same ClassData (used by Clone / GetAsFrozen).
+    Noesis::Ptr<Noesis::Freezable> CreateInstanceCore() const override {
+        if (mClassData) {
+            Noesis::BaseComponent* bc = make_trampoline(mClassData);
+            auto* fz = Noesis::DynamicCast<Noesis::Freezable*>(bc);
+            if (fz) return Noesis::Ptr<Noesis::Freezable>(fz);
+        }
+        return Noesis::Ptr<Noesis::Freezable>(*new RustFreezable());
+    }
+
+private:
+    typedef RustFreezable SelfClass;
+    typedef Noesis::Freezable ParentClass;
+    friend class Noesis::TypeClassCreator;
+    static void StaticFillClassType(Noesis::TypeClassCreator&) {}
+};
+const Noesis::TypeClass* RustFreezable::StaticGetClassType(Noesis::TypeTag<RustFreezable>*) {
+    static const Noesis::TypeClass* type;
+    if (NS_UNLIKELY(type == 0)) {
+        type = static_cast<const Noesis::TypeClass*>(Noesis::Reflection::RegisterType(
+            "DmNoesis.RustFreezable", Noesis::TypeClassCreator::Create<RustFreezable>,
+            Noesis::TypeClassCreator::Fill<RustFreezable, Noesis::Freezable>));
+    }
+    return type;
+}
+
 // The reflected static base type for a given base enum (used as the synthetic
 // TypeClass's parent so XAML / reflection resolve the hierarchy).
 const Noesis::TypeClass* base_static_type(dm_noesis_class_base base) {
@@ -542,6 +647,8 @@ const Noesis::TypeClass* base_static_type(dm_noesis_class_base base) {
             return RustPanel::StaticGetClassType((TypeTag<RustPanel>*)nullptr);
         case DM_NOESIS_BASE_DECORATOR:
             return RustDecorator::StaticGetClassType((TypeTag<RustDecorator>*)nullptr);
+        case DM_NOESIS_BASE_FREEZABLE:
+            return RustFreezable::StaticGetClassType((TypeTag<RustFreezable>*)nullptr);
     }
     return nullptr;
 }
@@ -554,9 +661,16 @@ bool base_supported(dm_noesis_class_base base) {
         case DM_NOESIS_BASE_USER_CONTROL:
         case DM_NOESIS_BASE_PANEL:
         case DM_NOESIS_BASE_DECORATOR:
+        case DM_NOESIS_BASE_FREEZABLE:
             return true;
     }
     return false;
+}
+
+// Whether `base` is a UIElement-derived base (gets UIElementData metadata +
+// routed events) vs the non-UIElement Freezable base (plain DependencyData).
+bool base_is_uielement(dm_noesis_class_base base) {
+    return base != DM_NOESIS_BASE_FREEZABLE;
 }
 
 // Construct a trampoline for `cd`'s base, bind ClassData, and return the
@@ -584,6 +698,9 @@ Noesis::BaseComponent* make_trampoline(ClassData* cd) {
         }
         case DM_NOESIS_BASE_DECORATOR: {
             auto* o = new RustDecorator(); canonical = o; dobj = o; iface = o; break;
+        }
+        case DM_NOESIS_BASE_FREEZABLE: {
+            auto* o = new RustFreezable(); canonical = o; dobj = o; iface = o; break;
         }
         default:
             return nullptr;
@@ -616,11 +733,16 @@ size_t coercible_size(dm_noesis_prop_type t) {
         case DM_NOESIS_PROP_INT32:
         case DM_NOESIS_PROP_UINT32:
         case DM_NOESIS_PROP_FLOAT:
+        case DM_NOESIS_PROP_ENUM:
             return 4;
         case DM_NOESIS_PROP_DOUBLE:
             return 8;
         case DM_NOESIS_PROP_BOOL:
             return sizeof(bool);
+        case DM_NOESIS_PROP_POINT:
+        case DM_NOESIS_PROP_SIZE:
+        case DM_NOESIS_PROP_VECTOR:
+            return sizeof(float) * 2;
         case DM_NOESIS_PROP_THICKNESS:
         case DM_NOESIS_PROP_COLOR:
         case DM_NOESIS_PROP_RECT:
@@ -764,6 +886,37 @@ Noesis::Ptr<Noesis::DependencyProperty> create_dp_ex(
             return DependencyProperty::Create<Rect>(
                 name, owner, make_md<Rect>(def, options, coerce).GetPtr(), nullptr, access);
         }
+        case DM_NOESIS_PROP_POINT: {
+            Point def;
+            if (default_ptr) {
+                const auto* f = static_cast<const float*>(default_ptr);
+                def = Point(f[0], f[1]);
+            }
+            return DependencyProperty::Create<Point>(
+                name, owner, make_md<Point>(def, options, coerce).GetPtr(), nullptr, access);
+        }
+        case DM_NOESIS_PROP_SIZE: {
+            Size def;
+            if (default_ptr) {
+                const auto* f = static_cast<const float*>(default_ptr);
+                def = Size(f[0], f[1]);
+            }
+            return DependencyProperty::Create<Size>(
+                name, owner, make_md<Size>(def, options, coerce).GetPtr(), nullptr, access);
+        }
+        case DM_NOESIS_PROP_VECTOR: {
+            Vector2 def;
+            if (default_ptr) {
+                const auto* f = static_cast<const float*>(default_ptr);
+                def = Vector2(f[0], f[1]);
+            }
+            return DependencyProperty::Create<Vector2>(
+                name, owner, make_md<Vector2>(def, options, coerce).GetPtr(), nullptr, access);
+        }
+        case DM_NOESIS_PROP_ENUM:
+            // Enum DPs are created through dm_noesis_class_register_enum_property
+            // (they need the runtime TypeEnum*), not this value-only path.
+            return nullptr;
         case DM_NOESIS_PROP_IMAGE_SOURCE: {
             // Seed an explicit null Ptr<BaseComponent> default — a missing Box
             // source crashes the typed Init path during a real visual-tree
@@ -781,6 +934,30 @@ Noesis::Ptr<Noesis::DependencyProperty> create_dp_ex(
         }
     }
     return nullptr;
+}
+
+// Create an enum-typed DP: int32 storage, but the reflected Type is the runtime
+// TypeEnum resolved from `enum_type_name`. Mirrors create_dp_ex's int32 path
+// except for the explicit type argument. Returns null if the enum name does not
+// resolve to a registered TypeEnum.
+Noesis::Ptr<Noesis::DependencyProperty> create_enum_dp(
+    const char* name,
+    const Noesis::TypeClass* owner,
+    const char* enum_type_name,
+    int32_t default_value,
+    uint32_t options,
+    bool read_only) {
+    using namespace Noesis;
+    if (!enum_type_name) return nullptr;
+    Symbol sym(enum_type_name, Symbol::NullIfNotFound());
+    if (sym.IsNull()) return nullptr;
+    const auto* enumType = DynamicCast<const TypeEnum*>(Reflection::GetType(sym));
+    if (!enumType) return nullptr;
+
+    PropertyAccess access = read_only ? PropertyAccess_ReadOnly : PropertyAccess_ReadWrite;
+    auto md = make_md<int32_t>(default_value, options, CoerceValueCallback());
+    return DependencyProperty::Create<int32_t>(
+        name, enumType, owner, md.GetPtr(), nullptr, access);
 }
 
 }  // namespace
@@ -818,7 +995,13 @@ extern "C" void* dm_noesis_class_register(
     cd->typeClass = new Noesis::TypeClassBuilder(sym, /*isInterface*/ false);
     cd->typeClass->AddBase(base_static_type(base));
 
-    cd->uiData = Noesis::MakePtr<Noesis::UIElementData>(cd->typeClass);
+    // UIElement bases get UIElementData (DP storage + routed events); the
+    // Freezable base gets a plain DependencyData (DP storage only).
+    if (base_is_uielement(base)) {
+        cd->uiData = Noesis::MakePtr<Noesis::UIElementData>(cd->typeClass);
+    } else {
+        cd->uiData = Noesis::MakePtr<Noesis::DependencyData>(cd->typeClass);
+    }
     cd->typeClass->AddMeta(cd->uiData.GetPtr());
 
     Noesis::Reflection::RegisterType(cd->typeClass);
@@ -888,6 +1071,30 @@ extern "C" uint32_t dm_noesis_class_register_property(
     return dm_noesis_class_register_property_ex(
         class_token, prop_name, prop_type, default_ptr, /*options*/ 0,
         /*read_only*/ false, /*coerce*/ false);
+}
+
+extern "C" uint32_t dm_noesis_class_register_enum_property(
+    void* class_token,
+    const char* prop_name,
+    const char* enum_type_name,
+    int32_t default_value,
+    uint32_t fpm_options,
+    bool read_only) {
+    if (!class_token || !prop_name) return UINT32_MAX;
+    auto* cd = static_cast<ClassData*>(class_token);
+
+    uint32_t index = static_cast<uint32_t>(cd->properties.size());
+
+    auto dp = create_enum_dp(prop_name, cd->typeClass, enum_type_name, default_value,
+                             fpm_options, read_only);
+    if (!dp) return UINT32_MAX;
+
+    const Noesis::DependencyProperty* installed = cd->uiData->InsertProperty(dp.GetPtr());
+    if (!installed) return UINT32_MAX;
+
+    // Tag as ENUM so the marshaling switches treat its storage as int32.
+    cd->properties.push_back({installed, DM_NOESIS_PROP_ENUM, read_only});
+    return index;
 }
 
 extern "C" void dm_noesis_class_set_coerce(
@@ -1090,6 +1297,42 @@ void apply_set(
             else obj->SetValue<Rect>(dp, r);
             return;
         }
+        case DM_NOESIS_PROP_POINT: {
+            Point p;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                p = Point(f[0], f[1]);
+            }
+            if (mode == SetMode::Current) obj->SetCurrentValue<Point>(dp, p);
+            else obj->SetValue<Point>(dp, p);
+            return;
+        }
+        case DM_NOESIS_PROP_SIZE: {
+            Size s;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                s = Size(f[0], f[1]);
+            }
+            if (mode == SetMode::Current) obj->SetCurrentValue<Size>(dp, s);
+            else obj->SetValue<Size>(dp, s);
+            return;
+        }
+        case DM_NOESIS_PROP_VECTOR: {
+            Vector2 v;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                v = Vector2(f[0], f[1]);
+            }
+            if (mode == SetMode::Current) obj->SetCurrentValue<Vector2>(dp, v);
+            else obj->SetValue<Vector2>(dp, v);
+            return;
+        }
+        case DM_NOESIS_PROP_ENUM: {
+            int32_t v = value_ptr ? *static_cast<const int32_t*>(value_ptr) : 0;
+            if (mode == SetMode::Current) obj->SetCurrentValue<int32_t>(dp, v);
+            else obj->SetValue<int32_t>(dp, v);
+            return;
+        }
         case DM_NOESIS_PROP_IMAGE_SOURCE:
         case DM_NOESIS_PROP_BASE_COMPONENT: {
             BaseComponent* b = value_ptr ? *static_cast<BaseComponent* const*>(value_ptr) : nullptr;
@@ -1154,6 +1397,28 @@ bool apply_get(
             f[0] = r.x; f[1] = r.y; f[2] = r.width; f[3] = r.height;
             return true;
         }
+        case DM_NOESIS_PROP_POINT: {
+            const Point& p = base ? obj->GetBaseValue<Point>(dp) : obj->GetValue<Point>(dp);
+            auto* f = static_cast<float*>(out_value);
+            f[0] = p.x; f[1] = p.y;
+            return true;
+        }
+        case DM_NOESIS_PROP_SIZE: {
+            const Size& s = base ? obj->GetBaseValue<Size>(dp) : obj->GetValue<Size>(dp);
+            auto* f = static_cast<float*>(out_value);
+            f[0] = s.width; f[1] = s.height;
+            return true;
+        }
+        case DM_NOESIS_PROP_VECTOR: {
+            const Vector2& v = base ? obj->GetBaseValue<Vector2>(dp) : obj->GetValue<Vector2>(dp);
+            auto* f = static_cast<float*>(out_value);
+            f[0] = v.x; f[1] = v.y;
+            return true;
+        }
+        case DM_NOESIS_PROP_ENUM:
+            *static_cast<int32_t*>(out_value) =
+                base ? obj->GetBaseValue<int32_t>(dp) : obj->GetValue<int32_t>(dp);
+            return true;
         case DM_NOESIS_PROP_IMAGE_SOURCE:
         case DM_NOESIS_PROP_BASE_COMPONENT: {
             if (base) return false;
@@ -1179,6 +1444,10 @@ bool prop_type_matches(const Noesis::Type* t, dm_noesis_prop_type tag) {
         case DM_NOESIS_PROP_THICKNESS: return t == TypeOf<Thickness>();
         case DM_NOESIS_PROP_COLOR:     return t == TypeOf<Color>();
         case DM_NOESIS_PROP_RECT:      return t == TypeOf<Rect>();
+        case DM_NOESIS_PROP_POINT:     return t == TypeOf<Point>();
+        case DM_NOESIS_PROP_SIZE:      return t == TypeOf<Size>();
+        case DM_NOESIS_PROP_VECTOR:    return t == TypeOf<Vector2>();
+        case DM_NOESIS_PROP_ENUM:      return DynamicCast<const TypeEnum*>(t) != nullptr;
         case DM_NOESIS_PROP_IMAGE_SOURCE:
             return TypeOf<ImageSource>()->IsAssignableFrom(t);
         case DM_NOESIS_PROP_BASE_COMPONENT:
@@ -1200,6 +1469,10 @@ int32_t prop_type_to_tag(const Noesis::Type* t) {
     if (t == TypeOf<Thickness>()) return DM_NOESIS_PROP_THICKNESS;
     if (t == TypeOf<Color>())     return DM_NOESIS_PROP_COLOR;
     if (t == TypeOf<Rect>())      return DM_NOESIS_PROP_RECT;
+    if (t == TypeOf<Point>())     return DM_NOESIS_PROP_POINT;
+    if (t == TypeOf<Size>())      return DM_NOESIS_PROP_SIZE;
+    if (t == TypeOf<Vector2>())   return DM_NOESIS_PROP_VECTOR;
+    if (Noesis::DynamicCast<const Noesis::TypeEnum*>(t)) return DM_NOESIS_PROP_ENUM;
     if (TypeOf<ImageSource>()->IsAssignableFrom(t)) return DM_NOESIS_PROP_IMAGE_SOURCE;
     if (TypeOf<BaseComponent>()->IsAssignableFrom(t)) return DM_NOESIS_PROP_BASE_COMPONENT;
     return -1;
@@ -1242,6 +1515,29 @@ extern "C" bool dm_noesis_instance_set_readonly_property(
     const PropEntry& pe = cd->properties[prop_index];
     iface->RustSetReadOnly(pe.dp, pe.type, value_ptr);
     return true;
+}
+
+extern "C" bool dm_noesis_freezable_freeze(void* freezable) {
+    if (!freezable) return false;
+    auto* fz = Noesis::DynamicCast<Noesis::Freezable*>(
+        static_cast<Noesis::BaseComponent*>(freezable));
+    if (!fz || !fz->CanFreeze()) return false;
+    fz->Freeze();
+    return true;
+}
+
+extern "C" bool dm_noesis_freezable_is_frozen(void* freezable) {
+    if (!freezable) return false;
+    auto* fz = Noesis::DynamicCast<Noesis::Freezable*>(
+        static_cast<Noesis::BaseComponent*>(freezable));
+    return fz && fz->IsFrozen();
+}
+
+extern "C" bool dm_noesis_freezable_can_freeze(void* freezable) {
+    if (!freezable) return false;
+    auto* fz = Noesis::DynamicCast<Noesis::Freezable*>(
+        static_cast<Noesis::BaseComponent*>(freezable));
+    return fz && fz->CanFreeze();
 }
 
 extern "C" bool dm_noesis_image_source_get_size(

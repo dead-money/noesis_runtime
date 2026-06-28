@@ -36,9 +36,10 @@ use std::ffi::{CString, c_void};
 use crate::ffi::{
     EnumValue, dm_noesis_base_component_release, dm_noesis_enum_name_from_value,
     dm_noesis_enum_value_from_name, dm_noesis_factory_is_registered, dm_noesis_raise_routed_event,
-    dm_noesis_register_enum, dm_noesis_register_routed_event, dm_noesis_type_converter_from_string,
-    dm_noesis_type_set_content_property, dm_noesis_unbox_bool, dm_noesis_unbox_double,
-    dm_noesis_unbox_int32, dm_noesis_unbox_string,
+    dm_noesis_register_enum, dm_noesis_register_routed_event, dm_noesis_type_add_depends_on,
+    dm_noesis_type_converter_from_string, dm_noesis_type_get_content_property,
+    dm_noesis_type_get_depends_on, dm_noesis_type_set_content_property, dm_noesis_unbox_bool,
+    dm_noesis_unbox_double, dm_noesis_unbox_int32, dm_noesis_unbox_string,
 };
 use crate::view::FrameworkElement;
 
@@ -211,6 +212,87 @@ pub fn set_content_property(type_name: &str, prop_name: &str) -> bool {
     let cp = CString::new(prop_name).expect("prop name contained NUL");
     // SAFETY: both pointers valid for the call; appends ContentPropertyMetaData.
     unsafe { dm_noesis_type_set_content_property(ct.as_ptr(), cp.as_ptr()) }
+}
+
+/// Read the property name recorded by [`set_content_property`] on `type_name`,
+/// read straight back through the live reflection metadata
+/// (`FindMeta<ContentPropertyMetaData>` → `GetContentProperty`). `None` if the
+/// type is unknown or carries no `ContentProperty` metadata.
+///
+/// `FindMeta` is keyed by the metadata `TypeClass`, so this reads the
+/// `ContentProperty` independently of any [`add_depends_on`] record on the same
+/// type.
+///
+/// # Panics
+///
+/// Panics if `type_name` contains an interior NUL byte.
+#[must_use]
+pub fn get_content_property(type_name: &str) -> Option<String> {
+    let ct = CString::new(type_name).expect("type name contained NUL");
+    let mut out: *const core::ffi::c_char = ptr::null();
+    // SAFETY: type_name ptr valid for the call; out receives a borrowed interned
+    // Symbol string (valid while Noesis lives) which we copy on success.
+    let ok = unsafe { dm_noesis_type_get_content_property(ct.as_ptr(), &mut out) };
+    if !ok || out.is_null() {
+        return None;
+    }
+    // SAFETY: out is a non-null NUL-terminated interned Symbol string.
+    Some(
+        unsafe { CStr::from_ptr(out) }
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
+/// Attach `DependsOn` metadata to the registered type `type_name`, recording
+/// that an attributed property depends on the value of `prop_name`
+/// (`Noesis::DependsOnMetaData`, the type-level metadata Noesis exposes for
+/// this). Returns `false` if the type is unknown.
+///
+/// `DependsOn` is attached at the *type* level (via `TypeMeta::AddMeta`), not
+/// per-property as in WPF, and `FindMeta` returns only the first matching
+/// record — so multiple `DependsOn` records on one type are not individually
+/// retrievable. It DOES coexist with [`set_content_property`] on the same type:
+/// `FindMeta` is keyed by the metadata `TypeClass`, so a `ContentProperty` and a
+/// `DependsOn` record are stored and read back independently.
+///
+/// Read the recorded property back with [`get_depends_on`].
+///
+/// # Panics
+///
+/// Panics if `type_name` / `prop_name` contain an interior NUL byte.
+#[must_use]
+pub fn add_depends_on(type_name: &str, prop_name: &str) -> bool {
+    let ct = CString::new(type_name).expect("type name contained NUL");
+    let cp = CString::new(prop_name).expect("prop name contained NUL");
+    // SAFETY: both pointers valid for the call; appends DependsOnMetaData.
+    unsafe { dm_noesis_type_add_depends_on(ct.as_ptr(), cp.as_ptr()) }
+}
+
+/// Read the property name recorded by [`add_depends_on`] on `type_name`, read
+/// straight back through the live reflection metadata
+/// (`DependsOnMetaData::GetDependsOnProperty`). `None` if the type is unknown or
+/// carries no `DependsOn` metadata.
+///
+/// # Panics
+///
+/// Panics if `type_name` contains an interior NUL byte.
+#[must_use]
+pub fn get_depends_on(type_name: &str) -> Option<String> {
+    let ct = CString::new(type_name).expect("type name contained NUL");
+    let mut out: *const core::ffi::c_char = ptr::null();
+    // SAFETY: type_name ptr valid for the call; out receives a borrowed interned
+    // Symbol string (valid while Noesis lives) which we copy on success.
+    let ok = unsafe { dm_noesis_type_get_depends_on(ct.as_ptr(), &mut out) };
+    if !ok || out.is_null() {
+        return None;
+    }
+    // SAFETY: out is a non-null NUL-terminated interned Symbol string.
+    Some(
+        unsafe { CStr::from_ptr(out) }
+            .to_string_lossy()
+            .into_owned(),
+    )
 }
 
 // ── (D) String → value conversion via the reflection TypeConverter ────────────
