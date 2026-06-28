@@ -54,19 +54,6 @@ the component-DP path, `FrameworkTemplate::FindName`) are wired (`src/resources.
   (built-ins; we have custom markup extensions but not these). Reachable from
   XAML already; a code path is low priority.
 
-## 8. Controls — programmatic access
-
-`Selector` selection (`SelectedIndex`/`SelectedItem`), `ItemsControl.Items` mutation, `RangeBase`
-values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `ScrollViewer` offsets +
-`ScrollTo*`, and `TextBox`/`PasswordBox` selection/caret are exposed (`src/view.rs` Controls §8 +
-`cpp/noesis_controls.cpp`). Remaining:
-
-- **Selection.** `Selector::SelectedValue`/`SelectedValuePath`; `TreeView` selection; `ListView` columns.
-- **Items.** `ItemContainerGenerator` deep access (container ⇄ item ⇄ index mapping).
-- **Popups/overlays.** `ContextMenu`, `ToolTip`/`ToolTipService`.
-- **Scrolling.** Direct `IScrollInfo` and the line/page-scroll methods (`LineUp`/`PageDown`/…).
-- **`Image` / `MediaElement`-style** source assignment from code.
-
 ## 9. Custom types / reflection registration
 
 The runtime type system is broadly wired: element base classes (`Control`/`FrameworkElement`/
@@ -165,3 +152,4 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **Font-family enumeration (§13).** No SDK API enumerates the set of *available family names* from the font system. `FontFamily` offers per-family enumeration only (`GetNumFonts`/`GetFontName`/`GetFontPath`, resolved through the registered provider — wrapped as `FontFamily::num_fonts`/`font_name`), and `Fonts::GetTypefaces(Stream*, cb)` enumerates the faces inside *one supplied font file*, not the registry. Workaround: the host font provider (`scan_folder` / `register_font`, already wrapped) is the authority on which families it serves, so the host can enumerate its own families.
 - **No public Drawing object model / `DrawingVisual::RenderOpen` (§10).** In 3.2.13 `DrawingContext` has a private constructor (`friend UIElement`) and is delivered ONLY to `UIElement::OnRender(DrawingContext*)`; there is no public `DrawingVisual`/`RenderOpen` and no `Drawing`/`DrawingGroup`/`GeometryDrawing`/`ImageDrawing`/`DrawingImage`/`DrawingBrush` headers. So immediate-mode drawing is reachable only by overriding `OnRender` — which the §10 PR wires through a `render` callback on the custom-element trampolines (`ClassBuilder::set_render` → a borrowed `DrawingContext`). Retained/recorded drawings and drawing-as-a-brush are not expressible.
 - **`DrawingContext::DrawImage` source (§10).** `DrawImage` needs a live `ImageSource`, which this crate cannot build headlessly yet (TODO §12 imaging); the wrapper accepts a borrowed `ImageSource*` but rejects null. `DrawText`/`DrawMesh` are likewise un-exercisable without a `FormattedText` / `MeshData` builder and are not wrapped.
+- **`ToolTip`/`ContextMenu` open state + raw `IScrollInfo` (§8).** `ToolTip`/`ContextMenu` `IsOpen` is wrapped, but *opening* one spawns a `Popup` that needs a live placement target / hosted view, so the open transition can't be driven or observed headlessly (the tests assert the typed `IsOpen` accessor + content-pointer round-trips instead). Noesis 3.2.13 also keeps `ScrollViewer::GetScrollInfo()` `protected`, so the raw `IScrollInfo` backend isn't publicly reachable — the public `Line*`/`Page*`/`ScrollTo*` methods (wrapped) are its surface.

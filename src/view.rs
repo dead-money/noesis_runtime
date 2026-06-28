@@ -23,28 +23,52 @@ use crate::ffi::{
     PropType, dm_noesis_base_component_add_reference, dm_noesis_base_component_release,
     dm_noesis_binding_expression_update_source, dm_noesis_binding_expression_update_target,
     dm_noesis_control_get_template, dm_noesis_control_set_template,
-    dm_noesis_dependency_object_check_access, dm_noesis_dependency_object_clear_value,
-    dm_noesis_dependency_object_get_attached, dm_noesis_dependency_object_get_base_value,
-    dm_noesis_dependency_object_get_property, dm_noesis_dependency_object_property_tag,
-    dm_noesis_dependency_object_set_attached, dm_noesis_dependency_object_set_current_value,
-    dm_noesis_dependency_object_set_property, dm_noesis_dependency_object_thread_id,
-    dm_noesis_expander_get_is_expanded, dm_noesis_expander_set_is_expanded,
-    dm_noesis_focus_element, dm_noesis_framework_element_find_name,
-    dm_noesis_framework_element_find_resource, dm_noesis_framework_element_get_data_context,
-    dm_noesis_framework_element_get_halign, dm_noesis_framework_element_get_name,
-    dm_noesis_framework_element_get_resources, dm_noesis_framework_element_get_style,
-    dm_noesis_framework_element_get_valign, dm_noesis_framework_element_logical_parent,
-    dm_noesis_framework_element_register_name, dm_noesis_framework_element_set_data_context,
-    dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
-    dm_noesis_framework_element_set_resources, dm_noesis_framework_element_set_style,
-    dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
-    dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
-    dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml,
-    dm_noesis_items_control_items_add, dm_noesis_items_control_items_clear,
-    dm_noesis_items_control_items_count, dm_noesis_items_control_items_insert,
-    dm_noesis_items_control_items_remove_at, dm_noesis_items_control_realized_count,
-    dm_noesis_items_control_set_items_source, dm_noesis_logical_child,
-    dm_noesis_logical_children_count, dm_noesis_passwordbox_get_password,
+    dm_noesis_controls_contextmenu_get_is_open, dm_noesis_controls_contextmenu_set_is_open,
+    dm_noesis_controls_contextmenuservice_get_context_menu,
+    dm_noesis_controls_contextmenuservice_set_context_menu, dm_noesis_controls_fe_get_context_menu,
+    dm_noesis_controls_fe_get_tooltip, dm_noesis_controls_fe_set_context_menu,
+    dm_noesis_controls_fe_set_tooltip, dm_noesis_controls_fe_set_tooltip_string,
+    dm_noesis_controls_generator_container_from_index,
+    dm_noesis_controls_generator_container_from_item,
+    dm_noesis_controls_generator_index_from_container,
+    dm_noesis_controls_generator_item_from_container, dm_noesis_controls_gridview_column_count,
+    dm_noesis_controls_gridview_column_get_actual_width,
+    dm_noesis_controls_gridview_column_get_header, dm_noesis_controls_gridview_column_get_width,
+    dm_noesis_controls_gridview_column_set_width, dm_noesis_controls_image_get_source,
+    dm_noesis_controls_image_set_source, dm_noesis_controls_listview_get_view,
+    dm_noesis_controls_scrollviewer_edge, dm_noesis_controls_scrollviewer_line,
+    dm_noesis_controls_scrollviewer_metric, dm_noesis_controls_scrollviewer_page,
+    dm_noesis_controls_selector_get_selected_value,
+    dm_noesis_controls_selector_get_selected_value_path,
+    dm_noesis_controls_selector_set_selected_value,
+    dm_noesis_controls_selector_set_selected_value_path, dm_noesis_controls_tooltip_get_is_open,
+    dm_noesis_controls_tooltip_set_is_open, dm_noesis_controls_tooltipservice_get_tooltip,
+    dm_noesis_controls_tooltipservice_set_tooltip, dm_noesis_controls_treeview_get_selected_item,
+    dm_noesis_controls_treeviewitem_get_is_expanded,
+    dm_noesis_controls_treeviewitem_get_is_selected,
+    dm_noesis_controls_treeviewitem_set_is_expanded,
+    dm_noesis_controls_treeviewitem_set_is_selected, dm_noesis_dependency_object_check_access,
+    dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
+    dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
+    dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
+    dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
+    dm_noesis_dependency_object_thread_id, dm_noesis_expander_get_is_expanded,
+    dm_noesis_expander_set_is_expanded, dm_noesis_focus_element,
+    dm_noesis_framework_element_find_name, dm_noesis_framework_element_find_resource,
+    dm_noesis_framework_element_get_data_context, dm_noesis_framework_element_get_halign,
+    dm_noesis_framework_element_get_name, dm_noesis_framework_element_get_resources,
+    dm_noesis_framework_element_get_style, dm_noesis_framework_element_get_valign,
+    dm_noesis_framework_element_logical_parent, dm_noesis_framework_element_register_name,
+    dm_noesis_framework_element_set_data_context, dm_noesis_framework_element_set_halign,
+    dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_resources,
+    dm_noesis_framework_element_set_style, dm_noesis_framework_element_set_valign,
+    dm_noesis_framework_element_set_visibility, dm_noesis_framework_element_template_child,
+    dm_noesis_framework_element_unregister_name, dm_noesis_get_binding_expression,
+    dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml, dm_noesis_items_control_items_add,
+    dm_noesis_items_control_items_clear, dm_noesis_items_control_items_count,
+    dm_noesis_items_control_items_insert, dm_noesis_items_control_items_remove_at,
+    dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
+    dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_passwordbox_get_password,
     dm_noesis_passwordbox_set_password, dm_noesis_path_set_points, dm_noesis_popup_get_is_open,
     dm_noesis_popup_set_is_open, dm_noesis_rangebase_get, dm_noesis_rangebase_set,
     dm_noesis_render_options_get_bitmap_scaling_mode,
@@ -2107,6 +2131,512 @@ impl FrameworkElement {
         let c = CString::new(password).expect("password contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
         unsafe { dm_noesis_passwordbox_set_password(self.ptr.as_ptr(), c.as_ptr()) }
+    }
+
+    // -- Selector: SelectedValue / SelectedValuePath --
+
+    /// Borrowed (no `+1`) pointer to the current `SelectedValue` (the
+    /// [`selected_item`](Self::selected_item) projected through
+    /// [`selected_value_path`](Self::selected_value_path); the whole item when
+    /// the path is empty). `None` when nothing is selected / not a `Selector`.
+    /// Borrowed exactly like [`get_component`](Self::get_component).
+    #[must_use]
+    pub fn selected_value(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // Selector and returns a borrowed pointer or null.
+        let p = unsafe { dm_noesis_controls_selector_get_selected_value(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Select the item whose [`selected_value_path`](Self::selected_value_path)
+    /// projection equals `value`. Pass null to clear. Returns `false` if not a
+    /// `Selector`. Noesis takes its own reference to `value`.
+    ///
+    /// # Safety
+    ///
+    /// `value` must be a valid live `Noesis::BaseComponent*` (e.g. a
+    /// [`crate::binding::Boxed::raw`]) or null.
+    pub unsafe fn set_selected_value(&mut self, value: *mut c_void) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; `value` is live per contract.
+        unsafe { dm_noesis_controls_selector_set_selected_value(self.ptr.as_ptr(), value) }
+    }
+
+    /// The `SelectedValuePath` (the property path projected from the selected
+    /// item to produce `SelectedValue`). `None` if not a `Selector`; an unset
+    /// path yields `Some("")`.
+    #[must_use]
+    pub fn selected_value_path(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
+        // NUL-terminated UTF-8 string (or null on a non-Selector); copy out now.
+        let p = unsafe { dm_noesis_controls_selector_get_selected_value_path(self.ptr.as_ptr()) };
+        if p.is_null() {
+            None
+        } else {
+            // SAFETY: p is a live NUL-terminated UTF-8 string while we hold our ref.
+            Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+        }
+    }
+
+    /// Set the `SelectedValuePath`. Returns `false` if not a `Selector`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` contains an interior NUL byte.
+    pub fn set_selected_value_path(&mut self, path: &str) -> bool {
+        let c = CString::new(path).expect("path contained interior NUL");
+        // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
+        unsafe {
+            dm_noesis_controls_selector_set_selected_value_path(self.ptr.as_ptr(), c.as_ptr())
+        }
+    }
+
+    // -- TreeView selection / TreeViewItem state --
+
+    /// Borrowed pointer to the `TreeView`'s currently-selected item (the data
+    /// item, or the `TreeViewItem` container for directly-authored items).
+    /// `None` when nothing is selected / not a `TreeView`. Borrowed like
+    /// [`get_component`](Self::get_component).
+    #[must_use]
+    pub fn tree_selected_item(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p = unsafe { dm_noesis_controls_treeview_get_selected_item(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// `TreeViewItem.IsSelected`. `None` if not a `TreeViewItem`. (A `TreeView`
+    /// has no public `SetSelectedItem`; selection is driven per item — set this
+    /// on the item, then read it back via [`tree_selected_item`](Self::tree_selected_item).)
+    #[must_use]
+    pub fn tree_item_is_selected(&self) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
+        unsafe { dm_noesis_controls_treeviewitem_get_is_selected(self.ptr.as_ptr(), &mut out) }
+            .then_some(out)
+    }
+
+    /// Set `TreeViewItem.IsSelected`. Returns `false` if not a `TreeViewItem`.
+    pub fn set_tree_item_is_selected(&mut self, selected: bool) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_controls_treeviewitem_set_is_selected(self.ptr.as_ptr(), selected) }
+    }
+
+    /// `TreeViewItem.IsExpanded`. `None` if not a `TreeViewItem`.
+    #[must_use]
+    pub fn tree_item_is_expanded(&self) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
+        unsafe { dm_noesis_controls_treeviewitem_get_is_expanded(self.ptr.as_ptr(), &mut out) }
+            .then_some(out)
+    }
+
+    /// Set `TreeViewItem.IsExpanded`. Returns `false` if not a `TreeViewItem`.
+    pub fn set_tree_item_is_expanded(&mut self, expanded: bool) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_controls_treeviewitem_set_is_expanded(self.ptr.as_ptr(), expanded) }
+    }
+
+    // -- ItemContainerGenerator (container <-> item <-> index) --
+    //
+    // These route through this `ItemsControl`'s `ItemContainerGenerator`.
+    // Containers exist only after the control has been laid out in a live
+    // [`View`] — call before a layout pass and the lookups return `None` / `-1`.
+
+    /// Borrowed pointer to the realized container for item `index`, or `None`
+    /// when the index has no realized container / this is not an `ItemsControl`.
+    #[must_use]
+    pub fn container_from_index(&self, index: i32) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p =
+            unsafe { dm_noesis_controls_generator_container_from_index(self.ptr.as_ptr(), index) };
+        NonNull::new(p)
+    }
+
+    /// Borrowed pointer to the realized container for `item`, or `None`.
+    ///
+    /// # Safety
+    ///
+    /// `item` must be a valid live `Noesis::BaseComponent*` or null.
+    #[must_use]
+    pub unsafe fn container_from_item(&self, item: *mut c_void) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is live; `item` is live per contract.
+        let p =
+            unsafe { dm_noesis_controls_generator_container_from_item(self.ptr.as_ptr(), item) };
+        NonNull::new(p)
+    }
+
+    /// Index of `container` in the items, or `None` when it is not a realized
+    /// container / this is not an `ItemsControl`.
+    ///
+    /// # Safety
+    ///
+    /// `container` must be a valid live `Noesis::DependencyObject*` (e.g. a
+    /// pointer from [`container_from_index`](Self::container_from_index)).
+    #[must_use]
+    pub unsafe fn index_from_container(&self, container: *mut c_void) -> Option<i32> {
+        // SAFETY: self.ptr is live; `container` is live per contract.
+        let idx = unsafe {
+            dm_noesis_controls_generator_index_from_container(self.ptr.as_ptr(), container)
+        };
+        (idx >= 0).then_some(idx)
+    }
+
+    /// Borrowed pointer to the data item backing `container`, or `None`.
+    ///
+    /// # Safety
+    ///
+    /// `container` must be a valid live `Noesis::DependencyObject*` or null.
+    #[must_use]
+    pub unsafe fn item_from_container(&self, container: *mut c_void) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is live; `container` is live per contract.
+        let p = unsafe {
+            dm_noesis_controls_generator_item_from_container(self.ptr.as_ptr(), container)
+        };
+        NonNull::new(p)
+    }
+
+    // -- ListView / GridView columns --
+
+    /// Borrowed pointer to the `GridView` set as this `ListView`'s `View`, for
+    /// passing to the `gridview_column_*` accessors. `None` if not a `ListView`
+    /// or its `View` is not a `GridView`. Borrowed like
+    /// [`get_component`](Self::get_component).
+    #[must_use]
+    pub fn listview_gridview(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p = unsafe { dm_noesis_controls_listview_get_view(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Number of columns in a `GridView` (the pointer from
+    /// [`listview_gridview`](Self::listview_gridview)). `None` if not a
+    /// `GridView`.
+    ///
+    /// # Safety
+    ///
+    /// `gridview` must be a live `Noesis::GridView*`.
+    #[must_use]
+    pub unsafe fn gridview_column_count(gridview: NonNull<c_void>) -> Option<i32> {
+        // SAFETY: `gridview` is a live GridView* per contract.
+        let n = unsafe { dm_noesis_controls_gridview_column_count(gridview.as_ptr()) };
+        (n >= 0).then_some(n)
+    }
+
+    /// A column's `Width` (NaN means `Auto`). `None` on a bad index / non-GridView.
+    ///
+    /// # Safety
+    ///
+    /// `gridview` must be a live `Noesis::GridView*`.
+    #[must_use]
+    pub unsafe fn gridview_column_width(gridview: NonNull<c_void>, index: u32) -> Option<f32> {
+        let mut out = 0.0f32;
+        // SAFETY: `gridview` is a live GridView* per contract; writes on success.
+        unsafe { dm_noesis_controls_gridview_column_get_width(gridview.as_ptr(), index, &mut out) }
+            .then_some(out)
+    }
+
+    /// Set a column's `Width`. Returns `false` on a bad index / non-GridView.
+    ///
+    /// # Safety
+    ///
+    /// `gridview` must be a live `Noesis::GridView*`.
+    pub unsafe fn set_gridview_column_width(
+        gridview: NonNull<c_void>,
+        index: u32,
+        width: f32,
+    ) -> bool {
+        // SAFETY: `gridview` is a live GridView* per contract.
+        unsafe { dm_noesis_controls_gridview_column_set_width(gridview.as_ptr(), index, width) }
+    }
+
+    /// A column's computed `ActualWidth`. `None` on a bad index / non-GridView.
+    ///
+    /// # Safety
+    ///
+    /// `gridview` must be a live `Noesis::GridView*`.
+    #[must_use]
+    pub unsafe fn gridview_column_actual_width(
+        gridview: NonNull<c_void>,
+        index: u32,
+    ) -> Option<f32> {
+        let mut out = 0.0f32;
+        // SAFETY: `gridview` is a live GridView* per contract; writes on success.
+        unsafe {
+            dm_noesis_controls_gridview_column_get_actual_width(gridview.as_ptr(), index, &mut out)
+        }
+        .then_some(out)
+    }
+
+    /// Borrowed pointer to a column's `Header` (typically a boxed string), or
+    /// `None`.
+    ///
+    /// # Safety
+    ///
+    /// `gridview` must be a live `Noesis::GridView*`.
+    #[must_use]
+    pub unsafe fn gridview_column_header(
+        gridview: NonNull<c_void>,
+        index: u32,
+    ) -> Option<NonNull<c_void>> {
+        // SAFETY: `gridview` is a live GridView* per contract.
+        let p = unsafe { dm_noesis_controls_gridview_column_get_header(gridview.as_ptr(), index) };
+        NonNull::new(p)
+    }
+
+    // -- ToolTip / ToolTipService --
+
+    /// Borrowed pointer to this element's `ToolTip` content, or `None`. Borrowed
+    /// like [`get_component`](Self::get_component).
+    #[must_use]
+    pub fn tooltip(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p = unsafe { dm_noesis_controls_fe_get_tooltip(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Set this element's `ToolTip` to a borrowed content component (e.g. a
+    /// boxed string, or a `ToolTip`/element). Pass null to clear. Returns
+    /// `false` if not a `FrameworkElement`. Noesis takes its own reference.
+    ///
+    /// # Safety
+    ///
+    /// `tooltip` must be a valid live `Noesis::BaseComponent*` or null.
+    pub unsafe fn set_tooltip(&mut self, tooltip: *mut c_void) -> bool {
+        // SAFETY: self.ptr is live; `tooltip` is live per contract.
+        unsafe { dm_noesis_controls_fe_set_tooltip(self.ptr.as_ptr(), tooltip) }
+    }
+
+    /// Set this element's `ToolTip` to a plain string. Returns `false` if not a
+    /// `FrameworkElement`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `text` contains an interior NUL byte.
+    pub fn set_tooltip_string(&mut self, text: &str) -> bool {
+        let c = CString::new(text).expect("tooltip text contained interior NUL");
+        // SAFETY: self.ptr is live; c.as_ptr() lives for the call.
+        unsafe { dm_noesis_controls_fe_set_tooltip_string(self.ptr.as_ptr(), c.as_ptr()) }
+    }
+
+    /// Borrowed pointer to the `ToolTipService.ToolTip` attached value on this
+    /// object (what [`set_tooltip`](Self::set_tooltip) ultimately writes), or
+    /// `None`. Readable on any `DependencyObject`.
+    #[must_use]
+    pub fn tooltip_service_tooltip(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p = unsafe { dm_noesis_controls_tooltipservice_get_tooltip(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Set the `ToolTipService.ToolTip` attached value. Returns `false` if not a
+    /// `DependencyObject`.
+    ///
+    /// # Safety
+    ///
+    /// `tooltip` must be a valid live `Noesis::BaseComponent*` or null.
+    pub unsafe fn set_tooltip_service_tooltip(&mut self, tooltip: *mut c_void) -> bool {
+        // SAFETY: self.ptr is live; `tooltip` is live per contract.
+        unsafe { dm_noesis_controls_tooltipservice_set_tooltip(self.ptr.as_ptr(), tooltip) }
+    }
+
+    /// `ToolTip.IsOpen`. `None` if not a `ToolTip` control.
+    #[must_use]
+    pub fn tooltip_is_open(&self) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
+        unsafe { dm_noesis_controls_tooltip_get_is_open(self.ptr.as_ptr(), &mut out) }
+            .then_some(out)
+    }
+
+    /// Set `ToolTip.IsOpen`. Returns `false` if not a `ToolTip` control.
+    pub fn set_tooltip_is_open(&mut self, open: bool) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_controls_tooltip_set_is_open(self.ptr.as_ptr(), open) }
+    }
+
+    // -- ContextMenu / ContextMenuService --
+
+    /// Borrowed pointer to this element's `ContextMenu`, or `None`. Borrowed
+    /// like [`get_component`](Self::get_component).
+    #[must_use]
+    pub fn context_menu(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p = unsafe { dm_noesis_controls_fe_get_context_menu(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Set this element's `ContextMenu`. `menu` must be a `ContextMenu*` (e.g.
+    /// from [`context_menu`](Self::context_menu) or a parsed element) or null to
+    /// clear. Returns `false` if not a `FrameworkElement`, or `menu` is not a
+    /// `ContextMenu`. Noesis takes its own reference.
+    ///
+    /// # Safety
+    ///
+    /// `menu` must be a valid live `Noesis::ContextMenu*` or null.
+    pub unsafe fn set_context_menu(&mut self, menu: *mut c_void) -> bool {
+        // SAFETY: self.ptr is live; `menu` is live per contract.
+        unsafe { dm_noesis_controls_fe_set_context_menu(self.ptr.as_ptr(), menu) }
+    }
+
+    /// Borrowed pointer to the `ContextMenuService.ContextMenu` attached value,
+    /// or `None`. Readable on any `DependencyObject`.
+    #[must_use]
+    pub fn context_menu_service_menu(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p =
+            unsafe { dm_noesis_controls_contextmenuservice_get_context_menu(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Set the `ContextMenuService.ContextMenu` attached value. Returns `false`
+    /// if not a `DependencyObject`, or `menu` is not a `ContextMenu`.
+    ///
+    /// # Safety
+    ///
+    /// `menu` must be a valid live `Noesis::ContextMenu*` or null.
+    pub unsafe fn set_context_menu_service_menu(&mut self, menu: *mut c_void) -> bool {
+        // SAFETY: self.ptr is live; `menu` is live per contract.
+        unsafe { dm_noesis_controls_contextmenuservice_set_context_menu(self.ptr.as_ptr(), menu) }
+    }
+
+    /// `ContextMenu.IsOpen`. `None` if not a `ContextMenu` control.
+    #[must_use]
+    pub fn context_menu_is_open(&self) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
+        unsafe { dm_noesis_controls_contextmenu_get_is_open(self.ptr.as_ptr(), &mut out) }
+            .then_some(out)
+    }
+
+    /// Set `ContextMenu.IsOpen`. Returns `false` if not a `ContextMenu` control.
+    pub fn set_context_menu_is_open(&mut self, open: bool) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_controls_contextmenu_set_is_open(self.ptr.as_ptr(), open) }
+    }
+
+    // -- ScrollViewer line / page / edge scrolling + IScrollInfo --
+
+    /// Scroll up one line (`LineUp`). Returns `false` if not a `ScrollViewer`.
+    pub fn line_up(&mut self) -> bool {
+        self.scrollviewer_line(0)
+    }
+
+    /// Scroll down one line (`LineDown`). `false` if not a `ScrollViewer`.
+    pub fn line_down(&mut self) -> bool {
+        self.scrollviewer_line(1)
+    }
+
+    /// Scroll left one line (`LineLeft`). `false` if not a `ScrollViewer`.
+    pub fn line_left(&mut self) -> bool {
+        self.scrollviewer_line(2)
+    }
+
+    /// Scroll right one line (`LineRight`). `false` if not a `ScrollViewer`.
+    pub fn line_right(&mut self) -> bool {
+        self.scrollviewer_line(3)
+    }
+
+    fn scrollviewer_line(&mut self, which: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_controls_scrollviewer_line(self.ptr.as_ptr(), which) }
+    }
+
+    /// Scroll up one page (`PageUp`). `false` if not a `ScrollViewer`.
+    pub fn page_up(&mut self) -> bool {
+        self.scrollviewer_page(0)
+    }
+
+    /// Scroll down one page (`PageDown`). `false` if not a `ScrollViewer`.
+    pub fn page_down(&mut self) -> bool {
+        self.scrollviewer_page(1)
+    }
+
+    /// Scroll left one page (`PageLeft`). `false` if not a `ScrollViewer`.
+    pub fn page_left(&mut self) -> bool {
+        self.scrollviewer_page(2)
+    }
+
+    /// Scroll right one page (`PageRight`). `false` if not a `ScrollViewer`.
+    pub fn page_right(&mut self) -> bool {
+        self.scrollviewer_page(3)
+    }
+
+    fn scrollviewer_page(&mut self, which: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_controls_scrollviewer_page(self.ptr.as_ptr(), which) }
+    }
+
+    /// Scroll to the top edge (`ScrollToTop`). `false` if not a `ScrollViewer`.
+    pub fn scroll_to_top(&mut self) -> bool {
+        self.scrollviewer_edge(0)
+    }
+
+    /// Scroll to the bottom edge (`ScrollToBottom`). `false` if not a
+    /// `ScrollViewer`.
+    pub fn scroll_to_bottom(&mut self) -> bool {
+        self.scrollviewer_edge(1)
+    }
+
+    /// Scroll to the left edge (`ScrollToLeftEnd`). `false` if not a
+    /// `ScrollViewer`.
+    pub fn scroll_to_left_end(&mut self) -> bool {
+        self.scrollviewer_edge(2)
+    }
+
+    /// Scroll to the right edge (`ScrollToRightEnd`). `false` if not a
+    /// `ScrollViewer`.
+    pub fn scroll_to_right_end(&mut self) -> bool {
+        self.scrollviewer_edge(3)
+    }
+
+    fn scrollviewer_edge(&mut self, which: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_controls_scrollviewer_edge(self.ptr.as_ptr(), which) }
+    }
+
+    /// `ExtentWidth` (the full content width). `None` if not a `ScrollViewer`.
+    #[must_use]
+    pub fn extent_width(&self) -> Option<f32> {
+        self.scrollviewer_metric(6)
+    }
+
+    /// `ViewportWidth` (the visible content width). `None` if not a
+    /// `ScrollViewer`.
+    #[must_use]
+    pub fn viewport_width(&self) -> Option<f32> {
+        self.scrollviewer_metric(7)
+    }
+
+    fn scrollviewer_metric(&self, which: i32) -> Option<f32> {
+        let mut out = 0.0f32;
+        // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
+        unsafe { dm_noesis_controls_scrollviewer_metric(self.ptr.as_ptr(), which, &mut out) }
+            .then_some(out)
+    }
+
+    // -- Image source --
+
+    /// Borrowed pointer to this `Image`'s `Source` (an `ImageSource`), or
+    /// `None` when unset / not an `Image`. Borrowed like
+    /// [`get_component`](Self::get_component).
+    #[must_use]
+    pub fn image_source(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
+        let p = unsafe { dm_noesis_controls_image_get_source(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Set this `Image`'s `Source`. `source` must be an `ImageSource*` (e.g. a
+    /// [`crate::imaging::BitmapImage`] / [`crate::imaging::TextureSource`]
+    /// handle's [`raw`](crate::imaging::TextureSource::raw)) or null to clear.
+    /// Returns `false` if not an `Image`, or `source` is not an `ImageSource`.
+    /// Noesis takes its own reference.
+    ///
+    /// # Safety
+    ///
+    /// `source` must be a valid live `Noesis::ImageSource*` or null.
+    pub unsafe fn set_image_source(&mut self, source: *mut c_void) -> bool {
+        // SAFETY: self.ptr is live; `source` is live per contract.
+        unsafe { dm_noesis_controls_image_set_source(self.ptr.as_ptr(), source) }
     }
 
     // ── resources-styles-templates (§7) ─────────────────────────────────────
