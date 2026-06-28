@@ -10,17 +10,6 @@ sequencing is in [Suggested completion order](#suggested-completion-order); thin
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
-## 6. Animation & timing
-
-`Storyboard` (Begin/Pause/Resume/Stop/Seek), the Double/Color/Thickness/Point From-To animations,
-Double/Color `*UsingKeyFrames` (Discrete/Linear/Easing key frames), the easing-function family, the
-common `Timeline` knobs, and storyboard-less `begin_on` (`ApplyAnimationClock` equivalent) ship
-(`src/animation.rs`, `cpp/noesis_animation.cpp`). Remaining:
-
-- **More animation value types.** `Rect`/`Size`/`Object`/`Matrix`/`Int*` animations + their `*UsingKeyFrames`.
-- **`KeySpline`** (spline key frames) and per-animation `HandoffBehavior` on the `Storyboard` path.
-- **`BeginStoryboard`** trigger-action wrapper (only useful inside a trigger; code-driven `Begin` covers the rest).
-
 ## 7. Styles, resources, templates
 
 `ResourceDictionary` access (create/own, key→component add, borrowed lookup,

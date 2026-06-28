@@ -27,7 +27,7 @@
 //! [`FrameworkElement::get_f32`](crate::view::FrameworkElement::get_f32)).
 
 use core::ptr::NonNull;
-use std::ffi::{CString, c_void};
+use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
     dm_noesis_animation_begin_on, dm_noesis_animation_set_easing_function,
@@ -43,18 +43,67 @@ use crate::ffi::{
     dm_noesis_easing_function_set_springiness, dm_noesis_point_animation_create,
     dm_noesis_point_animation_set_by, dm_noesis_point_animation_set_from,
     dm_noesis_point_animation_set_to, dm_noesis_storyboard_add_child, dm_noesis_storyboard_begin,
-    dm_noesis_storyboard_child_count, dm_noesis_storyboard_create, dm_noesis_storyboard_is_paused,
-    dm_noesis_storyboard_is_playing, dm_noesis_storyboard_pause, dm_noesis_storyboard_resume,
-    dm_noesis_storyboard_seek, dm_noesis_storyboard_set_target_name,
-    dm_noesis_storyboard_set_target_property, dm_noesis_storyboard_stop,
-    dm_noesis_thickness_animation_create, dm_noesis_thickness_animation_set_by,
-    dm_noesis_thickness_animation_set_from, dm_noesis_thickness_animation_set_to,
-    dm_noesis_timeline_get_duration_seconds, dm_noesis_timeline_set_auto_reverse,
-    dm_noesis_timeline_set_begin_time_seconds, dm_noesis_timeline_set_duration_auto,
-    dm_noesis_timeline_set_duration_forever, dm_noesis_timeline_set_duration_seconds,
-    dm_noesis_timeline_set_fill_behavior, dm_noesis_timeline_set_repeat_count,
-    dm_noesis_timeline_set_repeat_duration, dm_noesis_timeline_set_repeat_forever,
-    dm_noesis_timeline_set_speed_ratio,
+    dm_noesis_storyboard_begin_handoff, dm_noesis_storyboard_child_count,
+    dm_noesis_storyboard_create, dm_noesis_storyboard_is_paused, dm_noesis_storyboard_is_playing,
+    dm_noesis_storyboard_pause, dm_noesis_storyboard_resume, dm_noesis_storyboard_seek,
+    dm_noesis_storyboard_set_target_name, dm_noesis_storyboard_set_target_property,
+    dm_noesis_storyboard_stop, dm_noesis_thickness_animation_create,
+    dm_noesis_thickness_animation_set_by, dm_noesis_thickness_animation_set_from,
+    dm_noesis_thickness_animation_set_to, dm_noesis_timeline_get_duration_seconds,
+    dm_noesis_timeline_set_auto_reverse, dm_noesis_timeline_set_begin_time_seconds,
+    dm_noesis_timeline_set_duration_auto, dm_noesis_timeline_set_duration_forever,
+    dm_noesis_timeline_set_duration_seconds, dm_noesis_timeline_set_fill_behavior,
+    dm_noesis_timeline_set_repeat_count, dm_noesis_timeline_set_repeat_duration,
+    dm_noesis_timeline_set_repeat_forever, dm_noesis_timeline_set_speed_ratio,
+};
+use crate::ffi::{
+    dm_noesis_animation_begin_storyboard_create, dm_noesis_animation_begin_storyboard_get_handoff,
+    dm_noesis_animation_begin_storyboard_get_name,
+    dm_noesis_animation_begin_storyboard_get_storyboard,
+    dm_noesis_animation_begin_storyboard_set_handoff,
+    dm_noesis_animation_begin_storyboard_set_name,
+    dm_noesis_animation_begin_storyboard_set_storyboard,
+    dm_noesis_animation_int16_animation_create, dm_noesis_animation_int16_animation_get_by,
+    dm_noesis_animation_int16_animation_get_from, dm_noesis_animation_int16_animation_get_to,
+    dm_noesis_animation_int16_animation_set_by, dm_noesis_animation_int16_animation_set_from,
+    dm_noesis_animation_int16_animation_set_to, dm_noesis_animation_int16_keyframes_add,
+    dm_noesis_animation_int16_keyframes_count, dm_noesis_animation_int16_keyframes_create,
+    dm_noesis_animation_int16_keyframes_get_key_time,
+    dm_noesis_animation_int16_keyframes_get_value, dm_noesis_animation_int32_animation_create,
+    dm_noesis_animation_int32_animation_get_by, dm_noesis_animation_int32_animation_get_from,
+    dm_noesis_animation_int32_animation_get_to, dm_noesis_animation_int32_animation_set_by,
+    dm_noesis_animation_int32_animation_set_from, dm_noesis_animation_int32_animation_set_to,
+    dm_noesis_animation_int32_keyframes_add, dm_noesis_animation_int32_keyframes_count,
+    dm_noesis_animation_int32_keyframes_create, dm_noesis_animation_int32_keyframes_get_key_time,
+    dm_noesis_animation_int32_keyframes_get_value, dm_noesis_animation_int64_animation_create,
+    dm_noesis_animation_int64_animation_get_by, dm_noesis_animation_int64_animation_get_from,
+    dm_noesis_animation_int64_animation_get_to, dm_noesis_animation_int64_animation_set_by,
+    dm_noesis_animation_int64_animation_set_from, dm_noesis_animation_int64_animation_set_to,
+    dm_noesis_animation_int64_keyframes_add, dm_noesis_animation_int64_keyframes_count,
+    dm_noesis_animation_int64_keyframes_create, dm_noesis_animation_int64_keyframes_get_key_time,
+    dm_noesis_animation_int64_keyframes_get_value, dm_noesis_animation_keyspline_create,
+    dm_noesis_animation_keyspline_get_control_point1,
+    dm_noesis_animation_keyspline_get_control_point2,
+    dm_noesis_animation_keyspline_set_control_point1,
+    dm_noesis_animation_keyspline_set_control_point2, dm_noesis_animation_matrix_keyframes_add,
+    dm_noesis_animation_matrix_keyframes_count, dm_noesis_animation_matrix_keyframes_create,
+    dm_noesis_animation_matrix_keyframes_get_key_time,
+    dm_noesis_animation_matrix_keyframes_get_value, dm_noesis_animation_object_keyframes_add,
+    dm_noesis_animation_object_keyframes_count, dm_noesis_animation_object_keyframes_create,
+    dm_noesis_animation_object_keyframes_get_key_time,
+    dm_noesis_animation_object_keyframes_get_value, dm_noesis_animation_rect_animation_create,
+    dm_noesis_animation_rect_animation_get_by, dm_noesis_animation_rect_animation_get_from,
+    dm_noesis_animation_rect_animation_get_to, dm_noesis_animation_rect_animation_set_by,
+    dm_noesis_animation_rect_animation_set_from, dm_noesis_animation_rect_animation_set_to,
+    dm_noesis_animation_rect_keyframes_add, dm_noesis_animation_rect_keyframes_count,
+    dm_noesis_animation_rect_keyframes_create, dm_noesis_animation_rect_keyframes_get_key_time,
+    dm_noesis_animation_rect_keyframes_get_value, dm_noesis_animation_size_animation_create,
+    dm_noesis_animation_size_animation_get_by, dm_noesis_animation_size_animation_get_from,
+    dm_noesis_animation_size_animation_get_to, dm_noesis_animation_size_animation_set_by,
+    dm_noesis_animation_size_animation_set_from, dm_noesis_animation_size_animation_set_to,
+    dm_noesis_animation_size_keyframes_add, dm_noesis_animation_size_keyframes_count,
+    dm_noesis_animation_size_keyframes_create, dm_noesis_animation_size_keyframes_get_key_time,
+    dm_noesis_animation_size_keyframes_get_value,
 };
 use crate::view::FrameworkElement;
 
@@ -132,8 +181,44 @@ pub enum KeyFrameKind {
     Discrete = 0,
     /// Linear interpolation up to the key time.
     Linear = 1,
-    /// Eased interpolation (provide an [`EasingFunction`]).
+    /// Eased interpolation (provide an [`EasingFunction`] via
+    /// [`KeyFrameInterp::Easing`]).
     Easing = 2,
+    /// Spline interpolation (provide a [`KeySpline`] via
+    /// [`KeyFrameInterp::Spline`]). Not supported by the `Double` / `Color`
+    /// key-frame animations.
+    Spline = 3,
+}
+
+/// The interpolation aid passed alongside a key frame: an [`EasingFunction`] for
+/// [`KeyFrameKind::Easing`], a [`KeySpline`] for [`KeyFrameKind::Spline`], or
+/// nothing for discrete / linear frames.
+#[derive(Copy, Clone)]
+pub enum KeyFrameInterp<'a> {
+    /// No interpolation aid (discrete / linear frames).
+    None,
+    /// Easing function for an [`KeyFrameKind::Easing`] frame.
+    Easing(&'a EasingFunction),
+    /// Key spline for a [`KeyFrameKind::Spline`] frame.
+    Spline(&'a KeySpline),
+}
+
+impl KeyFrameInterp<'_> {
+    fn raw(self) -> *mut c_void {
+        match self {
+            KeyFrameInterp::None => core::ptr::null_mut(),
+            KeyFrameInterp::Easing(e) => e.raw(),
+            KeyFrameInterp::Spline(s) => s.raw(),
+        }
+    }
+}
+
+/// A handle that exposes its borrowed `Noesis::BaseComponent*`. Implemented by
+/// every owning wrapper in this module, letting any of them be used as an
+/// [`ObjectAnimationUsingKeyFrames`] key-frame value.
+pub trait AsComponent {
+    /// Borrowed `Noesis::BaseComponent*` for `self`.
+    fn component_raw(&self) -> *mut c_void;
 }
 
 macro_rules! base_component_handle {
@@ -147,6 +232,12 @@ macro_rules! base_component_handle {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
             #[must_use]
             pub fn raw(&self) -> *mut c_void {
+                self.ptr.as_ptr()
+            }
+        }
+
+        impl AsComponent for $name {
+            fn component_raw(&self) -> *mut c_void {
                 self.ptr.as_ptr()
             }
         }
@@ -368,6 +459,23 @@ impl Storyboard {
     pub fn begin(&mut self, root: &FrameworkElement, controllable: bool) -> bool {
         // SAFETY: both pointers are live for the call.
         unsafe { dm_noesis_storyboard_begin(self.raw(), root.raw(), controllable) }
+    }
+
+    /// Like [`begin`](Self::begin), but with an explicit [`HandoffBehavior`]
+    /// controlling how the storyboard's new clocks interact with animations
+    /// already running on the same properties
+    /// ([`SnapshotAndReplace`](HandoffBehavior::SnapshotAndReplace) replaces
+    /// them; [`Compose`](HandoffBehavior::Compose) layers on top).
+    pub fn begin_with_handoff(
+        &mut self,
+        root: &FrameworkElement,
+        handoff: HandoffBehavior,
+        controllable: bool,
+    ) -> bool {
+        // SAFETY: both pointers are live for the call.
+        unsafe {
+            dm_noesis_storyboard_begin_handoff(self.raw(), root.raw(), handoff as i32, controllable)
+        }
     }
 
     /// Pause the controllable clocks created for `root`. No-op unless the
@@ -802,5 +910,1205 @@ impl ColorAnimationUsingKeyFrames {
                 e,
             )
         }
+    }
+}
+
+// ── Rect / Size From/To animations ───────────────────────────────────────────
+
+/// A `RectAnimation` — interpolates a `Rect` property between `From` and `To`.
+/// Rects are `[x, y, width, height]`.
+pub struct RectAnimation {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(RectAnimation);
+
+impl Default for RectAnimation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RectAnimation {
+    /// Create an empty `RectAnimation`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned RectAnimation*.
+        let ptr = unsafe { dm_noesis_animation_rect_animation_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_rect_animation_create returned null"),
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the starting rect.
+    pub fn set_from(&mut self, value: Option<[f32; 4]>) -> bool {
+        let v = value.unwrap_or([0.0; 4]);
+        // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
+        unsafe {
+            dm_noesis_animation_rect_animation_set_from(self.raw(), value.is_some(), v.as_ptr())
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the ending rect.
+    pub fn set_to(&mut self, value: Option<[f32; 4]>) -> bool {
+        let v = value.unwrap_or([0.0; 4]);
+        // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
+        unsafe {
+            dm_noesis_animation_rect_animation_set_to(self.raw(), value.is_some(), v.as_ptr())
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the relative rect offset (`By`).
+    pub fn set_by(&mut self, value: Option<[f32; 4]>) -> bool {
+        let v = value.unwrap_or([0.0; 4]);
+        // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
+        unsafe {
+            dm_noesis_animation_rect_animation_set_by(self.raw(), value.is_some(), v.as_ptr())
+        }
+    }
+
+    /// Read back the `From` rect, or `None` if unset.
+    #[must_use]
+    pub fn from(&self) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
+        let has =
+            unsafe { dm_noesis_animation_rect_animation_get_from(self.raw(), out.as_mut_ptr()) };
+        has.then_some(out)
+    }
+
+    /// Read back the `To` rect, or `None` if unset.
+    #[must_use]
+    pub fn to(&self) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
+        let has =
+            unsafe { dm_noesis_animation_rect_animation_get_to(self.raw(), out.as_mut_ptr()) };
+        has.then_some(out)
+    }
+
+    /// Read back the `By` rect, or `None` if unset.
+    #[must_use]
+    pub fn by(&self) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
+        let has =
+            unsafe { dm_noesis_animation_rect_animation_get_by(self.raw(), out.as_mut_ptr()) };
+        has.then_some(out)
+    }
+}
+
+/// A `SizeAnimation` — interpolates a `Size` property between `From` and `To`.
+/// Sizes are `[width, height]`.
+pub struct SizeAnimation {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(SizeAnimation);
+
+impl Default for SizeAnimation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SizeAnimation {
+    /// Create an empty `SizeAnimation`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned SizeAnimation*.
+        let ptr = unsafe { dm_noesis_animation_size_animation_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_size_animation_create returned null"),
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the starting size.
+    pub fn set_from(&mut self, value: Option<[f32; 2]>) -> bool {
+        let v = value.unwrap_or([0.0; 2]);
+        // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
+        unsafe {
+            dm_noesis_animation_size_animation_set_from(self.raw(), value.is_some(), v.as_ptr())
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the ending size.
+    pub fn set_to(&mut self, value: Option<[f32; 2]>) -> bool {
+        let v = value.unwrap_or([0.0; 2]);
+        // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
+        unsafe {
+            dm_noesis_animation_size_animation_set_to(self.raw(), value.is_some(), v.as_ptr())
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the relative size offset (`By`).
+    pub fn set_by(&mut self, value: Option<[f32; 2]>) -> bool {
+        let v = value.unwrap_or([0.0; 2]);
+        // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
+        unsafe {
+            dm_noesis_animation_size_animation_set_by(self.raw(), value.is_some(), v.as_ptr())
+        }
+    }
+
+    /// Read back the `From` size, or `None` if unset.
+    #[must_use]
+    pub fn from(&self) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
+        let has =
+            unsafe { dm_noesis_animation_size_animation_get_from(self.raw(), out.as_mut_ptr()) };
+        has.then_some(out)
+    }
+
+    /// Read back the `To` size, or `None` if unset.
+    #[must_use]
+    pub fn to(&self) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
+        let has =
+            unsafe { dm_noesis_animation_size_animation_get_to(self.raw(), out.as_mut_ptr()) };
+        has.then_some(out)
+    }
+
+    /// Read back the `By` size, or `None` if unset.
+    #[must_use]
+    pub fn by(&self) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
+        let has =
+            unsafe { dm_noesis_animation_size_animation_get_by(self.raw(), out.as_mut_ptr()) };
+        has.then_some(out)
+    }
+}
+
+// ── Int16 / Int32 / Int64 From/To animations ─────────────────────────────────
+
+/// An `Int16Animation` — interpolates an `int16` property between `From` and
+/// `To` (Noesis rounds the interpolated value).
+pub struct Int16Animation {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(Int16Animation);
+
+impl Default for Int16Animation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Int16Animation {
+    /// Create an empty `Int16Animation`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned Int16Animation*.
+        let ptr = unsafe { dm_noesis_animation_int16_animation_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_int16_animation_create returned null"),
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the starting value.
+    pub fn set_from(&mut self, value: Option<i16>) -> bool {
+        // SAFETY: self.raw() is a live Int16Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int16_animation_set_from(
+                self.raw(),
+                value.is_some(),
+                i32::from(value.unwrap_or(0)),
+            )
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the ending value.
+    pub fn set_to(&mut self, value: Option<i16>) -> bool {
+        // SAFETY: self.raw() is a live Int16Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int16_animation_set_to(
+                self.raw(),
+                value.is_some(),
+                i32::from(value.unwrap_or(0)),
+            )
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the relative offset (`By`).
+    pub fn set_by(&mut self, value: Option<i16>) -> bool {
+        // SAFETY: self.raw() is a live Int16Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int16_animation_set_by(
+                self.raw(),
+                value.is_some(),
+                i32::from(value.unwrap_or(0)),
+            )
+        }
+    }
+
+    /// Read back the `From` value, or `None` if unset.
+    #[must_use]
+    pub fn from(&self) -> Option<i16> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let has = unsafe { dm_noesis_animation_int16_animation_get_from(self.raw(), &mut out) };
+        has.then_some(out as i16)
+    }
+
+    /// Read back the `To` value, or `None` if unset.
+    #[must_use]
+    pub fn to(&self) -> Option<i16> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let has = unsafe { dm_noesis_animation_int16_animation_get_to(self.raw(), &mut out) };
+        has.then_some(out as i16)
+    }
+
+    /// Read back the `By` value, or `None` if unset.
+    #[must_use]
+    pub fn by(&self) -> Option<i16> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let has = unsafe { dm_noesis_animation_int16_animation_get_by(self.raw(), &mut out) };
+        has.then_some(out as i16)
+    }
+}
+
+/// An `Int32Animation` — interpolates an `int32` property between `From` and
+/// `To`.
+pub struct Int32Animation {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(Int32Animation);
+
+impl Default for Int32Animation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Int32Animation {
+    /// Create an empty `Int32Animation`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned Int32Animation*.
+        let ptr = unsafe { dm_noesis_animation_int32_animation_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_int32_animation_create returned null"),
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the starting value.
+    pub fn set_from(&mut self, value: Option<i32>) -> bool {
+        // SAFETY: self.raw() is a live Int32Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int32_animation_set_from(
+                self.raw(),
+                value.is_some(),
+                value.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the ending value.
+    pub fn set_to(&mut self, value: Option<i32>) -> bool {
+        // SAFETY: self.raw() is a live Int32Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int32_animation_set_to(
+                self.raw(),
+                value.is_some(),
+                value.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the relative offset (`By`).
+    pub fn set_by(&mut self, value: Option<i32>) -> bool {
+        // SAFETY: self.raw() is a live Int32Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int32_animation_set_by(
+                self.raw(),
+                value.is_some(),
+                value.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Read back the `From` value, or `None` if unset.
+    #[must_use]
+    pub fn from(&self) -> Option<i32> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let has = unsafe { dm_noesis_animation_int32_animation_get_from(self.raw(), &mut out) };
+        has.then_some(out)
+    }
+
+    /// Read back the `To` value, or `None` if unset.
+    #[must_use]
+    pub fn to(&self) -> Option<i32> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let has = unsafe { dm_noesis_animation_int32_animation_get_to(self.raw(), &mut out) };
+        has.then_some(out)
+    }
+
+    /// Read back the `By` value, or `None` if unset.
+    #[must_use]
+    pub fn by(&self) -> Option<i32> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let has = unsafe { dm_noesis_animation_int32_animation_get_by(self.raw(), &mut out) };
+        has.then_some(out)
+    }
+}
+
+/// An `Int64Animation` — interpolates an `int64` property between `From` and
+/// `To`.
+pub struct Int64Animation {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(Int64Animation);
+
+impl Default for Int64Animation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Int64Animation {
+    /// Create an empty `Int64Animation`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned Int64Animation*.
+        let ptr = unsafe { dm_noesis_animation_int64_animation_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_int64_animation_create returned null"),
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the starting value.
+    pub fn set_from(&mut self, value: Option<i64>) -> bool {
+        // SAFETY: self.raw() is a live Int64Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int64_animation_set_from(
+                self.raw(),
+                value.is_some(),
+                value.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the ending value.
+    pub fn set_to(&mut self, value: Option<i64>) -> bool {
+        // SAFETY: self.raw() is a live Int64Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int64_animation_set_to(
+                self.raw(),
+                value.is_some(),
+                value.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Set (`Some`) or clear (`None`) the relative offset (`By`).
+    pub fn set_by(&mut self, value: Option<i64>) -> bool {
+        // SAFETY: self.raw() is a live Int64Animation* for the call.
+        unsafe {
+            dm_noesis_animation_int64_animation_set_by(
+                self.raw(),
+                value.is_some(),
+                value.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Read back the `From` value, or `None` if unset.
+    #[must_use]
+    pub fn from(&self) -> Option<i64> {
+        let mut out = 0i64;
+        // SAFETY: self.raw() is live; `out` is a valid i64.
+        let has = unsafe { dm_noesis_animation_int64_animation_get_from(self.raw(), &mut out) };
+        has.then_some(out)
+    }
+
+    /// Read back the `To` value, or `None` if unset.
+    #[must_use]
+    pub fn to(&self) -> Option<i64> {
+        let mut out = 0i64;
+        // SAFETY: self.raw() is live; `out` is a valid i64.
+        let has = unsafe { dm_noesis_animation_int64_animation_get_to(self.raw(), &mut out) };
+        has.then_some(out)
+    }
+
+    /// Read back the `By` value, or `None` if unset.
+    #[must_use]
+    pub fn by(&self) -> Option<i64> {
+        let mut out = 0i64;
+        // SAFETY: self.raw() is live; `out` is a valid i64.
+        let has = unsafe { dm_noesis_animation_int64_animation_get_by(self.raw(), &mut out) };
+        has.then_some(out)
+    }
+}
+
+// ── KeySpline ─────────────────────────────────────────────────────────────────
+
+/// A `KeySpline` — the two cubic-Bezier control points (each in the unit square)
+/// that shape a spline key frame's progress curve. Used with
+/// [`KeyFrameKind::Spline`] via [`KeyFrameInterp::Spline`].
+pub struct KeySpline {
+    ptr: NonNull<c_void>,
+}
+
+base_component_handle!(KeySpline);
+
+impl KeySpline {
+    /// Create a `KeySpline` from its two control points `(x, y)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new(control_point1: (f32, f32), control_point2: (f32, f32)) -> Self {
+        // SAFETY: factory returns a +1-owned KeySpline*.
+        let ptr = unsafe {
+            dm_noesis_animation_keyspline_create(
+                control_point1.0,
+                control_point1.1,
+                control_point2.0,
+                control_point2.1,
+            )
+        };
+        Self {
+            ptr: NonNull::new(ptr).expect("dm_noesis_animation_keyspline_create returned null"),
+        }
+    }
+
+    /// Set the first control point `(x, y)`.
+    pub fn set_control_point1(&mut self, x: f32, y: f32) -> bool {
+        // SAFETY: self.raw() is a live KeySpline* for the call.
+        unsafe { dm_noesis_animation_keyspline_set_control_point1(self.raw(), x, y) }
+    }
+
+    /// Set the second control point `(x, y)`.
+    pub fn set_control_point2(&mut self, x: f32, y: f32) -> bool {
+        // SAFETY: self.raw() is a live KeySpline* for the call.
+        unsafe { dm_noesis_animation_keyspline_set_control_point2(self.raw(), x, y) }
+    }
+
+    /// Read back the first control point `(x, y)`.
+    #[must_use]
+    pub fn control_point1(&self) -> Option<(f32, f32)> {
+        let mut out = [0.0f32; 2];
+        // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
+        let ok = unsafe {
+            dm_noesis_animation_keyspline_get_control_point1(self.raw(), out.as_mut_ptr())
+        };
+        ok.then_some((out[0], out[1]))
+    }
+
+    /// Read back the second control point `(x, y)`.
+    #[must_use]
+    pub fn control_point2(&self) -> Option<(f32, f32)> {
+        let mut out = [0.0f32; 2];
+        // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
+        let ok = unsafe {
+            dm_noesis_animation_keyspline_get_control_point2(self.raw(), out.as_mut_ptr())
+        };
+        ok.then_some((out[0], out[1]))
+    }
+}
+
+// ── Rect / Size / Int key-frame animations ───────────────────────────────────
+
+/// A `RectAnimationUsingKeyFrames` — animates a `Rect` property through
+/// discrete / linear / eased / splined key frames.
+pub struct RectAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(RectAnimationUsingKeyFrames);
+
+impl Default for RectAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RectAnimationUsingKeyFrames {
+    /// Create an empty key-frame rect animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned RectAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_rect_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_rect_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a key frame reaching `value` (`[x, y, width, height]`) at
+    /// `key_time_secs`. Provide the matching [`KeyFrameInterp`] for
+    /// [`KeyFrameKind::Easing`] / [`KeyFrameKind::Spline`].
+    pub fn add_key_frame(
+        &mut self,
+        kind: KeyFrameKind,
+        key_time_secs: f64,
+        value: [f32; 4],
+        interp: KeyFrameInterp,
+    ) -> bool {
+        // SAFETY: self.raw() is live; `value` outlives the call; the interp raw
+        // pointer is null or a live easing/spline object.
+        unsafe {
+            dm_noesis_animation_rect_keyframes_add(
+                self.raw(),
+                kind as i32,
+                key_time_secs,
+                value.as_ptr(),
+                interp.raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_rect_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
+        let ok = unsafe {
+            dm_noesis_animation_rect_keyframes_get_value(self.raw(), index as i32, out.as_mut_ptr())
+        };
+        ok.then_some(out)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_rect_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+/// A `SizeAnimationUsingKeyFrames` — animates a `Size` property through
+/// discrete / linear / eased / splined key frames.
+pub struct SizeAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(SizeAnimationUsingKeyFrames);
+
+impl Default for SizeAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SizeAnimationUsingKeyFrames {
+    /// Create an empty key-frame size animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned SizeAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_size_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_size_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a key frame reaching `value` (`[width, height]`) at
+    /// `key_time_secs`. Provide the matching [`KeyFrameInterp`] for
+    /// [`KeyFrameKind::Easing`] / [`KeyFrameKind::Spline`].
+    pub fn add_key_frame(
+        &mut self,
+        kind: KeyFrameKind,
+        key_time_secs: f64,
+        value: [f32; 2],
+        interp: KeyFrameInterp,
+    ) -> bool {
+        // SAFETY: self.raw() is live; `value` outlives the call; the interp raw
+        // pointer is null or a live easing/spline object.
+        unsafe {
+            dm_noesis_animation_size_keyframes_add(
+                self.raw(),
+                kind as i32,
+                key_time_secs,
+                value.as_ptr(),
+                interp.raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_size_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
+        let ok = unsafe {
+            dm_noesis_animation_size_keyframes_get_value(self.raw(), index as i32, out.as_mut_ptr())
+        };
+        ok.then_some(out)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_size_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+/// An `Int16AnimationUsingKeyFrames` — animates an `int16` property through
+/// discrete / linear / eased / splined key frames.
+pub struct Int16AnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(Int16AnimationUsingKeyFrames);
+
+impl Default for Int16AnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Int16AnimationUsingKeyFrames {
+    /// Create an empty key-frame int16 animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned Int16AnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_int16_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_int16_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a key frame reaching `value` at `key_time_secs`. Provide the
+    /// matching [`KeyFrameInterp`] for [`KeyFrameKind::Easing`] /
+    /// [`KeyFrameKind::Spline`].
+    pub fn add_key_frame(
+        &mut self,
+        kind: KeyFrameKind,
+        key_time_secs: f64,
+        value: i16,
+        interp: KeyFrameInterp,
+    ) -> bool {
+        // SAFETY: self.raw() is live; the interp raw pointer is null or a live
+        // easing/spline object.
+        unsafe {
+            dm_noesis_animation_int16_keyframes_add(
+                self.raw(),
+                kind as i32,
+                key_time_secs,
+                i32::from(value),
+                interp.raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_int16_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<i16> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let ok = unsafe {
+            dm_noesis_animation_int16_keyframes_get_value(self.raw(), index as i32, &mut out)
+        };
+        ok.then_some(out as i16)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_int16_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+/// An `Int32AnimationUsingKeyFrames` — animates an `int32` property through
+/// discrete / linear / eased / splined key frames.
+pub struct Int32AnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(Int32AnimationUsingKeyFrames);
+
+impl Default for Int32AnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Int32AnimationUsingKeyFrames {
+    /// Create an empty key-frame int32 animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned Int32AnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_int32_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_int32_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a key frame reaching `value` at `key_time_secs`. Provide the
+    /// matching [`KeyFrameInterp`] for [`KeyFrameKind::Easing`] /
+    /// [`KeyFrameKind::Spline`].
+    pub fn add_key_frame(
+        &mut self,
+        kind: KeyFrameKind,
+        key_time_secs: f64,
+        value: i32,
+        interp: KeyFrameInterp,
+    ) -> bool {
+        // SAFETY: self.raw() is live; the interp raw pointer is null or a live
+        // easing/spline object.
+        unsafe {
+            dm_noesis_animation_int32_keyframes_add(
+                self.raw(),
+                kind as i32,
+                key_time_secs,
+                value,
+                interp.raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_int32_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<i32> {
+        let mut out = 0i32;
+        // SAFETY: self.raw() is live; `out` is a valid i32.
+        let ok = unsafe {
+            dm_noesis_animation_int32_keyframes_get_value(self.raw(), index as i32, &mut out)
+        };
+        ok.then_some(out)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_int32_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+/// An `Int64AnimationUsingKeyFrames` — animates an `int64` property through
+/// discrete / linear / eased / splined key frames.
+pub struct Int64AnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(Int64AnimationUsingKeyFrames);
+
+impl Default for Int64AnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Int64AnimationUsingKeyFrames {
+    /// Create an empty key-frame int64 animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned Int64AnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_int64_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_int64_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a key frame reaching `value` at `key_time_secs`. Provide the
+    /// matching [`KeyFrameInterp`] for [`KeyFrameKind::Easing`] /
+    /// [`KeyFrameKind::Spline`].
+    pub fn add_key_frame(
+        &mut self,
+        kind: KeyFrameKind,
+        key_time_secs: f64,
+        value: i64,
+        interp: KeyFrameInterp,
+    ) -> bool {
+        // SAFETY: self.raw() is live; the interp raw pointer is null or a live
+        // easing/spline object.
+        unsafe {
+            dm_noesis_animation_int64_keyframes_add(
+                self.raw(),
+                kind as i32,
+                key_time_secs,
+                value,
+                interp.raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_int64_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<i64> {
+        let mut out = 0i64;
+        // SAFETY: self.raw() is live; `out` is a valid i64.
+        let ok = unsafe {
+            dm_noesis_animation_int64_keyframes_get_value(self.raw(), index as i32, &mut out)
+        };
+        ok.then_some(out)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_int64_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+// ── Object key-frame animation ───────────────────────────────────────────────
+
+/// An owned `Noesis::BaseComponent` handle handed back from an
+/// [`ObjectAnimationUsingKeyFrames`] key-frame value read.
+pub struct OwnedComponent {
+    ptr: NonNull<c_void>,
+}
+
+base_component_handle!(OwnedComponent);
+
+/// An `ObjectAnimationUsingKeyFrames` — animates an `Object` (arbitrary
+/// `BaseComponent`) property through discrete key frames. Objects can't be
+/// interpolated, so only discrete frames exist.
+pub struct ObjectAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(ObjectAnimationUsingKeyFrames);
+
+impl Default for ObjectAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ObjectAnimationUsingKeyFrames {
+    /// Create an empty key-frame object animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned ObjectAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_object_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_object_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a discrete key frame setting `value` at `key_time_secs`. The
+    /// collection takes its own reference to `value`'s component, so the handle
+    /// may be dropped afterwards. `value` is any owning handle in this module
+    /// (its borrowed `BaseComponent*` is read).
+    pub fn add_key_frame<C: AsComponent>(&mut self, key_time_secs: f64, value: &C) -> bool {
+        // SAFETY: self.raw() is live; value.component_raw() is a live BaseComponent*.
+        unsafe {
+            dm_noesis_animation_object_keyframes_add(
+                self.raw(),
+                key_time_secs,
+                value.component_raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_object_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the component at key frame `index` as an owned handle (`+1`
+    /// reference), or `None` if out of range or the value is null.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<OwnedComponent> {
+        // SAFETY: self.raw() is live; the C side hands out a +1 reference.
+        let ptr =
+            unsafe { dm_noesis_animation_object_keyframes_get_value(self.raw(), index as i32) };
+        NonNull::new(ptr).map(|ptr| OwnedComponent { ptr })
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_object_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+// ── Matrix key-frame animation ───────────────────────────────────────────────
+
+/// A `MatrixAnimationUsingKeyFrames` — animates a `Matrix` (`MatrixTransform`)
+/// property through discrete key frames. A matrix is not componentwise
+/// interpolated, so only discrete frames exist. Matrices are
+/// `[m00, m01, m10, m11, m20, m21]`.
+pub struct MatrixAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(MatrixAnimationUsingKeyFrames);
+
+impl Default for MatrixAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MatrixAnimationUsingKeyFrames {
+    /// Create an empty key-frame matrix animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned MatrixAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_matrix_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_matrix_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a discrete key frame setting `value`
+    /// (`[m00, m01, m10, m11, m20, m21]`) at `key_time_secs`.
+    pub fn add_key_frame(&mut self, key_time_secs: f64, value: [f32; 6]) -> bool {
+        // SAFETY: self.raw() is live; `value` outlives the call.
+        unsafe {
+            dm_noesis_animation_matrix_keyframes_add(self.raw(), key_time_secs, value.as_ptr())
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_matrix_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the matrix at key frame `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<[f32; 6]> {
+        let mut out = [0.0f32; 6];
+        // SAFETY: self.raw() is live; `out` is a valid 6-float buffer.
+        let ok = unsafe {
+            dm_noesis_animation_matrix_keyframes_get_value(
+                self.raw(),
+                index as i32,
+                out.as_mut_ptr(),
+            )
+        };
+        ok.then_some(out)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_matrix_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+// ── BeginStoryboard (trigger action) ──────────────────────────────────────────
+
+/// A `BeginStoryboard` trigger action — begins a [`Storyboard`] with a chosen
+/// [`HandoffBehavior`] when the owning trigger fires. Useful inside a trigger's
+/// action list; code-driven [`Storyboard::begin`] covers the rest.
+pub struct BeginStoryboard {
+    ptr: NonNull<c_void>,
+}
+
+base_component_handle!(BeginStoryboard);
+
+impl Default for BeginStoryboard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BeginStoryboard {
+    /// Create an empty `BeginStoryboard`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned BeginStoryboard*.
+        let ptr = unsafe { dm_noesis_animation_begin_storyboard_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_begin_storyboard_create returned null"),
+        }
+    }
+
+    /// Set the storyboard this action begins. Noesis takes its own reference, so
+    /// `storyboard` may be dropped afterwards.
+    pub fn set_storyboard(&mut self, storyboard: &Storyboard) -> bool {
+        // SAFETY: both pointers are live for the call.
+        unsafe { dm_noesis_animation_begin_storyboard_set_storyboard(self.raw(), storyboard.raw()) }
+    }
+
+    /// Whether a storyboard has been assigned.
+    #[must_use]
+    pub fn has_storyboard(&self) -> bool {
+        // SAFETY: self.raw() is live; the C side hands out a +1 reference we
+        // release immediately after the null check.
+        let ptr = unsafe { dm_noesis_animation_begin_storyboard_get_storyboard(self.raw()) };
+        if ptr.is_null() {
+            false
+        } else {
+            // SAFETY: `ptr` is a +1-owned reference; release the borrow.
+            unsafe { dm_noesis_base_component_release(ptr) };
+            true
+        }
+    }
+
+    /// Set the hand-off behavior used when starting the storyboard's clocks.
+    pub fn set_handoff(&mut self, handoff: HandoffBehavior) -> bool {
+        // SAFETY: self.raw() is live for the call.
+        unsafe { dm_noesis_animation_begin_storyboard_set_handoff(self.raw(), handoff as i32) }
+    }
+
+    /// Read back the hand-off behavior, or `None` if the handle is invalid.
+    #[must_use]
+    pub fn handoff(&self) -> Option<HandoffBehavior> {
+        // SAFETY: self.raw() is live for the call.
+        match unsafe { dm_noesis_animation_begin_storyboard_get_handoff(self.raw()) } {
+            0 => Some(HandoffBehavior::SnapshotAndReplace),
+            1 => Some(HandoffBehavior::Compose),
+            _ => None,
+        }
+    }
+
+    /// Set the `Name` used to control the started storyboard later.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_name(&mut self, name: &str) -> bool {
+        let c = CString::new(name).expect("name contained interior NUL");
+        // SAFETY: self.raw() is live; `c` outlives the call.
+        unsafe { dm_noesis_animation_begin_storyboard_set_name(self.raw(), c.as_ptr()) }
+    }
+
+    /// Read back the `Name`, or `None` if unset.
+    #[must_use]
+    pub fn name(&self) -> Option<String> {
+        // SAFETY: self.raw() is live; the returned pointer (if non-null) is a
+        // borrowed NUL-terminated string valid for the read.
+        let p = unsafe { dm_noesis_animation_begin_storyboard_get_name(self.raw()) };
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: `p` is a live NUL-terminated C string for the duration of the copy.
+        let s = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        (!s.is_empty()).then_some(s)
     }
 }

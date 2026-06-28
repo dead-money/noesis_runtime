@@ -1798,6 +1798,12 @@ unsafe extern "C" {
     pub fn dm_noesis_storyboard_set_target(timeline: *mut c_void, target: *mut c_void) -> bool;
     pub fn dm_noesis_storyboard_begin(sb: *mut c_void, fe: *mut c_void, controllable: bool)
     -> bool;
+    pub fn dm_noesis_storyboard_begin_handoff(
+        sb: *mut c_void,
+        fe: *mut c_void,
+        handoff: i32,
+        controllable: bool,
+    ) -> bool;
     pub fn dm_noesis_storyboard_pause(sb: *mut c_void, fe: *mut c_void) -> bool;
     pub fn dm_noesis_storyboard_resume(sb: *mut c_void, fe: *mut c_void) -> bool;
     pub fn dm_noesis_storyboard_stop(sb: *mut c_void, fe: *mut c_void) -> bool;
@@ -1899,6 +1905,242 @@ unsafe extern "C" {
         dp_name: *const c_char,
         handoff: i32,
     ) -> bool;
+
+    // Rect / Size From-To animations
+    pub fn dm_noesis_animation_rect_animation_create() -> *mut c_void;
+    pub fn dm_noesis_animation_rect_animation_set_from(
+        anim: *mut c_void,
+        has: bool,
+        r: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_rect_animation_set_to(
+        anim: *mut c_void,
+        has: bool,
+        r: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_rect_animation_set_by(
+        anim: *mut c_void,
+        has: bool,
+        r: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_rect_animation_get_from(anim: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_animation_rect_animation_get_to(anim: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_animation_rect_animation_get_by(anim: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_animation_size_animation_create() -> *mut c_void;
+    pub fn dm_noesis_animation_size_animation_set_from(
+        anim: *mut c_void,
+        has: bool,
+        s: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_size_animation_set_to(
+        anim: *mut c_void,
+        has: bool,
+        s: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_size_animation_set_by(
+        anim: *mut c_void,
+        has: bool,
+        s: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_size_animation_get_from(anim: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_animation_size_animation_get_to(anim: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_animation_size_animation_get_by(anim: *mut c_void, out: *mut f32) -> bool;
+
+    // Int16 / Int32 From-To animations (value crosses as i32)
+    pub fn dm_noesis_animation_int16_animation_create() -> *mut c_void;
+    pub fn dm_noesis_animation_int16_animation_set_from(
+        anim: *mut c_void,
+        has: bool,
+        v: i32,
+    ) -> bool;
+    pub fn dm_noesis_animation_int16_animation_set_to(anim: *mut c_void, has: bool, v: i32)
+    -> bool;
+    pub fn dm_noesis_animation_int16_animation_set_by(anim: *mut c_void, has: bool, v: i32)
+    -> bool;
+    pub fn dm_noesis_animation_int16_animation_get_from(anim: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_animation_int16_animation_get_to(anim: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_animation_int16_animation_get_by(anim: *mut c_void, out: *mut i32) -> bool;
+
+    pub fn dm_noesis_animation_int32_animation_create() -> *mut c_void;
+    pub fn dm_noesis_animation_int32_animation_set_from(
+        anim: *mut c_void,
+        has: bool,
+        v: i32,
+    ) -> bool;
+    pub fn dm_noesis_animation_int32_animation_set_to(anim: *mut c_void, has: bool, v: i32)
+    -> bool;
+    pub fn dm_noesis_animation_int32_animation_set_by(anim: *mut c_void, has: bool, v: i32)
+    -> bool;
+    pub fn dm_noesis_animation_int32_animation_get_from(anim: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_animation_int32_animation_get_to(anim: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_animation_int32_animation_get_by(anim: *mut c_void, out: *mut i32) -> bool;
+
+    // Int64 From-To animation (value crosses as i64)
+    pub fn dm_noesis_animation_int64_animation_create() -> *mut c_void;
+    pub fn dm_noesis_animation_int64_animation_set_from(
+        anim: *mut c_void,
+        has: bool,
+        v: i64,
+    ) -> bool;
+    pub fn dm_noesis_animation_int64_animation_set_to(anim: *mut c_void, has: bool, v: i64)
+    -> bool;
+    pub fn dm_noesis_animation_int64_animation_set_by(anim: *mut c_void, has: bool, v: i64)
+    -> bool;
+    pub fn dm_noesis_animation_int64_animation_get_from(anim: *mut c_void, out: *mut i64) -> bool;
+    pub fn dm_noesis_animation_int64_animation_get_to(anim: *mut c_void, out: *mut i64) -> bool;
+    pub fn dm_noesis_animation_int64_animation_get_by(anim: *mut c_void, out: *mut i64) -> bool;
+
+    // Rect / Size key-frame animations. `kind`: 0 Discrete, 1 Linear, 2 Easing
+    // (`extra` = EasingFunctionBase*), 3 Spline (`extra` = KeySpline*).
+    pub fn dm_noesis_animation_rect_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_rect_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        r: *const f32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_rect_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_rect_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_rect_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    pub fn dm_noesis_animation_size_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_size_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        s: *const f32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_size_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_size_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_size_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    // Int16 / Int32 key-frame animations (value crosses as i32)
+    pub fn dm_noesis_animation_int16_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_int16_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        value: i32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_int16_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_int16_keyframes_get_value(
+        anim: *mut c_void,
+        idx: i32,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_animation_int16_keyframes_get_key_time(anim: *mut c_void, idx: i32) -> f64;
+
+    pub fn dm_noesis_animation_int32_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_int32_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        value: i32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_int32_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_int32_keyframes_get_value(
+        anim: *mut c_void,
+        idx: i32,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_animation_int32_keyframes_get_key_time(anim: *mut c_void, idx: i32) -> f64;
+
+    // Int64 key-frame animation (value crosses as i64)
+    pub fn dm_noesis_animation_int64_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_int64_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        value: i64,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_int64_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_int64_keyframes_get_value(
+        anim: *mut c_void,
+        idx: i32,
+        out: *mut i64,
+    ) -> bool;
+    pub fn dm_noesis_animation_int64_keyframes_get_key_time(anim: *mut c_void, idx: i32) -> f64;
+
+    // Object key-frame animation (discrete only; value is a borrowed BaseComponent*)
+    pub fn dm_noesis_animation_object_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_object_keyframes_add(
+        anim: *mut c_void,
+        key_time_seconds: f64,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_object_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_object_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_animation_object_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    // Matrix key-frame animation (discrete only; matrix is a [m00,m01,m10,m11,m20,m21] float[6])
+    pub fn dm_noesis_animation_matrix_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_matrix_keyframes_add(
+        anim: *mut c_void,
+        key_time_seconds: f64,
+        m: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_matrix_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_matrix_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_matrix_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    // KeySpline
+    pub fn dm_noesis_animation_keyspline_create(
+        c1x: f32,
+        c1y: f32,
+        c2x: f32,
+        c2y: f32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_animation_keyspline_set_control_point1(
+        ks: *mut c_void,
+        x: f32,
+        y: f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_keyspline_set_control_point2(
+        ks: *mut c_void,
+        x: f32,
+        y: f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_keyspline_get_control_point1(ks: *mut c_void, out: *mut f32)
+    -> bool;
+    pub fn dm_noesis_animation_keyspline_get_control_point2(ks: *mut c_void, out: *mut f32)
+    -> bool;
+
+    // BeginStoryboard trigger action
+    pub fn dm_noesis_animation_begin_storyboard_create() -> *mut c_void;
+    pub fn dm_noesis_animation_begin_storyboard_set_storyboard(
+        bs: *mut c_void,
+        sb: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_begin_storyboard_get_storyboard(bs: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_animation_begin_storyboard_set_handoff(bs: *mut c_void, behavior: i32)
+    -> bool;
+    pub fn dm_noesis_animation_begin_storyboard_get_handoff(bs: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_begin_storyboard_set_name(
+        bs: *mut c_void,
+        name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_animation_begin_storyboard_get_name(bs: *mut c_void) -> *const c_char;
 }
 
 // ── FormattedText measurement / layout (TODO §13) ───────────────────────────
