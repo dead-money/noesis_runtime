@@ -1554,6 +1554,64 @@ void dm_noesis_command_destroy(void* command);
 // Safe to call with NULL or a non-command pointer (no-op).
 void dm_noesis_command_raise_can_execute_changed(void* command);
 
+// ── RoutedCommand / RoutedUICommand (TODO §4) ───────────────────────────────
+//
+// Commands routed through the element tree to a matching CommandBinding. The
+// owner is resolved from `owner_type_name` via the Core reflection registry — a
+// built-in type ("UIElement") or a §9-registered custom class. Both creators
+// return a `BaseComponent*` (+1; release via dm_noesis_base_component_release),
+// and dm_noesis_command_raise_can_execute_changed works on them. NULL on a bad
+// name / unresolvable owner.
+void* dm_noesis_routed_command_create(const char* name, const char* owner_type_name);
+void* dm_noesis_routed_ui_command_create(
+    const char* name, const char* text, const char* owner_type_name);
+// Execute / query against a UIElement target (routes to its CommandBindings).
+// `param` is borrowed (may be NULL). No-op / false on a non-RoutedCommand or
+// non-UIElement.
+void dm_noesis_routed_command_execute(void* command, void* param, void* target);
+bool dm_noesis_routed_command_can_execute(void* command, void* param, void* target);
+// Borrowed accessors. _get_name applies to any RoutedCommand; _text to
+// RoutedUICommand only. NULL on type mismatch.
+const char* dm_noesis_routed_command_get_name(void* command);
+const char* dm_noesis_routed_ui_command_get_text(void* command);
+void dm_noesis_routed_ui_command_set_text(void* command, const char* text);
+
+// ── CommandBinding (TODO §4) ────────────────────────────────────────────────
+//
+// Binds a command to Rust handlers and attaches to an element's CommandBindings
+// so an invoked command routing through that element fires them. Lifetime
+// mirrors the command free-fn pattern: dm_noesis_command_binding_create donates
+// `userdata` (freed via dm_noesis_command_free_fn on destroy) and returns an
+// opaque token. Attach it to a UIElement, then destroy to detach + free.
+
+// Executed: run the action. `parameter` is the borrowed command parameter (may
+// be NULL). The binding marks the event handled afterwards.
+typedef void (*dm_noesis_cmd_executed_fn)(void* userdata, void* parameter);
+// CanExecute: return whether the command may run now (drives routing + bound
+// control enabled state). `parameter` borrowed; may be NULL.
+typedef bool (*dm_noesis_cmd_can_execute_fn)(void* userdata, void* parameter);
+
+// Create a CommandBinding for `command` (a borrowed ICommand* — RoutedCommand,
+// built-in, or Rust ICommand). Returns an opaque token, or NULL on a null /
+// non-ICommand `command`. `can_execute` may be NULL (treated as always-true).
+void* dm_noesis_command_binding_create(
+    void* command, dm_noesis_cmd_executed_fn executed,
+    dm_noesis_cmd_can_execute_fn can_execute, void* userdata,
+    dm_noesis_command_free_fn free_handler);
+// Add the binding to `element`'s CommandBindings. Returns false if `element` is
+// not a UIElement. The element then keeps the binding alive.
+bool dm_noesis_command_binding_attach(void* token, void* element);
+// Detach the delegates, free the donated userdata (exactly once), and drop the
+// token's binding reference. Safe to call with NULL.
+void dm_noesis_command_binding_destroy(void* token);
+
+// ── Built-in command libraries (TODO §4) ────────────────────────────────────
+//
+// Borrowed `const RoutedUICommand*` framework singletons (do NOT release),
+// indexed by the enums in src/commands.rs. NULL on an out-of-range index.
+const void* dm_noesis_application_command(uint32_t which);
+const void* dm_noesis_component_command(uint32_t which);
+
 // ── Value boxing / unboxing primitives (TODO §3) ───────────────────────────
 //
 // Binding values cross the FFI as `Noesis::BaseComponent*` (boxed). These wrap

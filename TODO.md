@@ -10,12 +10,6 @@ sequencing is in [Suggested completion order](#suggested-completion-order); thin
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
-## 4. Commands
-
-- **`RoutedCommand` / `RoutedUICommand`** (note: `Create` needs a reflected `TypeClass` owner — see §9).
-- **`CommandBinding`** (CanExecute/Executed delegates) attached via `UIElement::GetCommandBindings()`, plus `CommandManager`'s attached `CanExecute`/`Executed` routed events.
-- **Built-in command libraries:** `ApplicationCommands`, `ComponentCommands` (static `const RoutedUICommand*` getters).
-
 ## 5. Routed events
 
 - **Richer typed arg accessors.** Focus-changed (`old`/`new` element — 2 fields, cheap), manipulation (delta/velocity/inertia — ~6 nested structs), and drag (effects/key-states bitmasks). Currently reachable only as base `RoutedEventArgs` (source/handled).
@@ -131,12 +125,11 @@ text) — the §-sections above track only their leftover remainders. What's lef
 crate with the least rework:
 
 **Phase E — platform & finer input.**
-2. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
-3. §16 Finer input (mouse capture, `FocusManager`/keyboard nav, input gestures, **gamepad / focus engagement**).
-4. §4 Routed commands (`RoutedCommand`/`CommandBinding`/built-in libraries) — pairs with §16 input bindings; the Rust `ICommand` already covers simple cases, so this is late.
+1. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
+2. §16 Finer input (mouse capture, `FocusManager`/keyboard nav, input gestures, **gamepad / focus engagement**).
 
 **Phase F — robustness & profiling.**
-5. §18 `SetErrorHandler`/`SetAssertHandler` + memory/lifetime hooks, and §17 profiling (`CpuProfiler`, `ViewStats` overlay).
+3. §18 `SetErrorHandler`/`SetAssertHandler` + memory/lifetime hooks, and §17 profiling (`CpuProfiler`, `ViewStats` overlay).
 
 ## Known SDK limitations
 
@@ -147,6 +140,7 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **`PriorityBinding` (§3).** Not in 3.2.13 — the class doesn't exist in the SDK (a WPF feature Noesis omits, like `NavigationCommands`). No workaround; restructure so a single binding with a `FallbackValue` covers the priority case.
 - **`TemplateBinding` runtime construction (§3).** `TemplateBindingExtension` exists but is only meaningful inside a `ControlTemplate`; the XAML `{TemplateBinding X}` parse path already works, and the code path is covered by a templated-parent binding (`{Binding RelativeSource={RelativeSource TemplatedParent}}`, already wrapped). A dedicated runtime wrapper would just duplicate that, so it's intentionally not built.
 - **`CommandManager.RequerySuggested` / `InvalidateRequerySuggested` (§4).** Absent. Use per-command `BaseCommand::RaiseCanExecuteChanged` (already wrapped) to drive enable/disable.
+- **`CommandManager` class-level attached events (§4).** 3.2.13 exposes the static `ExecutedEvent`/`CanExecuteEvent` `RoutedEvent`s but no `AddExecutedHandler`/`AddCanExecuteHandler` convenience (a WPF-ism). Per-`CommandBinding` `Executed`/`CanExecute` handlers (wrapped) are the supported path; a global class-level observer isn't wrapped.
 - **`NavigationCommands` (§4).** Header doesn't ship (`ApplicationCommands`/`ComponentCommands` do).
 - **`GetBaseValue` object form (§2).** No boxed `GetBaseValue`, so the base-value getter covers value/struct/string DPs only, not component/brush DPs.
 - **`Dispatcher::BeginInvoke` (§2).** No NsGui dispatcher queue; queued/cross-thread invoke must route through the View timer API (`CreateTimer`, wrapped).
