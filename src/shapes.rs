@@ -23,7 +23,7 @@
 //! Noesis 3.2.13 ships only `Rectangle`, `Ellipse`, `Line`, and `Path` as shape
 //! elements — there is **no** `Polygon`/`Polyline`. Build a polygon or polyline
 //! as a `PathGeometry`/`StreamGeometry` hosted in a `Path` (the §10 geometry
-//! path). See `## Known SDK limitations` in `TODO.md`.
+//! path).
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
