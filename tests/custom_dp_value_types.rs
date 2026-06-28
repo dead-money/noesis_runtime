@@ -1,5 +1,5 @@
 //! TODO §9 — custom dependency-property value types beyond the original
-//! scalar/struct/string set: `Point`, `Size`, `Vector` (Noesis::Vector2), and a
+//! scalar/struct/string set: `Point`, `Size`, `Vector` (`Noesis::Vector2`), and a
 //! runtime-`enum`-typed DP.
 //!
 //! Every assertion reads the value back THROUGH the live Noesis object (either

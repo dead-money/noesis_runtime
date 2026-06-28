@@ -18,7 +18,7 @@
 //!   - The cursor callback *does* fire headlessly: a live `View` over XAML
 //!     whose root sets `Cursor="Hand"` invokes the global cursor callback with
 //!     [`CursorType::Hand`] when a synthesised mouse-move lands over the
-//!     element. This is a genuine end-to-end firing (Noesis input → QueryCursor
+//!     element. This is a genuine end-to-end firing (Noesis input → `QueryCursor`
 //!     → global callback → C++ trampoline → Rust closure).
 //!
 //! What cannot be driven headlessly:
