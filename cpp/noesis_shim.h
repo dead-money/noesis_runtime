@@ -1898,6 +1898,58 @@ bool dm_noesis_rectangle_get_radius_y(void* shape, float* out);
 // Line::X1/Y1/X2/Y2 (set/get all four; out = {x1, y1, x2, y2}).
 bool dm_noesis_line_set(void* shape, float x1, float y1, float x2, float y2);
 bool dm_noesis_line_get(void* shape, float out[4]);
+// ── ImageSource / BitmapSource family (TODO §12 "Bitmaps") ──────────────────
+//
+// Implemented in cpp/noesis_imaging.cpp. Every `*_create` returns a freshly-
+// built BaseComponent* with a single owned reference (released by the owning
+// Rust handle's Drop via dm_noesis_base_component_release). `cast`-style type
+// checks make every setter/getter a no-op (false / null) on a wrong-type
+// pointer. Headless, the GPU-resolved values (TextureSource texture, pixel
+// dims, dpi) read back null / 0 — that resolution needs a RenderDevice render
+// pass (see "Known SDK limitations" in TODO.md).
+
+// CroppedBitmap (no GPU needed). `source` / the get return are borrowed
+// BitmapSource* (Noesis takes its own reference on set; the get adds no +1).
+// SourceRect is an Int32Rect {x, y (int32); width, height (uint32)}.
+void* dm_noesis_cropped_bitmap_create(void);
+bool dm_noesis_cropped_bitmap_set_source(void* crop, void* source);
+void* dm_noesis_cropped_bitmap_get_source(void* crop);
+bool dm_noesis_cropped_bitmap_set_source_rect(void* crop, int32_t x, int32_t y, uint32_t width,
+                                              uint32_t height);
+bool dm_noesis_cropped_bitmap_get_source_rect(void* crop, int32_t* x, int32_t* y, uint32_t* width,
+                                              uint32_t* height);
+
+// TextureSource. `texture` is a borrowed Noesis::Texture* (null => default ctor;
+// real ones come from a host RenderDevice). get returns a borrowed Texture* or
+// null (null until a host RenderDevice-created Texture is bound).
+void* dm_noesis_texture_source_create(void* texture);
+bool dm_noesis_texture_source_set_texture(void* source, void* texture);
+void* dm_noesis_texture_source_get_texture(void* source);
+
+// BitmapImage. `uri` is a UTF-8 string (null => default ctor). get returns a
+// borrowed canonicalized UriSource string (valid while the image + its
+// UriSource are unchanged), or null on a non-BitmapImage pointer.
+void* dm_noesis_bitmap_image_create(const char* uri);
+bool dm_noesis_bitmap_image_set_uri_source(void* image, const char* uri);
+const char* dm_noesis_bitmap_image_get_uri_source(void* image);
+
+// BitmapSource base getters (work on any BitmapSource subclass). Pixel dims /
+// dpi default until resolved on a render pass. false on a non-BitmapSource.
+bool dm_noesis_bitmap_source_get_pixel_size(void* source, int32_t* width, int32_t* height);
+bool dm_noesis_bitmap_source_get_dpi(void* source, float* dpi_x, float* dpi_y);
+
+// DynamicTextureSource. `callback` is pointer-ABI-compatible with
+// Noesis::DynamicTextureSource::TextureRenderCallback
+// (Texture* (*)(RenderDevice*, void*)); it is invoked from the render thread, so
+// it only fires under a live RenderDevice render pass. create returns null if
+// `callback` is null.
+typedef void* (*dm_noesis_texture_render_callback)(void* device, void* user);
+void* dm_noesis_dynamic_texture_source_create(uint32_t width, uint32_t height,
+                                              dm_noesis_texture_render_callback callback,
+                                              void* user);
+bool dm_noesis_dynamic_texture_source_resize(void* source, uint32_t width, uint32_t height);
+bool dm_noesis_dynamic_texture_source_get_pixel_size(void* source, uint32_t* width,
+                                                     uint32_t* height);
 
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //
