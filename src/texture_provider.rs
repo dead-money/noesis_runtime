@@ -37,7 +37,9 @@ use std::os::raw::c_char;
 
 use crate::ffi::{
     TextureInfoFfi, TextureProviderVTable, dm_noesis_set_texture_provider,
-    dm_noesis_texture_provider_create, dm_noesis_texture_provider_destroy,
+    dm_noesis_set_texture_provider_assembly, dm_noesis_set_texture_provider_scheme,
+    dm_noesis_set_texture_provider_scheme_assembly, dm_noesis_texture_provider_create,
+    dm_noesis_texture_provider_destroy,
 };
 
 /// Metadata a [`TextureProvider`] can report for a URI without decoding
@@ -226,15 +228,90 @@ impl Drop for Registered {
 ///
 /// Panics if the C++ factory returns null.
 pub fn set_texture_provider<P: TextureProvider>(provider: P) -> Registered {
+    // SAFETY: install globally — Noesis retains its own +1.
+    register_with(provider, |handle| unsafe {
+        dm_noesis_set_texture_provider(handle)
+    })
+}
+
+/// Build the C++ `RustTextureProvider` wrapping `provider`, hand its handle to
+/// `install` (the only thing that differs between the global / scheme /
+/// assembly variants), and return the owning [`Registered`] guard. Keeps the
+/// four public setters DRY.
+fn register_with<P: TextureProvider>(provider: P, install: impl FnOnce(*mut c_void)) -> Registered {
     let outer: Box<Box<dyn TextureProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);
     // SAFETY: VTABLE is 'static; userdata is freshly leaked.
     let handle = unsafe { dm_noesis_texture_provider_create(&raw const VTABLE, userdata.cast()) };
     let handle = NonNull::new(handle).expect("dm_noesis_texture_provider_create returned null");
-    unsafe { dm_noesis_set_texture_provider(handle.as_ptr()) };
+    install(handle.as_ptr());
 
     Registered {
         handle,
         userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
     }
+}
+
+/// Install `provider` as the texture provider for the URI `scheme` (the part
+/// before `://`). Noesis consults the scheme-scoped provider for matching
+/// texture URIs in preference to the global one. Reuses
+/// [`set_texture_provider`]'s trampoline + [`Registered`] machinery; only the
+/// install call differs.
+///
+/// # Panics
+///
+/// Panics if the C++ factory returns null, or `scheme` contains an interior
+/// NUL byte.
+pub fn set_scheme_texture_provider<P: TextureProvider>(scheme: &str, provider: P) -> Registered {
+    let scheme = std::ffi::CString::new(scheme).expect("scheme contained interior NUL");
+    register_with(provider, move |handle| {
+        // SAFETY: handle is a live RustTextureProvider*; `scheme` outlives the call.
+        unsafe { dm_noesis_set_texture_provider_scheme(scheme.as_ptr(), handle) }
+    })
+}
+
+/// Install `provider` as the texture provider for `assembly` (the assembly name
+/// in a pack URI). Reuses [`set_texture_provider`]'s machinery; only the
+/// install call differs.
+///
+/// # Panics
+///
+/// Panics if the C++ factory returns null, or `assembly` contains an interior
+/// NUL byte.
+pub fn set_assembly_texture_provider<P: TextureProvider>(
+    assembly: &str,
+    provider: P,
+) -> Registered {
+    let assembly = std::ffi::CString::new(assembly).expect("assembly contained interior NUL");
+    register_with(provider, move |handle| {
+        // SAFETY: handle is a live RustTextureProvider*; `assembly` outlives the call.
+        unsafe { dm_noesis_set_texture_provider_assembly(assembly.as_ptr(), handle) }
+    })
+}
+
+/// Install `provider` as the texture provider scoped to both a `scheme` and an
+/// `assembly`. Reuses [`set_texture_provider`]'s machinery; only the install
+/// call differs.
+///
+/// # Panics
+///
+/// Panics if the C++ factory returns null, or `scheme` / `assembly` contain an
+/// interior NUL byte.
+pub fn set_scheme_assembly_texture_provider<P: TextureProvider>(
+    scheme: &str,
+    assembly: &str,
+    provider: P,
+) -> Registered {
+    let scheme = std::ffi::CString::new(scheme).expect("scheme contained interior NUL");
+    let assembly = std::ffi::CString::new(assembly).expect("assembly contained interior NUL");
+    register_with(provider, move |handle| {
+        // SAFETY: handle is a live RustTextureProvider*; both CStrings outlive the call.
+        unsafe {
+            dm_noesis_set_texture_provider_scheme_assembly(
+                scheme.as_ptr(),
+                assembly.as_ptr(),
+                handle,
+            )
+        }
+    })
 }

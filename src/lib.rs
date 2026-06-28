@@ -26,6 +26,7 @@ pub mod formatted_text;
 pub mod geometry;
 pub mod gui;
 pub mod imaging;
+pub mod input;
 pub mod markup;
 pub mod multi_binding;
 pub mod name_scope;
@@ -41,6 +42,7 @@ pub mod texture_provider;
 pub mod transforms;
 pub mod typography;
 pub mod view;
+pub mod xaml;
 pub mod xaml_provider;
 
 /// Optional. Apply Indie license credentials before [`init`] to suppress the

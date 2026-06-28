@@ -13,6 +13,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_reflection_meta.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_controls.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_commands.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_input.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_binding.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_plain_vm.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_resources.cpp");
@@ -30,6 +31,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_text_inlines.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_formatted_text.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_typography.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_xaml.cpp");
 
     let sdk_dir = env::var("NOESIS_SDK_DIR").unwrap_or_else(|_| {
         panic!(
@@ -93,6 +95,7 @@ fn main() {
         .file("cpp/noesis_collections.cpp")
         .file("cpp/noesis_controls.cpp")
         .file("cpp/noesis_commands.cpp")
+        .file("cpp/noesis_input.cpp")
         .file("cpp/noesis_binding.cpp")
         .file("cpp/noesis_plain_vm.cpp")
         .file("cpp/noesis_resources.cpp")
@@ -110,6 +113,7 @@ fn main() {
         .file("cpp/noesis_text_inlines.cpp")
         .file("cpp/noesis_formatted_text.cpp")
         .file("cpp/noesis_typography.cpp")
+        .file("cpp/noesis_xaml.cpp")
         .include(&include)
         .flag_if_supported("-Wno-unused-parameter");
 

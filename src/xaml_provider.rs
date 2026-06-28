@@ -16,12 +16,13 @@
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
 use core::ptr::NonNull;
-use std::ffi::{CStr, c_void};
+use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    XamlProviderVTable, dm_noesis_set_xaml_provider, dm_noesis_xaml_provider_create,
-    dm_noesis_xaml_provider_destroy,
+    XamlProviderVTable, dm_noesis_set_xaml_provider, dm_noesis_set_xaml_provider_assembly,
+    dm_noesis_set_xaml_provider_scheme, dm_noesis_set_xaml_provider_scheme_assembly,
+    dm_noesis_xaml_provider_create, dm_noesis_xaml_provider_destroy,
 };
 
 /// Rust-side XAML provider. The bytes returned from [`load_xaml`] are wrapped
@@ -156,18 +157,94 @@ impl Drop for Registered {
 /// Panics if the C++ factory returns null (only possible on internal logic
 /// errors).
 pub fn set_xaml_provider<P: XamlProvider + 'static>(provider: P) -> Registered {
+    // SAFETY: install globally — Noesis retains its own +1.
+    register_with(provider, |handle| unsafe {
+        dm_noesis_set_xaml_provider(handle)
+    })
+}
+
+/// Build the C++ `RustXamlProvider` wrapping `provider`, hand its handle to
+/// `install` (the only thing that differs between the global / scheme /
+/// assembly variants), and return the owning [`Registered`] guard. Keeps the
+/// four public setters DRY.
+fn register_with<P: XamlProvider + 'static>(
+    provider: P,
+    install: impl FnOnce(*mut c_void),
+) -> Registered {
     // Double-Box gives a stable thin pointer for the C ABI userdata.
     let outer: Box<Box<dyn XamlProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);
     // SAFETY: VTABLE is 'static; userdata is freshly leaked.
     let handle = unsafe { dm_noesis_xaml_provider_create(&raw const VTABLE, userdata.cast()) };
     let handle = NonNull::new(handle).expect("dm_noesis_xaml_provider_create returned null");
-    // Install globally. Noesis retains its own +1; we keep ours until the
-    // Registered is dropped.
-    unsafe { dm_noesis_set_xaml_provider(handle.as_ptr()) };
+    // Noesis retains its own +1; we keep ours until the Registered is dropped.
+    install(handle.as_ptr());
 
     Registered {
         handle,
         userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
     }
+}
+
+/// Install `provider` as the XAML provider for the URI `scheme` (the part
+/// before `://`, e.g. `"pack"` for `pack://...`). Noesis consults the
+/// scheme-scoped provider for matching URIs in preference to the global one.
+/// Reuses the same trampoline + [`Registered`] machinery as
+/// [`set_xaml_provider`]; only the install call differs.
+///
+/// # Panics
+///
+/// Panics if the C++ factory returns null, or `scheme` contains an interior
+/// NUL byte.
+pub fn set_scheme_xaml_provider<P: XamlProvider + 'static>(
+    scheme: &str,
+    provider: P,
+) -> Registered {
+    let scheme = CString::new(scheme).expect("scheme contained interior NUL");
+    register_with(provider, move |handle| {
+        // SAFETY: handle is a live RustXamlProvider*; `scheme` outlives the call.
+        unsafe { dm_noesis_set_xaml_provider_scheme(scheme.as_ptr(), handle) }
+    })
+}
+
+/// Install `provider` as the XAML provider for `assembly` (the assembly name in
+/// a pack URI, e.g. `MyApp` in `pack://application:,,,/MyApp;component/...`).
+/// Reuses [`set_xaml_provider`]'s machinery; only the install call differs.
+///
+/// # Panics
+///
+/// Panics if the C++ factory returns null, or `assembly` contains an interior
+/// NUL byte.
+pub fn set_assembly_xaml_provider<P: XamlProvider + 'static>(
+    assembly: &str,
+    provider: P,
+) -> Registered {
+    let assembly = CString::new(assembly).expect("assembly contained interior NUL");
+    register_with(provider, move |handle| {
+        // SAFETY: handle is a live RustXamlProvider*; `assembly` outlives the call.
+        unsafe { dm_noesis_set_xaml_provider_assembly(assembly.as_ptr(), handle) }
+    })
+}
+
+/// Install `provider` as the XAML provider scoped to both a `scheme` and an
+/// `assembly`. Reuses [`set_xaml_provider`]'s machinery; only the install call
+/// differs.
+///
+/// # Panics
+///
+/// Panics if the C++ factory returns null, or `scheme` / `assembly` contain an
+/// interior NUL byte.
+pub fn set_scheme_assembly_xaml_provider<P: XamlProvider + 'static>(
+    scheme: &str,
+    assembly: &str,
+    provider: P,
+) -> Registered {
+    let scheme = CString::new(scheme).expect("scheme contained interior NUL");
+    let assembly = CString::new(assembly).expect("assembly contained interior NUL");
+    register_with(provider, move |handle| {
+        // SAFETY: handle is a live RustXamlProvider*; both CStrings outlive the call.
+        unsafe {
+            dm_noesis_set_xaml_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
+        }
+    })
 }
