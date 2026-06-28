@@ -19,7 +19,19 @@ use crate::render_device::device::{
 };
 use crate::render_device::ffi::{
     RenderDeviceVTable, RenderTargetBindingFfi, TextureBindingFfi, dm_noesis_render_device_create,
-    dm_noesis_render_device_destroy,
+    dm_noesis_render_device_destroy, dm_noesis_render_device_get_glyph_cache_height,
+    dm_noesis_render_device_get_glyph_cache_width,
+    dm_noesis_render_device_get_offscreen_default_num_surfaces,
+    dm_noesis_render_device_get_offscreen_height,
+    dm_noesis_render_device_get_offscreen_max_num_surfaces,
+    dm_noesis_render_device_get_offscreen_sample_count,
+    dm_noesis_render_device_get_offscreen_width, dm_noesis_render_device_set_glyph_cache_height,
+    dm_noesis_render_device_set_glyph_cache_width,
+    dm_noesis_render_device_set_offscreen_default_num_surfaces,
+    dm_noesis_render_device_set_offscreen_height,
+    dm_noesis_render_device_set_offscreen_max_num_surfaces,
+    dm_noesis_render_device_set_offscreen_sample_count,
+    dm_noesis_render_device_set_offscreen_width,
 };
 use crate::render_device::types::{Batch, DeviceCaps, TextureFormat, Tile};
 
@@ -371,6 +383,122 @@ impl Registered {
             .as_any_mut()
             .downcast_mut::<D>()
             .expect("Registered::device_mut: type does not match the one given to register")
+    }
+
+    /// Width of offscreen render-target textures, in pixels (`RenderDevice::
+    /// SetOffscreenWidth`). `0` (the default) selects automatic sizing. Set
+    /// this — and the sibling offscreen / glyph-cache knobs — before the
+    /// renderer draws its first frame.
+    pub fn set_offscreen_width(&mut self, width: u32) {
+        // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
+        unsafe { dm_noesis_render_device_set_offscreen_width(self.handle.as_ptr(), width) }
+    }
+
+    /// Height of offscreen render-target textures, in pixels (`RenderDevice::
+    /// SetOffscreenHeight`). `0` (the default) selects automatic sizing.
+    pub fn set_offscreen_height(&mut self, height: u32) {
+        // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
+        unsafe { dm_noesis_render_device_set_offscreen_height(self.handle.as_ptr(), height) }
+    }
+
+    /// Multisample count for offscreen textures (`RenderDevice::
+    /// SetOffscreenSampleCount`). Default is `1` (no MSAA).
+    pub fn set_offscreen_sample_count(&mut self, count: u32) {
+        // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
+        unsafe { dm_noesis_render_device_set_offscreen_sample_count(self.handle.as_ptr(), count) }
+    }
+
+    /// Number of offscreen textures created up-front at startup
+    /// (`RenderDevice::SetOffscreenDefaultNumSurfaces`). Default is `0`.
+    pub fn set_offscreen_default_num_surfaces(&mut self, num: u32) {
+        // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
+        unsafe {
+            dm_noesis_render_device_set_offscreen_default_num_surfaces(self.handle.as_ptr(), num)
+        }
+    }
+
+    /// Maximum number of offscreen textures (`RenderDevice::
+    /// SetOffscreenMaxNumSurfaces`). `0` (the default) means unlimited.
+    pub fn set_offscreen_max_num_surfaces(&mut self, num: u32) {
+        // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
+        unsafe { dm_noesis_render_device_set_offscreen_max_num_surfaces(self.handle.as_ptr(), num) }
+    }
+
+    /// Width of the glyph-cache texture, in pixels (`RenderDevice::
+    /// SetGlyphCacheWidth`). The default is build-dependent — read it back with
+    /// [`Self::glyph_cache_width`] rather than assuming a value.
+    pub fn set_glyph_cache_width(&mut self, width: u32) {
+        // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
+        unsafe { dm_noesis_render_device_set_glyph_cache_width(self.handle.as_ptr(), width) }
+    }
+
+    /// Height of the glyph-cache texture, in pixels (`RenderDevice::
+    /// SetGlyphCacheHeight`). The default is build-dependent — read it back with
+    /// [`Self::glyph_cache_height`] rather than assuming a value.
+    pub fn set_glyph_cache_height(&mut self, height: u32) {
+        // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
+        unsafe { dm_noesis_render_device_set_glyph_cache_height(self.handle.as_ptr(), height) }
+    }
+
+    /// Configured offscreen texture width (`RenderDevice::GetOffscreenWidth`).
+    /// `0` means automatic. Companion to [`Self::set_offscreen_width`].
+    #[must_use]
+    pub fn offscreen_width(&self) -> u32 {
+        // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
+        unsafe { dm_noesis_render_device_get_offscreen_width(self.handle.as_ptr()) }
+    }
+
+    /// Configured offscreen texture height (`RenderDevice::GetOffscreenHeight`).
+    /// `0` means automatic. Companion to [`Self::set_offscreen_height`].
+    #[must_use]
+    pub fn offscreen_height(&self) -> u32 {
+        // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
+        unsafe { dm_noesis_render_device_get_offscreen_height(self.handle.as_ptr()) }
+    }
+
+    /// Configured offscreen multisample count
+    /// (`RenderDevice::GetOffscreenSampleCount`). Companion to
+    /// [`Self::set_offscreen_sample_count`].
+    #[must_use]
+    pub fn offscreen_sample_count(&self) -> u32 {
+        // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
+        unsafe { dm_noesis_render_device_get_offscreen_sample_count(self.handle.as_ptr()) }
+    }
+
+    /// Configured startup offscreen-surface count
+    /// (`RenderDevice::GetOffscreenDefaultNumSurfaces`). Companion to
+    /// [`Self::set_offscreen_default_num_surfaces`].
+    #[must_use]
+    pub fn offscreen_default_num_surfaces(&self) -> u32 {
+        // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
+        unsafe { dm_noesis_render_device_get_offscreen_default_num_surfaces(self.handle.as_ptr()) }
+    }
+
+    /// Configured maximum offscreen-surface count
+    /// (`RenderDevice::GetOffscreenMaxNumSurfaces`). `0` means unlimited.
+    /// Companion to [`Self::set_offscreen_max_num_surfaces`].
+    #[must_use]
+    pub fn offscreen_max_num_surfaces(&self) -> u32 {
+        // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
+        unsafe { dm_noesis_render_device_get_offscreen_max_num_surfaces(self.handle.as_ptr()) }
+    }
+
+    /// Configured glyph-cache texture width
+    /// (`RenderDevice::GetGlyphCacheWidth`). Build-dependent default. Companion to
+    /// [`Self::set_glyph_cache_width`].
+    #[must_use]
+    pub fn glyph_cache_width(&self) -> u32 {
+        // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
+        unsafe { dm_noesis_render_device_get_glyph_cache_width(self.handle.as_ptr()) }
+    }
+
+    /// Configured glyph-cache texture height
+    /// (`RenderDevice::GetGlyphCacheHeight`). Build-dependent default. Companion to
+    /// [`Self::set_glyph_cache_height`].
+    #[must_use]
+    pub fn glyph_cache_height(&self) -> u32 {
+        // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
+        unsafe { dm_noesis_render_device_get_glyph_cache_height(self.handle.as_ptr()) }
     }
 }
 

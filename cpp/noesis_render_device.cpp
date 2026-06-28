@@ -257,6 +257,83 @@ extern "C" void dm_noesis_render_device_destroy(void* device) {
     static_cast<Noesis::RenderDevice*>(device)->Release();
 }
 
+// ─── Offscreen / glyph-cache tuning (TODO §1) ───────────────────────────────
+//
+// Non-virtual configuration on the `Noesis::RenderDevice` base, applied to the
+// device the renderer draws with. Width/height of 0 means automatic. These
+// affect resource sizing only, so they are plain pass-through setters; no-ops
+// on a NULL device.
+
+extern "C" void dm_noesis_render_device_set_offscreen_width(void* device, uint32_t width) {
+    if (!device) return;
+    static_cast<Noesis::RenderDevice*>(device)->SetOffscreenWidth(width);
+}
+
+extern "C" void dm_noesis_render_device_set_offscreen_height(void* device, uint32_t height) {
+    if (!device) return;
+    static_cast<Noesis::RenderDevice*>(device)->SetOffscreenHeight(height);
+}
+
+extern "C" void dm_noesis_render_device_set_offscreen_sample_count(void* device, uint32_t count) {
+    if (!device) return;
+    static_cast<Noesis::RenderDevice*>(device)->SetOffscreenSampleCount(count);
+}
+
+extern "C" void dm_noesis_render_device_set_offscreen_default_num_surfaces(void* device, uint32_t num) {
+    if (!device) return;
+    static_cast<Noesis::RenderDevice*>(device)->SetOffscreenDefaultNumSurfaces(num);
+}
+
+extern "C" void dm_noesis_render_device_set_offscreen_max_num_surfaces(void* device, uint32_t num) {
+    if (!device) return;
+    static_cast<Noesis::RenderDevice*>(device)->SetOffscreenMaxNumSurfaces(num);
+}
+
+extern "C" void dm_noesis_render_device_set_glyph_cache_width(void* device, uint32_t width) {
+    if (!device) return;
+    static_cast<Noesis::RenderDevice*>(device)->SetGlyphCacheWidth(width);
+}
+
+extern "C" void dm_noesis_render_device_set_glyph_cache_height(void* device, uint32_t height) {
+    if (!device) return;
+    static_cast<Noesis::RenderDevice*>(device)->SetGlyphCacheHeight(height);
+}
+
+extern "C" uint32_t dm_noesis_render_device_get_offscreen_width(const void* device) {
+    if (!device) return 0;
+    return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenWidth();
+}
+
+extern "C" uint32_t dm_noesis_render_device_get_offscreen_height(const void* device) {
+    if (!device) return 0;
+    return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenHeight();
+}
+
+extern "C" uint32_t dm_noesis_render_device_get_offscreen_sample_count(const void* device) {
+    if (!device) return 0;
+    return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenSampleCount();
+}
+
+extern "C" uint32_t dm_noesis_render_device_get_offscreen_default_num_surfaces(const void* device) {
+    if (!device) return 0;
+    return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenDefaultNumSurfaces();
+}
+
+extern "C" uint32_t dm_noesis_render_device_get_offscreen_max_num_surfaces(const void* device) {
+    if (!device) return 0;
+    return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenMaxNumSurfaces();
+}
+
+extern "C" uint32_t dm_noesis_render_device_get_glyph_cache_width(const void* device) {
+    if (!device) return 0;
+    return static_cast<const Noesis::RenderDevice*>(device)->GetGlyphCacheWidth();
+}
+
+extern "C" uint32_t dm_noesis_render_device_get_glyph_cache_height(const void* device) {
+    if (!device) return 0;
+    return static_cast<const Noesis::RenderDevice*>(device)->GetGlyphCacheHeight();
+}
+
 extern "C" uint64_t dm_noesis_texture_get_handle(const void* texture) {
     if (!texture) return 0;
     return static_cast<const RustTexture*>(

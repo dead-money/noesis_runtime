@@ -48,8 +48,9 @@ use crate::ffi::{
     dm_noesis_popup_set_is_open, dm_noesis_rangebase_get, dm_noesis_rangebase_set,
     dm_noesis_render_options_get_bitmap_scaling_mode,
     dm_noesis_render_options_set_bitmap_scaling_mode, dm_noesis_renderer_init,
-    dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
-    dm_noesis_renderer_update_render_tree, dm_noesis_scrollviewer_get,
+    dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
+    dm_noesis_renderer_render_stereo, dm_noesis_renderer_render_stereo_both,
+    dm_noesis_renderer_shutdown, dm_noesis_renderer_update_render_tree, dm_noesis_scrollviewer_get,
     dm_noesis_scrollviewer_scroll_to_end, dm_noesis_scrollviewer_scroll_to_home,
     dm_noesis_scrollviewer_scroll_to_horizontal, dm_noesis_scrollviewer_scroll_to_vertical,
     dm_noesis_selector_get_selected_index, dm_noesis_selector_get_selected_item,
@@ -57,16 +58,22 @@ use crate::ffi::{
     dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_textbox_get_int,
     dm_noesis_textbox_get_selected_text, dm_noesis_textbox_select, dm_noesis_textbox_select_all,
     dm_noesis_textbox_set_int, dm_noesis_toggle_get_is_checked, dm_noesis_toggle_set_is_checked,
-    dm_noesis_view_activate, dm_noesis_view_cancel_timer, dm_noesis_view_char,
-    dm_noesis_view_create, dm_noesis_view_create_timer, dm_noesis_view_deactivate,
-    dm_noesis_view_destroy, dm_noesis_view_get_content, dm_noesis_view_get_flags,
-    dm_noesis_view_get_renderer, dm_noesis_view_get_stats,
-    dm_noesis_view_get_tessellation_max_pixel_error, dm_noesis_view_hscroll,
-    dm_noesis_view_key_down, dm_noesis_view_key_up, dm_noesis_view_mouse_button_down,
-    dm_noesis_view_mouse_button_up, dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel,
-    dm_noesis_view_mouse_move, dm_noesis_view_mouse_wheel, dm_noesis_view_restart_timer,
-    dm_noesis_view_scroll, dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix,
+    dm_noesis_view_activate, dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
+    dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
+    dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
+    dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
+    dm_noesis_view_get_stats, dm_noesis_view_get_tessellation_max_pixel_error,
+    dm_noesis_view_hscroll, dm_noesis_view_key_down, dm_noesis_view_key_up,
+    dm_noesis_view_mouse_button_down, dm_noesis_view_mouse_button_up,
+    dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel, dm_noesis_view_mouse_move,
+    dm_noesis_view_mouse_wheel, dm_noesis_view_remove_rendering_handler,
+    dm_noesis_view_restart_timer, dm_noesis_view_scroll,
+    dm_noesis_view_set_double_tap_distance_threshold, dm_noesis_view_set_double_tap_time_threshold,
+    dm_noesis_view_set_emulate_touch, dm_noesis_view_set_flags,
+    dm_noesis_view_set_holding_distance_threshold, dm_noesis_view_set_holding_time_threshold,
+    dm_noesis_view_set_manipulation_distance_threshold, dm_noesis_view_set_projection_matrix,
     dm_noesis_view_set_scale, dm_noesis_view_set_size,
+    dm_noesis_view_set_stereo_offscreen_scale_factor,
     dm_noesis_view_set_tessellation_max_pixel_error, dm_noesis_view_touch_down,
     dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
     dm_noesis_visual_child, dm_noesis_visual_children_count, dm_noesis_visual_hit_test,
@@ -2223,6 +2230,62 @@ impl View {
         unsafe { dm_noesis_view_get_tessellation_max_pixel_error(self.ptr.as_ptr()) }
     }
 
+    /// Time, in milliseconds, an interaction must be held before it promotes to
+    /// a `Holding` (long-press) event rather than a `Tapped` (`IView::
+    /// SetHoldingTimeThreshold`). Default 500ms.
+    pub fn set_holding_time_threshold(&mut self, ms: u32) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_holding_time_threshold(self.ptr.as_ptr(), ms) }
+    }
+
+    /// Maximum distance, in pixels, between first and last contact for an
+    /// interaction to still count as a `Tapped` / `Holding` event
+    /// (`IView::SetHoldingDistanceThreshold`). Default 10px.
+    pub fn set_holding_distance_threshold(&mut self, pixels: u32) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_holding_distance_threshold(self.ptr.as_ptr(), pixels) }
+    }
+
+    /// Minimum distance, in pixels, from first contact before a manipulation
+    /// starts (raising `ManipulationStarted`) — `IView::
+    /// SetManipulationDistanceThreshold`. Default 10px.
+    pub fn set_manipulation_distance_threshold(&mut self, pixels: u32) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_manipulation_distance_threshold(self.ptr.as_ptr(), pixels) }
+    }
+
+    /// Maximum delay, in milliseconds, between two `Tapped` events for them to
+    /// be interpreted as a `DoubleTapped` (`IView::SetDoubleTapTimeThreshold`).
+    /// Default 500ms.
+    pub fn set_double_tap_time_threshold(&mut self, ms: u32) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_double_tap_time_threshold(self.ptr.as_ptr(), ms) }
+    }
+
+    /// Maximum distance, in pixels, between two taps for them to be interpreted
+    /// as a `DoubleTapped` (`IView::SetDoubleTapDistanceThreshold`). Default
+    /// 10px.
+    pub fn set_double_tap_distance_threshold(&mut self, pixels: u32) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_double_tap_distance_threshold(self.ptr.as_ptr(), pixels) }
+    }
+
+    /// Whether mouse input is emulated as touch input
+    /// (`IView::SetEmulateTouch`). Off by default.
+    pub fn set_emulate_touch(&mut self, emulate: bool) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_emulate_touch(self.ptr.as_ptr(), emulate) }
+    }
+
+    /// Scale applied to the offscreen render phase to account for stereo (VR)
+    /// eye matrices differing from the view projection
+    /// (`IView::SetStereoOffscreenScaleFactor`). Must be `1.0` (the default)
+    /// for non-VR rendering; `2.0`–`3.0` is recommended for VR.
+    pub fn set_stereo_offscreen_scale_factor(&mut self, factor: f32) {
+        // SAFETY: self.ptr is a live IView*; thin pass-through.
+        unsafe { dm_noesis_view_set_stereo_offscreen_scale_factor(self.ptr.as_ptr(), factor) }
+    }
+
     /// Performance counters for the last rendered frame (`IView::GetStats`).
     /// Most counters (triangle / draw / batch / glyph counts) are populated by
     /// the render pass; timing fields are tracked across update + render. See
@@ -2276,6 +2339,48 @@ impl View {
 
         if let Some(token) = NonNull::new(token) {
             Some(TimerSubscription { token })
+        } else {
+            // Creation failed before donation took effect — free the box we
+            // leaked above so the handler isn't leaked.
+            // SAFETY: userdata came from Box::into_raw moments ago; nothing
+            // else ever saw the pointer.
+            unsafe { drop(Box::from_raw(userdata)) };
+            None
+        }
+    }
+
+    /// Subscribe to the view's `Rendering` event (`IView::Rendering`), raised
+    /// once per frame after animation and layout are applied to the composition
+    /// tree, just before it is rendered — fired from inside [`Self::update`] on
+    /// the view-driving thread. Use it for per-frame work that must observe the
+    /// final, laid-out tree (e.g. syncing an external overlay).
+    ///
+    /// The returned [`RenderingSubscription`] is RAII: drop it to detach the
+    /// handler and free it. Returns `None` only if the underlying C entrypoint
+    /// fails (e.g. a null view).
+    pub fn add_rendering_handler<H: RenderingHandler>(
+        &mut self,
+        handler: H,
+    ) -> Option<RenderingSubscription> {
+        // Double-Box gives a stable thin pointer for the C ABI userdata, the
+        // same pattern as the timers and event subscriptions.
+        let outer: Box<Box<dyn RenderingHandler>> = Box::new(Box::new(handler));
+        let userdata = Box::into_raw(outer);
+
+        // SAFETY: trampolines are `extern "C"`; userdata is freshly leaked and
+        // donated to the C++ handler (freed via `rendering_free` on removal);
+        // the view pointer is borrowed for the call only.
+        let token = unsafe {
+            dm_noesis_view_add_rendering_handler(
+                self.ptr.as_ptr(),
+                rendering_trampoline,
+                userdata.cast(),
+                rendering_free,
+            )
+        };
+
+        if let Some(token) = NonNull::new(token) {
+            Some(RenderingSubscription { token })
         } else {
             // Creation failed before donation took effect — free the box we
             // leaked above so the handler isn't leaked.
@@ -2387,6 +2492,46 @@ impl View {
         Renderer {
             ptr: NonNull::new(ptr).expect("GetRenderer returned null"),
             _view: PhantomData,
+        }
+    }
+
+    /// Take an **owned, thread-movable** handle to this view's renderer, for the
+    /// render-thread / UI-thread split: keep driving [`Self::update`] on the UI
+    /// thread through this `View`, and move the returned [`RendererHandle`] to a
+    /// render thread to call `update_render_tree` / `render` there.
+    ///
+    /// Unlike [`Self::renderer`] (a borrow that cannot outlive or coexist with
+    /// other use of the `View`), the handle holds its own `+1` reference on the
+    /// underlying `IView`, so it keeps the view — and the `IRenderer` the view
+    /// owns — alive independently. The `View` and the `RendererHandle` may then
+    /// live on different threads.
+    ///
+    /// # Threading contract
+    ///
+    /// Noesis decouples the two halves through the snapshot taken by
+    /// `update`/`update_render_tree`, but it does **not** lock them for you: you
+    /// must serialize the hand-off yourself. The supported pattern per frame is
+    /// `View::update` (UI thread) → a sync point → `RendererHandle::
+    /// update_render_tree` (grabs the snapshot; must not overlap `update`) →
+    /// `RendererHandle::render` (may overlap the next `update`). Driving both
+    /// halves from one thread is always fine.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis returns a null renderer — impossible on a
+    /// successfully-constructed `View`.
+    #[must_use]
+    pub fn renderer_handle(&self) -> RendererHandle {
+        // AddReference the IView so the handle keeps it alive independently of
+        // this View wrapper; balanced by dm_noesis_view_destroy in Drop.
+        // SAFETY: self.ptr is a live IView*.
+        let view = unsafe { dm_noesis_view_add_reference(self.ptr.as_ptr()) };
+        let view = NonNull::new(view).expect("dm_noesis_view_add_reference returned null");
+        // SAFETY: view is the live IView* we just took a ref on.
+        let renderer = unsafe { dm_noesis_view_get_renderer(view.as_ptr()) };
+        RendererHandle {
+            view,
+            renderer: NonNull::new(renderer).expect("GetRenderer returned null"),
         }
     }
 
@@ -2795,6 +2940,69 @@ impl Drop for TimerSubscription {
     }
 }
 
+// ── Rendering event (TODO §1) ────────────────────────────────────────────────
+
+/// Rust-side handler for a view's `Rendering` event (see
+/// [`View::add_rendering_handler`]). Called once per frame from inside
+/// [`View::update`], after animation + layout and before the composition tree
+/// is rendered.
+///
+/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource` or
+/// be moved onto the render thread — same rationale as [`TimerHandler`]. The
+/// event fires on the view-driving thread.
+pub trait RenderingHandler: Send + 'static {
+    /// Run one frame's rendering callback.
+    fn on_rendering(&mut self);
+}
+
+impl<F: FnMut() + Send + 'static> RenderingHandler for F {
+    fn on_rendering(&mut self) {
+        self();
+    }
+}
+
+/// SAFETY: `userdata` must be a pointer produced by
+/// [`View::add_rendering_handler`] and still alive (its
+/// [`RenderingSubscription`] hasn't been dropped).
+unsafe extern "C" fn rendering_trampoline(userdata: *mut c_void, _view: *mut c_void) {
+    // SAFETY: userdata is the double-boxed handler leaked in
+    // add_rendering_handler; the C++ handler keeps it alive until removal, so
+    // the deref is valid here.
+    let handler = unsafe { &mut *userdata.cast::<Box<dyn RenderingHandler>>() };
+    handler.on_rendering();
+}
+
+/// SAFETY: `userdata` must be the pointer donated to the C++ handler by
+/// [`View::add_rendering_handler`]; the C side invokes this exactly once on
+/// removal.
+unsafe extern "C" fn rendering_free(userdata: *mut c_void) {
+    // SAFETY: reconstitute and drop the double box we leaked in
+    // add_rendering_handler.
+    unsafe { drop(Box::from_raw(userdata.cast::<Box<dyn RenderingHandler>>())) };
+}
+
+/// RAII handle for a `Rendering` subscription created by
+/// [`View::add_rendering_handler`]. While alive, the handler stays attached;
+/// dropping it detaches the delegate and frees the boxed handler (the C++
+/// teardown runs `-=` then the donated free handler exactly once). Drop it
+/// before [`crate::shutdown`], like every other owning handle in this crate.
+pub struct RenderingSubscription {
+    token: NonNull<c_void>,
+}
+
+// SAFETY: the boxed handler is `Send`, and the C++ handler is bound to a single
+// view whose access Noesis serialises — mirrors [`TimerSubscription`].
+unsafe impl Send for RenderingSubscription {}
+unsafe impl Sync for RenderingSubscription {}
+
+impl Drop for RenderingSubscription {
+    fn drop(&mut self) {
+        // SAFETY: token produced by add_rendering_handler; removal detaches the
+        // delegate and runs the donated free handler, exactly once here.
+        unsafe { dm_noesis_view_remove_rendering_handler(self.token.as_ptr()) };
+    }
+}
+
 /// Borrowed handle to the view's renderer. Methods map 1:1 onto
 /// `Noesis::IRenderer`; the renderer is owned by the view and must not
 /// outlive it.
@@ -2840,5 +3048,93 @@ impl Renderer<'_> {
     /// render device's perspective).
     pub fn render(&mut self, flip_y: bool, clear: bool) {
         unsafe { dm_noesis_renderer_render(self.ptr.as_ptr(), flip_y, clear) }
+    }
+
+    /// Multi-pass stereo (VR) render of a single eye
+    /// (`IRenderer::RenderStereo`). Call once per eye, binding that eye's
+    /// render target first. `eye_matrix` is a row-major 4×4 (16 floats); since
+    /// culling uses the view's projection (see
+    /// [`View::set_projection_matrix`]), the eye matrix must be enclosed by it.
+    /// Pair with [`View::set_stereo_offscreen_scale_factor`] (2–3 for VR).
+    pub fn render_stereo(&mut self, eye_matrix: &[f32; 16], flip_y: bool, clear: bool) {
+        // SAFETY: self.ptr is a live IRenderer*; eye_matrix is exactly 16 floats
+        // as the C side reads (Matrix4(const float*)).
+        unsafe {
+            dm_noesis_renderer_render_stereo(self.ptr.as_ptr(), eye_matrix.as_ptr(), flip_y, clear)
+        }
+    }
+
+    /// Single-pass stereo (VR) render of both eyes in one call
+    /// (`IRenderer::RenderStereo`) — for multiview / instanced VR pipelines.
+    /// Each eye matrix is a row-major 4×4 (16 floats), and both must be
+    /// enclosed by the view's projection matrix.
+    pub fn render_stereo_both(
+        &mut self,
+        left_eye_matrix: &[f32; 16],
+        right_eye_matrix: &[f32; 16],
+        flip_y: bool,
+        clear: bool,
+    ) {
+        // SAFETY: self.ptr is a live IRenderer*; each matrix is exactly 16
+        // floats as the C side reads.
+        unsafe {
+            dm_noesis_renderer_render_stereo_both(
+                self.ptr.as_ptr(),
+                left_eye_matrix.as_ptr(),
+                right_eye_matrix.as_ptr(),
+                flip_y,
+                clear,
+            )
+        }
+    }
+}
+
+/// An **owned**, thread-movable handle to a view's renderer, from
+/// [`View::renderer_handle`]. Holds its own `+1` reference on the underlying
+/// `IView` (which owns the `IRenderer`), so it keeps both alive independently of
+/// the [`View`] wrapper and can be moved to a render thread for the
+/// render-thread / UI-thread split. See [`View::renderer_handle`] for the
+/// threading contract.
+///
+/// Call [`Self::renderer`] each frame to get the borrowed [`Renderer`] the
+/// actual render calls live on. Drop the handle (before [`crate::shutdown`])
+/// to release its view reference.
+pub struct RendererHandle {
+    view: NonNull<c_void>,     // owns a +1 ref on the IView.
+    renderer: NonNull<c_void>, // borrowed from `view`; valid while the ref is held.
+}
+
+// SAFETY: the handle owns a +1 IView ref, so it is self-sufficient (it does not
+// borrow the View). Moving it between threads is sound for the same reason as
+// [`View`]: Noesis serialises per-object calls, and the render-thread split is
+// the documented supported use. `Sync` is safe because every render call goes
+// through `renderer(&mut self)`, so `&RendererHandle` exposes no Noesis calls.
+unsafe impl Send for RendererHandle {}
+unsafe impl Sync for RendererHandle {}
+
+impl RendererHandle {
+    /// Borrow the [`Renderer`] for this frame's render calls (`init` /
+    /// `update_render_tree` / `render` / `render_stereo` / …). The borrow is
+    /// tied to `&mut self`, so it cannot escape the handle.
+    pub fn renderer(&mut self) -> Renderer<'_> {
+        Renderer {
+            ptr: self.renderer,
+            _view: PhantomData,
+        }
+    }
+
+    /// Raw `Noesis::IView*` this handle keeps alive (borrowed for the handle's
+    /// lifetime). Useful for APIs that take the view rather than the renderer.
+    #[must_use]
+    pub fn view_raw(&self) -> *mut c_void {
+        self.view.as_ptr()
+    }
+}
+
+impl Drop for RendererHandle {
+    fn drop(&mut self) {
+        // SAFETY: `view` carries the +1 ref taken in View::renderer_handle;
+        // release it exactly once. dm_noesis_view_destroy is just IView::Release.
+        unsafe { dm_noesis_view_destroy(self.view.as_ptr()) };
     }
 }

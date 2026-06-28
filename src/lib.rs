@@ -7,7 +7,7 @@
 //!
 //! # Setup
 //!
-//! Set `NOESIS_SDK_DIR` to the extracted Noesis Native SDK 3.2.12 root (the
+//! Set `NOESIS_SDK_DIR` to the extracted Noesis Native SDK 3.2.13 root (the
 //! directory containing `Include/` and `Bin/`). See `README.md`.
 
 use std::ffi::{CStr, CString};
@@ -123,7 +123,7 @@ pub fn shutdown() {
     unsafe { ffi::dm_noesis_shutdown() }
 }
 
-/// Returns the Noesis runtime build version (e.g. `"3.2.12"`).
+/// Returns the Noesis runtime build version (e.g. `"3.2.13"`).
 #[must_use]
 pub fn version() -> String {
     // SAFETY: version string is owned by the Noesis runtime and stays valid for

@@ -1,25 +1,18 @@
 # TODO — unexposed Noesis SDK surface
 
-This tracks Noesis Native SDK (3.2.12) features **not yet exposed** through the crate's
+This tracks Noesis Native SDK (3.2.13) features **not yet exposed** through the crate's
 C ABI (`cpp/noesis_shim.h`) and Rust wrappers — the remaining gap between the full SDK
 and what we wrap today.
 
 The goal is to **complete the crate**: cover the whole reachable SDK surface. Sections below
 list only outstanding work (finished work is removed, not annotated). The recommended
-sequencing is in [Suggested completion order](#suggested-completion-order); things 3.2.12
+sequencing is in [Suggested completion order](#suggested-completion-order); things 3.2.13
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
-## 1. View / Renderer
-
-- **Gesture / touch thresholds.** `SetHoldingTimeThreshold`, `SetHoldingDistanceThreshold`, `SetManipulationDistanceThreshold`, `SetDoubleTapTimeThreshold`, `SetDoubleTapDistanceThreshold`, `SetEmulateTouch`.
-- **Stereo / VR.** `SetStereoOffscreenScaleFactor`.
-- **`Rendering` event.** Per-frame `RenderingEventHandler` delegate (hook before render).
-- **Renderer offscreen sizing / glyph cache** and the render-thread split (UpdateRenderTree on render thread vs Update on UI thread).
-
 ## 2. Element tree access
 
-- **`Dispatcher` queued invoke.** Cross-thread/queued invoke routes through the View timer API (`CreateTimer`, §1); blocked until those land. (Thread-affinity queries `CheckAccess`/`thread_id` are already wrapped — see also [limitations](#known-sdk-limitations).)
+- **`Dispatcher` queued invoke.** No dedicated dispatcher-queue wrapper yet; cross-thread/queued invoke can be built on the View timer API (`CreateTimer`, wrapped). (Thread-affinity queries `CheckAccess`/`thread_id` are already wrapped — see also [limitations](#known-sdk-limitations).)
 - **`Style` / `RenderTransform` first-class typed wrappers.** Reachable today via the generic component accessors; no dedicated sugar yet.
 - **Filtered hit testing.** Only the single-point `VisualTreeHelper::HitTest` is wrapped; the `HitTestFilterCallback` / result-callback overload is not.
 - **Standalone `INameScope` / `NameScope` object.** Registration goes through `FrameworkElement::RegisterName`/`UnregisterName`; the freestanding scope object isn't exposed.
@@ -156,7 +149,7 @@ From `IntegrationAPI.h`, none are wired:
 
 ## 17. Diagnostics & tooling
 
-- **Profiling.** `CpuProfiler`, `ViewStats` overlay (see §1), memory usage queries.
+- **Profiling.** `CpuProfiler`, `ViewStats` debug overlay (the `GetStats` counters are wrapped; the on-screen overlay is not), memory usage queries.
 - **Logging** has a handler; structured log levels / categories could be richer.
 
 ## 18. Memory / kernel hooks
@@ -186,14 +179,14 @@ rework:
 
 ## Known SDK limitations
 
-Recorded so they aren't re-attempted — 3.2.12 doesn't expose these; the workaround is noted.
+Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workaround is noted.
 
-- **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.12 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
+- **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.13 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
 - **`CollectionView` sort / filter / group (§3).** `ICollectionView` here is current-item navigation only — no `SortDescriptions`, `Filter` delegate, `GroupDescriptions`, or `CollectionViewSource::GetDefaultView` ship. Sort/filter/group in Rust before populating the `ObservableCollection`. (Current-item navigation — `MoveCurrentTo*` — *is* available if ever needed.)
 - **`CommandManager.RequerySuggested` / `InvalidateRequerySuggested` (§4).** Absent. Use per-command `BaseCommand::RaiseCanExecuteChanged` (already wrapped) to drive enable/disable.
 - **`NavigationCommands` (§4).** Header doesn't ship (`ApplicationCommands`/`ComponentCommands` do).
 - **`GetBaseValue` object form (§2).** No boxed `GetBaseValue`, so the base-value getter covers value/struct/string DPs only, not component/brush DPs.
-- **`Dispatcher::BeginInvoke` (§2).** No NsGui dispatcher queue; queued/cross-thread invoke must route through the View timer API (`CreateTimer`, §1) once wrapped.
+- **`Dispatcher::BeginInvoke` (§2).** No NsGui dispatcher queue; queued/cross-thread invoke must route through the View timer API (`CreateTimer`, wrapped).
 - **Read-only DP value types (§9).** `DependencyObject::SetReadOnlyProperty` is template-only with no boxed object form, so the key-gated read-only setter covers value / struct / string DPs only — not component / brush DPs. (`DependencyPropertyKey` / `RegisterReadOnly` don't exist in 3.2.13; read-only DPs use `PropertyAccess_ReadOnly` + `SetReadOnlyProperty`.)
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
