@@ -207,11 +207,7 @@ unsafe extern "C" {
     pub fn dm_noesis_text_set(element: *mut c_void, text: *const c_char) -> bool;
     pub fn dm_noesis_text_caret_to_end(element: *mut c_void) -> bool;
     pub fn dm_noesis_focus_element(element: *mut c_void) -> bool;
-    pub fn dm_noesis_path_set_points(
-        element: *mut c_void,
-        xy: *const f32,
-        count: u32,
-    ) -> bool;
+    pub fn dm_noesis_path_set_points(element: *mut c_void, xy: *const f32, count: u32) -> bool;
 
     pub fn dm_noesis_class_register(
         name: *const c_char,
