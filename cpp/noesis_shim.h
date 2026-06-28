@@ -2198,6 +2198,74 @@ bool dm_noesis_type_set_content_property(
 // The consumption side (dm_noesis_type_converter_from_string above) works for
 // any built-in / reflected type. See TODO.md "Known SDK limitations".
 
+// ── TextBlock inline content model (TODO §13) ──────────────────────────────
+//
+// The Inline element family shipped in 3.2.13 — Run, Span, Bold, Italic,
+// Underline, Hyperlink, LineBreak, InlineUIContainer — plus the InlineCollection
+// (UICollection<Inline>) that TextBlock and Span expose. Inlines are assembled
+// in Rust and added to a TextBlock's (or Span's) Inlines collection; read-back
+// getters re-read from the live Noesis object so a stub fails the round-trip.
+//
+// Every *_create returns a BaseComponent* with +1 ref for the caller (release
+// via dm_noesis_base_component_release). Adding an inline to a collection makes
+// the collection take its own reference, so the builder handle may then be
+// dropped.
+
+// Construct an inline. `run_create` seeds the text (NULL == empty Run). Each
+// returns a +1 BaseComponent*, or NULL on allocation failure.
+void* dm_noesis_text_inlines_run_create(const char* text);
+void* dm_noesis_text_inlines_span_create(void);
+void* dm_noesis_text_inlines_bold_create(void);
+void* dm_noesis_text_inlines_italic_create(void);
+void* dm_noesis_text_inlines_underline_create(void);
+void* dm_noesis_text_inlines_hyperlink_create(void);
+void* dm_noesis_text_inlines_line_break_create(void);
+void* dm_noesis_text_inlines_ui_container_create(void);
+
+// Run text. `set` copies into the Run's storage (NULL clears to empty) and
+// returns false if `run` is not a Run. `get` returns a borrowed (no +1) pointer
+// into the Run's UTF-8 storage, or NULL if `run` is not a Run.
+bool dm_noesis_text_inlines_run_set_text(void* run, const char* text);
+const char* dm_noesis_text_inlines_run_get_text(void* run);
+
+// Hyperlink NavigateUri. `set` copies the URI (NULL clears) and returns false
+// if `link` is not a Hyperlink. `get` returns a borrowed (no +1) pointer, or
+// NULL if `link` is not a Hyperlink.
+bool dm_noesis_text_inlines_hyperlink_set_navigate_uri(void* link, const char* uri);
+const char* dm_noesis_text_inlines_hyperlink_get_navigate_uri(void* link);
+
+// Inline base TextDecorations (0 None, 1 OverLine, 2 Baseline, 3 Underline,
+// 4 Strikethrough). `set` returns false if `inl` is not an Inline; `get`
+// returns -1 if `inl` is not an Inline.
+bool dm_noesis_text_inlines_inline_set_text_decorations(void* inl, int32_t decorations);
+int32_t dm_noesis_text_inlines_inline_get_text_decorations(void* inl);
+
+// InlineUIContainer Child (hosts a UIElement, e.g. a Button). `set` makes the
+// container take its own reference (NULL clears) and returns false if
+// `container` is not an InlineUIContainer or `child` is non-null but not a
+// UIElement. `get` returns a borrowed (no +1) BaseComponent* whose address
+// matches the BaseComponent subobject of the element set (so it can be compared
+// for identity), or NULL.
+bool dm_noesis_text_inlines_ui_container_set_child(void* container, void* child);
+void* dm_noesis_text_inlines_ui_container_get_child(void* container);
+
+// Live InlineCollection (UICollection<Inline>) of a TextBlock's / Span's
+// top-level inlines, handed out at +1 (release via
+// dm_noesis_base_component_release). The collection is also owned by its host
+// element; the +1 keeps it alive for the handle's lifetime. NULL if the object
+// is not a TextBlock / Span.
+void* dm_noesis_text_inlines_text_block_get_inlines(void* text_block);
+void* dm_noesis_text_inlines_span_get_inlines(void* span);
+
+// InlineCollection mutation/inspection. `add` appends a borrowed Inline* (the
+// collection takes its own ref) and returns the insertion index, or -1 if
+// `collection` is not an InlineCollection or `inl` is not an Inline. `count`
+// returns the item count, or -1 for a non-collection. `get` returns a borrowed
+// (no +1) Inline* at `index`, or NULL on null/non-collection/out-of-range.
+int32_t dm_noesis_text_inlines_collection_add(void* collection, void* inl);
+int32_t dm_noesis_text_inlines_collection_count(void* collection);
+void* dm_noesis_text_inlines_collection_get(void* collection, uint32_t index);
+
 #ifdef __cplusplus
 }
 #endif

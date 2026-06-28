@@ -29,6 +29,7 @@ pub mod reflection;
 pub mod render_device;
 pub mod resources;
 pub mod styles;
+pub mod text_inlines;
 pub mod texture_provider;
 pub mod transforms;
 pub mod view;

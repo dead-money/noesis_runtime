@@ -119,7 +119,6 @@ Only `Path.set_points` is exposed.
 
 ## 13. Text & fonts (rich)
 
-- **`TextBlock` inlines.** `Run`/`Span`/`Bold`/`Italic`/`Underline`/`Hyperlink`/`LineBreak`/`InlineUIContainer`.
 - **`FormattedText`** measurement/layout.
 - **Typography** properties, `FontFamily` enumeration, `TextElement` props, `CompositionUnderline` (IME).
 

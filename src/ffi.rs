@@ -1229,6 +1229,48 @@ unsafe extern "C" {
         type_name: *const c_char,
         prop_name: *const c_char,
     ) -> bool;
+
+    // TextBlock inline content model (TODO §13). Constructors hand out a +1
+    // BaseComponent* (release via dm_noesis_base_component_release).
+    pub fn dm_noesis_text_inlines_run_create(text: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_text_inlines_span_create() -> *mut c_void;
+    pub fn dm_noesis_text_inlines_bold_create() -> *mut c_void;
+    pub fn dm_noesis_text_inlines_italic_create() -> *mut c_void;
+    pub fn dm_noesis_text_inlines_underline_create() -> *mut c_void;
+    pub fn dm_noesis_text_inlines_hyperlink_create() -> *mut c_void;
+    pub fn dm_noesis_text_inlines_line_break_create() -> *mut c_void;
+    pub fn dm_noesis_text_inlines_ui_container_create() -> *mut c_void;
+
+    pub fn dm_noesis_text_inlines_run_set_text(run: *mut c_void, text: *const c_char) -> bool;
+    pub fn dm_noesis_text_inlines_run_get_text(run: *mut c_void) -> *const c_char;
+
+    pub fn dm_noesis_text_inlines_hyperlink_set_navigate_uri(
+        link: *mut c_void,
+        uri: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_text_inlines_hyperlink_get_navigate_uri(link: *mut c_void) -> *const c_char;
+
+    pub fn dm_noesis_text_inlines_inline_set_text_decorations(
+        inl: *mut c_void,
+        decorations: i32,
+    ) -> bool;
+    pub fn dm_noesis_text_inlines_inline_get_text_decorations(inl: *mut c_void) -> i32;
+
+    pub fn dm_noesis_text_inlines_ui_container_set_child(
+        container: *mut c_void,
+        child: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_text_inlines_ui_container_get_child(container: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_text_inlines_text_block_get_inlines(text_block: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_text_inlines_span_get_inlines(span: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_text_inlines_collection_add(collection: *mut c_void, inl: *mut c_void) -> i32;
+    pub fn dm_noesis_text_inlines_collection_count(collection: *mut c_void) -> i32;
+    pub fn dm_noesis_text_inlines_collection_get(
+        collection: *mut c_void,
+        index: u32,
+    ) -> *mut c_void;
 }
 /// Coerce callback (TODO §9). Invoked inside Noesis's value pipeline when a
 /// coerced DP's effective value is computed. `in_value` is the pre-coercion
