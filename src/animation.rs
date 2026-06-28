@@ -129,6 +129,7 @@ use crate::view::FrameworkElement;
 /// match `Noesis::EasingMode`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum EasingMode {
     /// `100% - f(t)` — decelerating.
     EaseOut = 0,
@@ -142,6 +143,7 @@ pub enum EasingMode {
 /// `cpp/noesis_animation.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum EasingKind {
     /// `t^2`.
     Quadratic = 0,
@@ -172,6 +174,7 @@ pub enum EasingKind {
 /// Ordinals match `Noesis::FillBehavior`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FillBehavior {
     /// Hold the final animated value after completion.
     HoldEnd = 0,
@@ -183,6 +186,7 @@ pub enum FillBehavior {
 /// property. Ordinals match `Noesis::HandoffBehavior`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HandoffBehavior {
     /// Snapshot the current value and replace any running animation.
     SnapshotAndReplace = 0,
@@ -194,6 +198,7 @@ pub enum HandoffBehavior {
 /// switch in `cpp/noesis_animation.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KeyFrameKind {
     /// Jump to the value at the key time (no interpolation).
     Discrete = 0,

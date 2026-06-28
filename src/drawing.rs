@@ -54,6 +54,7 @@ use crate::transforms::Transform;
 /// `Noesis::BlendingMode`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BlendingMode {
     Normal = 0,
     Multiply = 1,

@@ -4,7 +4,7 @@
 //! dictionary without our key; after `set_resources` with a code-built
 //! dictionary, `find_resource` resolves the key THROUGH Noesis's logical-chain
 //! lookup (and unboxes to the stored string), a child element inherits it via
-//! that same chain, a missing key returns `None`, and `get_resources` reads the
+//! that same chain, a missing key returns `None`, and `resources` reads the
 //! installed dictionary back (containing the key). A no-op `set_resources` would
 //! leave `find_resource` empty.
 //!
@@ -77,8 +77,8 @@ fn element_resources_set_and_find() {
             "unknown key -> None"
         );
 
-        // get_resources reads the installed dictionary back.
-        let read_back = root.get_resources().expect("get_resources after set");
+        // resources() reads the installed dictionary back.
+        let read_back = root.resources().expect("resources() after set");
         assert!(
             read_back.contains("Accent"),
             "read-back dictionary contains the installed key"

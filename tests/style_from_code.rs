@@ -8,7 +8,7 @@
 //! reads the default (`!= 33`). This discriminates "style applied" from "no-op"
 //! — a stubbed `add_setter` or `set_style` leaves both blocks at the default and
 //! fails the first assert. We also exercise `BasedOn` (inherited setter) and
-//! `get_style` read-back.
+//! `style` read-back.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
 //!   `cargo test -p dm_noesis_runtime --test style_from_code -- --nocapture`
@@ -94,7 +94,7 @@ fn style_setter_applies_to_assigned_element() {
         );
 
         // A fresh element has no Style assigned.
-        assert!(styled.get_style().is_none(), "no style before assignment");
+        assert!(styled.style().is_none(), "no style before assignment");
 
         // ── Build + assign a Style ───────────────────────────────────────────
         let mut style = Style::new();
@@ -116,7 +116,7 @@ fn style_setter_applies_to_assigned_element() {
         view.update(0.016);
 
         assert!(
-            styled.get_style().is_some(),
+            styled.style().is_some(),
             "GetStyle returns the assigned style"
         );
         assert!(

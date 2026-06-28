@@ -53,6 +53,7 @@ use crate::view::FrameworkElement;
 /// SDK's `NsGui/GridLength.h` so the value round-trips by ordinal.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum GridUnitType {
     /// Size determined by the content (the `value` is ignored).
     Auto = 0,

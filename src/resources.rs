@@ -23,7 +23,7 @@
 //!
 //! Per-element resources and `FindResource` live on
 //! [`FrameworkElement`](crate::view::FrameworkElement) (the
-//! `get_resources` / `set_resources` / `find_resource` methods).
+//! `resources` / `set_resources` / `find_resource` methods).
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};

@@ -1497,6 +1497,7 @@ impl Drop for DataObjectSubscription {
 
 /// Which `DataObject` attached event a [`subscribe_data_object`] call targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DataObjectEvent {
     /// `DataObject.Copying` — raised before data is placed on the clipboard
     /// (e.g. by `Ctrl+C` in a `TextBox`).

@@ -118,7 +118,7 @@ impl Style {
     }
 
     /// Wrap an already-owned (`+1`) `Noesis::Style*` — e.g. the `AddRef`'d result
-    /// of `get_style`.
+    /// of `style`.
     ///
     /// # Safety
     ///

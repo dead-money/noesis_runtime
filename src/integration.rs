@@ -90,6 +90,7 @@ fn next_reg_id() -> u64 {
 /// value read back from a live `Cursor` round-trips.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum CursorType {
     None = 0,
     No = 1,

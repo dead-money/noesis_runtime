@@ -26,6 +26,7 @@ use std::os::raw::c_void;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum TextureFormat {
     /// Four-component, 8 bits per channel including alpha.
     Rgba8 = 0,
@@ -44,6 +45,7 @@ pub const TEXTURE_FORMAT_COUNT: usize = 3;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum WrapMode {
     /// Clamp UV between 0.0 and 1.0.
     ClampToEdge = 0,
@@ -62,6 +64,7 @@ pub const WRAP_MODE_COUNT: usize = 6;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MinMagFilter {
     Nearest = 0,
     Linear = 1,
@@ -71,6 +74,7 @@ pub const MIN_MAG_FILTER_COUNT: usize = 2;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MipFilter {
     /// Sample from mipmap level 0 only.
     Disabled = 0,
@@ -122,6 +126,7 @@ impl SamplerState {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BlendMode {
     /// `cs / as`
     Src = 0,
@@ -141,6 +146,7 @@ pub const BLEND_MODE_COUNT: usize = 6;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum StencilMode {
     Disabled = 0,
     EqualKeep = 1,
@@ -291,6 +297,7 @@ pub const SHADER_COUNT: usize = 53;
 /// Mirror of `Noesis::Shader::Vertex::Enum`.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VertexShader {
     Pos = 0,
     PosColor = 1,
@@ -320,6 +327,7 @@ pub const VERTEX_SHADER_COUNT: usize = 21;
 /// Mirror of `Noesis::Shader::Vertex::Format::Enum`.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VertexFormat {
     Pos = 0,
     PosColor = 1,
@@ -344,6 +352,7 @@ pub const VERTEX_FORMAT_COUNT: usize = 16;
 /// Mirror of `Noesis::Shader::Vertex::Format::Attr::Enum`.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VertexAttr {
     /// Position (xy), linear.
     Pos = 0,
@@ -368,6 +377,7 @@ pub const VERTEX_ATTR_COUNT: usize = 8;
 /// Mirror of `Noesis::Shader::Vertex::Format::Attr::Type::Enum`.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VertexAttrType {
     /// One 32-bit float.
     Float = 0,

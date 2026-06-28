@@ -43,6 +43,7 @@ use crate::view::FrameworkElement;
 /// `Noesis::TextDecorations`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum TextDecorations {
     /// No decoration.
     None = 0,

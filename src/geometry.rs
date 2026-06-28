@@ -92,6 +92,7 @@ impl Rect {
 
 /// How the intersecting areas inside a geometry are combined (Noesis `FillRule`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FillRule {
     /// Odd-crossing rule (the XAML default).
     EvenOdd,
@@ -118,6 +119,7 @@ impl FillRule {
 /// How the two operands of a [`CombinedGeometry`] are combined (Noesis
 /// `GeometryCombineMode`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GeometryCombineMode {
     /// `A ∪ B`.
     Union,
@@ -152,6 +154,7 @@ impl GeometryCombineMode {
 
 /// Direction an [`ArcSegment`] / `ArcTo` sweeps (Noesis `SweepDirection`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SweepDirection {
     /// Counter-clockwise (negative-angle) direction.
     Counterclockwise,

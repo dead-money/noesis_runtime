@@ -137,6 +137,7 @@ impl EnumType {
 /// Routing strategy for a custom routed event (mirrors `Noesis::RoutingStrategy`).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RoutingStrategy {
     /// Top-of-tree → source (preview events).
     Tunnel = 0,

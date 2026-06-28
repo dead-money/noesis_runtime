@@ -63,6 +63,7 @@ use crate::view::FrameworkElement;
 /// (e.g. `Normal` = 400, `Bold` = 700), matching the OpenType `usWeightClass`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontWeight {
     /// 100
     Thin = 100,
@@ -112,6 +113,7 @@ impl FontWeight {
 /// `Noesis::FontStyle` (FontProperties.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontStyle {
     /// Upright (the default).
     Normal = 0,
@@ -137,6 +139,7 @@ impl FontStyle {
 /// `Noesis::FontStretch` (FontProperties.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontStretch {
     /// 1
     UltraCondensed = 1,
@@ -180,6 +183,7 @@ impl FontStretch {
 /// `Noesis::FontCapitals` (Typography.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontCapitals {
     /// Default.
     Normal = 0,
@@ -217,6 +221,7 @@ impl FontCapitals {
 /// `Noesis::FontNumeralStyle` (Typography.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontNumeralStyle {
     /// Default.
     Normal = 0,
@@ -242,6 +247,7 @@ impl FontNumeralStyle {
 /// `Noesis::FontFraction` (Typography.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontFraction {
     /// Default.
     Normal = 0,
@@ -267,6 +273,7 @@ impl FontFraction {
 /// `Noesis::FontVariants` (Typography.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontVariants {
     /// Default.
     Normal = 0,
@@ -302,6 +309,7 @@ impl FontVariants {
 /// an IME composition underline.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CompositionLineStyle {
     /// No line.
     None = 0,

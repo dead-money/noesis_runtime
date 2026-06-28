@@ -210,6 +210,7 @@ fn gradient_mapping_mode(ptr: *mut c_void) -> Option<BrushMappingMode> {
 /// area outside its `[0, 1]` gradient vector. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GradientSpreadMethod {
     /// Fill the remaining space with the boundary colors (the XAML default).
     Pad = 0,
@@ -578,6 +579,7 @@ impl Brush for RadialGradientBrush {
 /// content within its base tile. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AlignmentX {
     /// Align toward the left edge.
     Left = 0,
@@ -602,6 +604,7 @@ impl AlignmentX {
 /// within its base tile. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AlignmentY {
     /// Align toward the upper edge.
     Top = 0,
@@ -629,6 +632,7 @@ impl AlignmentY {
 /// and by [shapes](crate::shapes::Shape::set_stretch), which re-exports it.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Stretch {
     /// Preserve original size.
     None = 0,
@@ -656,6 +660,7 @@ impl Stretch {
 /// painted area. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TileMode {
     /// Draw the base tile once; the rest is transparent.
     None = 0,
@@ -687,6 +692,7 @@ impl TileMode {
 /// match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BrushMappingMode {
     /// Coordinates are absolute (local space).
     Absolute = 0,

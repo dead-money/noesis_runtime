@@ -476,6 +476,7 @@ impl AsCommand for BorrowedCommand {
 /// singleton.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ApplicationCommand {
     CancelPrint = 0,
     Close = 1,
@@ -523,6 +524,7 @@ impl ApplicationCommand {
 /// scrolling commands. [`Self::command`] returns the framework singleton.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ComponentCommand {
     ExtendSelectionDown = 0,
     ExtendSelectionLeft = 1,

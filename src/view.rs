@@ -3268,7 +3268,7 @@ impl FrameworkElement {
     /// `+1` reference (the accessor `AddRef`'d it), so it stays valid past this
     /// borrow and mutating it mutates the live dictionary on the element.
     #[must_use]
-    pub fn get_resources(&self) -> Option<crate::resources::ResourceDictionary> {
+    pub fn resources(&self) -> Option<crate::resources::ResourceDictionary> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs the
         // result so the wrapper owns a +1.
         let ptr = unsafe { dm_noesis_framework_element_get_resources(self.ptr.as_ptr()) };
@@ -3318,7 +3318,7 @@ impl FrameworkElement {
     /// (`FrameworkElement::GetStyle`), or `None` if none. The returned wrapper
     /// owns its own `+1` reference (the accessor `AddRef`'d it).
     #[must_use]
-    pub fn get_style(&self) -> Option<crate::styles::Style> {
+    pub fn style(&self) -> Option<crate::styles::Style> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs.
         let ptr = unsafe { dm_noesis_framework_element_get_style(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| unsafe { crate::styles::Style::from_owned(ptr) })
@@ -3340,7 +3340,7 @@ impl FrameworkElement {
     /// (`Control::GetTemplate`), or `None` if none / not a `Control`. The
     /// returned wrapper owns its own `+1` reference (the accessor `AddRef`'d it).
     #[must_use]
-    pub fn get_control_template(&self) -> Option<crate::styles::ControlTemplate> {
+    pub fn control_template(&self) -> Option<crate::styles::ControlTemplate> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side AddRefs.
         let ptr = unsafe { dm_noesis_control_get_template(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| unsafe { crate::styles::ControlTemplate::from_owned(ptr) })
@@ -3388,6 +3388,7 @@ pub enum DynValue {
 /// `Noesis::HorizontalAlignment` (`NsGui/Enums.h`). Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HAlign {
     Left = 0,
     Center = 1,
@@ -3413,6 +3414,7 @@ impl HAlign {
 /// `Noesis::VerticalAlignment` (`NsGui/Enums.h`). Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum VAlign {
     Top = 0,
     Center = 1,
@@ -3883,6 +3885,7 @@ impl Drop for View {
 /// the tree walk.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HitTestFilterBehavior {
     /// Skip this visual and its subtree, continue elsewhere.
     ContinueSkipSelfAndChildren = 0,
@@ -3901,6 +3904,7 @@ pub enum HitTestFilterBehavior {
 /// collecting hits or stop.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HitTestResultBehavior {
     /// Stop the hit test after this hit.
     Stop = 0,
@@ -3912,6 +3916,7 @@ pub enum HitTestResultBehavior {
 /// validated at C++ compile time via `static_assert` in `noesis_view.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MouseButton {
     Left = 0,
     Right = 1,
@@ -3927,6 +3932,7 @@ pub enum MouseButton {
 /// variant here (and a matching assert in C++) to centralize the mapping.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Key {
     None = 0,
     Back = 2,
@@ -4060,6 +4066,7 @@ pub enum Key {
 #[repr(u32)]
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RenderFlag {
     Wireframe = 1,
     ColorBatches = 2,
@@ -4149,6 +4156,7 @@ impl Extend<RenderFlag> for RenderFlags {
 /// screen-space pixel-error thresholds. `Medium` is the Noesis default; `High`
 /// is recommended only when rendering to a multisampled surface.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Quality {
     /// `LowQuality` — 0.7 px error (coarsest curves).
     Low,
