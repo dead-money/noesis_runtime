@@ -2,4 +2,7 @@
 *.swp
 .DS_Store
 .idea/
-.claude/
+# Track shared .claude/skills/; ignore the local and ephemeral bits.
+/.claude/settings.local.json
+/.claude/worktrees/
+/.claude/workflows/
