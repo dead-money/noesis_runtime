@@ -818,6 +818,177 @@ unsafe extern "C" {
     pub fn dm_noesis_render_options_get_bitmap_scaling_mode(obj: *mut c_void) -> i32;
 }
 
+// Geometry object model (TODO §10). Declarations mirror cpp/noesis_shim.h by
+// hand; see cpp/noesis_geometry.cpp for the ownership contract (each *_create
+// hands out one owned reference released by the Rust handle's Drop).
+unsafe extern "C" {
+    // Geometry base
+    pub fn dm_noesis_geometry_get_bounds(geometry: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_geometry_get_render_bounds(geometry: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_geometry_is_empty(geometry: *mut c_void) -> i32;
+    pub fn dm_noesis_geometry_set_transform(geometry: *mut c_void, transform: *mut c_void) -> bool;
+    pub fn dm_noesis_geometry_get_transform(geometry: *mut c_void) -> *mut c_void;
+
+    // StreamGeometry + StreamGeometryContext
+    pub fn dm_noesis_stream_geometry_create() -> *mut c_void;
+    pub fn dm_noesis_stream_geometry_create_from_data(data: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_stream_geometry_set_data(geometry: *mut c_void, data: *const c_char) -> bool;
+    pub fn dm_noesis_stream_geometry_set_fill_rule(geometry: *mut c_void, rule: i32) -> bool;
+    pub fn dm_noesis_stream_geometry_get_fill_rule(geometry: *mut c_void) -> i32;
+    pub fn dm_noesis_stream_geometry_open(geometry: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_stream_geometry_context_begin_figure(
+        ctx: *mut c_void,
+        x: f32,
+        y: f32,
+        is_closed: bool,
+    ) -> bool;
+    pub fn dm_noesis_stream_geometry_context_line_to(ctx: *mut c_void, x: f32, y: f32) -> bool;
+    pub fn dm_noesis_stream_geometry_context_cubic_to(
+        ctx: *mut c_void,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+    ) -> bool;
+    pub fn dm_noesis_stream_geometry_context_quadratic_to(
+        ctx: *mut c_void,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+    ) -> bool;
+    pub fn dm_noesis_stream_geometry_context_arc_to(
+        ctx: *mut c_void,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        rotation_deg: f32,
+        is_large_arc: bool,
+        sweep_direction: i32,
+    ) -> bool;
+    pub fn dm_noesis_stream_geometry_context_set_is_closed(
+        ctx: *mut c_void,
+        is_closed: bool,
+    ) -> bool;
+    pub fn dm_noesis_stream_geometry_context_close(ctx: *mut c_void) -> bool;
+    pub fn dm_noesis_stream_geometry_context_destroy(ctx: *mut c_void);
+
+    // PathGeometry + PathFigure
+    pub fn dm_noesis_path_geometry_create() -> *mut c_void;
+    pub fn dm_noesis_path_geometry_set_fill_rule(geometry: *mut c_void, rule: i32) -> bool;
+    pub fn dm_noesis_path_geometry_get_fill_rule(geometry: *mut c_void) -> i32;
+    pub fn dm_noesis_path_geometry_add_figure(geometry: *mut c_void, figure: *mut c_void) -> i32;
+    pub fn dm_noesis_path_geometry_figure_count(geometry: *mut c_void) -> i32;
+
+    pub fn dm_noesis_path_figure_create() -> *mut c_void;
+    pub fn dm_noesis_path_figure_set_start_point(figure: *mut c_void, x: f32, y: f32) -> bool;
+    pub fn dm_noesis_path_figure_get_start_point(figure: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_path_figure_set_is_closed(figure: *mut c_void, is_closed: bool) -> bool;
+    pub fn dm_noesis_path_figure_set_is_filled(figure: *mut c_void, is_filled: bool) -> bool;
+    pub fn dm_noesis_path_figure_get_is_closed(figure: *mut c_void) -> i32;
+    pub fn dm_noesis_path_figure_get_is_filled(figure: *mut c_void) -> i32;
+    pub fn dm_noesis_path_figure_add_segment(figure: *mut c_void, segment: *mut c_void) -> i32;
+    pub fn dm_noesis_path_figure_segment_count(figure: *mut c_void) -> i32;
+
+    // Path segments
+    pub fn dm_noesis_line_segment_create(x: f32, y: f32) -> *mut c_void;
+    pub fn dm_noesis_line_segment_get_point(segment: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_bezier_segment_create(
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_bezier_segment_get(segment: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_quadratic_bezier_segment_create(
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_quadratic_bezier_segment_get(segment: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_arc_segment_create(
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        rotation_deg: f32,
+        is_large_arc: bool,
+        sweep_direction: i32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_arc_segment_get(
+        segment: *mut c_void,
+        out_point: *mut f32,
+        out_size: *mut f32,
+        out_rotation_deg: *mut f32,
+        out_is_large_arc: *mut bool,
+        out_sweep_direction: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_poly_line_segment_create(points: *const f32, num_points: u32) -> *mut c_void;
+    pub fn dm_noesis_poly_bezier_segment_create(points: *const f32, num_points: u32)
+    -> *mut c_void;
+    pub fn dm_noesis_poly_quadratic_bezier_segment_create(
+        points: *const f32,
+        num_points: u32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_poly_segment_point_count(segment: *mut c_void) -> i32;
+    pub fn dm_noesis_poly_segment_get_point(
+        segment: *mut c_void,
+        index: u32,
+        out: *mut f32,
+    ) -> bool;
+
+    // EllipseGeometry / RectangleGeometry / LineGeometry
+    pub fn dm_noesis_ellipse_geometry_create(cx: f32, cy: f32, rx: f32, ry: f32) -> *mut c_void;
+    pub fn dm_noesis_ellipse_geometry_get(geometry: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_rectangle_geometry_create(
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        rx: f32,
+        ry: f32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_rectangle_geometry_get(
+        geometry: *mut c_void,
+        out_rect: *mut f32,
+        out_radii: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_line_geometry_create(x1: f32, y1: f32, x2: f32, y2: f32) -> *mut c_void;
+    pub fn dm_noesis_line_geometry_get(geometry: *mut c_void, out: *mut f32) -> bool;
+
+    // CombinedGeometry
+    pub fn dm_noesis_combined_geometry_create(
+        mode: i32,
+        geometry1: *mut c_void,
+        geometry2: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_combined_geometry_set_geometry1(
+        geometry: *mut c_void,
+        g1: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_combined_geometry_set_geometry2(
+        geometry: *mut c_void,
+        g2: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_combined_geometry_get_geometry1(geometry: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_combined_geometry_get_geometry2(geometry: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_combined_geometry_set_mode(geometry: *mut c_void, mode: i32) -> bool;
+    pub fn dm_noesis_combined_geometry_get_mode(geometry: *mut c_void) -> i32;
+
+    // GeometryGroup
+    pub fn dm_noesis_geometry_group_create() -> *mut c_void;
+    pub fn dm_noesis_geometry_group_set_fill_rule(geometry: *mut c_void, rule: i32) -> bool;
+    pub fn dm_noesis_geometry_group_get_fill_rule(geometry: *mut c_void) -> i32;
+    pub fn dm_noesis_geometry_group_add_child(geometry: *mut c_void, child: *mut c_void) -> i32;
+    pub fn dm_noesis_geometry_group_child_count(geometry: *mut c_void) -> i32;
+}
+
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
 /// pointers receive the `userdata` passed to [`dm_noesis_value_converter_create`],
 /// the borrowed boxed `value` / `parameter` (`BaseComponent*`, may be null), an

@@ -2102,6 +2102,146 @@ bool dm_noesis_type_set_content_property(
 // The consumption side (dm_noesis_type_converter_from_string above) works for
 // any built-in / reflected type. See TODO.md "Known SDK limitations".
 
+// ── Geometry object model (TODO §10) ────────────────────────────────────────
+//
+// Code-built Geometry objects (NsGui/Geometry.h and derivatives). Every
+// *_create hands out one owned BaseComponent reference (release via
+// dm_noesis_base_component_release, mirrored by the owning Rust handle's Drop).
+// Assign a finished geometry to a Path's Data via the generic component DP path
+// (FrameworkElement::set_component("Data", ...)); Noesis takes its own
+// reference, so the Rust handle may drop afterwards. `cast`-style type checks
+// make every accessor a no-op (false / -1) on a wrong-type pointer. Rects are
+// float[4] = {x, y, width, height}; points are passed as (x, y) pairs. FillRule
+// ordinals match Noesis::FillRule (0 = EvenOdd, 1 = Nonzero); GeometryCombineMode
+// matches Noesis::GeometryCombineMode (0 Union, 1 Intersect, 2 Xor, 3 Exclude);
+// SweepDirection matches Noesis::SweepDirection (0 Counterclockwise, 1 Clockwise).
+
+// Geometry base — works on any Geometry* (StreamGeometry, PathGeometry, …).
+// out = {x, y, width, height}.
+bool dm_noesis_geometry_get_bounds(void* geometry, float out[4]);
+// Render bounds with a null Pen (no stroke widening). out = {x, y, w, h}.
+bool dm_noesis_geometry_get_render_bounds(void* geometry, float out[4]);
+// 1 = empty, 0 = non-empty, -1 = not a Geometry.
+int32_t dm_noesis_geometry_is_empty(void* geometry);
+// Assign / read the Transform applied to the geometry. set takes a borrowed
+// Transform* (or null to clear); Noesis takes its own reference. get returns a
+// borrowed Transform* (no +1) or null.
+bool dm_noesis_geometry_set_transform(void* geometry, void* transform);
+void* dm_noesis_geometry_get_transform(void* geometry);
+
+// StreamGeometry + StreamGeometryContext.
+void* dm_noesis_stream_geometry_create(void);
+// Build from an SVG path-data string (e.g. "M 0,0 L 10,0 10,10 Z"). NULL data
+// yields an empty geometry.
+void* dm_noesis_stream_geometry_create_from_data(const char* data);
+bool dm_noesis_stream_geometry_set_data(void* geometry, const char* data);
+bool dm_noesis_stream_geometry_set_fill_rule(void* geometry, int32_t rule);
+int32_t dm_noesis_stream_geometry_get_fill_rule(void* geometry);
+// Open a drawing context. Returns an opaque heap StreamGeometryContext* that
+// keeps the geometry alive; finish with dm_noesis_stream_geometry_context_close
+// (flush + free) or dm_noesis_stream_geometry_context_destroy (free, no flush).
+void* dm_noesis_stream_geometry_open(void* geometry);
+bool dm_noesis_stream_geometry_context_begin_figure(void* ctx, float x, float y, bool is_closed);
+bool dm_noesis_stream_geometry_context_line_to(void* ctx, float x, float y);
+bool dm_noesis_stream_geometry_context_cubic_to(void* ctx, float x1, float y1, float x2, float y2,
+                                                float x3, float y3);
+bool dm_noesis_stream_geometry_context_quadratic_to(void* ctx, float x1, float y1, float x2,
+                                                    float y2);
+bool dm_noesis_stream_geometry_context_arc_to(void* ctx, float x, float y, float width,
+                                              float height, float rotation_deg, bool is_large_arc,
+                                              int32_t sweep_direction);
+bool dm_noesis_stream_geometry_context_set_is_closed(void* ctx, bool is_closed);
+// Close the context: flush its commands into the geometry, then free it.
+bool dm_noesis_stream_geometry_context_close(void* ctx);
+// Free the context WITHOUT flushing (the geometry is left unaltered).
+void dm_noesis_stream_geometry_context_destroy(void* ctx);
+
+// PathGeometry + PathFigureCollection of PathFigure.
+void* dm_noesis_path_geometry_create(void);
+bool dm_noesis_path_geometry_set_fill_rule(void* geometry, int32_t rule);
+int32_t dm_noesis_path_geometry_get_fill_rule(void* geometry);
+// Append a borrowed PathFigure*; the collection takes its own reference.
+// Returns the new index, or -1 on failure.
+int32_t dm_noesis_path_geometry_add_figure(void* geometry, void* figure);
+int32_t dm_noesis_path_geometry_figure_count(void* geometry);
+
+// PathFigure + PathSegmentCollection of PathSegment.
+void* dm_noesis_path_figure_create(void);
+bool dm_noesis_path_figure_set_start_point(void* figure, float x, float y);
+bool dm_noesis_path_figure_get_start_point(void* figure, float out[2]);
+bool dm_noesis_path_figure_set_is_closed(void* figure, bool is_closed);
+bool dm_noesis_path_figure_set_is_filled(void* figure, bool is_filled);
+// 1 = true, 0 = false, -1 = not a PathFigure.
+int32_t dm_noesis_path_figure_get_is_closed(void* figure);
+int32_t dm_noesis_path_figure_get_is_filled(void* figure);
+// Append a borrowed PathSegment*; the collection takes its own reference.
+int32_t dm_noesis_path_figure_add_segment(void* figure, void* segment);
+int32_t dm_noesis_path_figure_segment_count(void* figure);
+
+// Path segments. Each *_create hands out one owned reference.
+void* dm_noesis_line_segment_create(float x, float y);
+bool dm_noesis_line_segment_get_point(void* segment, float out[2]);
+
+void* dm_noesis_bezier_segment_create(float x1, float y1, float x2, float y2, float x3, float y3);
+// out = {x1, y1, x2, y2, x3, y3}
+bool dm_noesis_bezier_segment_get(void* segment, float out[6]);
+
+void* dm_noesis_quadratic_bezier_segment_create(float x1, float y1, float x2, float y2);
+// out = {x1, y1, x2, y2}
+bool dm_noesis_quadratic_bezier_segment_get(void* segment, float out[4]);
+
+void* dm_noesis_arc_segment_create(float x, float y, float width, float height, float rotation_deg,
+                                   bool is_large_arc, int32_t sweep_direction);
+// out_point = {x, y}; out_size = {width, height}; any out pointer may be null.
+bool dm_noesis_arc_segment_get(void* segment, float out_point[2], float out_size[2],
+                               float* out_rotation_deg, bool* out_is_large_arc,
+                               int32_t* out_sweep_direction);
+
+// Poly* segments: `points` is `num_points` (x, y) pairs (2 * num_points floats).
+void* dm_noesis_poly_line_segment_create(const float* points, uint32_t num_points);
+void* dm_noesis_poly_bezier_segment_create(const float* points, uint32_t num_points);
+void* dm_noesis_poly_quadratic_bezier_segment_create(const float* points, uint32_t num_points);
+// Read-back over any of the three poly segment types. count returns -1 on a
+// non-poly pointer; get_point fills out = {x, y}.
+int32_t dm_noesis_poly_segment_point_count(void* segment);
+bool dm_noesis_poly_segment_get_point(void* segment, uint32_t index, float out[2]);
+
+// EllipseGeometry.
+void* dm_noesis_ellipse_geometry_create(float cx, float cy, float rx, float ry);
+// out = {centerX, centerY, radiusX, radiusY}
+bool dm_noesis_ellipse_geometry_get(void* geometry, float out[4]);
+
+// RectangleGeometry. rx / ry round the corners.
+void* dm_noesis_rectangle_geometry_create(float x, float y, float width, float height, float rx,
+                                          float ry);
+// out_rect = {x, y, width, height}; out_radii = {radiusX, radiusY}; either may
+// be null.
+bool dm_noesis_rectangle_geometry_get(void* geometry, float out_rect[4], float out_radii[2]);
+
+// LineGeometry.
+void* dm_noesis_line_geometry_create(float x1, float y1, float x2, float y2);
+// out = {startX, startY, endX, endY}
+bool dm_noesis_line_geometry_get(void* geometry, float out[4]);
+
+// CombinedGeometry. `mode` is a GeometryCombineMode ordinal; geometry1/2 are
+// borrowed Geometry* (or null), Noesis takes its own references.
+void* dm_noesis_combined_geometry_create(int32_t mode, void* geometry1, void* geometry2);
+bool dm_noesis_combined_geometry_set_geometry1(void* geometry, void* g1);
+bool dm_noesis_combined_geometry_set_geometry2(void* geometry, void* g2);
+// Borrowed Geometry* (no +1) or null.
+void* dm_noesis_combined_geometry_get_geometry1(void* geometry);
+void* dm_noesis_combined_geometry_get_geometry2(void* geometry);
+bool dm_noesis_combined_geometry_set_mode(void* geometry, int32_t mode);
+int32_t dm_noesis_combined_geometry_get_mode(void* geometry);
+
+// GeometryGroup + GeometryCollection of Geometry.
+void* dm_noesis_geometry_group_create(void);
+bool dm_noesis_geometry_group_set_fill_rule(void* geometry, int32_t rule);
+int32_t dm_noesis_geometry_group_get_fill_rule(void* geometry);
+// Append a borrowed child Geometry*; the collection takes its own reference.
+int32_t dm_noesis_geometry_group_add_child(void* geometry, void* child);
+int32_t dm_noesis_geometry_group_child_count(void* geometry);
+
 #ifdef __cplusplus
 }
 #endif
