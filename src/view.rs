@@ -59,9 +59,17 @@ use crate::ffi::{
     dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_textbox_get_int,
     dm_noesis_textbox_get_selected_text, dm_noesis_textbox_select, dm_noesis_textbox_select_all,
     dm_noesis_textbox_set_int, dm_noesis_toggle_get_is_checked, dm_noesis_toggle_set_is_checked,
-    dm_noesis_ui_element_get_render_transform_origin,
-    dm_noesis_ui_element_set_render_transform_origin, dm_noesis_view_activate,
-    dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
+    dm_noesis_ui_element_capture_mouse, dm_noesis_ui_element_capture_mouse_mode,
+    dm_noesis_ui_element_capture_touch, dm_noesis_ui_element_focus_engage,
+    dm_noesis_ui_element_get_is_focused, dm_noesis_ui_element_get_is_keyboard_focus_within,
+    dm_noesis_ui_element_get_is_keyboard_focused, dm_noesis_ui_element_get_is_mouse_captured,
+    dm_noesis_ui_element_get_key_states, dm_noesis_ui_element_get_keyboard_focused,
+    dm_noesis_ui_element_get_modifiers, dm_noesis_ui_element_get_mouse_captured,
+    dm_noesis_ui_element_get_render_transform_origin, dm_noesis_ui_element_is_key_down,
+    dm_noesis_ui_element_is_key_toggled, dm_noesis_ui_element_is_key_up,
+    dm_noesis_ui_element_move_focus, dm_noesis_ui_element_predict_focus,
+    dm_noesis_ui_element_release_mouse_capture, dm_noesis_ui_element_set_render_transform_origin,
+    dm_noesis_view_activate, dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
     dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
     dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
     dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
@@ -374,6 +382,180 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
         // DynamicCast<UIElement*> + Focus().
         unsafe { dm_noesis_focus_element(self.ptr.as_ptr()) }
+    }
+
+    // ── Input — finer control (TODO §16) ────────────────────────────────────
+    //
+    // Element-level mouse/touch capture, keyboard-state queries, focus-state
+    // DPs, focus engagement, and focus traversal. All narrow this element to a
+    // `UIElement` on the C side (returning `false` / `None` on a mismatch).
+    // Capture and keyboard-state queries require the element to be connected to
+    // a live `View` (Noesis's `GetMouse()` / `GetKeyboard()` are null until
+    // then) — drive them after [`View::create`] + [`View::update`]. The value
+    // types ([`ModifierKeys`], [`KeyStates`], [`FocusNavigationDirection`],
+    // [`CaptureMode`]) live in [`crate::input`].
+
+    /// Capture the mouse to this element (`UIElement::CaptureMouse`). Returns
+    /// `true` if capture was taken. Requires a live `View`; returns `false` if
+    /// this is not a `UIElement` or capture is refused.
+    pub fn capture_mouse(&mut self) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; C narrows to UIElement.
+        unsafe { dm_noesis_ui_element_capture_mouse(self.ptr.as_ptr()) }
+    }
+
+    /// Capture the mouse to this element with an explicit
+    /// [`CaptureMode`](crate::input::CaptureMode) (`Element` vs `SubTree`), via
+    /// the element's `Mouse::Capture`. `false` if not a `UIElement` or there is
+    /// no live `View`.
+    pub fn capture_mouse_mode(&mut self, mode: crate::input::CaptureMode) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; mode is a valid ordinal.
+        unsafe { dm_noesis_ui_element_capture_mouse_mode(self.ptr.as_ptr(), mode as i32) }
+    }
+
+    /// Release any mouse capture held by this element
+    /// (`UIElement::ReleaseMouseCapture`). No-op if not captured.
+    pub fn release_mouse_capture(&mut self) {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_release_mouse_capture(self.ptr.as_ptr()) }
+    }
+
+    /// Whether this element currently holds mouse capture
+    /// (`UIElement::GetIsMouseCaptured`).
+    #[must_use]
+    pub fn is_mouse_captured(&self) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_get_is_mouse_captured(self.ptr.as_ptr()) }
+    }
+
+    /// Capture the touch device `touch_device` to this element
+    /// (`UIElement::CaptureTouch`). `false` if not a `UIElement` or refused.
+    pub fn capture_touch(&mut self, touch_device: u64) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_capture_touch(self.ptr.as_ptr(), touch_device) }
+    }
+
+    /// The element currently holding mouse capture in this element's `View`
+    /// (`Mouse::GetCaptured`), as a **borrowed** pointer (no `+1`). `None` if
+    /// nothing is captured. Compare against another element's
+    /// [`raw`](Self::raw) to identify it.
+    #[must_use]
+    pub fn mouse_captured(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
+        let p = unsafe { dm_noesis_ui_element_get_mouse_captured(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// The chord [`ModifierKeys`](crate::input::ModifierKeys) currently held, via
+    /// this element's `Keyboard::GetModifiers`. `None` if not a `UIElement` or
+    /// not attached to a `View`.
+    #[must_use]
+    pub fn modifiers(&self) -> Option<crate::input::ModifierKeys> {
+        let mut out = 0;
+        // SAFETY: self.ptr is a live FrameworkElement*; out is a valid i32.
+        unsafe { dm_noesis_ui_element_get_modifiers(self.ptr.as_ptr(), &mut out) }
+            .then(|| crate::input::ModifierKeys::from_bits(out))
+    }
+
+    /// The [`KeyStates`](crate::input::KeyStates) of `key` via this element's
+    /// `Keyboard::GetKeyStates`. `None` if not a `UIElement` / not attached.
+    #[must_use]
+    pub fn key_states(&self, key: Key) -> Option<crate::input::KeyStates> {
+        let mut out = 0;
+        // SAFETY: self.ptr is a live FrameworkElement*; out is a valid i32.
+        unsafe { dm_noesis_ui_element_get_key_states(self.ptr.as_ptr(), key as i32, &mut out) }
+            .then(|| crate::input::KeyStates::from_bits(out))
+    }
+
+    /// Whether `key` is currently down (`Keyboard::IsKeyDown`). `false` if not a
+    /// `UIElement` / not attached / the key is up.
+    #[must_use]
+    pub fn is_key_down(&self, key: Key) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_is_key_down(self.ptr.as_ptr(), key as i32) }
+    }
+
+    /// Whether `key` is currently up (`Keyboard::IsKeyUp`). An un-attached
+    /// element reports `true` (no key held).
+    #[must_use]
+    pub fn is_key_up(&self, key: Key) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_is_key_up(self.ptr.as_ptr(), key as i32) }
+    }
+
+    /// Whether `key`'s toggle is on (`Keyboard::IsKeyToggled`, e.g. `CapsLock`).
+    #[must_use]
+    pub fn is_key_toggled(&self, key: Key) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_is_key_toggled(self.ptr.as_ptr(), key as i32) }
+    }
+
+    /// The element with keyboard focus in this element's `View`
+    /// (`Keyboard::GetFocused`), as a **borrowed** pointer (no `+1`). `None` if
+    /// nothing is focused. Compare against [`raw`](Self::raw).
+    #[must_use]
+    pub fn keyboard_focused(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
+        let p = unsafe { dm_noesis_ui_element_get_keyboard_focused(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Whether this element has logical focus (`UIElement::GetIsFocused`).
+    #[must_use]
+    pub fn is_focused(&self) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_get_is_focused(self.ptr.as_ptr()) }
+    }
+
+    /// Whether this element has keyboard focus
+    /// (`UIElement::GetIsKeyboardFocused`).
+    #[must_use]
+    pub fn is_keyboard_focused(&self) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_get_is_keyboard_focused(self.ptr.as_ptr()) }
+    }
+
+    /// Whether keyboard focus is on this element or a descendant
+    /// (`UIElement::GetIsKeyboardFocusWithin`).
+    #[must_use]
+    pub fn is_keyboard_focus_within(&self) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        unsafe { dm_noesis_ui_element_get_is_keyboard_focus_within(self.ptr.as_ptr()) }
+    }
+
+    /// Move keyboard focus to this element, optionally **engaging** it
+    /// (`UIElement::Focus(bool engage)`). Engagement is the gamepad/console
+    /// focus-engagement model: `engage = true` enters the element so directional
+    /// input drives it rather than moving focus. Returns the focusable result.
+    pub fn focus_engage(&mut self, engage: bool) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; C narrows to UIElement.
+        unsafe { dm_noesis_ui_element_focus_engage(self.ptr.as_ptr(), engage) }
+    }
+
+    /// Move focus away from this element in the given
+    /// [`FocusNavigationDirection`](crate::input::FocusNavigationDirection)
+    /// (`UIElement::MoveFocus`). `wrapped` lets traversal wrap around the ends.
+    /// Returns `true` if focus moved.
+    pub fn move_focus(
+        &mut self,
+        direction: crate::input::FocusNavigationDirection,
+        wrapped: bool,
+    ) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; direction a valid ordinal.
+        unsafe { dm_noesis_ui_element_move_focus(self.ptr.as_ptr(), direction as i32, wrapped) }
+    }
+
+    /// Predict the element focus would land on in `direction` without moving it
+    /// (`UIElement::PredictFocus`), as a **borrowed** `DependencyObject*` (no
+    /// `+1`). `None` if no candidate (or for the tab-order directions `Next` /
+    /// `Previous` / `First` / `Last`, which `PredictFocus` does not support).
+    #[must_use]
+    pub fn predict_focus(
+        &self,
+        direction: crate::input::FocusNavigationDirection,
+    ) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
+        let p = unsafe { dm_noesis_ui_element_predict_focus(self.ptr.as_ptr(), direction as i32) };
+        NonNull::new(p)
     }
 
     /// Assign this element's geometry — as a `Path` — to an open polyline through

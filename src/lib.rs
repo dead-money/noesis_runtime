@@ -26,6 +26,7 @@ pub mod formatted_text;
 pub mod geometry;
 pub mod gui;
 pub mod imaging;
+pub mod input;
 pub mod markup;
 pub mod multi_binding;
 pub mod name_scope;
