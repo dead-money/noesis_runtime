@@ -30,6 +30,7 @@ pub mod plain_vm;
 pub mod reflection;
 pub mod render_device;
 pub mod resources;
+pub mod shapes;
 pub mod styles;
 pub mod texture_provider;
 pub mod transforms;

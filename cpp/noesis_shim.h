@@ -1533,6 +1533,64 @@ void dm_noesis_command_destroy(void* command);
 // Safe to call with NULL or a non-command pointer (no-op).
 void dm_noesis_command_raise_can_execute_changed(void* command);
 
+// ── RoutedCommand / RoutedUICommand (TODO §4) ───────────────────────────────
+//
+// Commands routed through the element tree to a matching CommandBinding. The
+// owner is resolved from `owner_type_name` via the Core reflection registry — a
+// built-in type ("UIElement") or a §9-registered custom class. Both creators
+// return a `BaseComponent*` (+1; release via dm_noesis_base_component_release),
+// and dm_noesis_command_raise_can_execute_changed works on them. NULL on a bad
+// name / unresolvable owner.
+void* dm_noesis_routed_command_create(const char* name, const char* owner_type_name);
+void* dm_noesis_routed_ui_command_create(
+    const char* name, const char* text, const char* owner_type_name);
+// Execute / query against a UIElement target (routes to its CommandBindings).
+// `param` is borrowed (may be NULL). No-op / false on a non-RoutedCommand or
+// non-UIElement.
+void dm_noesis_routed_command_execute(void* command, void* param, void* target);
+bool dm_noesis_routed_command_can_execute(void* command, void* param, void* target);
+// Borrowed accessors. _get_name applies to any RoutedCommand; _text to
+// RoutedUICommand only. NULL on type mismatch.
+const char* dm_noesis_routed_command_get_name(void* command);
+const char* dm_noesis_routed_ui_command_get_text(void* command);
+void dm_noesis_routed_ui_command_set_text(void* command, const char* text);
+
+// ── CommandBinding (TODO §4) ────────────────────────────────────────────────
+//
+// Binds a command to Rust handlers and attaches to an element's CommandBindings
+// so an invoked command routing through that element fires them. Lifetime
+// mirrors the command free-fn pattern: dm_noesis_command_binding_create donates
+// `userdata` (freed via dm_noesis_command_free_fn on destroy) and returns an
+// opaque token. Attach it to a UIElement, then destroy to detach + free.
+
+// Executed: run the action. `parameter` is the borrowed command parameter (may
+// be NULL). The binding marks the event handled afterwards.
+typedef void (*dm_noesis_cmd_executed_fn)(void* userdata, void* parameter);
+// CanExecute: return whether the command may run now (drives routing + bound
+// control enabled state). `parameter` borrowed; may be NULL.
+typedef bool (*dm_noesis_cmd_can_execute_fn)(void* userdata, void* parameter);
+
+// Create a CommandBinding for `command` (a borrowed ICommand* — RoutedCommand,
+// built-in, or Rust ICommand). Returns an opaque token, or NULL on a null /
+// non-ICommand `command`. `can_execute` may be NULL (treated as always-true).
+void* dm_noesis_command_binding_create(
+    void* command, dm_noesis_cmd_executed_fn executed,
+    dm_noesis_cmd_can_execute_fn can_execute, void* userdata,
+    dm_noesis_command_free_fn free_handler);
+// Add the binding to `element`'s CommandBindings. Returns false if `element` is
+// not a UIElement. The element then keeps the binding alive.
+bool dm_noesis_command_binding_attach(void* token, void* element);
+// Detach the delegates, free the donated userdata (exactly once), and drop the
+// token's binding reference. Safe to call with NULL.
+void dm_noesis_command_binding_destroy(void* token);
+
+// ── Built-in command libraries (TODO §4) ────────────────────────────────────
+//
+// Borrowed `const RoutedUICommand*` framework singletons (do NOT release),
+// indexed by the enums in src/commands.rs. NULL on an out-of-range index.
+const void* dm_noesis_application_command(uint32_t which);
+const void* dm_noesis_component_command(uint32_t which);
+
 // ── Value boxing / unboxing primitives (TODO §3) ───────────────────────────
 //
 // Binding values cross the FFI as `Noesis::BaseComponent*` (boxed). These wrap
@@ -1772,6 +1830,75 @@ bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* o
 // get returns the ordinal or -1 if `obj` is not a DependencyObject.
 bool dm_noesis_render_options_set_bitmap_scaling_mode(void* obj, int32_t mode);
 int32_t dm_noesis_render_options_get_bitmap_scaling_mode(void* obj);
+
+// ── Shape elements (TODO §10 / Phase D) ─────────────────────────────────────
+//
+// Implemented in cpp/noesis_shapes.cpp. *_create hands out a freshly-built
+// shape with one owned +1 reference (the brushes handout() idiom); the Rust
+// handle's Drop releases it. `shape` is a Shape* / FrameworkElement* /
+// BaseComponent* (the same opaque handle used elsewhere); every entrypoint
+// DynamicCasts and fails gracefully (false / null / -1) on a type mismatch.
+// Noesis 3.2.13 ships only Rectangle/Ellipse/Line/Path shape elements — there
+// is no Polygon/Polyline (see TODO §10 + Known SDK limitations).
+void* dm_noesis_rectangle_create(void);
+void* dm_noesis_ellipse_create(void);
+void* dm_noesis_line_create(void);
+
+// FrameworkElement Width/Height (a Shape's own size lives on these inherited DPs).
+bool dm_noesis_shape_set_width(void* shape, float width);
+bool dm_noesis_shape_get_width(void* shape, float* out);
+bool dm_noesis_shape_set_height(void* shape, float height);
+bool dm_noesis_shape_get_height(void* shape, float* out);
+
+// Fill/Stroke reuse the brush wrappers: setters take any Brush* (null clears),
+// getters return the live Brush* BORROWED (no +1) so tests can match by identity.
+bool dm_noesis_shape_set_fill(void* shape, void* brush);
+void* dm_noesis_shape_get_fill(void* shape);
+bool dm_noesis_shape_set_stroke(void* shape, void* brush);
+void* dm_noesis_shape_get_stroke(void* shape);
+
+// Stroke scalar properties.
+bool dm_noesis_shape_set_stroke_thickness(void* shape, float value);
+bool dm_noesis_shape_get_stroke_thickness(void* shape, float* out);
+bool dm_noesis_shape_set_stroke_miter_limit(void* shape, float value);
+bool dm_noesis_shape_get_stroke_miter_limit(void* shape, float* out);
+bool dm_noesis_shape_set_stroke_dash_offset(void* shape, float value);
+bool dm_noesis_shape_get_stroke_dash_offset(void* shape, float* out);
+bool dm_noesis_shape_set_trim_start(void* shape, float value);
+bool dm_noesis_shape_get_trim_start(void* shape, float* out);
+bool dm_noesis_shape_set_trim_end(void* shape, float value);
+bool dm_noesis_shape_get_trim_end(void* shape, float* out);
+bool dm_noesis_shape_set_trim_offset(void* shape, float value);
+bool dm_noesis_shape_get_trim_offset(void* shape, float* out);
+
+// Stroke enum properties: set returns false on type mismatch, get returns the
+// ordinal or -1. Ordinals match Noesis::PenLineCap / PenLineJoin / Stretch.
+bool dm_noesis_shape_set_stroke_dash_cap(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_dash_cap(void* shape);
+bool dm_noesis_shape_set_stroke_start_line_cap(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_start_line_cap(void* shape);
+bool dm_noesis_shape_set_stroke_end_line_cap(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_end_line_cap(void* shape);
+bool dm_noesis_shape_set_stroke_line_join(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_line_join(void* shape);
+bool dm_noesis_shape_set_stretch(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stretch(void* shape);
+
+// StrokeDashArray — Noesis exposes this as a string ("2 1 3"); get returns a
+// borrowed pointer owned by the Shape (null if unset / not a Shape).
+bool dm_noesis_shape_set_stroke_dash_array(void* shape, const char* dashes);
+const char* dm_noesis_shape_get_stroke_dash_array(void* shape);
+
+// Rectangle::RadiusX / RadiusY.
+bool dm_noesis_rectangle_set_radius_x(void* shape, float value);
+bool dm_noesis_rectangle_get_radius_x(void* shape, float* out);
+bool dm_noesis_rectangle_set_radius_y(void* shape, float value);
+bool dm_noesis_rectangle_get_radius_y(void* shape, float* out);
+
+// Line::X1/Y1/X2/Y2 (set/get all four; out = {x1, y1, x2, y2}).
+bool dm_noesis_line_set(void* shape, float x1, float y1, float x2, float y2);
+bool dm_noesis_line_get(void* shape, float out[4]);
+
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //
 // Implemented in cpp/noesis_controls.cpp. Each entrypoint DynamicCasts to the

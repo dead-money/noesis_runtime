@@ -84,9 +84,6 @@ Remaining:
 
 ## 10. Geometry, shapes, drawing
 
-Geometry construction is exposed (`src/geometry.rs`); shapes and `DrawingContext` remain.
-
-- **Shapes.** `Rectangle`/`Ellipse`/`Line`/`Polygon`/`Polyline` property access; `Shape` stroke/fill/`Pen`/`DashStyle`.
 - **`DrawingContext`** immediate-mode drawing.
 
 ## 11. Brushes, transforms, visual properties
@@ -178,3 +175,4 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
 - **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.
 - **Transform-aware / group `Geometry.GetBounds` (§10).** `Geometry::GetBounds()` reports the *untransformed* path in 3.2.13 — assigning a `Transform` does not move the reported bounds (the assignment is still verifiable via the read-back `GetTransform` pointer). `GeometryGroup`/`PathGeometry` build their aggregate path lazily, so `GetBounds` reads empty until the geometry is rendered in a live view; child / figure / segment counts are the headless FFI-crossing proof. `EllipseGeometry`/`RectangleGeometry`/`LineGeometry`/`StreamGeometry`/`CombinedGeometry` bounds compute eagerly. `StreamGeometryContext` exposes Noesis's actual command set — `CubicTo`/`QuadraticTo`/`SmoothCubicTo`/`SmoothQuadraticTo`/`ArcTo` and `BeginFigure(point, isClosed)` (no per-call `isFilled`/`isStroked`), which differs from WPF's `BezierTo`/`QuadraticBezierTo` naming.
+- **`Polygon` / `Polyline` shape elements (§10).** Noesis 3.2.13 ships only `Path`/`Rectangle`/`Ellipse`/`Line` shape elements — there is no `Polygon.h`/`Polyline.h`. Build a polygon/polyline as a `PathGeometry`/`StreamGeometry` (the §10 geometry path) and host it in a `Path`.

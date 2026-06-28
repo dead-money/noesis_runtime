@@ -894,6 +894,60 @@ unsafe extern "C" {
     // RenderOptions
     pub fn dm_noesis_render_options_set_bitmap_scaling_mode(obj: *mut c_void, mode: i32) -> bool;
     pub fn dm_noesis_render_options_get_bitmap_scaling_mode(obj: *mut c_void) -> i32;
+
+    // ── Shape elements (TODO §10) — see cpp/noesis_shapes.cpp / src/shapes.rs ─
+    pub fn dm_noesis_rectangle_create() -> *mut c_void;
+    pub fn dm_noesis_ellipse_create() -> *mut c_void;
+    pub fn dm_noesis_line_create() -> *mut c_void;
+
+    pub fn dm_noesis_shape_set_width(shape: *mut c_void, width: f32) -> bool;
+    pub fn dm_noesis_shape_get_width(shape: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_shape_set_height(shape: *mut c_void, height: f32) -> bool;
+    pub fn dm_noesis_shape_get_height(shape: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_shape_set_fill(shape: *mut c_void, brush: *mut c_void) -> bool;
+    pub fn dm_noesis_shape_get_fill(shape: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_shape_set_stroke(shape: *mut c_void, brush: *mut c_void) -> bool;
+    pub fn dm_noesis_shape_get_stroke(shape: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_shape_set_stroke_thickness(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_shape_get_stroke_thickness(shape: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_shape_set_stroke_miter_limit(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_shape_get_stroke_miter_limit(shape: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_shape_set_stroke_dash_offset(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_shape_get_stroke_dash_offset(shape: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_shape_set_trim_start(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_shape_get_trim_start(shape: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_shape_set_trim_end(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_shape_get_trim_end(shape: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_shape_set_trim_offset(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_shape_get_trim_offset(shape: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_shape_set_stroke_dash_cap(shape: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_shape_get_stroke_dash_cap(shape: *mut c_void) -> i32;
+    pub fn dm_noesis_shape_set_stroke_start_line_cap(shape: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_shape_get_stroke_start_line_cap(shape: *mut c_void) -> i32;
+    pub fn dm_noesis_shape_set_stroke_end_line_cap(shape: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_shape_get_stroke_end_line_cap(shape: *mut c_void) -> i32;
+    pub fn dm_noesis_shape_set_stroke_line_join(shape: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_shape_get_stroke_line_join(shape: *mut c_void) -> i32;
+    pub fn dm_noesis_shape_set_stretch(shape: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_shape_get_stretch(shape: *mut c_void) -> i32;
+
+    pub fn dm_noesis_shape_set_stroke_dash_array(
+        shape: *mut c_void,
+        dashes: *const std::os::raw::c_char,
+    ) -> bool;
+    pub fn dm_noesis_shape_get_stroke_dash_array(shape: *mut c_void)
+    -> *const std::os::raw::c_char;
+
+    pub fn dm_noesis_rectangle_set_radius_x(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_rectangle_get_radius_x(shape: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_rectangle_set_radius_y(shape: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_rectangle_get_radius_y(shape: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_line_set(shape: *mut c_void, x1: f32, y1: f32, x2: f32, y2: f32) -> bool;
+    pub fn dm_noesis_line_get(shape: *mut c_void, out: *mut f32) -> bool;
 }
 
 // Geometry object model (TODO §10). Declarations mirror cpp/noesis_shim.h by

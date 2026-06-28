@@ -23,6 +23,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_brushes.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_animation.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_geometry.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_shapes.cpp");
 
     let sdk_dir = env::var("NOESIS_SDK_DIR").unwrap_or_else(|_| {
         panic!(
@@ -96,6 +97,7 @@ fn main() {
         .file("cpp/noesis_brushes.cpp")
         .file("cpp/noesis_animation.cpp")
         .file("cpp/noesis_geometry.cpp")
+        .file("cpp/noesis_shapes.cpp")
         .include(&include)
         .flag_if_supported("-Wno-unused-parameter");
 
