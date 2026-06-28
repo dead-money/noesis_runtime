@@ -876,3 +876,57 @@ pub type PropChangedFn = unsafe extern "C" fn(
 /// registration; the Rust trampoline drops the boxed handler. Ownership
 /// of `userdata` transfers to the C++ side at register time.
 pub type ClassFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+// ────────────────────────────────────────────────────────────────────────────
+// Reflection meta: custom enums / routed events / factory + string conversion
+// (TODO §9). See cpp/noesis_shim.h for the full ownership + threading contracts.
+// ────────────────────────────────────────────────────────────────────────────
+
+/// One (name, value) pair of a runtime enum, mirroring
+/// `dm_noesis_enum_value` in `cpp/noesis_shim.h`. `name` is a borrowed C string
+/// valid for the duration of the `dm_noesis_register_enum` call.
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct EnumValue {
+    pub name: *const c_char,
+    pub value: i32,
+}
+
+unsafe extern "C" {
+    // (A) Custom enums
+    pub fn dm_noesis_register_enum(
+        name: *const c_char,
+        values: *const EnumValue,
+        count: u32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_enum_value_from_name(
+        enum_type: *const c_char,
+        value_name: *const c_char,
+        out_value: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_enum_name_from_value(
+        enum_type: *const c_char,
+        value: i32,
+        out_name: *mut *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_type_converter_from_string(
+        type_name: *const c_char,
+        str: *const c_char,
+        out_boxed: *mut *mut c_void,
+    ) -> bool;
+
+    // (B) Custom routed events
+    pub fn dm_noesis_register_routed_event(
+        type_name: *const c_char,
+        event_name: *const c_char,
+        strategy: i32,
+    ) -> bool;
+    pub fn dm_noesis_raise_routed_event(element: *mut c_void, event_name: *const c_char) -> bool;
+
+    // (C) Factory / component metadata
+    pub fn dm_noesis_factory_is_registered(name: *const c_char) -> bool;
+    pub fn dm_noesis_type_set_content_property(
+        type_name: *const c_char,
+        prop_name: *const c_char,
+    ) -> bool;
+}
