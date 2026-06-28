@@ -5,9 +5,9 @@
 //! `TextBlock.Text` to `{Binding Title}`. Then it asserts the binding engine
 //! actually moved the data both ways across `View::update`:
 //!
-//!   * the value set on the VM *before* binding shows up in the bound TextBlock;
-//!   * mutating the VM's DP *after* the view is live updates the TextBlock —
-//!     which only happens if the DependencyObject change notification reached
+//!   * the value set on the VM *before* binding shows up in the bound `TextBlock`;
+//!   * mutating the VM's DP *after* the view is live updates the `TextBlock` —
+//!     which only happens if the `DependencyObject` change notification reached
 //!     the binding (the INotifyPropertyChanged-equivalent for a DO source).
 //!
 //! Reading the rendered value back through `TextBlock::Text` (not through the

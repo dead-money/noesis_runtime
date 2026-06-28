@@ -5,10 +5,10 @@
 //! every helper:
 //!
 //! 1. `set_text` / `text()` round-trip on both element types.
-//! 2. `set_caret_to_end` on the TextBox.
-//! 3. `focus()` on the TextBox.
+//! 2. `set_caret_to_end` on the `TextBox`.
+//! 3. `focus()` on the `TextBox`.
 //! 4. `subscribe_keydown` — callback receives a synthetic `Key::Return`
-//!    plus a synthetic `Key::OemTilde`, mirrors AoR's command-input flow.
+//!    plus a synthetic `Key::OemTilde`, mirrors `AoR`'s command-input flow.
 //!
 //! Run with `NOESIS_SDK_DIR` set (and ideally a license, though trial mode
 //! is fine for a smoke test):

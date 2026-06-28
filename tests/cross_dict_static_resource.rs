@@ -41,7 +41,7 @@
 //! application resources up front (empty), then each leaf is added to
 //! `parent.MergedDictionaries` and its `Source` assigned — so each
 //! parse runs with the parent + previously-loaded siblings already
-//! visible to the StaticResource walker. A regression here would
+//! visible to the `StaticResource` walker. A regression here would
 //! surface as `IndirectProbe.Indirect` reading back transparent (the
 //! null-Color default).
 //!

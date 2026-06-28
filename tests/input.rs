@@ -10,7 +10,7 @@
 //! proves the event reached the render tree.
 //!
 //! Run with `NOESIS_SDK_DIR` set, e.g.
-//!   cargo test -p dm_noesis_runtime --test input -- --nocapture
+//!   cargo test -p `dm_noesis_runtime` --test input -- --nocapture
 
 use std::collections::HashMap;
 

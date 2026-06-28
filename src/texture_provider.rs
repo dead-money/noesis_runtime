@@ -17,7 +17,7 @@
 //!
 //! - `LoadTexture(uri, device)`: return the image as tightly-packed
 //!   RGBA8 bytes. The C++ shim immediately hands the bytes to
-//!   `device->CreateTexture(...)` on the same RenderDevice Noesis passed
+//!   `device->CreateTexture(...)` on the same `RenderDevice` Noesis passed
 //!   in (our `RustRenderDevice`), so the resulting `Noesis::Texture` is
 //!   backed by a real wgpu texture and plugs into `Batch.pattern` /
 //!   `Batch.image` through the existing `*_handle()` path. The byte

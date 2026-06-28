@@ -69,7 +69,7 @@ pub struct FontProviderVTable {
     ) -> bool,
 }
 
-/// Mirror of `dm_noesis_texture_info` in noesis_shim.h — texture metadata
+/// Mirror of `dm_noesis_texture_info` in `noesis_shim.h` — texture metadata
 /// returned by the provider's `get_info` callback.
 #[repr(C)]
 pub struct TextureInfoFfi {
@@ -301,12 +301,12 @@ unsafe extern "C" {
 }
 
 /// Free callback invoked exactly once per registered markup extension
-/// when its underlying C++ MarkupClassData is finally freed. Same shape
+/// when its underlying C++ `MarkupClassData` is finally freed. Same shape
 /// and contract as [`ClassFreeFn`] — see that type's docs.
 pub type MarkupFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
-/// Callback invoked when a registered MarkupExtension's `ProvideValue` runs
-/// during XAML parse. `key` is the ContentProperty value the parser set on
+/// Callback invoked when a registered `MarkupExtension`'s `ProvideValue` runs
+/// during XAML parse. `key` is the `ContentProperty` value the parser set on
 /// the extension (the bit between `{aor:Localize` and `}`); see
 /// `cpp/noesis_shim.h` for the output-slot contract.
 pub type MarkupProvideFn = unsafe extern "C" fn(
@@ -335,8 +335,8 @@ pub type KeyDownFn = unsafe extern "C" fn(userdata: *mut c_void, key: i32, out_h
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Base type the trampoline subclass derives from. v1 only exposes
-/// `ContentControl`; sibling base types (Control, UserControl,
-/// FrameworkElement, Panel) plug in by adding trampoline subclasses on the
+/// `ContentControl`; sibling base types (Control, `UserControl`,
+/// `FrameworkElement`, Panel) plug in by adding trampoline subclasses on the
 /// C++ side and a new variant here.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -374,7 +374,7 @@ pub type PropChangedFn = unsafe extern "C" fn(
 );
 
 /// Free callback invoked exactly once per registered class when the
-/// underlying C++ ClassData is finally freed (either at
+/// underlying C++ `ClassData` is finally freed (either at
 /// `dm_noesis_class_unregister` if no instances exist, or deferred to the
 /// last live instance's destruction). Receives the `userdata` passed at
 /// registration; the Rust trampoline drops the boxed handler. Ownership

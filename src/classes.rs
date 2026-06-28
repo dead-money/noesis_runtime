@@ -18,7 +18,7 @@
 //!    on the main thread.
 //! 4. From Rust, mutate the instance via [`Instance::set_int32`] /
 //!    [`Instance::set_thickness`] / etc. — useful for "computed" properties
-//!    (NineSlicer's `TopLeftViewbox` family is the motivating example).
+//!    (`NineSlicer`'s `TopLeftViewbox` family is the motivating example).
 //! 5. Drop the [`ClassRegistration`] AFTER all live instances are released
 //!    (typically at process shutdown). RAII + the `Send`/`Sync` bounds are
 //!    deliberately conservative — registrations are cheap and rare.
@@ -67,7 +67,7 @@ unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
     // unique ownership; this is the matching `Box::from_raw` that ends it.
     unsafe {
         drop(Box::from_raw(
-            userdata as *mut Box<dyn PropertyChangeHandler>,
+            userdata.cast::<Box<dyn PropertyChangeHandler>>(),
         ))
     };
 }
@@ -77,7 +77,7 @@ unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
 /// the pointer is null or doesn't downcast.
 ///
 /// Useful when a custom-control [`PropertyChangeHandler`] needs the source
-/// dimensions to compute derived properties — NineSlicer / ThreeSlicer's
+/// dimensions to compute derived properties — `NineSlicer` / `ThreeSlicer`'s
 /// `OnSlicesChanged` is the motivating example.
 ///
 /// # Safety
@@ -180,7 +180,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
     ///
     /// Defaults are best-effort for v1: scalar / Thickness / Color / Rect
     /// work; `ImageSource` and `BaseComponent` always default to null
-    /// (matching AoR's authoring style).
+    /// (matching `AoR`'s authoring style).
     pub fn add_property(&mut self, name: &str, kind: PropType) -> u32 {
         self.add_property_with(name, kind, PropertyDefault::None)
     }
@@ -362,7 +362,7 @@ impl OwnedDefault {
 
 /// RAII handle for a registered class. Drop unregisters the class —
 /// preventing new instances from being created — but the underlying
-/// ClassData (and the boxed handler) survive as long as instances remain
+/// `ClassData` (and the boxed handler) survive as long as instances remain
 /// alive. The intrusive refcount on the C++ side guarantees the handler
 /// outlives any property-change callback fired during instance destruction.
 pub struct ClassRegistration {
@@ -384,7 +384,7 @@ impl ClassRegistration {
     }
 
     /// Internal token (a `void*` to the C++-side `ClassData`). Used by
-    /// dm_noesis_bevy when collecting registrations into the render-app sync.
+    /// `dm_noesis_bevy` when collecting registrations into the render-app sync.
     pub fn token(&self) -> NonNull<c_void> {
         self.token
     }
@@ -610,7 +610,7 @@ impl Instance {
     /// value. Returns `None` when the source is null, not an
     /// `ImageSource` subclass, or the property index doesn't match an
     /// `ImageSource` property. Safe wrapper over [`image_source_size`] —
-    /// useful for custom-control handlers (NineSlicer / ThreeSlicer) that
+    /// useful for custom-control handlers (`NineSlicer` / `ThreeSlicer`) that
     /// need source dimensions without dropping into `unsafe`.
     #[must_use]
     pub fn get_image_source_size(self, prop_index: u32) -> Option<(f32, f32)> {
