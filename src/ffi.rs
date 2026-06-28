@@ -1011,6 +1011,126 @@ pub type PropChangedFn = unsafe extern "C" fn(
 pub type ClassFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 // ────────────────────────────────────────────────────────────────────────────
+// Animation & timing (TODO §6 / Phase C). See cpp/noesis_animation.cpp.
+// Every `*_create` returns a +1-owned BaseComponent* (released by the owning
+// Rust handle's Drop via dm_noesis_base_component_release).
+// ────────────────────────────────────────────────────────────────────────────
+unsafe extern "C" {
+    // Storyboard
+    pub fn dm_noesis_storyboard_create() -> *mut c_void;
+    pub fn dm_noesis_storyboard_add_child(sb: *mut c_void, timeline: *mut c_void) -> bool;
+    pub fn dm_noesis_storyboard_child_count(sb: *mut c_void) -> i32;
+    pub fn dm_noesis_storyboard_set_target_name(timeline: *mut c_void, name: *const c_char)
+    -> bool;
+    pub fn dm_noesis_storyboard_set_target_property(
+        timeline: *mut c_void,
+        path: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_storyboard_set_target(timeline: *mut c_void, target: *mut c_void) -> bool;
+    pub fn dm_noesis_storyboard_begin(sb: *mut c_void, fe: *mut c_void, controllable: bool)
+    -> bool;
+    pub fn dm_noesis_storyboard_pause(sb: *mut c_void, fe: *mut c_void) -> bool;
+    pub fn dm_noesis_storyboard_resume(sb: *mut c_void, fe: *mut c_void) -> bool;
+    pub fn dm_noesis_storyboard_stop(sb: *mut c_void, fe: *mut c_void) -> bool;
+    pub fn dm_noesis_storyboard_seek(sb: *mut c_void, fe: *mut c_void, seconds: f64) -> bool;
+    pub fn dm_noesis_storyboard_is_playing(sb: *mut c_void, fe: *mut c_void) -> bool;
+    pub fn dm_noesis_storyboard_is_paused(sb: *mut c_void, fe: *mut c_void) -> bool;
+
+    // Timeline common knobs
+    pub fn dm_noesis_timeline_set_duration_seconds(tl: *mut c_void, seconds: f64) -> bool;
+    pub fn dm_noesis_timeline_set_duration_auto(tl: *mut c_void) -> bool;
+    pub fn dm_noesis_timeline_set_duration_forever(tl: *mut c_void) -> bool;
+    pub fn dm_noesis_timeline_get_duration_seconds(tl: *mut c_void) -> f64;
+    pub fn dm_noesis_timeline_set_begin_time_seconds(tl: *mut c_void, seconds: f64) -> bool;
+    pub fn dm_noesis_timeline_set_auto_reverse(tl: *mut c_void, value: bool) -> bool;
+    pub fn dm_noesis_timeline_set_speed_ratio(tl: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_timeline_set_fill_behavior(tl: *mut c_void, behavior: i32) -> bool;
+    pub fn dm_noesis_timeline_set_repeat_count(tl: *mut c_void, count: f32) -> bool;
+    pub fn dm_noesis_timeline_set_repeat_duration(tl: *mut c_void, seconds: f64) -> bool;
+    pub fn dm_noesis_timeline_set_repeat_forever(tl: *mut c_void) -> bool;
+
+    // From/To/By animations
+    pub fn dm_noesis_double_animation_create() -> *mut c_void;
+    pub fn dm_noesis_double_animation_set_from(anim: *mut c_void, has: bool, v: f32) -> bool;
+    pub fn dm_noesis_double_animation_set_to(anim: *mut c_void, has: bool, v: f32) -> bool;
+    pub fn dm_noesis_double_animation_set_by(anim: *mut c_void, has: bool, v: f32) -> bool;
+
+    pub fn dm_noesis_color_animation_create() -> *mut c_void;
+    pub fn dm_noesis_color_animation_set_from(
+        anim: *mut c_void,
+        has: bool,
+        color: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_color_animation_set_to(
+        anim: *mut c_void,
+        has: bool,
+        color: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_color_animation_set_by(
+        anim: *mut c_void,
+        has: bool,
+        color: *const f32,
+    ) -> bool;
+
+    pub fn dm_noesis_thickness_animation_create() -> *mut c_void;
+    pub fn dm_noesis_thickness_animation_set_from(
+        anim: *mut c_void,
+        has: bool,
+        t: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_thickness_animation_set_to(
+        anim: *mut c_void,
+        has: bool,
+        t: *const f32,
+    ) -> bool;
+    pub fn dm_noesis_thickness_animation_set_by(
+        anim: *mut c_void,
+        has: bool,
+        t: *const f32,
+    ) -> bool;
+
+    pub fn dm_noesis_point_animation_create() -> *mut c_void;
+    pub fn dm_noesis_point_animation_set_from(anim: *mut c_void, has: bool, x: f32, y: f32)
+    -> bool;
+    pub fn dm_noesis_point_animation_set_to(anim: *mut c_void, has: bool, x: f32, y: f32) -> bool;
+    pub fn dm_noesis_point_animation_set_by(anim: *mut c_void, has: bool, x: f32, y: f32) -> bool;
+
+    pub fn dm_noesis_animation_set_easing_function(anim: *mut c_void, easing: *mut c_void) -> bool;
+
+    // Easing functions
+    pub fn dm_noesis_easing_function_create(kind: i32, mode: i32) -> *mut c_void;
+    pub fn dm_noesis_easing_function_set_amplitude(easing: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_easing_function_set_power(easing: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_easing_function_set_exponent(easing: *mut c_void, value: f32) -> bool;
+    pub fn dm_noesis_easing_function_set_oscillations(easing: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_easing_function_set_springiness(easing: *mut c_void, value: f32) -> bool;
+
+    // Key-frame animations
+    pub fn dm_noesis_double_animation_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_double_animation_add_keyframe(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        value: f32,
+        easing: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_color_animation_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_color_animation_add_keyframe(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        color: *const f32,
+        easing: *mut c_void,
+    ) -> bool;
+
+    // Storyboard-less direct animation
+    pub fn dm_noesis_animation_begin_on(
+        anim: *mut c_void,
+        target: *mut c_void,
+        dp_name: *const c_char,
+        handoff: i32,
+    ) -> bool;
+}
 // Reflection meta: custom enums / routed events / factory + string conversion
 // (TODO §9). See cpp/noesis_shim.h for the full ownership + threading contracts.
 // ────────────────────────────────────────────────────────────────────────────

@@ -1793,6 +1793,95 @@ void* dm_noesis_control_get_template(void* control);
 void* dm_noesis_framework_template_find_name(
     void* tmpl, const char* name, void* templated_parent);
 
+// ── Animation & timing (TODO §6 / Phase C) ──────────────────────────────────
+//
+// Code-built Storyboards, animation classes, key frames, and easing functions.
+// Each `*_create` returns a +1-owned BaseComponent* (release via
+// dm_noesis_base_component_release, mirrored by the owning Rust handle's Drop).
+// Adding a timeline to a Storyboard, or a key frame / easing function to its
+// parent, makes Noesis take its own reference. Animations advance off the View
+// clock — pump view.update(t). See cpp/noesis_animation.cpp.
+
+// Storyboard. `fe` arguments below are nullable FrameworkElement*; pass the
+// element tree root (also the namescope for TargetName resolution).
+void* dm_noesis_storyboard_create(void);
+bool dm_noesis_storyboard_add_child(void* sb, void* timeline);
+int32_t dm_noesis_storyboard_child_count(void* sb);
+// Attached-property setters; `timeline` is a child animation (DependencyObject).
+bool dm_noesis_storyboard_set_target_name(void* timeline, const char* name);
+bool dm_noesis_storyboard_set_target_property(void* timeline, const char* path);
+bool dm_noesis_storyboard_set_target(void* timeline, void* target);
+// `controllable` must be true for Pause/Resume/Stop/Seek to take effect.
+bool dm_noesis_storyboard_begin(void* sb, void* fe, bool controllable);
+bool dm_noesis_storyboard_pause(void* sb, void* fe);
+bool dm_noesis_storyboard_resume(void* sb, void* fe);
+bool dm_noesis_storyboard_stop(void* sb, void* fe);
+bool dm_noesis_storyboard_seek(void* sb, void* fe, double seconds);
+bool dm_noesis_storyboard_is_playing(void* sb, void* fe);
+bool dm_noesis_storyboard_is_paused(void* sb, void* fe);
+
+// Timeline common knobs (apply to any Timeline / animation handle).
+bool dm_noesis_timeline_set_duration_seconds(void* tl, double seconds);
+bool dm_noesis_timeline_set_duration_auto(void* tl);
+bool dm_noesis_timeline_set_duration_forever(void* tl);
+double dm_noesis_timeline_get_duration_seconds(void* tl);
+bool dm_noesis_timeline_set_begin_time_seconds(void* tl, double seconds);
+bool dm_noesis_timeline_set_auto_reverse(void* tl, bool value);
+bool dm_noesis_timeline_set_speed_ratio(void* tl, float value);
+bool dm_noesis_timeline_set_fill_behavior(void* tl, int32_t behavior);  // 0 HoldEnd, 1 Stop
+bool dm_noesis_timeline_set_repeat_count(void* tl, float count);
+bool dm_noesis_timeline_set_repeat_duration(void* tl, double seconds);
+bool dm_noesis_timeline_set_repeat_forever(void* tl);
+
+// From/To/By animations. Each setter takes a `has` flag (false => clear to
+// null, so the animation infers the endpoint from the base property value).
+void* dm_noesis_double_animation_create(void);
+bool dm_noesis_double_animation_set_from(void* anim, bool has, float v);
+bool dm_noesis_double_animation_set_to(void* anim, bool has, float v);
+bool dm_noesis_double_animation_set_by(void* anim, bool has, float v);
+
+void* dm_noesis_color_animation_create(void);
+bool dm_noesis_color_animation_set_from(void* anim, bool has, const float color[4]);
+bool dm_noesis_color_animation_set_to(void* anim, bool has, const float color[4]);
+bool dm_noesis_color_animation_set_by(void* anim, bool has, const float color[4]);
+
+void* dm_noesis_thickness_animation_create(void);
+bool dm_noesis_thickness_animation_set_from(void* anim, bool has, const float t[4]);
+bool dm_noesis_thickness_animation_set_to(void* anim, bool has, const float t[4]);
+bool dm_noesis_thickness_animation_set_by(void* anim, bool has, const float t[4]);
+
+void* dm_noesis_point_animation_create(void);
+bool dm_noesis_point_animation_set_from(void* anim, bool has, float x, float y);
+bool dm_noesis_point_animation_set_to(void* anim, bool has, float x, float y);
+bool dm_noesis_point_animation_set_by(void* anim, bool has, float x, float y);
+
+// Assign an easing function to a Double/Color/Thickness/Point From-To animation.
+bool dm_noesis_animation_set_easing_function(void* anim, void* easing);
+
+// Easing functions. kind: 0 Quadratic, 1 Cubic, 2 Quartic, 3 Quintic, 4 Sine,
+// 5 Circle, 6 Back, 7 Bounce, 8 Elastic, 9 Exponential, 10 Power. mode matches
+// Noesis::EasingMode (0 EaseOut, 1 EaseIn, 2 EaseInOut).
+void* dm_noesis_easing_function_create(int32_t kind, int32_t mode);
+bool dm_noesis_easing_function_set_amplitude(void* easing, float value);      // Back
+bool dm_noesis_easing_function_set_power(void* easing, float value);          // Power
+bool dm_noesis_easing_function_set_exponent(void* easing, float value);       // Exponential
+bool dm_noesis_easing_function_set_oscillations(void* easing, int32_t value); // Elastic/Bounce
+bool dm_noesis_easing_function_set_springiness(void* easing, float value);    // Elastic/Bounce
+
+// Key-frame animations. add_keyframe kind: 0 Discrete, 1 Linear, 2 Easing
+// (uses `easing` if non-null). key_time is in seconds.
+void* dm_noesis_double_animation_keyframes_create(void);
+bool dm_noesis_double_animation_add_keyframe(void* anim, int32_t kind, double key_time_seconds,
+                                             float value, void* easing);
+void* dm_noesis_color_animation_keyframes_create(void);
+bool dm_noesis_color_animation_add_keyframe(void* anim, int32_t kind, double key_time_seconds,
+                                            const float color[4], void* easing);
+
+// Storyboard-less direct animation: start `anim` on `target`'s `dp_name`
+// property using the target's view TimeManager. `target` must be a
+// FrameworkElement connected to a live View. handoff matches
+// Noesis::HandoffBehavior (0 SnapshotAndReplace, 1 Compose).
+bool dm_noesis_animation_begin_on(void* anim, void* target, const char* dp_name, int32_t handoff);
 // ── Plain (non-DependencyObject) view models + MultiBinding (TODO §9 + §3) ──
 //
 // The bevy-bridge unblocker: a binding source that is NOT a DependencyObject.
