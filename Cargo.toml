@@ -1,0 +1,31 @@
+[package]
+name = "dm_noesis_runtime"
+version = "0.1.0"
+edition = "2024"
+description = "FFI to the Noesis GUI Native SDK plus a wgpu-friendly RenderDevice subclass shim. Renderer-agnostic; Bevy integration lives in dm_noesis_bevy."
+repository = "https://github.com/dead-money/dm_noesis_runtime"
+license = "MIT"
+publish = false
+links = "Noesis"
+
+[features]
+default = []
+# Enables the dm_noesis_test_* C entrypoints used by tests/render_device.rs.
+# Off by default so production builds don't carry the test helpers.
+test-utils = []
+
+[dependencies]
+thiserror = "2"
+
+[build-dependencies]
+cc = "1"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# FFI shuttles values across u32/usize/u8 boundaries pervasively; these casts
+# are deliberate and the trampolines stay readable when not littered with
+# u32::try_from(...).unwrap() noise. Matches the convention used in
+# dm_spine_runtime.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+module_name_repetitions = "allow"
