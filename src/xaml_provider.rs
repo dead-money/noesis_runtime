@@ -101,6 +101,7 @@ static VTABLE: XamlProviderVTable = XamlProviderVTable {
 /// is already released; otherwise the final destructor fires later than
 /// expected and the boxed impl outlives its C++ wrapper briefly (still
 /// safe — no further callbacks are possible after `Shutdown`).
+#[must_use = "dropping the guard immediately clears the registration"]
 pub struct Registered {
     handle: NonNull<c_void>,
     userdata: NonNull<Box<dyn XamlProvider>>,

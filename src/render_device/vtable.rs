@@ -378,6 +378,7 @@ static VTABLE: RenderDeviceVTable = RenderDeviceVTable {
 /// instance. Drop order is C++ first (so any transitively-held textures /
 /// render targets fire their `drop_*` callbacks against a still-alive trait
 /// object), then the boxed impl.
+#[must_use = "dropping the guard immediately clears the registration"]
 pub struct Registered {
     handle: NonNull<c_void>,
     userdata: NonNull<Box<dyn RenderDevice>>,

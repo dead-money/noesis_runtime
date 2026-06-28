@@ -617,6 +617,7 @@ impl OwnedDefault {
 /// `ClassData` (and the boxed handler) survive as long as instances remain
 /// alive. The intrusive refcount on the C++ side guarantees the handler
 /// outlives any property-change callback fired during instance destruction.
+#[must_use = "dropping the guard immediately clears the registration"]
 pub struct ClassRegistration {
     token: NonNull<c_void>,
     _name: CString,
@@ -758,6 +759,7 @@ impl Instance {
         Self(ptr)
     }
 
+    /// Raw opaque instance pointer, for FFI calls not yet wrapped here.
     pub fn as_ptr(self) -> *mut c_void {
         self.0.as_ptr()
     }
@@ -772,6 +774,7 @@ impl Instance {
             );
         }
     }
+    /// Set a `Float` DP. Triggers the change callback if the value differs.
     pub fn set_float(self, prop_index: u32, value: f32) {
         unsafe {
             noesis_instance_set_property(
@@ -781,6 +784,7 @@ impl Instance {
             );
         }
     }
+    /// Set a `Double` DP. Triggers the change callback if the value differs.
     pub fn set_double(self, prop_index: u32, value: f64) {
         unsafe {
             noesis_instance_set_property(
@@ -790,6 +794,7 @@ impl Instance {
             );
         }
     }
+    /// Set a `Bool` DP. Triggers the change callback if the value differs.
     pub fn set_bool(self, prop_index: u32, value: bool) {
         unsafe {
             noesis_instance_set_property(
@@ -799,6 +804,11 @@ impl Instance {
             );
         }
     }
+    /// Set a `String` DP. Triggers the change callback if the value differs.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` contains an interior NUL byte.
     pub fn set_string(self, prop_index: u32, value: &str) {
         let cstr = CString::new(value).expect("string contained NUL");
         let ptr: *const i8 = cstr.as_ptr();
@@ -810,18 +820,22 @@ impl Instance {
             );
         }
     }
+    /// Set a `Thickness` DP from its four edge widths, in device-independent
+    /// pixels.
     pub fn set_thickness(self, prop_index: u32, left: f32, top: f32, right: f32, bottom: f32) {
         let arr = [left, top, right, bottom];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
+    /// Set a `Color` DP from RGBA components in 0..=1.
     pub fn set_color(self, prop_index: u32, r: f32, g: f32, b: f32, a: f32) {
         let arr = [r, g, b, a];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
+    /// Set a `Rect` DP from its origin and extent.
     pub fn set_rect(self, prop_index: u32, x: f32, y: f32, width: f32, height: f32) {
         let arr = [x, y, width, height];
         unsafe {
@@ -914,6 +928,8 @@ impl Instance {
         };
         ok.then_some(out)
     }
+    /// Read back a `Float` DP. Returns `None` on bad input
+    /// (instance pointer / index mismatch).
     pub fn get_float(self, prop_index: u32) -> Option<f32> {
         let mut out: f32 = 0.0;
         let ok = unsafe {
@@ -940,6 +956,7 @@ impl Instance {
         // before yielding control.
         Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
     }
+    /// Read back a `Thickness` DP as `(left, top, right, bottom)`.
     pub fn get_thickness(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
@@ -947,6 +964,7 @@ impl Instance {
         };
         ok.then_some((out[0], out[1], out[2], out[3]))
     }
+    /// Read back a `Rect` DP as `(x, y, width, height)`.
     pub fn get_rect(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {

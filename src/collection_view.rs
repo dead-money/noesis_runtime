@@ -332,6 +332,7 @@ impl<F: Fn() + Send + 'static> CurrentChangedHandler for F {
 
 /// RAII subscription to a [`CollectionView`]'s `CurrentChanged` event. While
 /// alive, the registered handler stays installed; drop it to unsubscribe.
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct CurrentChangedSubscription {
     token: NonNull<c_void>,
     userdata: NonNull<Box<dyn CurrentChangedHandler>>,

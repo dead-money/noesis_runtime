@@ -84,6 +84,7 @@ unsafe extern "C" fn click_trampoline(userdata: *mut c_void) {
 /// this releases that ref and removes the handler from the routed-event
 /// list. Drop before [`crate::shutdown`] like every other owning handle in
 /// this crate.
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct ClickSubscription {
     token: NonNull<c_void>,
     userdata: NonNull<Box<dyn ClickHandler>>,
@@ -330,6 +331,7 @@ fn key_from_raw(raw: i32) -> Key {
 
 /// RAII subscription token for [`subscribe_keydown`]. Drop to unsubscribe
 /// and free the boxed handler. Mirrors [`ClickSubscription`].
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct KeyDownSubscription {
     token: NonNull<c_void>,
     userdata: NonNull<Box<dyn KeyDownHandler>>,
@@ -897,6 +899,7 @@ unsafe extern "C" fn event_trampoline(
 
 /// RAII subscription token for [`subscribe_event`]. Drop to unsubscribe and
 /// free the boxed handler. Mirrors [`ClickSubscription`] / [`KeyDownSubscription`].
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct EventSubscription {
     token: NonNull<c_void>,
     userdata: NonNull<Box<dyn RoutedEventHandler>>,
@@ -1232,6 +1235,7 @@ unsafe extern "C" fn lifecycle_trampoline(userdata: *mut c_void) {
 
 /// RAII subscription token for [`subscribe_lifecycle`]. Drop to unsubscribe and
 /// free the boxed handler. Mirrors [`ClickSubscription`].
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct LifecycleSubscription {
     token: NonNull<c_void>,
     userdata: NonNull<Box<dyn LifecycleHandler>>,
@@ -1450,6 +1454,7 @@ unsafe extern "C" fn data_object_trampoline(
 /// RAII subscription token for a `DataObject.Copying` / `.Pasting` handler.
 /// Drop to detach the handler and free the boxed closure. Mirrors
 /// [`EventSubscription`]; holds a `+1` ref on the element.
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct DataObjectSubscription {
     token: NonNull<c_void>,
     userdata: NonNull<Box<dyn DataObjectHandler>>,

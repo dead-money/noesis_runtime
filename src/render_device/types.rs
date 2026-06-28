@@ -37,6 +37,7 @@ pub enum TextureFormat {
     R8 = 2,
 }
 
+/// Number of [`TextureFormat`] variants.
 pub const TEXTURE_FORMAT_COUNT: usize = 3;
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -53,6 +54,7 @@ pub enum WrapMode {
     ClampToEdge = 0,
     /// Out-of-range coordinates return transparent zero.
     ClampToZero = 1,
+    /// Tile the texture across the full coordinate range.
     Repeat = 2,
     /// Repeat with horizontal flip.
     MirrorU = 3,
@@ -62,6 +64,7 @@ pub enum WrapMode {
     Mirror = 5,
 }
 
+/// Number of [`WrapMode`] variants.
 pub const WRAP_MODE_COUNT: usize = 6;
 
 /// Filtering applied when a texture is minified or magnified.
@@ -69,10 +72,13 @@ pub const WRAP_MODE_COUNT: usize = 6;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum MinMagFilter {
+    /// Nearest-texel sampling.
     Nearest = 0,
+    /// Bilinear sampling.
     Linear = 1,
 }
 
+/// Number of [`MinMagFilter`] variants.
 pub const MIN_MAG_FILTER_COUNT: usize = 2;
 
 /// Filtering applied between mipmap levels.
@@ -82,10 +88,13 @@ pub const MIN_MAG_FILTER_COUNT: usize = 2;
 pub enum MipFilter {
     /// Sample from mipmap level 0 only.
     Disabled = 0,
+    /// Sample the nearest mipmap level.
     Nearest = 1,
+    /// Linearly blend between mipmap levels (trilinear).
     Linear = 2,
 }
 
+/// Number of [`MipFilter`] variants.
 pub const MIP_FILTER_COUNT: usize = 3;
 
 /// Mirror of `Noesis::SamplerState`.
@@ -150,6 +159,7 @@ pub enum BlendMode {
     SrcOverDual = 5,
 }
 
+/// Number of [`BlendMode`] variants.
 pub const BLEND_MODE_COUNT: usize = 6;
 
 /// Stencil (and, in some variants, depth) test a batch applies.
@@ -157,9 +167,13 @@ pub const BLEND_MODE_COUNT: usize = 6;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum StencilMode {
+    /// No stencil test.
     Disabled = 0,
+    /// Pass where stencil equals `stencil_ref`; leave the buffer unchanged.
     EqualKeep = 1,
+    /// Pass where stencil equals `stencil_ref`; increment the buffer.
     EqualIncr = 2,
+    /// Pass where stencil equals `stencil_ref`; decrement the buffer.
     EqualDecr = 3,
     /// Set stencil data to 0.
     Clear = 4,
@@ -169,6 +183,7 @@ pub enum StencilMode {
     EqualKeepZTest = 6,
 }
 
+/// Number of [`StencilMode`] variants.
 pub const STENCIL_MODE_COUNT: usize = 7;
 
 /// Mirror of `Noesis::RenderState`.
@@ -237,6 +252,7 @@ pub struct Shader(pub u8);
 #[allow(non_upper_case_globals)]
 impl Shader {
     // Debug
+    /// Debug shader: flat per-vertex RGBA color.
     pub const RGBA: Self = Self(0);
     /// Stencil-only rendering for masks.
     pub const MASK: Self = Self(1);
@@ -244,68 +260,119 @@ impl Shader {
     pub const CLEAR: Self = Self(2);
 
     // Path (no PPAA)
+    /// Path fill, solid color.
     pub const PATH_SOLID: Self = Self(3);
+    /// Path fill, linear gradient.
     pub const PATH_LINEAR: Self = Self(4);
+    /// Path fill, radial gradient.
     pub const PATH_RADIAL: Self = Self(5);
+    /// Path fill, texture pattern.
     pub const PATH_PATTERN: Self = Self(6);
+    /// Path fill, texture pattern, clamp wrap.
     pub const PATH_PATTERN_CLAMP: Self = Self(7);
+    /// Path fill, texture pattern, repeat wrap.
     pub const PATH_PATTERN_REPEAT: Self = Self(8);
+    /// Path fill, texture pattern, mirror-U wrap.
     pub const PATH_PATTERN_MIRROR_U: Self = Self(9);
+    /// Path fill, texture pattern, mirror-V wrap.
     pub const PATH_PATTERN_MIRROR_V: Self = Self(10);
+    /// Path fill, texture pattern, mirror wrap.
     pub const PATH_PATTERN_MIRROR: Self = Self(11);
 
     // Path (with PPAA)
+    /// Antialiased path fill, solid color.
     pub const PATH_AA_SOLID: Self = Self(12);
+    /// Antialiased path fill, linear gradient.
     pub const PATH_AA_LINEAR: Self = Self(13);
+    /// Antialiased path fill, radial gradient.
     pub const PATH_AA_RADIAL: Self = Self(14);
+    /// Antialiased path fill, texture pattern.
     pub const PATH_AA_PATTERN: Self = Self(15);
+    /// Antialiased path fill, texture pattern, clamp wrap.
     pub const PATH_AA_PATTERN_CLAMP: Self = Self(16);
+    /// Antialiased path fill, texture pattern, repeat wrap.
     pub const PATH_AA_PATTERN_REPEAT: Self = Self(17);
+    /// Antialiased path fill, texture pattern, mirror-U wrap.
     pub const PATH_AA_PATTERN_MIRROR_U: Self = Self(18);
+    /// Antialiased path fill, texture pattern, mirror-V wrap.
     pub const PATH_AA_PATTERN_MIRROR_V: Self = Self(19);
+    /// Antialiased path fill, texture pattern, mirror wrap.
     pub const PATH_AA_PATTERN_MIRROR: Self = Self(20);
 
     // SDF (text)
+    /// SDF text glyphs, solid color.
     pub const SDF_SOLID: Self = Self(21);
+    /// SDF text glyphs, linear gradient.
     pub const SDF_LINEAR: Self = Self(22);
+    /// SDF text glyphs, radial gradient.
     pub const SDF_RADIAL: Self = Self(23);
+    /// SDF text glyphs, texture pattern.
     pub const SDF_PATTERN: Self = Self(24);
+    /// SDF text glyphs, texture pattern, clamp wrap.
     pub const SDF_PATTERN_CLAMP: Self = Self(25);
+    /// SDF text glyphs, texture pattern, repeat wrap.
     pub const SDF_PATTERN_REPEAT: Self = Self(26);
+    /// SDF text glyphs, texture pattern, mirror-U wrap.
     pub const SDF_PATTERN_MIRROR_U: Self = Self(27);
+    /// SDF text glyphs, texture pattern, mirror-V wrap.
     pub const SDF_PATTERN_MIRROR_V: Self = Self(28);
+    /// SDF text glyphs, texture pattern, mirror wrap.
     pub const SDF_PATTERN_MIRROR: Self = Self(29);
 
     // SDF LCD (subpixel text; needs DeviceCaps::subpixel_rendering)
+    /// LCD subpixel SDF text, solid color.
     pub const SDF_LCD_SOLID: Self = Self(30);
+    /// LCD subpixel SDF text, linear gradient.
     pub const SDF_LCD_LINEAR: Self = Self(31);
+    /// LCD subpixel SDF text, radial gradient.
     pub const SDF_LCD_RADIAL: Self = Self(32);
+    /// LCD subpixel SDF text, texture pattern.
     pub const SDF_LCD_PATTERN: Self = Self(33);
+    /// LCD subpixel SDF text, texture pattern, clamp wrap.
     pub const SDF_LCD_PATTERN_CLAMP: Self = Self(34);
+    /// LCD subpixel SDF text, texture pattern, repeat wrap.
     pub const SDF_LCD_PATTERN_REPEAT: Self = Self(35);
+    /// LCD subpixel SDF text, texture pattern, mirror-U wrap.
     pub const SDF_LCD_PATTERN_MIRROR_U: Self = Self(36);
+    /// LCD subpixel SDF text, texture pattern, mirror-V wrap.
     pub const SDF_LCD_PATTERN_MIRROR_V: Self = Self(37);
+    /// LCD subpixel SDF text, texture pattern, mirror wrap.
     pub const SDF_LCD_PATTERN_MIRROR: Self = Self(38);
 
     // Opacity (offscreen)
+    /// Offscreen opacity-group composite, solid color.
     pub const OPACITY_SOLID: Self = Self(39);
+    /// Offscreen opacity-group composite, linear gradient.
     pub const OPACITY_LINEAR: Self = Self(40);
+    /// Offscreen opacity-group composite, radial gradient.
     pub const OPACITY_RADIAL: Self = Self(41);
+    /// Offscreen opacity-group composite, texture pattern.
     pub const OPACITY_PATTERN: Self = Self(42);
+    /// Offscreen opacity-group composite, texture pattern, clamp wrap.
     pub const OPACITY_PATTERN_CLAMP: Self = Self(43);
+    /// Offscreen opacity-group composite, texture pattern, repeat wrap.
     pub const OPACITY_PATTERN_REPEAT: Self = Self(44);
+    /// Offscreen opacity-group composite, texture pattern, mirror-U wrap.
     pub const OPACITY_PATTERN_MIRROR_U: Self = Self(45);
+    /// Offscreen opacity-group composite, texture pattern, mirror-V wrap.
     pub const OPACITY_PATTERN_MIRROR_V: Self = Self(46);
+    /// Offscreen opacity-group composite, texture pattern, mirror wrap.
     pub const OPACITY_PATTERN_MIRROR: Self = Self(47);
 
     // Misc
+    /// Upsample pass (blur/effect resolve).
     pub const UPSAMPLE: Self = Self(48);
+    /// Downsample pass (blur/effect resolve).
     pub const DOWNSAMPLE: Self = Self(49);
+    /// Drop-shadow generation.
     pub const SHADOW: Self = Self(50);
+    /// Gaussian blur.
     pub const BLUR: Self = Self(51);
+    /// User-supplied custom pixel effect.
     pub const CUSTOM_EFFECT: Self = Self(52);
 }
 
+/// Number of [`Shader`] values.
 pub const SHADER_COUNT: usize = 53;
 
 /// Mirror of `Noesis::Shader::Vertex::Enum`.
@@ -313,29 +380,51 @@ pub const SHADER_COUNT: usize = 53;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum VertexShader {
+    /// Position only.
     Pos = 0,
+    /// Position + color.
     PosColor = 1,
+    /// Position + texcoord 0.
     PosTex0 = 2,
+    /// Position + texcoord 0 + rect.
     PosTex0Rect = 3,
+    /// Position + texcoord 0 + rect + tile.
     PosTex0RectTile = 4,
+    /// Position + color + coverage.
     PosColorCoverage = 5,
+    /// Position + texcoord 0 + coverage.
     PosTex0Coverage = 6,
+    /// Position + texcoord 0 + coverage + rect.
     PosTex0CoverageRect = 7,
+    /// Position + texcoord 0 + coverage + rect + tile.
     PosTex0CoverageRectTile = 8,
+    /// Position + color + texcoord 1 (SDF).
     PosColorTex1Sdf = 9,
+    /// Position + texcoord 0 + texcoord 1 (SDF).
     PosTex0Tex1Sdf = 10,
+    /// Position + texcoord 0 + texcoord 1 + rect (SDF).
     PosTex0Tex1RectSdf = 11,
+    /// Position + texcoord 0 + texcoord 1 + rect + tile (SDF).
     PosTex0Tex1RectTileSdf = 12,
+    /// Position + color + texcoord 1.
     PosColorTex1 = 13,
+    /// Position + texcoord 0 + texcoord 1.
     PosTex0Tex1 = 14,
+    /// Position + texcoord 0 + texcoord 1 + rect.
     PosTex0Tex1Rect = 15,
+    /// Position + texcoord 0 + texcoord 1 + rect + tile.
     PosTex0Tex1RectTile = 16,
+    /// Position + color + texcoord 0 + texcoord 1.
     PosColorTex0Tex1 = 17,
+    /// Position + texcoord 0 + texcoord 1 (downsample).
     PosTex0Tex1Downsample = 18,
+    /// Position + color + texcoord 1 + rect.
     PosColorTex1Rect = 19,
+    /// Position + color + texcoord 0 + rect + image position.
     PosColorTex0RectImagePos = 20,
 }
 
+/// Number of [`VertexShader`] variants.
 pub const VERTEX_SHADER_COUNT: usize = 21;
 
 /// Mirror of `Noesis::Shader::Vertex::Format::Enum`.
@@ -343,24 +432,41 @@ pub const VERTEX_SHADER_COUNT: usize = 21;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum VertexFormat {
+    /// Position only.
     Pos = 0,
+    /// Position + color.
     PosColor = 1,
+    /// Position + texcoord 0.
     PosTex0 = 2,
+    /// Position + texcoord 0 + rect.
     PosTex0Rect = 3,
+    /// Position + texcoord 0 + rect + tile.
     PosTex0RectTile = 4,
+    /// Position + color + coverage.
     PosColorCoverage = 5,
+    /// Position + texcoord 0 + coverage.
     PosTex0Coverage = 6,
+    /// Position + texcoord 0 + coverage + rect.
     PosTex0CoverageRect = 7,
+    /// Position + texcoord 0 + coverage + rect + tile.
     PosTex0CoverageRectTile = 8,
+    /// Position + color + texcoord 1.
     PosColorTex1 = 9,
+    /// Position + texcoord 0 + texcoord 1.
     PosTex0Tex1 = 10,
+    /// Position + texcoord 0 + texcoord 1 + rect.
     PosTex0Tex1Rect = 11,
+    /// Position + texcoord 0 + texcoord 1 + rect + tile.
     PosTex0Tex1RectTile = 12,
+    /// Position + color + texcoord 0 + texcoord 1.
     PosColorTex0Tex1 = 13,
+    /// Position + color + texcoord 1 + rect.
     PosColorTex1Rect = 14,
+    /// Position + color + texcoord 0 + rect + image position.
     PosColorTex0RectImagePos = 15,
 }
 
+/// Number of [`VertexFormat`] variants.
 pub const VERTEX_FORMAT_COUNT: usize = 16;
 
 /// Mirror of `Noesis::Shader::Vertex::Format::Attr::Enum`.
@@ -386,6 +492,7 @@ pub enum VertexAttr {
     ImagePos = 7,
 }
 
+/// Number of [`VertexAttr`] variants.
 pub const VERTEX_ATTR_COUNT: usize = 8;
 
 /// Mirror of `Noesis::Shader::Vertex::Format::Attr::Type::Enum`.
@@ -405,6 +512,7 @@ pub enum VertexAttrType {
     UShort4Norm = 4,
 }
 
+/// Number of [`VertexAttrType`] variants.
 pub const VERTEX_ATTR_TYPE_COUNT: usize = 5;
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -480,9 +588,13 @@ impl Default for DeviceCaps {
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct Tile {
+    /// Left edge in pixels, measured from the target's lower-left origin.
     pub x: u32,
+    /// Bottom edge in pixels, measured from the target's lower-left origin.
     pub y: u32,
+    /// Width in pixels.
     pub width: u32,
+    /// Height in pixels.
     pub height: u32,
 }
 
@@ -572,8 +684,11 @@ pub struct Texture {
 #[repr(C)]
 #[derive(Debug)]
 pub struct Batch {
+    /// Built-in (or custom) shader to bind for this draw.
     pub shader: Shader,
+    /// Packed color-write, blend, stencil, and wireframe flags.
     pub render_state: RenderState,
+    /// Reference value for the stencil test selected by `render_state`.
     pub stencil_ref: u8,
     /// When `true`, the batch renders both left and right eye images in one
     /// pass (single-pass stereo).
@@ -581,22 +696,35 @@ pub struct Batch {
 
     /// Byte offset into the most recent `map_vertices()` buffer.
     pub vertex_offset: u32,
+    /// Number of vertices in the batch.
     pub num_vertices: u32,
     /// First index, in indices (multiply by 2 for the byte offset into the
     /// most recent `map_indices()` buffer).
     pub start_index: u32,
+    /// Number of 16-bit indices to draw.
     pub num_indices: u32,
 
+    /// Pattern (brush) texture; null when unused. See
+    /// [`pattern_handle`](Self::pattern_handle).
     pub pattern: *mut Texture,
+    /// Gradient ramps texture; null when unused.
     pub ramps: *mut Texture,
+    /// Image / offscreen input texture; null when unused.
     pub image: *mut Texture,
+    /// SDF glyph atlas; null when unused.
     pub glyphs: *mut Texture,
+    /// Shadow intermediate texture; null when unused.
     pub shadow: *mut Texture,
 
+    /// Sampler state for `pattern`.
     pub pattern_sampler: SamplerState,
+    /// Sampler state for `ramps`.
     pub ramps_sampler: SamplerState,
+    /// Sampler state for `image`.
     pub image_sampler: SamplerState,
+    /// Sampler state for `glyphs`.
     pub glyphs_sampler: SamplerState,
+    /// Sampler state for `shadow`.
     pub shadow_sampler: SamplerState,
 
     /// Vertex-shader uniform buffers, one per slot. `num_dwords == 0` marks

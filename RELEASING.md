@@ -41,8 +41,19 @@ build, clippy, test, and the verified publish. GitHub-hosted runners only run
 
 With `main` clean and CI green:
 
+> **First release (0.9.0):** the version is already set in `Cargo.toml` and the
+> `0.9.0` section of `CHANGELOG.md` is already filled, so do NOT run
+> `cargo release` for it — that would re-bump the version and duplicate the
+> changelog heading. Just tag the current commit and push the tag:
+>
+> ```sh
+> git tag v0.9.0 && git push origin v0.9.0
+> ```
+
+Use `cargo release` for **subsequent** releases:
+
 ```sh
-cargo release 0.9.0        # or: patch | minor | major
+cargo release 1.0.0        # or: patch | minor | major
 ```
 
 `cargo release` (config in `release.toml`) bumps the version in `Cargo.toml`,

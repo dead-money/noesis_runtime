@@ -130,6 +130,7 @@ static VTABLE: FontProviderVTable = FontProviderVTable {
 /// Owns a Rust [`FontProvider`] impl together with its C++
 /// `RustFontProvider` instance. Parallel to
 /// [`crate::xaml_provider::Registered`].
+#[must_use = "dropping the guard immediately clears the registration"]
 pub struct Registered {
     handle: NonNull<c_void>,
     userdata: NonNull<Box<dyn FontProvider>>,
