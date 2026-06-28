@@ -563,6 +563,45 @@ unsafe extern "C" {
     pub fn dm_noesis_command_destroy(command: *mut c_void);
     pub fn dm_noesis_command_raise_can_execute_changed(command: *mut c_void);
 
+    // RoutedCommand / RoutedUICommand (TODO §4).
+    pub fn dm_noesis_routed_command_create(
+        name: *const c_char,
+        owner_type_name: *const c_char,
+    ) -> *mut c_void;
+    pub fn dm_noesis_routed_ui_command_create(
+        name: *const c_char,
+        text: *const c_char,
+        owner_type_name: *const c_char,
+    ) -> *mut c_void;
+    pub fn dm_noesis_routed_command_execute(
+        command: *mut c_void,
+        param: *mut c_void,
+        target: *mut c_void,
+    );
+    pub fn dm_noesis_routed_command_can_execute(
+        command: *mut c_void,
+        param: *mut c_void,
+        target: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_routed_command_get_name(command: *mut c_void) -> *const c_char;
+    pub fn dm_noesis_routed_ui_command_get_text(command: *mut c_void) -> *const c_char;
+    pub fn dm_noesis_routed_ui_command_set_text(command: *mut c_void, text: *const c_char);
+
+    // CommandBinding (TODO §4).
+    pub fn dm_noesis_command_binding_create(
+        command: *mut c_void,
+        executed: CmdExecutedFn,
+        can_execute: Option<CmdCanExecuteFn>,
+        userdata: *mut c_void,
+        free_handler: CommandFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_command_binding_attach(token: *mut c_void, element: *mut c_void) -> bool;
+    pub fn dm_noesis_command_binding_destroy(token: *mut c_void);
+
+    // Built-in command libraries (TODO §4).
+    pub fn dm_noesis_application_command(which: u32) -> *const c_void;
+    pub fn dm_noesis_component_command(which: u32) -> *const c_void;
+
     // ── Value boxing / unboxing primitives (TODO §3) ──────────────────────────
     pub fn dm_noesis_box_bool(value: bool) -> *mut c_void;
     pub fn dm_noesis_box_int32(value: i32) -> *mut c_void;
@@ -1505,8 +1544,21 @@ pub struct CommandVTable {
 
 /// Free callback invoked exactly once when the underlying `RustCommand` is
 /// finally destroyed (last reference released). Drops the boxed handler whose
-/// ownership transferred to C++ at [`dm_noesis_command_create`].
+/// ownership transferred to C++ at [`dm_noesis_command_create`]. Reused for the
+/// [`CommandBinding`](crate::commands::CommandBinding) bridge (TODO §4) — same
+/// shape and contract.
 pub type CommandFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+/// [`CommandBinding`](crate::commands::CommandBinding) `Executed` callback (TODO
+/// §4): run the action. `parameter` is the borrowed command parameter (may be
+/// NULL). Fires on the view-driving thread inside the input/command route.
+pub type CmdExecutedFn = unsafe extern "C" fn(userdata: *mut c_void, parameter: *mut c_void);
+
+/// [`CommandBinding`](crate::commands::CommandBinding) `CanExecute` callback
+/// (TODO §4): return whether the command may run now. `parameter` borrowed; may
+/// be NULL.
+pub type CmdCanExecuteFn =
+    unsafe extern "C" fn(userdata: *mut c_void, parameter: *mut c_void) -> bool;
 
 /// Free callback invoked exactly once per registered markup extension
 /// when its underlying C++ `MarkupClassData` is finally freed. Same shape
