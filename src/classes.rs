@@ -44,8 +44,9 @@ use std::ffi::{CString, c_void};
 use std::sync::Mutex;
 
 use crate::ffi::{
-    ClassBase, PropType, dm_noesis_class_register, dm_noesis_class_register_property,
-    dm_noesis_class_unregister, dm_noesis_image_source_get_size, dm_noesis_instance_get_property,
+    ClassBase, PropType, dm_noesis_base_component_release, dm_noesis_class_create_instance,
+    dm_noesis_class_register, dm_noesis_class_register_property, dm_noesis_class_unregister,
+    dm_noesis_image_source_get_size, dm_noesis_instance_get_property,
     dm_noesis_instance_set_property,
 };
 
@@ -386,6 +387,66 @@ impl ClassRegistration {
     /// dm_noesis_bevy when collecting registrations into the render-app sync.
     pub fn token(&self) -> NonNull<c_void> {
         self.token
+    }
+
+    /// Instantiate this class directly from Rust, without a XAML reference.
+    /// Returns `None` only if the C++ side rejected the token (it never should
+    /// for a live registration).
+    ///
+    /// The instance is a `DependencyObject` carrying this class's registered
+    /// DPs, which makes it a ready-made data-binding source: set it as an
+    /// element's `DataContext`
+    /// ([`FrameworkElement::set_data_context`](crate::view::FrameworkElement::set_data_context))
+    /// and author `{Binding SomeDP}` in XAML. Writing a DP from Rust via the
+    /// returned [`ClassInstance`]'s [`Instance`] handle raises the change
+    /// notification the binding engine observes, so the bound element updates
+    /// on the next `View::update`.
+    ///
+    /// The registration must outlive every [`ClassInstance`] it produces (the
+    /// same rule the C++ refcount enforces for XAML-created instances).
+    #[must_use]
+    pub fn create_instance(&self) -> Option<ClassInstance> {
+        // SAFETY: `self.token` is a live ClassData* for the lifetime of `self`.
+        let ptr = unsafe { dm_noesis_class_create_instance(self.token.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| ClassInstance { ptr })
+    }
+}
+
+/// An owned instance of a Rust-backed class created via
+/// [`ClassRegistration::create_instance`]. Holds a `+1` reference on the
+/// underlying object and releases it on drop. Most useful as a binding-source
+/// view model (set it as a `DataContext`).
+pub struct ClassInstance {
+    ptr: NonNull<c_void>,
+}
+
+// SAFETY: same rationale as [`Instance`] / `FrameworkElement` — the underlying
+// object is a Noesis BaseComponent whose per-object calls Noesis serialises to
+// one thread; moving the owning handle between threads is sound.
+unsafe impl Send for ClassInstance {}
+unsafe impl Sync for ClassInstance {}
+
+impl ClassInstance {
+    /// A non-owning [`Instance`] handle for driving the DPs (`set_*` / `get_*`).
+    /// The returned handle borrows this object; keep `self` alive while using it.
+    #[must_use]
+    pub fn handle(&self) -> Instance {
+        // SAFETY: self.ptr is a live instance pointer for the lifetime of self.
+        unsafe { Instance::from_raw(self.ptr) }
+    }
+
+    /// Raw `Noesis::BaseComponent*`, for handing to APIs that take one (e.g.
+    /// `set_data_context`). Borrowed for the lifetime of `self`.
+    #[must_use]
+    pub fn raw(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+impl Drop for ClassInstance {
+    fn drop(&mut self) {
+        // SAFETY: produced by dm_noesis_class_create_instance with +1 ref.
+        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 

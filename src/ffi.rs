@@ -264,6 +264,40 @@ unsafe extern "C" {
         free_handler: MarkupFreeFn,
     ) -> *mut c_void;
     pub fn dm_noesis_markup_extension_unregister(token: *mut c_void);
+
+    pub fn dm_noesis_class_create_instance(class_token: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_box_string(text: *const c_char) -> *mut c_void;
+
+    pub fn dm_noesis_observable_collection_create() -> *mut c_void;
+    pub fn dm_noesis_observable_collection_add(collection: *mut c_void, item: *mut c_void) -> i32;
+    pub fn dm_noesis_observable_collection_insert(
+        collection: *mut c_void,
+        index: u32,
+        item: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_observable_collection_set(
+        collection: *mut c_void,
+        index: u32,
+        item: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_observable_collection_remove_at(collection: *mut c_void, index: u32) -> bool;
+    pub fn dm_noesis_observable_collection_clear(collection: *mut c_void);
+    pub fn dm_noesis_observable_collection_count(collection: *mut c_void) -> i32;
+    pub fn dm_noesis_observable_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
+
+    pub fn dm_noesis_framework_element_set_data_context(
+        element: *mut c_void,
+        context: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_framework_element_get_data_context(element: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_items_control_set_items_source(
+        element: *mut c_void,
+        items: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_items_control_items_count(element: *mut c_void) -> i32;
+    pub fn dm_noesis_items_control_realized_count(element: *mut c_void) -> i32;
 }
 
 /// Free callback invoked exactly once per registered markup extension

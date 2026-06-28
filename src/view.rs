@@ -21,10 +21,13 @@ use std::ffi::{CStr, CString, c_void};
 use crate::ffi::{
     PropType, dm_noesis_base_component_release, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_set_property, dm_noesis_focus_element,
-    dm_noesis_framework_element_find_name, dm_noesis_framework_element_get_name,
+    dm_noesis_framework_element_find_name, dm_noesis_framework_element_get_data_context,
+    dm_noesis_framework_element_get_name, dm_noesis_framework_element_set_data_context,
     dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_visibility,
-    dm_noesis_gui_load_xaml, dm_noesis_path_set_points, dm_noesis_renderer_init,
-    dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
+    dm_noesis_gui_load_xaml, dm_noesis_items_control_items_count,
+    dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
+    dm_noesis_path_set_points, dm_noesis_renderer_init, dm_noesis_renderer_render,
+    dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
     dm_noesis_renderer_update_render_tree, dm_noesis_text_caret_to_end, dm_noesis_text_get,
     dm_noesis_text_set, dm_noesis_view_activate, dm_noesis_view_char, dm_noesis_view_create,
     dm_noesis_view_deactivate, dm_noesis_view_destroy, dm_noesis_view_get_content,
@@ -518,6 +521,84 @@ impl FrameworkElement {
             return None;
         }
         NonNull::new(p)
+    }
+
+    // ── Data binding (TODO §3) ──────────────────────────────────────────────
+    //
+    // Point this element's `DataContext` at a Rust view model, or an
+    // ItemsControl's `ItemsSource` at an [`crate::binding::ObservableCollection`].
+    // Bindings authored in XAML (`{Binding Path}`) then resolve against that
+    // Rust-owned data. Same View-thread affinity as the other accessors here.
+
+    /// Set this element's `DataContext` to an arbitrary `Noesis::BaseComponent*`
+    /// (most usefully a [`crate::classes::ClassInstance`] view model). Returns
+    /// `false` if this element is not a `FrameworkElement`. Noesis stores its
+    /// own reference to `context`.
+    ///
+    /// # Safety
+    ///
+    /// `context` must be a valid live `Noesis::BaseComponent*` (e.g. from
+    /// [`crate::classes::ClassInstance::raw`]) or null to clear.
+    pub unsafe fn set_data_context(&mut self, context: *mut c_void) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; `context` is a live
+        // BaseComponent* (or null) per the contract above; the C side
+        // DynamicCasts and null-checks.
+        unsafe { dm_noesis_framework_element_set_data_context(self.ptr.as_ptr(), context) }
+    }
+
+    /// Clear this element's `DataContext`.
+    pub fn clear_data_context(&mut self) -> bool {
+        // SAFETY: clearing with null is always sound.
+        unsafe {
+            dm_noesis_framework_element_set_data_context(self.ptr.as_ptr(), core::ptr::null_mut())
+        }
+    }
+
+    /// Borrowed (no `+1`) pointer to this element's current `DataContext`, or
+    /// `None` if unset / not a `FrameworkElement`.
+    #[must_use]
+    pub fn data_context(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live FrameworkElement*; the C side returns a
+        // borrowed pointer or null.
+        let p = unsafe { dm_noesis_framework_element_get_data_context(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Set this element's `ItemsSource` (it must be an `ItemsControl` — e.g.
+    /// `ItemsControl` / `ListBox` / `ListView`). Returns `false` if this element
+    /// is not an `ItemsControl`. Pass an
+    /// [`crate::binding::ObservableCollection`]'s `raw()` to drive a live list.
+    ///
+    /// # Safety
+    ///
+    /// `items` must be a valid live `Noesis::BaseComponent*` implementing a
+    /// list interface (e.g. an `ObservableCollection`) or null to clear.
+    pub unsafe fn set_items_source(&mut self, items: *mut c_void) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; `items` is a live
+        // BaseComponent* (or null) per the contract above.
+        unsafe { dm_noesis_items_control_set_items_source(self.ptr.as_ptr(), items) }
+    }
+
+    /// Number of items this `ItemsControl` sees through its bound source (a live
+    /// passthrough to the `ItemsSource`). `None` if this element is not an
+    /// `ItemsControl`.
+    #[must_use]
+    pub fn items_count(&self) -> Option<usize> {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        let n = unsafe { dm_noesis_items_control_items_count(self.ptr.as_ptr()) };
+        (n >= 0).then_some(n as usize)
+    }
+
+    /// Number of *realized* item containers the generator has materialized.
+    /// Unlike [`items_count`](Self::items_count), this only grows when the
+    /// generator regenerates — which for a source mutated after the first
+    /// layout pass requires `INotifyCollectionChanged` to have fired. `None` if
+    /// this element is not an `ItemsControl`.
+    #[must_use]
+    pub fn realized_item_count(&self) -> Option<usize> {
+        // SAFETY: self.ptr is a live FrameworkElement*.
+        let n = unsafe { dm_noesis_items_control_realized_count(self.ptr.as_ptr()) };
+        (n >= 0).then_some(n as usize)
     }
 }
 

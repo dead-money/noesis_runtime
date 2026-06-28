@@ -12,6 +12,7 @@
 
 use std::ffi::{CStr, CString};
 
+pub mod binding;
 pub mod classes;
 pub mod events;
 pub mod ffi;
