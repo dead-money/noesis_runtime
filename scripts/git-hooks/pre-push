@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# pre-push hook for dm_noesis_runtime.
+#
+# Runs the full local gate before a push reaches the remote: rustfmt, clippy
+# (-D warnings), and the test suite. CI only runs `cargo fmt` on GitHub-hosted
+# runners -- build / clippy / test all need the closed-source Noesis Native SDK,
+# which can't live on a public-repo self-hosted runner without exposing it to
+# fork-PR code execution (see README). So this hook is where build / clippy /
+# test regressions get caught, on the machines that actually have the SDK.
+#
+# Activate per clone:
+#   git config core.hooksPath scripts/git-hooks
+#
+# `cargo fmt --check` always runs (no SDK needed). clippy + tests run only when
+# NOESIS_SDK_DIR points at a valid SDK; without it they are skipped with a
+# warning so a contributor who lacks the SDK can still push (CI's fmt job and a
+# reviewer cover them).
+#
+# Bypass in an emergency with:  git push --no-verify
+
+set -uo pipefail
+
+# Skip when the push only deletes refs (local sha is all-zero). Reading stdin
+# also drains the ref list git feeds the hook. If git fed us no lines at all,
+# fall through and run the checks rather than silently skipping.
+zero="0000000000000000000000000000000000000000"
+lines=0
+deleting_only=1
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+    lines=$((lines + 1))
+    case "${local_sha:-}" in
+        "" | "$zero") ;;
+        *) deleting_only=0 ;;
+    esac
+done
+if [ "$lines" -gt 0 ] && [ "$deleting_only" -eq 1 ]; then
+    exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+fail=0
+run() {
+    echo "pre-push: running: $*"
+    if ! "$@"; then
+        echo "pre-push: FAILED: $*"
+        fail=1
+    fi
+}
+
+# Always: formatting. No SDK required.
+run cargo fmt --all --check
+
+# clippy + tests link the Noesis SDK. Skip (do not fail) when it is unavailable.
+if [ -n "${NOESIS_SDK_DIR:-}" ] && [ -d "${NOESIS_SDK_DIR}/Include" ]; then
+    run cargo clippy --all-targets -- -D warnings
+    # --features test-utils is a superset: it runs the default tests plus the
+    # gated render-device regression test (tests/render_device.rs).
+    run cargo test --features test-utils
+else
+    echo "pre-push: NOESIS_SDK_DIR not set or missing Include/ -- skipping clippy + tests."
+    echo "pre-push:   set NOESIS_SDK_DIR to run the full gate (see README)."
+fi
+
+if [ "$fail" -ne 0 ]; then
+    echo "pre-push: checks failed -- push aborted."
+    echo "pre-push: fix the above, or bypass with 'git push --no-verify'."
+    exit 1
+fi
+
+echo "pre-push: all checks passed."
+exit 0
