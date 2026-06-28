@@ -881,6 +881,105 @@ unsafe extern "C" {
         name: *const c_char,
         templated_parent: *mut c_void,
     ) -> *mut c_void;
+
+    // ── §7 triggers / selector / resource extensions ───────────────────────
+    //
+    // Trigger/DataTrigger/MultiTrigger/EventTrigger are constructed at +1 and
+    // attached to a Style's Triggers collection (which takes its own ref).
+    // `_get_*` value/binding getters AddRef (+1 owned); `_get_*_name` getters
+    // are borrowed C strings valid while the underlying DP/event lives.
+    pub fn dm_noesis_templates_trigger_create() -> *mut c_void;
+    pub fn dm_noesis_templates_trigger_set_property(
+        trigger: *mut c_void,
+        type_name: *const c_char,
+        dp_name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_templates_trigger_get_property_name(trigger: *mut c_void) -> *const c_char;
+    pub fn dm_noesis_templates_trigger_set_value(trigger: *mut c_void, value: *mut c_void) -> bool;
+    pub fn dm_noesis_templates_trigger_get_value(trigger: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_templates_trigger_add_setter(
+        trigger: *mut c_void,
+        type_name: *const c_char,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_trigger_setter_count(trigger: *mut c_void) -> i32;
+
+    pub fn dm_noesis_templates_data_trigger_create() -> *mut c_void;
+    pub fn dm_noesis_templates_data_trigger_set_binding(
+        trigger: *mut c_void,
+        binding: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_data_trigger_get_binding(trigger: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_templates_data_trigger_set_value(
+        trigger: *mut c_void,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_data_trigger_get_value(trigger: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_templates_data_trigger_add_setter(
+        trigger: *mut c_void,
+        type_name: *const c_char,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_data_trigger_setter_count(trigger: *mut c_void) -> i32;
+
+    pub fn dm_noesis_templates_multi_trigger_create() -> *mut c_void;
+    pub fn dm_noesis_templates_multi_trigger_add_condition(
+        trigger: *mut c_void,
+        type_name: *const c_char,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_multi_trigger_condition_count(trigger: *mut c_void) -> i32;
+    pub fn dm_noesis_templates_multi_trigger_get_condition_property_name(
+        trigger: *mut c_void,
+        index: u32,
+    ) -> *const c_char;
+    pub fn dm_noesis_templates_multi_trigger_get_condition_value(
+        trigger: *mut c_void,
+        index: u32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_templates_multi_trigger_add_setter(
+        trigger: *mut c_void,
+        type_name: *const c_char,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_multi_trigger_setter_count(trigger: *mut c_void) -> i32;
+
+    pub fn dm_noesis_templates_event_trigger_create() -> *mut c_void;
+    pub fn dm_noesis_templates_event_trigger_set_routed_event(
+        trigger: *mut c_void,
+        owner_type: *const c_char,
+        event_name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_templates_event_trigger_get_routed_event_name(
+        trigger: *mut c_void,
+    ) -> *const c_char;
+    pub fn dm_noesis_templates_event_trigger_set_source_name(
+        trigger: *mut c_void,
+        name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_templates_event_trigger_get_source_name(trigger: *mut c_void)
+    -> *const c_char;
+    pub fn dm_noesis_templates_event_trigger_action_count(trigger: *mut c_void) -> i32;
+
+    pub fn dm_noesis_templates_style_add_trigger(style: *mut c_void, trigger: *mut c_void) -> bool;
+    pub fn dm_noesis_templates_style_trigger_count(style: *mut c_void) -> i32;
+    pub fn dm_noesis_templates_style_get_trigger(style: *mut c_void, index: u32) -> *mut c_void;
+
+    pub fn dm_noesis_templates_selector_create(
+        vtable: *const TemplateSelectorVTable,
+        userdata: *mut c_void,
+        free_handler: TemplateSelectorFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_templates_selector_destroy(selector: *mut c_void);
+    pub fn dm_noesis_templates_selector_select(
+        selector: *mut c_void,
+        item: *mut c_void,
+        container: *mut c_void,
+    ) -> *mut c_void;
 }
 
 // ── Brushes, transforms, effects, RenderOptions (TODO §11) ──────────────────
@@ -1562,6 +1661,27 @@ pub struct ValueConverterVTable {
 /// whose ownership transferred to C++ at
 /// [`dm_noesis_value_converter_create`].
 pub type ValueConverterFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+/// Mirror of `dm_noesis_template_selector_vtable` in `cpp/noesis_resources.cpp`.
+/// `select` receives the `userdata` passed to
+/// [`dm_noesis_templates_selector_create`], the borrowed `item`
+/// (`BaseComponent*`, may be null), and the borrowed `container`
+/// (`DependencyObject*`, may be null). It returns a **borrowed**
+/// `Noesis::DataTemplate*` (the selector keeps its candidate templates alive) or
+/// null to select no template.
+#[repr(C)]
+pub struct TemplateSelectorVTable {
+    pub select: unsafe extern "C" fn(
+        userdata: *mut c_void,
+        item: *mut c_void,
+        container: *mut c_void,
+    ) -> *mut c_void,
+}
+
+/// Free callback invoked exactly once when the underlying
+/// `RustDataTemplateSelector` is finally destroyed. Drops the boxed handler whose
+/// ownership transferred to C++ at [`dm_noesis_templates_selector_create`].
+pub type TemplateSelectorFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 /// Callback for a `TwoWay` / `OneWayToSource` write back to a plain-VM reflected
 /// property. Mirrors `dm_noesis_plain_set_fn`. `instance` is the borrowed
