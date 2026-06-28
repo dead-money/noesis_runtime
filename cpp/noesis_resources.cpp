@@ -54,6 +54,7 @@
 #include <NsGui/FrameworkTemplate.h>
 #include <NsGui/IntegrationAPI.h>
 #include <NsGui/IUITreeNode.h>
+#include <NsGui/MultiDataTrigger.h>
 #include <NsGui/MultiTrigger.h>
 #include <NsGui/ResourceDictionary.h>
 #include <NsGui/RoutedEvent.h>
@@ -722,6 +723,102 @@ extern "C" int32_t dm_noesis_templates_event_trigger_action_count(void* trigger)
     if (!t) return -1;
     Noesis::TriggerActionCollection* a = t->GetActions();
     return a ? a->Count() : 0;
+}
+
+// Append `action` (any TriggerAction*, e.g. a BeginStoryboard from
+// noesis_animation.cpp) to the EventTrigger's Actions collection (which takes
+// its own reference). Returns false on a non-EventTrigger handle or a value that
+// is not a TriggerAction. Read back via dm_noesis_templates_event_trigger_action_count.
+extern "C" bool dm_noesis_templates_event_trigger_add_action(void* trigger, void* action) {
+    auto* t =
+        Noesis::DynamicCast<Noesis::EventTrigger*>(static_cast<Noesis::BaseComponent*>(trigger));
+    auto* a =
+        Noesis::DynamicCast<Noesis::TriggerAction*>(static_cast<Noesis::BaseComponent*>(action));
+    if (!t || !a) return false;
+    Noesis::TriggerActionCollection* actions = t->GetActions();
+    if (!actions) return false;
+    actions->Add(a);
+    return true;
+}
+
+// ── Multi Data Trigger (MultiDataTrigger) ────────────────────────────────────
+//
+// Binding-condition sibling of the MultiTrigger above: each Condition matches a
+// bound data value (Condition::SetBinding) against a Value, rather than a
+// dependency property. Setters apply when every condition is met.
+
+extern "C" void* dm_noesis_templates_multi_data_trigger_create(void) {
+    auto* t = new Noesis::MultiDataTrigger();
+    return static_cast<Noesis::BaseComponent*>(t);
+}
+
+// Append a Condition{ Binding=binding, Value=value } to the MultiDataTrigger's
+// Conditions. Returns false on a non-MultiDataTrigger handle, a value that is
+// not a BaseBinding, or a null value.
+extern "C" bool dm_noesis_templates_multi_data_trigger_add_condition(
+    void* trigger, void* binding, void* value) {
+    auto* t = Noesis::DynamicCast<Noesis::MultiDataTrigger*>(
+        static_cast<Noesis::BaseComponent*>(trigger));
+    auto* b =
+        Noesis::DynamicCast<Noesis::BaseBinding*>(static_cast<Noesis::BaseComponent*>(binding));
+    if (!t || !b || !value) return false;
+    Noesis::ConditionCollection* conditions = t->GetConditions();
+    if (!conditions) return false;
+    Noesis::Ptr<Noesis::Condition> condition = *new Noesis::Condition();
+    condition->SetBinding(b);
+    condition->SetValue(static_cast<Noesis::BaseComponent*>(value));
+    conditions->Add(condition.GetPtr());
+    return true;
+}
+
+extern "C" int32_t dm_noesis_templates_multi_data_trigger_condition_count(void* trigger) {
+    auto* t = Noesis::DynamicCast<Noesis::MultiDataTrigger*>(
+        static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::ConditionCollection* c = t->GetConditions();
+    return c ? c->Count() : 0;
+}
+
+// Whether the condition at `index` has a Binding set (read back from the live
+// object). -1 on a non-MultiDataTrigger handle or out-of-range index; 0/1 else.
+extern "C" int32_t dm_noesis_templates_multi_data_trigger_condition_has_binding(
+    void* trigger, uint32_t index) {
+    auto* t = Noesis::DynamicCast<Noesis::MultiDataTrigger*>(
+        static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::ConditionCollection* c = t->GetConditions();
+    if (!c || index >= static_cast<uint32_t>(c->Count())) return -1;
+    Noesis::Condition* cond = c->Get(index);
+    if (!cond) return -1;
+    return cond->GetBinding() != nullptr ? 1 : 0;
+}
+
+// +1-owned (AddRef'd) Value of the condition at `index`, or null.
+extern "C" void* dm_noesis_templates_multi_data_trigger_get_condition_value(
+    void* trigger, uint32_t index) {
+    auto* t = Noesis::DynamicCast<Noesis::MultiDataTrigger*>(
+        static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return nullptr;
+    Noesis::ConditionCollection* c = t->GetConditions();
+    if (!c || index >= static_cast<uint32_t>(c->Count())) return nullptr;
+    Noesis::Condition* cond = c->Get(index);
+    return cond ? handout(cond->GetValue()) : nullptr;
+}
+
+extern "C" bool dm_noesis_templates_multi_data_trigger_add_setter(
+    void* trigger, const char* type_name, const char* dp_name, void* value) {
+    auto* t = Noesis::DynamicCast<Noesis::MultiDataTrigger*>(
+        static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return false;
+    return add_setter_to(t->GetSetters(), type_name, dp_name, value);
+}
+
+extern "C" int32_t dm_noesis_templates_multi_data_trigger_setter_count(void* trigger) {
+    auto* t = Noesis::DynamicCast<Noesis::MultiDataTrigger*>(
+        static_cast<Noesis::BaseComponent*>(trigger));
+    if (!t) return -1;
+    Noesis::BaseSetterCollection* s = t->GetSetters();
+    return s ? s->Count() : 0;
 }
 
 // ── Style ⇄ Triggers ─────────────────────────────────────────────────────────

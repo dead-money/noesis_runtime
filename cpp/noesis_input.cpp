@@ -131,6 +131,22 @@ extern "C" void* dm_noesis_ui_element_get_mouse_captured(void* element) {
     return mouse ? static_cast<void*>(mouse->GetCaptured()) : nullptr;
 }
 
+// Pointer position relative to `element`, in element-local DIPs
+// (Mouse::GetPosition(UIElement*)). Writes the position into *out_x/*out_y and
+// returns true; false (outputs untouched) if `element` is not a UIElement. The
+// value is the last position the View's Mouse recorded (set by MouseMove), so it
+// is meaningful only once `element` is attached to a live, input-pumped View;
+// before any pointer event it reads back as the origin.
+extern "C" bool dm_noesis_ui_element_get_mouse_position(
+    void* element, float* out_x, float* out_y) {
+    Noesis::UIElement* ui = as_ui(element);
+    if (!ui) return false;
+    Noesis::Point p = Noesis::Mouse::GetPosition(ui);
+    if (out_x) *out_x = p.x;
+    if (out_y) *out_y = p.y;
+    return true;
+}
+
 // ── Keyboard state / modifiers (via UIElement::GetKeyboard) ──────────────────
 
 // `ModifierKeys` bitmask currently held down, into *out. False if not a

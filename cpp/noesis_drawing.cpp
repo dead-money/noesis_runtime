@@ -23,6 +23,9 @@
 
 #include "noesis_shim.h"
 
+#include <cstdio>
+#include <string>
+
 #include <NsCore/BaseComponent.h>
 #include <NsCore/DynamicCast.h>
 #include <NsCore/Noesis.h>
@@ -30,6 +33,7 @@
 #include <NsDrawing/Point.h>
 #include <NsDrawing/Rect.h>
 #include <NsGui/Brush.h>
+#include <NsGui/DashStyle.h>
 #include <NsGui/DrawingContext.h>
 #include <NsGui/Enums.h>  // BlendingMode, PenLineCap, PenLineJoin
 #include <NsGui/FormattedText.h>
@@ -132,6 +136,58 @@ extern "C" bool dm_noesis_pen_get_line_join(void* pen, int32_t* out_join, float*
     if (out_join) *out_join = static_cast<int32_t>(p->GetLineJoin());
     if (out_miter_limit) *out_miter_limit = p->GetMiterLimit();
     return true;
+}
+
+// ── Pen dash style (immediate-mode dashed strokes) ───────────────────────────
+//
+// Build a `DashStyle` from a typed dash array and assign it to the Pen. Noesis
+// exposes DashStyle.Dashes as a space-separated string (the same converter the
+// shape StrokeDashArray uses), so the typed `dashes` array is formatted here.
+// `count == 0` clears the dash style (a solid stroke). The dash lengths are in
+// multiples of the pen thickness, matching WPF/Noesis semantics.
+
+extern "C" bool dm_noesis_pen_set_dash_style(
+    void* pen, const float* dashes, uint32_t count, float offset) {
+    auto* p = cast<Noesis::Pen>(pen);
+    if (!p) return false;
+    if (count == 0) {
+        p->SetDashStyle(nullptr);
+        return true;
+    }
+    if (!dashes) return false;
+    Noesis::Ptr<Noesis::DashStyle> style = *new Noesis::DashStyle();
+    std::string text;
+    char buf[32];
+    for (uint32_t i = 0; i < count; ++i) {
+        if (i != 0) text.push_back(' ');
+        std::snprintf(buf, sizeof(buf), "%g", static_cast<double>(dashes[i]));
+        text += buf;
+    }
+    style->SetDashes(text.c_str());
+    style->SetOffset(offset);
+    p->SetDashStyle(style.GetPtr());
+    return true;
+}
+
+// Read the Pen's DashStyle.Offset into *out. False (output untouched) if the
+// Pen has no dash style set or `pen` is not a Pen.
+extern "C" bool dm_noesis_pen_get_dash_offset(void* pen, float* out) {
+    auto* p = cast<Noesis::Pen>(pen);
+    if (!p || !out) return false;
+    Noesis::DashStyle* style = p->GetDashStyle();
+    if (!style) return false;
+    *out = style->GetOffset();
+    return true;
+}
+
+// Borrowed space-separated dash string from the Pen's DashStyle
+// (DashStyle::GetDashes), or null if no dash style is set / not a Pen. Valid
+// until the Pen (or its DashStyle) is next mutated; copy it out immediately.
+extern "C" const char* dm_noesis_pen_get_dashes(void* pen) {
+    auto* p = cast<Noesis::Pen>(pen);
+    if (!p) return nullptr;
+    Noesis::DashStyle* style = p->GetDashStyle();
+    return style ? style->GetDashes() : nullptr;
 }
 
 // ── RectangleGeometry ────────────────────────────────────────────────────────

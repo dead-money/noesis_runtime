@@ -27,7 +27,7 @@
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;
-use std::ffi::c_void;
+use std::ffi::{CStr, c_void};
 
 use crate::brushes::Brush;
 use crate::ffi::{
@@ -37,8 +37,9 @@ use crate::ffi::{
     dm_noesis_drawing_draw_rounded_rectangle, dm_noesis_drawing_draw_text, dm_noesis_drawing_pop,
     dm_noesis_drawing_push_blending_mode, dm_noesis_drawing_push_clip,
     dm_noesis_drawing_push_transform, dm_noesis_pen_create, dm_noesis_pen_get_brush,
-    dm_noesis_pen_get_line_caps, dm_noesis_pen_get_line_join, dm_noesis_pen_get_thickness,
-    dm_noesis_pen_set_brush, dm_noesis_pen_set_line_caps, dm_noesis_pen_set_line_join,
+    dm_noesis_pen_get_dash_offset, dm_noesis_pen_get_dashes, dm_noesis_pen_get_line_caps,
+    dm_noesis_pen_get_line_join, dm_noesis_pen_get_thickness, dm_noesis_pen_set_brush,
+    dm_noesis_pen_set_dash_style, dm_noesis_pen_set_line_caps, dm_noesis_pen_set_line_join,
     dm_noesis_pen_set_thickness,
 };
 // `Geometry` / `RectangleGeometry` are the canonical types from `geometry`,
@@ -182,6 +183,56 @@ impl Pen {
         // SAFETY: self.ptr is a live Pen*; both out params are valid.
         let ok = unsafe { dm_noesis_pen_get_line_join(self.ptr.as_ptr(), &mut join, &mut miter) };
         ok.then(|| (join_from_i32(join), miter))
+    }
+
+    /// Set a typed dash pattern on this pen, building a `Noesis::DashStyle` from
+    /// `dashes` (alternating dash / gap lengths, in multiples of the pen
+    /// thickness) and `offset` (how far into the pattern the stroke begins).
+    /// Passing an empty `dashes` slice clears the dash style, restoring a solid
+    /// stroke.
+    ///
+    /// This is the typed `&[f32]` companion to the shape stroke-dash string path
+    /// ([`Shape::set_stroke_dash_array`](crate::shapes::Shape::set_stroke_dash_array)):
+    /// here the lengths cross the FFI as a `f32` array and Noesis's
+    /// space-separated `DashStyle.Dashes` string is built natively.
+    pub fn set_dash_style(&mut self, dashes: &[f32], offset: f32) -> bool {
+        let count = u32::try_from(dashes.len()).unwrap_or(u32::MAX);
+        // SAFETY: self.ptr is a live Pen*; `dashes`/`count` describe a valid
+        // (possibly empty) slice read only for the duration of the call.
+        unsafe { dm_noesis_pen_set_dash_style(self.ptr.as_ptr(), dashes.as_ptr(), count, offset) }
+    }
+
+    /// Read the dash `offset` back from the live object, or `None` if no dash
+    /// style is set (a solid stroke).
+    #[must_use]
+    pub fn dash_offset(&self) -> Option<f32> {
+        let mut out = 0.0f32;
+        // SAFETY: self.ptr is a live Pen*; `out` is a valid float.
+        let ok = unsafe { dm_noesis_pen_get_dash_offset(self.ptr.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+
+    /// Read the dash pattern back from the live object as a typed `Vec<f32>`,
+    /// re-parsed from Noesis's `DashStyle.Dashes` string. `None` if no dash
+    /// style is set. Proves the typed pattern survived the round-trip through
+    /// the live `Noesis::DashStyle`.
+    #[must_use]
+    pub fn dashes(&self) -> Option<Vec<f32>> {
+        // SAFETY: self.ptr is a live Pen*; the returned pointer (if non-null) is
+        // a borrowed NUL-terminated string valid until the next pen mutation —
+        // copied out immediately here.
+        let p = unsafe { dm_noesis_pen_get_dashes(self.ptr.as_ptr()) };
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: p is a NUL-terminated string owned by the live DashStyle.
+        let s = unsafe { CStr::from_ptr(p) }.to_string_lossy();
+        Some(
+            s.split([' ', ','])
+                .filter(|t| !t.is_empty())
+                .filter_map(|t| t.parse::<f32>().ok())
+                .collect(),
+        )
     }
 }
 

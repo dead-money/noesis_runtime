@@ -92,11 +92,12 @@ use crate::ffi::{
     dm_noesis_ui_element_get_is_keyboard_focused, dm_noesis_ui_element_get_is_mouse_captured,
     dm_noesis_ui_element_get_key_states, dm_noesis_ui_element_get_keyboard_focused,
     dm_noesis_ui_element_get_modifiers, dm_noesis_ui_element_get_mouse_captured,
-    dm_noesis_ui_element_get_render_transform_origin, dm_noesis_ui_element_is_key_down,
-    dm_noesis_ui_element_is_key_toggled, dm_noesis_ui_element_is_key_up,
-    dm_noesis_ui_element_move_focus, dm_noesis_ui_element_predict_focus,
-    dm_noesis_ui_element_release_mouse_capture, dm_noesis_ui_element_set_render_transform_origin,
-    dm_noesis_view_activate, dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
+    dm_noesis_ui_element_get_mouse_position, dm_noesis_ui_element_get_render_transform_origin,
+    dm_noesis_ui_element_is_key_down, dm_noesis_ui_element_is_key_toggled,
+    dm_noesis_ui_element_is_key_up, dm_noesis_ui_element_move_focus,
+    dm_noesis_ui_element_predict_focus, dm_noesis_ui_element_release_mouse_capture,
+    dm_noesis_ui_element_set_render_transform_origin, dm_noesis_view_activate,
+    dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
     dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
     dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
     dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
@@ -471,6 +472,23 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
         let p = unsafe { dm_noesis_ui_element_get_mouse_captured(self.ptr.as_ptr()) };
         NonNull::new(p)
+    }
+
+    /// The pointer position relative to this element, in element-local DIPs
+    /// (`Mouse::GetPosition(UIElement*)`) — the WPF idiom for reading the cursor
+    /// location *outside* a mouse event handler. `None` if this is not a
+    /// `UIElement`.
+    ///
+    /// The value is the last position the `View`'s mouse recorded (updated by
+    /// [`View::mouse_move`]), so it is meaningful only once the element is
+    /// connected to a live, input-pumped `View`; before any pointer event it
+    /// reads back as the element origin `(0.0, 0.0)`.
+    #[must_use]
+    pub fn mouse_position(&self) -> Option<(f32, f32)> {
+        let (mut x, mut y) = (0.0f32, 0.0f32);
+        // SAFETY: self.ptr is a live FrameworkElement*; both out params valid.
+        unsafe { dm_noesis_ui_element_get_mouse_position(self.ptr.as_ptr(), &mut x, &mut y) }
+            .then_some((x, y))
     }
 
     /// The chord [`ModifierKeys`](crate::input::ModifierKeys) currently held, via

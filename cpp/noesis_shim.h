@@ -1699,6 +1699,50 @@ int32_t dm_noesis_observable_collection_count(void* collection);
 // null/non-collection/out-of-range. The collection owns the reference.
 void* dm_noesis_observable_collection_get(void* collection, uint32_t index);
 
+// ── ICollectionView current-item navigation (Phase 6) ───────────────────────
+//
+// CollectionViewSource wraps a source list and produces a CollectionView (an
+// ICollectionView) that tracks a *current item*. *_create / *_get_view /
+// *_current_item hand out +1-owned objects (release via
+// dm_noesis_base_component_release). Sort/filter/group are not exposed (a real
+// SDK limitation). CurrentPosition uses -1 = before-first, Count = after-last.
+
+// Create an empty CollectionViewSource (+1 ref for the caller).
+void* dm_noesis_collection_view_source_create(void);
+// Point the source at `source` (borrowed list, e.g. an ObservableCollection);
+// the view is (re)built. NULL clears. false if not a CollectionViewSource.
+bool dm_noesis_collection_view_source_set_source(void* cvs, void* source);
+// +1-owned CollectionView associated with `cvs`, or NULL if none yet. Set a
+// Source first.
+void* dm_noesis_collection_view_source_get_view(void* cvs);
+
+// Records in the view, or -1 if `view` is not a CollectionView.
+int32_t dm_noesis_collection_view_count(void* view);
+// Ordinal position of CurrentItem, or INT32_MIN if not a CollectionView.
+int32_t dm_noesis_collection_view_current_position(void* view);
+// +1-owned CurrentItem, or NULL if none / not a view.
+void* dm_noesis_collection_view_current_item(void* view);
+bool dm_noesis_collection_view_is_current_before_first(void* view);
+bool dm_noesis_collection_view_is_current_after_last(void* view);
+// Move the current item; each returns whether the resulting CurrentItem is a
+// valid in-range record (ICollectionView contract). false on a non-view handle.
+bool dm_noesis_collection_view_move_current_to_first(void* view);
+bool dm_noesis_collection_view_move_current_to_last(void* view);
+bool dm_noesis_collection_view_move_current_to_next(void* view);
+bool dm_noesis_collection_view_move_current_to_previous(void* view);
+bool dm_noesis_collection_view_move_current_to_position(void* view, int32_t position);
+// Recreate the view (ICollectionView::Refresh).
+void dm_noesis_collection_view_refresh(void* view);
+
+// CurrentChanged event callback (fires after the current item changes). Same
+// threading contract as dm_noesis_click_fn.
+typedef void (*dm_noesis_collection_view_changed_fn)(void* userdata);
+// Subscribe to CurrentChanged; returns an opaque token (release via the
+// unsubscribe call) or NULL on a non-view handle / null cb.
+void* dm_noesis_collection_view_subscribe_current_changed(
+    void* view, dm_noesis_collection_view_changed_fn cb, void* userdata);
+void dm_noesis_collection_view_unsubscribe_current_changed(void* token);
+
 // Set / get a FrameworkElement's `DataContext`. `set` stores its own ref on
 // `context` (pass NULL to clear) and returns false if `element` is not a
 // FrameworkElement. `get` returns a borrowed (no +1) pointer or NULL.
@@ -2351,6 +2395,15 @@ bool dm_noesis_pen_set_line_caps(void* pen, int32_t start_cap, int32_t end_cap, 
 bool dm_noesis_pen_get_line_caps(void* pen, int32_t out[3]);
 bool dm_noesis_pen_set_line_join(void* pen, int32_t join, float miter_limit);
 bool dm_noesis_pen_get_line_join(void* pen, int32_t* out_join, float* out_miter_limit);
+// Build a DashStyle from a typed dash array (lengths in pen-thickness multiples)
+// + offset and assign it to the Pen. `count == 0` clears the dash style (solid).
+// False if `pen` is not a Pen (or `dashes` is null with count > 0).
+bool dm_noesis_pen_set_dash_style(void* pen, const float* dashes, uint32_t count, float offset);
+// Read the Pen's DashStyle.Offset into *out. False (untouched) if no dash style.
+bool dm_noesis_pen_get_dash_offset(void* pen, float* out);
+// Borrowed space-separated dash string from the Pen's DashStyle, or null if
+// none. Copy out immediately (valid until the Pen / DashStyle is mutated).
+const char* dm_noesis_pen_get_dashes(void* pen);
 
 // RectangleGeometry (NsGui/RectangleGeometry.h). A minimal Geometry primitive so
 // the DrawGeometry / PushClip context entrypoints are reachable; rect is
@@ -3307,6 +3360,12 @@ bool dm_noesis_ui_element_capture_mouse_mode(void* element, int32_t mode);
 // Borrowed UIElement* currently holding mouse capture in `element`'s View
 // (Mouse::GetCaptured), or null.
 void* dm_noesis_ui_element_get_mouse_captured(void* element);
+
+// Pointer position relative to `element` in element-local DIPs
+// (Mouse::GetPosition(UIElement*)), into *out_x/*out_y. False (outputs
+// untouched) if `element` is not a UIElement. Reads the last MouseMove position,
+// so meaningful only once attached to a live, input-pumped View.
+bool dm_noesis_ui_element_get_mouse_position(void* element, float* out_x, float* out_y);
 
 // ModifierKeys bitmask currently held, into *out. False if no UIElement/Keyboard.
 bool dm_noesis_ui_element_get_modifiers(void* element, int32_t* out);

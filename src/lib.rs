@@ -40,6 +40,7 @@ pub mod animation;
 pub mod binding;
 pub mod brushes;
 pub mod classes;
+pub mod collection_view;
 pub mod commands;
 pub mod converters;
 pub mod diagnostics;

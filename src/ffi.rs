@@ -573,6 +573,34 @@ unsafe extern "C" {
     pub fn dm_noesis_observable_collection_count(collection: *mut c_void) -> i32;
     pub fn dm_noesis_observable_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
 
+    // ── ICollectionView current-item navigation (Phase 6) ────────────────────
+    pub fn dm_noesis_collection_view_source_create() -> *mut c_void;
+    pub fn dm_noesis_collection_view_source_set_source(
+        cvs: *mut c_void,
+        source: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_collection_view_source_get_view(cvs: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_collection_view_count(view: *mut c_void) -> i32;
+    pub fn dm_noesis_collection_view_current_position(view: *mut c_void) -> i32;
+    pub fn dm_noesis_collection_view_current_item(view: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_collection_view_is_current_before_first(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_is_current_after_last(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_first(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_last(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_next(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_previous(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_position(
+        view: *mut c_void,
+        position: i32,
+    ) -> bool;
+    pub fn dm_noesis_collection_view_refresh(view: *mut c_void);
+    pub fn dm_noesis_collection_view_subscribe_current_changed(
+        view: *mut c_void,
+        cb: ClickFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_collection_view_unsubscribe_current_changed(token: *mut c_void);
+
     pub fn dm_noesis_framework_element_set_data_context(
         element: *mut c_void,
         context: *mut c_void,
@@ -1156,6 +1184,33 @@ unsafe extern "C" {
     pub fn dm_noesis_templates_event_trigger_get_source_name(trigger: *mut c_void)
     -> *const c_char;
     pub fn dm_noesis_templates_event_trigger_action_count(trigger: *mut c_void) -> i32;
+    pub fn dm_noesis_templates_event_trigger_add_action(
+        trigger: *mut c_void,
+        action: *mut c_void,
+    ) -> bool;
+
+    pub fn dm_noesis_templates_multi_data_trigger_create() -> *mut c_void;
+    pub fn dm_noesis_templates_multi_data_trigger_add_condition(
+        trigger: *mut c_void,
+        binding: *mut c_void,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_multi_data_trigger_condition_count(trigger: *mut c_void) -> i32;
+    pub fn dm_noesis_templates_multi_data_trigger_condition_has_binding(
+        trigger: *mut c_void,
+        index: u32,
+    ) -> i32;
+    pub fn dm_noesis_templates_multi_data_trigger_get_condition_value(
+        trigger: *mut c_void,
+        index: u32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_templates_multi_data_trigger_add_setter(
+        trigger: *mut c_void,
+        type_name: *const c_char,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_multi_data_trigger_setter_count(trigger: *mut c_void) -> i32;
 
     pub fn dm_noesis_templates_style_add_trigger(style: *mut c_void, trigger: *mut c_void) -> bool;
     pub fn dm_noesis_templates_style_trigger_count(style: *mut c_void) -> i32;
@@ -1815,6 +1870,14 @@ unsafe extern "C" {
         out_join: *mut i32,
         out_miter_limit: *mut f32,
     ) -> bool;
+    pub fn dm_noesis_pen_set_dash_style(
+        pen: *mut c_void,
+        dashes: *const f32,
+        count: u32,
+        offset: f32,
+    ) -> bool;
+    pub fn dm_noesis_pen_get_dash_offset(pen: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_pen_get_dashes(pen: *mut c_void) -> *const c_char;
 
     // RectangleGeometry
     pub fn dm_noesis_drawing_rect_geometry_create(
@@ -2981,6 +3044,11 @@ unsafe extern "C" {
     pub fn dm_noesis_ui_element_capture_touch(element: *mut c_void, touch_device: u64) -> bool;
     pub fn dm_noesis_ui_element_capture_mouse_mode(element: *mut c_void, mode: i32) -> bool;
     pub fn dm_noesis_ui_element_get_mouse_captured(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_ui_element_get_mouse_position(
+        element: *mut c_void,
+        out_x: *mut f32,
+        out_y: *mut f32,
+    ) -> bool;
 
     // Keyboard state / modifiers
     pub fn dm_noesis_ui_element_get_modifiers(element: *mut c_void, out: *mut i32) -> bool;
