@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -30,6 +29,24 @@ jobs:
 
       - name: cargo fmt
         run: cargo fmt --all --check
+
+  # Catches broken intra-doc links before they reach docs.rs. DOCS_RS makes
+  # build.rs skip the native compile, so this needs no SDK and runs on hosted.
+  doc:
+    name: doc
+    runs-on: ubuntu-latest
+    env:
+      DOCS_RS: "1"
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo doc
+        run: cargo doc --no-deps --all-features
 
   # build / clippy / test need the closed-source Noesis SDK, which only lives on
   # our self-hosted runner. Never run untrusted fork-PR code there: skip any PR
