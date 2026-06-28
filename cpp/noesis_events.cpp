@@ -106,6 +106,29 @@ extern "C" void* dm_noesis_framework_element_find_name(void* element, const char
     return result;
 }
 
+// Register / unregister an x:Name in the namescope hosting `element` (TODO §2.F).
+// `object` is borrowed — the scope takes its own reference. Returns false if
+// `element` is not a FrameworkElement. The element must live within a namescope
+// (the XAML root hosts one); registering a name already present updates it.
+extern "C" bool dm_noesis_framework_element_register_name(
+    void* element, const char* name, void* object) {
+    if (!element || !name) return false;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return false;
+    fe->RegisterName(name, static_cast<Noesis::BaseComponent*>(object));
+    return true;
+}
+
+extern "C" bool dm_noesis_framework_element_unregister_name(void* element, const char* name) {
+    if (!element || !name) return false;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return false;
+    fe->UnregisterName(name);
+    return true;
+}
+
 extern "C" const char* dm_noesis_framework_element_get_name(void* element) {
     if (!element) return nullptr;
     return static_cast<Noesis::FrameworkElement*>(element)->GetName();
