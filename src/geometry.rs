@@ -320,8 +320,9 @@ impl StreamGeometry {
     ///
     /// # Panics
     ///
-    /// Panics if Noesis fails to allocate the geometry or `data` contains an
-    /// interior NUL byte.
+    /// Panics if `data` contains an interior NUL byte, or if Noesis rejects the
+    /// input (cannot parse the path data, or fails to allocate the geometry and
+    /// returns null).
     #[must_use]
     pub fn from_data(data: &str) -> Self {
         let c = CString::new(data).expect("data contains NUL");

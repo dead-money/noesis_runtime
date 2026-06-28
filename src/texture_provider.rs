@@ -182,6 +182,7 @@ static VTABLE: TextureProviderVTable = TextureProviderVTable {
 /// Owns a Rust [`TextureProvider`] impl together with its C++
 /// `RustTextureProvider` instance. Parallel to
 /// [`crate::xaml_provider::Registered`].
+#[must_use = "dropping the guard immediately clears the registration"]
 pub struct Registered {
     handle: NonNull<c_void>,
     userdata: NonNull<Box<dyn TextureProvider>>,

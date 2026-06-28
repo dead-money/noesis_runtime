@@ -502,6 +502,10 @@ impl Drop for Binding {
 /// authoring `dp_name="{Binding ...}"` in XAML. Returns `false` if `element` is
 /// not a `DependencyObject` or `dp_name` doesn't resolve to one of its
 /// dependency properties.
+///
+/// # Panics
+///
+/// Panics if `dp_name` contains an interior NUL byte.
 #[must_use]
 pub fn set_binding(element: &FrameworkElement, dp_name: &str, binding: &Binding) -> bool {
     let c = CString::new(dp_name).expect("dp name contained interior NUL");
@@ -516,6 +520,10 @@ pub fn set_binding(element: &FrameworkElement, dp_name: &str, binding: &Binding)
 /// `{StaticResource key}` — e.g. `{Binding Path, Converter={StaticResource
 /// key}}`. The dictionary stores its own reference. Returns `false` if `element`
 /// is not a `FrameworkElement`.
+///
+/// # Panics
+///
+/// Panics if `key` contains an interior NUL byte.
 ///
 /// # Safety
 ///

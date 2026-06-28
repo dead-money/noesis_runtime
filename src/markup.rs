@@ -94,6 +94,7 @@ pub struct ClosureHandler<F: FnMut(&str) -> Option<String> + Send + 'static> {
 /// being parsed — but the underlying `MarkupClassData` and the boxed
 /// handler survive as long as live extension instances remain. Same
 /// intrusive-refcount contract as [`crate::classes::ClassRegistration`].
+#[must_use = "dropping the guard immediately clears the registration"]
 pub struct MarkupExtensionRegistration {
     token: NonNull<c_void>,
     _name: CString,

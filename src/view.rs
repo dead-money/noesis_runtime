@@ -4251,6 +4251,7 @@ unsafe extern "C" fn timer_free(userdata: *mut c_void) {
 /// boxed handler (the C++ teardown runs `CancelTimer` then the donated free
 /// handler exactly once). Drop it before [`crate::shutdown`], like every other
 /// owning handle in this crate.
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct TimerSubscription {
     token: NonNull<c_void>,
 }
@@ -4330,6 +4331,7 @@ unsafe extern "C" fn rendering_free(userdata: *mut c_void) {
 /// dropping it detaches the delegate and frees the boxed handler (the C++
 /// teardown runs `-=` then the donated free handler exactly once). Drop it
 /// before [`crate::shutdown`], like every other owning handle in this crate.
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct RenderingSubscription {
     token: NonNull<c_void>,
 }
