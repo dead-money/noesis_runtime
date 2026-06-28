@@ -23,17 +23,6 @@ Remaining:
 - **More custom-DP value types.** Enum / `Point`/`Vector`/`Size`-struct property types.
 - **`DependsOn` metadata** attribution (the `ContentProperty` path ships).
 
-## 14. System integration callbacks
-
-From `IntegrationAPI.h`, none are wired:
-
-- **`SetCursorCallback`** (host updates the OS cursor).
-- **`SetSoftwareKeyboardCallback`** (show/hide on-screen keyboard — important on console/mobile).
-- **`SetOpenUrlCallback`** / `OpenUrl` (hyperlink navigation).
-- **`SetPlayAudioCallback`** / `PlayAudio` (UI sound effects).
-- **`SetClipboard`**-style data object exchange (via `DataObject`).
-- **`SetCulture` / `GetCulture`** (`CultureInfo`) for localization/formatting.
-
 ## 17. Diagnostics & tooling
 
 - **Profiling.** `CpuProfiler`, `ViewStats` debug overlay (the `GetStats` counters are wrapped; the on-screen overlay is not), memory usage queries.
@@ -50,6 +39,8 @@ From `IntegrationAPI.h`, none are wired:
 ## Known SDK limitations
 
 Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workaround is noted.
+
+- **Clipboard / `DataObject` data exchange (§14).** 3.2.13 ships no process-global clipboard API: there is no `Clipboard` class and no `SetClipboard`/`GetClipboard` in `NsGui/IntegrationAPI.h` (verified — the only integration callbacks are cursor / software-keyboard / open-url / play-audio / culture, all wrapped in `src/integration.rs`). `NsGui/DataObject.h` exists but is *only* the WPF `DataObject.Copying`/`DataObject.Pasting` attached-routed-event plumbing (`AddCopyingHandler`/`AddPastingHandler` + the `CopyingEvent`/`PastingEvent` `RoutedEvent`s); the struct exposes **no** `SetData`/`GetData`/`GetFormats` payload accessors (grepped: no `SetData`/`GetData`/`class Clipboard` anywhere under `Include/`). So format-independent clipboard data transfer is not expressible. Workaround: the host owns the OS clipboard and bridges it — hook the `Copying`/`Pasting` routed events (the §5 routed-event surface) to observe copy/paste intent, and read/write the platform clipboard with host code (e.g. `arboard` on desktop).
 
 - **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.13 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
 - **Headless drag / manipulation synthesis (§5).** The typed `DragEventArgs` / `Manipulation*EventArgs` accessors are wrapped and round-trip tested, but the events themselves cannot be *raised* headlessly: a drag needs an OS pointer/drag loop (`DragDrop::DoDragDrop` is exposed and crosses the FFI but has no synchronous/headless completion) and manipulation events are promoted from a multi-frame touch stream under a live render pass. `tests/routed_events_typed_args.rs` drives keyboard-focus events for real and exercises the drag/manipulation accessors by constructing the real arg structs C++-side (under `--features test-utils`). `DataObject.Copying`/`.Pasting` handlers attach/detach but the clipboard copy/paste that fires them is likewise host-driven.

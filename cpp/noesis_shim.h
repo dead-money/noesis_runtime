@@ -412,6 +412,47 @@ void dm_noesis_set_font_provider_assembly(const char* assembly, void* provider);
 void dm_noesis_set_font_provider_scheme_assembly(
     const char* scheme, const char* assembly, void* provider);
 
+// ── System integration callbacks (Section 14) ──────────────────────────────
+//
+// Process-global host integration hooks from `NsGui/IntegrationAPI.h`
+// (namespace Noesis::GUI). Each `set_*` stores `(user, cb)` in a C++ static
+// slot and registers a C++ trampoline with Noesis; passing a NULL `cb`
+// unregisters (clears the underlying Noesis callback). The trampolines
+// convert the Noesis-typed arguments (Cursor*, const Uri&) into the plain
+// C ABI types passed to `cb`. `user` is forwarded verbatim.
+
+// Cursor: fires when a view needs to update the OS mouse cursor. `view` is a
+// borrowed `Noesis::IView*` (opaque; do not release). `cursor_type` is the
+// `Noesis::CursorType` enum value (see NsGui/Cursor.h: 0=None, 1=No,
+// 2=Arrow, ...); a NULL cursor maps to CursorType_None (0).
+typedef void (*dm_noesis_cursor_cb)(void* user, void* view, int32_t cursor_type);
+void dm_noesis_set_cursor_callback(void* user, dm_noesis_cursor_cb cb);
+
+// Software keyboard: fires when an element requests opening/closing the
+// on-screen keyboard. `focused` is a borrowed `Noesis::UIElement*` (opaque).
+typedef void (*dm_noesis_software_keyboard_cb)(void* user, void* focused, bool open);
+void dm_noesis_set_software_keyboard_callback(void* user, dm_noesis_software_keyboard_cb cb);
+
+// Open URL: host opens `url` in a browser. `dm_noesis_open_url` invokes the
+// registered callback synchronously.
+typedef void (*dm_noesis_open_url_cb)(void* user, const char* url);
+void dm_noesis_set_open_url_callback(void* user, dm_noesis_open_url_cb cb);
+void dm_noesis_open_url(const char* url);
+
+// Play audio: host plays the sound at `uri` (canonicalized Uri string) at
+// `volume` [0..1]. `dm_noesis_play_audio` invokes the callback synchronously.
+typedef void (*dm_noesis_play_audio_cb)(void* user, const char* uri, float volume);
+void dm_noesis_set_play_audio_callback(void* user, dm_noesis_play_audio_cb cb);
+void dm_noesis_play_audio(const char* uri, float volume);
+
+// Default culture (BCP-47 name, e.g. "en-US"). `dm_noesis_set_culture` keeps
+// the name alive in a process-static buffer (Noesis stores the CultureInfo's
+// `name` pointer by value). `dm_noesis_get_culture` returns a borrowed,
+// NUL-terminated pointer to the active culture name (never NULL; defaults to
+// "en-US" before any set). Copy it out; do not free.
+void dm_noesis_set_culture(const char* name);
+const char* dm_noesis_get_culture(void);
+
 // ── XAML loading + View + Renderer (Phase 4.C) ─────────────────────────────
 //
 // Opaque pointer contracts:
