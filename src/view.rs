@@ -661,16 +661,33 @@ impl FrameworkElement {
     // Bindings authored in XAML (`{Binding Path}`) then resolve against that
     // Rust-owned data. Same View-thread affinity as the other accessors here.
 
-    /// Set this element's `DataContext` to an arbitrary `Noesis::BaseComponent*`
-    /// (most usefully a [`crate::classes::ClassInstance`] view model). Returns
+    /// Set this element's `DataContext` to a Rust-backed view model. Returns
     /// `false` if this element is not a `FrameworkElement`. Noesis stores its
-    /// own reference to `context`.
+    /// own reference to the instance, so it stays valid even after `instance`
+    /// is dropped on the Rust side — though by convention the
+    /// [`ClassInstance`](crate::classes::ClassInstance) is kept alive for as
+    /// long as the binding is live.
+    ///
+    /// This is the safe entry point preferred by `unsafe`-free consumers (e.g.
+    /// `dm_noesis_bevy`, which is `unsafe_code = forbid`): the `&ClassInstance`
+    /// borrow encodes the "live `BaseComponent`" invariant the raw setter
+    /// demands. For an arbitrary `BaseComponent*` use [`Self::set_data_context_raw`].
+    pub fn set_data_context(&mut self, instance: &crate::classes::ClassInstance) -> bool {
+        // SAFETY: `instance.raw()` is a live BaseComponent* for the duration of
+        // the borrow, which fully covers this synchronous call.
+        unsafe { self.set_data_context_raw(instance.raw()) }
+    }
+
+    /// Set this element's `DataContext` to an arbitrary `Noesis::BaseComponent*`.
+    /// Returns `false` if this element is not a `FrameworkElement`. Noesis stores
+    /// its own reference to `context`. Prefer the safe [`Self::set_data_context`]
+    /// when the context is a [`ClassInstance`](crate::classes::ClassInstance).
     ///
     /// # Safety
     ///
     /// `context` must be a valid live `Noesis::BaseComponent*` (e.g. from
     /// [`crate::classes::ClassInstance::raw`]) or null to clear.
-    pub unsafe fn set_data_context(&mut self, context: *mut c_void) -> bool {
+    pub unsafe fn set_data_context_raw(&mut self, context: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; `context` is a live
         // BaseComponent* (or null) per the contract above; the C side
         // DynamicCasts and null-checks.
@@ -695,16 +712,41 @@ impl FrameworkElement {
         NonNull::new(p)
     }
 
-    /// Set this element's `ItemsSource` (it must be an `ItemsControl` — e.g.
-    /// `ItemsControl` / `ListBox` / `ListView`). Returns `false` if this element
-    /// is not an `ItemsControl`. Pass an
-    /// [`crate::binding::ObservableCollection`]'s `raw()` to drive a live list.
+    /// Point this element's `ItemsSource` at a Rust-owned
+    /// [`ObservableCollection`](crate::binding::ObservableCollection). The
+    /// element must be an `ItemsControl` (e.g. `ItemsControl` / `ListBox` /
+    /// `ListView` / `ComboBox`); returns `false` otherwise. Noesis stores its
+    /// own reference to the collection.
+    ///
+    /// Safe entry point for `unsafe`-free consumers — the `&ObservableCollection`
+    /// borrow encodes the live-`BaseComponent` invariant. Use
+    /// [`Self::clear_items_source`] to detach, or [`Self::set_items_source_raw`]
+    /// for an arbitrary list-implementing `BaseComponent*`.
+    pub fn set_items_source(&mut self, items: &crate::binding::ObservableCollection) -> bool {
+        // SAFETY: `items.raw()` is a live ObservableCollection* (a BaseComponent
+        // implementing a list interface) for the duration of the borrow.
+        unsafe { self.set_items_source_raw(items.raw()) }
+    }
+
+    /// Detach this element's `ItemsSource`. Returns `false` if this element is
+    /// not an `ItemsControl`. Clearing with null is always sound.
+    pub fn clear_items_source(&mut self) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; null is always valid.
+        unsafe {
+            dm_noesis_items_control_set_items_source(self.ptr.as_ptr(), core::ptr::null_mut())
+        }
+    }
+
+    /// Set this element's `ItemsSource` to an arbitrary `Noesis::BaseComponent*`
+    /// (it must be an `ItemsControl`). Returns `false` if this element is not an
+    /// `ItemsControl`. Prefer the safe [`Self::set_items_source`] /
+    /// [`Self::clear_items_source`].
     ///
     /// # Safety
     ///
     /// `items` must be a valid live `Noesis::BaseComponent*` implementing a
     /// list interface (e.g. an `ObservableCollection`) or null to clear.
-    pub unsafe fn set_items_source(&mut self, items: *mut c_void) -> bool {
+    pub unsafe fn set_items_source_raw(&mut self, items: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; `items` is a live
         // BaseComponent* (or null) per the contract above.
         unsafe { dm_noesis_items_control_set_items_source(self.ptr.as_ptr(), items) }

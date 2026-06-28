@@ -110,7 +110,7 @@ fn observable_collection() {
         // Bind the live collection as the source.
         // SAFETY: coll outlives this scope; raw() is a live ObservableCollection*.
         assert!(
-            unsafe { content.set_items_source(coll.raw()) },
+            content.set_items_source(&coll),
             "set_items_source returned false (root not an ItemsControl?)"
         );
 
@@ -150,11 +150,9 @@ fn observable_collection() {
         );
 
         // Teardown: drop the view (releases the ItemsControl's ItemsSource ref)
-        // before the collection handle.
-        // SAFETY: clearing the source with the control still alive is sound.
-        unsafe {
-            content.set_items_source(core::ptr::null_mut());
-        }
+        // before the collection handle. Clearing the source with the control
+        // still alive is sound.
+        content.clear_items_source();
         drop(content);
         view.deactivate();
         drop(view);
