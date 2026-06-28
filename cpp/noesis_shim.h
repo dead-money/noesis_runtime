@@ -1434,6 +1434,77 @@ bool dm_noesis_set_binding(void* element, const char* dp_name, void* binding);
 bool dm_noesis_framework_element_add_resource(
     void* element, const char* key, void* object);
 
+// ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
+//
+// Implemented in cpp/noesis_controls.cpp. Each entrypoint DynamicCasts to the
+// right control type and fails gracefully (false / null / sentinel) on a type
+// mismatch. `element` is a FrameworkElement* / BaseComponent* (the same opaque
+// handle the rest of the FrameworkElement surface uses).
+
+// Selector — SelectedIndex / SelectedItem (ListBox/ComboBox/TabControl/ListView).
+// get_selected_index writes *out (-1 == empty selection); both return false if
+// `element` is not a Selector. set_selected_index coerces out-of-range to -1.
+// get_selected_item returns a BORROWED (no +1) pointer (the data item for an
+// ItemsSource-bound control, else the container), null if empty / not a Selector.
+// set_selected_item takes a borrowed item (Noesis takes its own ref); null clears.
+bool dm_noesis_selector_get_selected_index(void* element, int32_t* out);
+bool dm_noesis_selector_set_selected_index(void* element, int32_t index);
+void* dm_noesis_selector_get_selected_item(void* element);
+bool dm_noesis_selector_set_selected_item(void* element, void* item);
+
+// ItemsControl.Items direct mutation (NOT ItemsSource — no-op when an external
+// ItemsSource is set, since Items is then read-only). `item` is a borrowed
+// BaseComponent* (typically a boxed value); the collection takes its own ref.
+// items_add returns the new index, or -1 on a non-ItemsControl / rejected add.
+int32_t dm_noesis_items_control_items_add(void* element, void* item);
+bool dm_noesis_items_control_items_insert(void* element, uint32_t index, void* item);
+bool dm_noesis_items_control_items_remove_at(void* element, uint32_t index);
+bool dm_noesis_items_control_items_clear(void* element);
+
+// RangeBase — `which`: 0 = Value, 1 = Minimum, 2 = Maximum (Slider/ProgressBar/
+// ScrollBar). Getter writes *out, returns false on a non-RangeBase / bad `which`.
+// Setter runs Noesis coercion (Value clamped to [Minimum, Maximum]).
+bool dm_noesis_rangebase_get(void* element, int32_t which, float* out);
+bool dm_noesis_rangebase_set(void* element, int32_t which, float value);
+
+// ToggleButton.IsChecked tri-state. `state`: 0 = unchecked, 1 = checked,
+// 2 = indeterminate (null). Getter writes *out_state, returns false on a
+// non-ToggleButton. (CheckBox/RadioButton.)
+bool dm_noesis_toggle_get_is_checked(void* element, int8_t* out_state);
+bool dm_noesis_toggle_set_is_checked(void* element, int8_t state);
+
+// Popup.IsOpen / Expander.IsExpanded. Getter writes *out, returns false on a
+// type mismatch.
+bool dm_noesis_popup_get_is_open(void* element, bool* out);
+bool dm_noesis_popup_set_is_open(void* element, bool open);
+bool dm_noesis_expander_get_is_expanded(void* element, bool* out);
+bool dm_noesis_expander_set_is_expanded(void* element, bool expanded);
+
+// ScrollViewer — `which`: 0 = HorizontalOffset, 1 = VerticalOffset,
+// 2 = ScrollableWidth, 3 = ScrollableHeight, 4 = ExtentHeight,
+// 5 = ViewportHeight (all read-only computed metrics). Getter writes *out,
+// returns false on a non-ScrollViewer / bad `which`. Scrolling is via methods.
+bool dm_noesis_scrollviewer_get(void* element, int32_t which, float* out);
+bool dm_noesis_scrollviewer_scroll_to_horizontal(void* element, float offset);
+bool dm_noesis_scrollviewer_scroll_to_vertical(void* element, float offset);
+bool dm_noesis_scrollviewer_scroll_to_home(void* element);
+bool dm_noesis_scrollviewer_scroll_to_end(void* element);
+
+// TextBox selection / caret. `which` for the int get/set: 0 = SelectionStart,
+// 1 = SelectionLength, 2 = CaretIndex. Getter writes *out, returns false on a
+// non-TextBox. get_selected_text returns a BORROWED pointer (copy immediately),
+// null on a non-TextBox.
+bool dm_noesis_textbox_get_int(void* element, int32_t which, int32_t* out);
+bool dm_noesis_textbox_set_int(void* element, int32_t which, int32_t value);
+bool dm_noesis_textbox_select(void* element, int32_t start, int32_t length);
+bool dm_noesis_textbox_select_all(void* element);
+const char* dm_noesis_textbox_get_selected_text(void* element);
+
+// PasswordBox password. get returns a BORROWED pointer (copy immediately), null
+// on a non-PasswordBox.
+const char* dm_noesis_passwordbox_get_password(void* element);
+bool dm_noesis_passwordbox_set_password(void* element, const char* password);
+
 #ifdef __cplusplus
 }
 #endif

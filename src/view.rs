@@ -25,7 +25,8 @@ use crate::ffi::{
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
     dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
-    dm_noesis_dependency_object_thread_id, dm_noesis_focus_element,
+    dm_noesis_dependency_object_thread_id, dm_noesis_expander_get_is_expanded,
+    dm_noesis_expander_set_is_expanded, dm_noesis_focus_element,
     dm_noesis_framework_element_find_name, dm_noesis_framework_element_get_data_context,
     dm_noesis_framework_element_get_halign, dm_noesis_framework_element_get_name,
     dm_noesis_framework_element_get_valign, dm_noesis_framework_element_logical_parent,
@@ -34,7 +35,9 @@ use crate::ffi::{
     dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
     dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
     dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml,
-    dm_noesis_items_control_items_count, dm_noesis_items_control_realized_count,
+    dm_noesis_items_control_items_add, dm_noesis_items_control_items_clear,
+    dm_noesis_items_control_items_count, dm_noesis_items_control_items_insert,
+    dm_noesis_items_control_items_remove_at, dm_noesis_items_control_realized_count,
     dm_noesis_items_control_set_items_source, dm_noesis_logical_child,
     dm_noesis_logical_children_count, dm_noesis_path_set_points, dm_noesis_renderer_init,
     dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
@@ -53,6 +56,17 @@ use crate::ffi::{
     dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
     dm_noesis_visual_child, dm_noesis_visual_children_count, dm_noesis_visual_hit_test,
     dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
+};
+use crate::ffi::{
+    dm_noesis_passwordbox_get_password, dm_noesis_passwordbox_set_password,
+    dm_noesis_popup_get_is_open, dm_noesis_popup_set_is_open, dm_noesis_rangebase_get,
+    dm_noesis_rangebase_set, dm_noesis_scrollviewer_get, dm_noesis_scrollviewer_scroll_to_end,
+    dm_noesis_scrollviewer_scroll_to_home, dm_noesis_scrollviewer_scroll_to_horizontal,
+    dm_noesis_scrollviewer_scroll_to_vertical, dm_noesis_selector_get_selected_index,
+    dm_noesis_selector_get_selected_item, dm_noesis_selector_set_selected_index,
+    dm_noesis_selector_set_selected_item, dm_noesis_textbox_get_int,
+    dm_noesis_textbox_get_selected_text, dm_noesis_textbox_select, dm_noesis_textbox_select_all,
+    dm_noesis_textbox_set_int, dm_noesis_toggle_get_is_checked, dm_noesis_toggle_set_is_checked,
 };
 use crate::render_device::Registered as RegisteredDevice;
 
@@ -1404,6 +1418,409 @@ impl FrameworkElement {
     pub fn thread_id(&self) -> u32 {
         // SAFETY: self.ptr is a live BaseComponent*; UINT32_MAX on non-DO.
         unsafe { dm_noesis_dependency_object_thread_id(self.ptr.as_ptr()) }
+    }
+
+    // ── Controls (§8) ────────────────────────────────────────────────────────
+    //
+    // Typed sugar + genuinely-new entrypoints over the standard Noesis controls.
+    // Each method DynamicCasts (C++ side) to the right control type and degrades
+    // gracefully (None / false / no-op) on a type mismatch, mirroring
+    // [`text`](Self::text) / [`go_to_state`](Self::go_to_state). Several of these
+    // (e.g. selection index, range value) are reachable through the generic DP
+    // accessors too — they exist as typed sugar that also validates the control
+    // type, and (for ranges) routes through the proper setter so Noesis coercion
+    // runs. View-thread affinity is the caller's, like the rest of this impl.
+
+    // -- Selector: ListBox / ComboBox / TabControl / ListView --
+
+    /// The index of the first selected item, or `-1` when nothing is selected.
+    /// `None` if this element is not a `Selector`.
+    #[must_use]
+    pub fn selected_index(&self) -> Option<i32> {
+        let mut out: i32 = 0;
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // Selector and writes `out` only on success.
+        unsafe { dm_noesis_selector_get_selected_index(self.ptr.as_ptr(), &mut out) }.then_some(out)
+    }
+
+    /// Set the selected index. Pass `-1` to clear the selection; an out-of-range
+    /// index is coerced by Noesis to `-1`. Returns `false` if this element is not
+    /// a `Selector`.
+    pub fn set_selected_index(&mut self, index: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_selector_set_selected_index(self.ptr.as_ptr(), index) }
+    }
+
+    /// Borrowed (no `+1`) pointer to the selected item, or `None` when nothing is
+    /// selected / this element is not a `Selector`. For an `ItemsSource`-bound
+    /// control this is the data item; for direct items it is the container.
+    ///
+    /// The pointer is borrowed exactly like [`get_component`](Self::get_component):
+    /// it must not be released and is valid only transiently.
+    #[must_use]
+    pub fn selected_item(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
+        // pointer or null.
+        let p = unsafe { dm_noesis_selector_get_selected_item(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Set the selected item to `item` (which should already be present in the
+    /// control's items). Pass null to clear. Returns `false` if this element is
+    /// not a `Selector`. Noesis takes its own reference to `item`.
+    ///
+    /// # Safety
+    ///
+    /// `item` must be a valid live `Noesis::BaseComponent*` (e.g. a
+    /// [`crate::binding::Boxed::raw`] or a pointer from [`selected_item`] /
+    /// [`crate::binding::ObservableCollection::get`]) or null.
+    pub unsafe fn set_selected_item(&mut self, item: *mut c_void) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; `item` is a live
+        // BaseComponent* (or null) per the contract above.
+        unsafe { dm_noesis_selector_set_selected_item(self.ptr.as_ptr(), item) }
+    }
+
+    // -- ItemsControl: direct Items mutation --
+
+    /// Append `item` to this `ItemsControl`'s own `Items` collection, returning
+    /// its new index. `None` if this element is not an `ItemsControl` or the add
+    /// was rejected (e.g. an external `ItemsSource` is set, making `Items`
+    /// read-only — use [`set_items_source`](Self::set_items_source) +
+    /// [`crate::binding::ObservableCollection`] for that case). The collection
+    /// takes its own reference to `item`.
+    ///
+    /// # Safety
+    ///
+    /// `item` must be a valid live `Noesis::BaseComponent*` (typically a
+    /// [`crate::binding::Boxed::raw`]).
+    pub unsafe fn items_add(&mut self, item: *mut c_void) -> Option<usize> {
+        // SAFETY: self.ptr is a live BaseComponent*; `item` is live per contract.
+        let idx = unsafe { dm_noesis_items_control_items_add(self.ptr.as_ptr(), item) };
+        (idx >= 0).then_some(idx as usize)
+    }
+
+    /// Append a boxed string to this `ItemsControl`'s `Items`, returning its
+    /// index. Sugar over [`items_add`](Self::items_add) +
+    /// [`crate::binding::box_string`]. `None` on a non-`ItemsControl` /
+    /// read-only `Items`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` contains an interior NUL byte.
+    pub fn items_add_string(&mut self, value: &str) -> Option<usize> {
+        let boxed = crate::binding::box_string(value);
+        // SAFETY: `boxed` is a live BaseComponent* for the call; the collection
+        // takes its own ref, so dropping `boxed` afterwards is sound.
+        unsafe { self.items_add(boxed.raw()) }
+    }
+
+    /// Insert `item` at `index` (allows `index == count`). Returns `false` if
+    /// this element is not an `ItemsControl` or `index` is out of range.
+    ///
+    /// # Safety
+    ///
+    /// `item` must be a valid live `Noesis::BaseComponent*`.
+    pub unsafe fn items_insert(&mut self, index: usize, item: *mut c_void) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; `item` is live per contract.
+        unsafe { dm_noesis_items_control_items_insert(self.ptr.as_ptr(), index as u32, item) }
+    }
+
+    /// Remove the item at `index` from `Items`. Returns `false` on a
+    /// non-`ItemsControl` or out-of-range `index`.
+    pub fn items_remove_at(&mut self, index: usize) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*.
+        unsafe { dm_noesis_items_control_items_remove_at(self.ptr.as_ptr(), index as u32) }
+    }
+
+    /// Remove every item from `Items`. Returns `false` if this element is not an
+    /// `ItemsControl`.
+    pub fn items_clear(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*.
+        unsafe { dm_noesis_items_control_items_clear(self.ptr.as_ptr()) }
+    }
+
+    // -- RangeBase: Slider / ProgressBar / ScrollBar --
+
+    /// The current `Value`. `None` if this element is not a `RangeBase`.
+    #[must_use]
+    pub fn range_value(&self) -> Option<f32> {
+        self.rangebase_get(0)
+    }
+
+    /// The `Minimum`. `None` if not a `RangeBase`.
+    #[must_use]
+    pub fn range_minimum(&self) -> Option<f32> {
+        self.rangebase_get(1)
+    }
+
+    /// The `Maximum`. `None` if not a `RangeBase`.
+    #[must_use]
+    pub fn range_maximum(&self) -> Option<f32> {
+        self.rangebase_get(2)
+    }
+
+    fn rangebase_get(&self, which: i32) -> Option<f32> {
+        let mut out: f32 = 0.0;
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // RangeBase and writes `out` only on success.
+        unsafe { dm_noesis_rangebase_get(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
+    }
+
+    /// Set the `Value`, going through `RangeBase::SetValue` so Noesis coerces it
+    /// into `[Minimum, Maximum]`. Returns `false` if not a `RangeBase`.
+    pub fn set_range_value(&mut self, value: f32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 0, value) }
+    }
+
+    /// Set the `Minimum`. Returns `false` if not a `RangeBase`.
+    pub fn set_range_minimum(&mut self, value: f32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 1, value) }
+    }
+
+    /// Set the `Maximum`. Returns `false` if not a `RangeBase`.
+    pub fn set_range_maximum(&mut self, value: f32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 2, value) }
+    }
+
+    // -- ToggleButton: CheckBox / RadioButton (tri-state) --
+
+    /// The tri-state `IsChecked`: outer `None` means this element is not a
+    /// `ToggleButton`; inner `Some(true)`/`Some(false)` are checked/unchecked,
+    /// and inner `None` is the indeterminate state. The indeterminate state is
+    /// preserved (never collapsed to `false`).
+    #[must_use]
+    pub fn is_checked(&self) -> Option<Option<bool>> {
+        let mut state: i8 = 0;
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // ToggleButton and writes `state` (0/1/2) only on success.
+        if !unsafe { dm_noesis_toggle_get_is_checked(self.ptr.as_ptr(), &mut state) } {
+            return None;
+        }
+        Some(match state {
+            1 => Some(true),
+            0 => Some(false),
+            _ => None, // 2 == indeterminate
+        })
+    }
+
+    /// Set the tri-state `IsChecked` (`None` = indeterminate). Returns `false`
+    /// if this element is not a `ToggleButton`.
+    pub fn set_is_checked(&mut self, state: Option<bool>) -> bool {
+        let code: i8 = match state {
+            Some(true) => 1,
+            Some(false) => 0,
+            None => 2,
+        };
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_toggle_set_is_checked(self.ptr.as_ptr(), code) }
+    }
+
+    // -- Popup / Expander --
+
+    /// `Popup.IsOpen`. `None` if this element is not a `Popup`.
+    #[must_use]
+    pub fn is_open(&self) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // Popup and writes `out` only on success.
+        unsafe { dm_noesis_popup_get_is_open(self.ptr.as_ptr(), &mut out) }.then_some(out)
+    }
+
+    /// Set `Popup.IsOpen`. Returns `false` if this element is not a `Popup`.
+    pub fn set_is_open(&mut self, open: bool) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_popup_set_is_open(self.ptr.as_ptr(), open) }
+    }
+
+    /// `Expander.IsExpanded`. `None` if this element is not an `Expander`.
+    #[must_use]
+    pub fn is_expanded(&self) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // Expander and writes `out` only on success.
+        unsafe { dm_noesis_expander_get_is_expanded(self.ptr.as_ptr(), &mut out) }.then_some(out)
+    }
+
+    /// Set `Expander.IsExpanded`. Returns `false` if not an `Expander`.
+    pub fn set_is_expanded(&mut self, expanded: bool) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_expander_set_is_expanded(self.ptr.as_ptr(), expanded) }
+    }
+
+    // -- ScrollViewer --
+
+    /// `HorizontalOffset` (current scroll position). `None` if not a
+    /// `ScrollViewer`.
+    #[must_use]
+    pub fn horizontal_offset(&self) -> Option<f32> {
+        self.scrollviewer_get(0)
+    }
+
+    /// `VerticalOffset` (current scroll position). `None` if not a
+    /// `ScrollViewer`.
+    #[must_use]
+    pub fn vertical_offset(&self) -> Option<f32> {
+        self.scrollviewer_get(1)
+    }
+
+    /// `ScrollableWidth` (extent minus viewport width). `None` if not a
+    /// `ScrollViewer`.
+    #[must_use]
+    pub fn scrollable_width(&self) -> Option<f32> {
+        self.scrollviewer_get(2)
+    }
+
+    /// `ScrollableHeight` (extent minus viewport height). `None` if not a
+    /// `ScrollViewer`.
+    #[must_use]
+    pub fn scrollable_height(&self) -> Option<f32> {
+        self.scrollviewer_get(3)
+    }
+
+    fn scrollviewer_get(&self, which: i32) -> Option<f32> {
+        let mut out: f32 = 0.0;
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // ScrollViewer and writes `out` only on success.
+        unsafe { dm_noesis_scrollviewer_get(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
+    }
+
+    /// Scroll horizontally to `offset` (clamped by Noesis to the scrollable
+    /// range, applied at the next layout pass). Returns `false` if not a
+    /// `ScrollViewer`.
+    pub fn scroll_to_horizontal_offset(&mut self, offset: f32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_scrollviewer_scroll_to_horizontal(self.ptr.as_ptr(), offset) }
+    }
+
+    /// Scroll vertically to `offset` (clamped by Noesis to the scrollable range,
+    /// applied at the next layout pass). Returns `false` if not a `ScrollViewer`.
+    pub fn scroll_to_vertical_offset(&mut self, offset: f32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_scrollviewer_scroll_to_vertical(self.ptr.as_ptr(), offset) }
+    }
+
+    /// Scroll to the top-left origin (`ScrollToHome`). Returns `false` if not a
+    /// `ScrollViewer`.
+    pub fn scroll_to_home(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_scrollviewer_scroll_to_home(self.ptr.as_ptr()) }
+    }
+
+    /// Scroll to the bottom (`ScrollToEnd`). Returns `false` if not a
+    /// `ScrollViewer`.
+    pub fn scroll_to_end(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_scrollviewer_scroll_to_end(self.ptr.as_ptr()) }
+    }
+
+    // -- TextBox selection / caret --
+
+    /// Select `length` characters starting at `start`. Returns `false` if this
+    /// element is not a `TextBox`.
+    pub fn select(&mut self, start: i32, length: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_textbox_select(self.ptr.as_ptr(), start, length) }
+    }
+
+    /// Select all text. Returns `false` if this element is not a `TextBox`.
+    pub fn select_all(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_textbox_select_all(self.ptr.as_ptr()) }
+    }
+
+    /// `SelectionStart` (caret-anchor offset of the current selection). `None`
+    /// if this element is not a `TextBox`.
+    #[must_use]
+    pub fn selection_start(&self) -> Option<i32> {
+        self.textbox_get_int(0)
+    }
+
+    /// `SelectionLength`. `None` if not a `TextBox`.
+    #[must_use]
+    pub fn selection_length(&self) -> Option<i32> {
+        self.textbox_get_int(1)
+    }
+
+    /// `CaretIndex`. `None` if not a `TextBox`. See also
+    /// [`set_caret_to_end`](Self::set_caret_to_end).
+    #[must_use]
+    pub fn caret_index(&self) -> Option<i32> {
+        self.textbox_get_int(2)
+    }
+
+    fn textbox_get_int(&self, which: i32) -> Option<i32> {
+        let mut out: i32 = 0;
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
+        // TextBox and writes `out` only on success.
+        unsafe { dm_noesis_textbox_get_int(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
+    }
+
+    /// Set `SelectionStart`. Returns `false` if not a `TextBox`.
+    pub fn set_selection_start(&mut self, value: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 0, value) }
+    }
+
+    /// Set `SelectionLength`. Returns `false` if not a `TextBox`.
+    pub fn set_selection_length(&mut self, value: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 1, value) }
+    }
+
+    /// Set `CaretIndex`. Returns `false` if not a `TextBox`.
+    pub fn set_caret_index(&mut self, value: i32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
+        unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 2, value) }
+    }
+
+    /// The currently-selected text, copied into an owned [`String`]. `None` if
+    /// this element is not a `TextBox`. An empty selection yields `Some("")`.
+    #[must_use]
+    pub fn selected_text(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
+        // NUL-terminated UTF-8 string (or null on a non-TextBox); we copy out
+        // immediately before yielding control.
+        let p = unsafe { dm_noesis_textbox_get_selected_text(self.ptr.as_ptr()) };
+        if p.is_null() {
+            None
+        } else {
+            // SAFETY: p is a live NUL-terminated UTF-8 string while we hold our
+            // element reference.
+            Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+        }
+    }
+
+    // -- PasswordBox --
+
+    /// The `PasswordBox` plaintext, copied into an owned [`String`]. `None` if
+    /// this element is not a `PasswordBox`.
+    #[must_use]
+    pub fn password(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
+        // NUL-terminated UTF-8 string (or null on a non-PasswordBox); copy out now.
+        let p = unsafe { dm_noesis_passwordbox_get_password(self.ptr.as_ptr()) };
+        if p.is_null() {
+            None
+        } else {
+            // SAFETY: p is a live NUL-terminated UTF-8 string while we hold our
+            // element reference.
+            Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+        }
+    }
+
+    /// Set the `PasswordBox` plaintext. Returns `false` if this element is not a
+    /// `PasswordBox`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `password` contains an interior NUL byte.
+    pub fn set_password(&mut self, password: &str) -> bool {
+        let c = CString::new(password).expect("password contained interior NUL");
+        // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
+        unsafe { dm_noesis_passwordbox_set_password(self.ptr.as_ptr(), c.as_ptr()) }
     }
 }
 
