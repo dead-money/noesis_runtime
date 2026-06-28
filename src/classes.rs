@@ -44,10 +44,13 @@ use std::ffi::{CString, c_void};
 use std::sync::Mutex;
 
 use crate::ffi::{
-    ClassBase, PropType, dm_noesis_base_component_release, dm_noesis_class_create_instance,
-    dm_noesis_class_register, dm_noesis_class_register_property, dm_noesis_class_unregister,
-    dm_noesis_image_source_get_size, dm_noesis_instance_get_property,
-    dm_noesis_instance_set_property,
+    ClassBase, LayoutVtable, PropType, dm_noesis_base_component_release,
+    dm_noesis_class_create_instance, dm_noesis_class_register,
+    dm_noesis_class_register_property_ex, dm_noesis_class_set_coerce, dm_noesis_class_set_layout,
+    dm_noesis_class_unregister, dm_noesis_image_source_get_size, dm_noesis_instance_get_property,
+    dm_noesis_instance_set_property, dm_noesis_instance_set_readonly_property,
+    dm_noesis_uielement_arrange, dm_noesis_uielement_desired_size, dm_noesis_uielement_measure,
+    dm_noesis_visual_child, dm_noesis_visual_children_count,
 };
 
 /// Free trampoline matching [`crate::ffi::ClassFreeFn`]. The C++ side holds a
@@ -138,12 +141,22 @@ pub enum PropertyValue<'a> {
     BaseComponent(Option<NonNull<c_void>>),
 }
 
+/// One registered dependency property + its metadata options.
+struct PropSpec {
+    name: CString,
+    kind: PropType,
+    default: OwnedDefault,
+    options: PropertyOptions,
+}
+
 /// Builder for a single class registration.
 pub struct ClassBuilder<H: PropertyChangeHandler> {
     name: CString,
     base: ClassBase,
     handler: H,
-    props: Vec<(CString, PropType, OwnedDefault)>,
+    props: Vec<PropSpec>,
+    coerce: Option<Box<dyn CoerceHandler>>,
+    layout: Option<Box<dyn LayoutHandler>>,
 }
 
 enum OwnedDefault {
@@ -173,6 +186,8 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             base,
             handler,
             props: Vec::new(),
+            coerce: None,
+            layout: None,
         }
     }
 
@@ -194,9 +209,51 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         kind: PropType,
         default: PropertyDefault<'_>,
     ) -> u32 {
+        self.add_property_ex(name, kind, default, PropertyOptions::default())
+    }
+
+    /// Append a dependency property with richer metadata
+    /// ([`PropertyOptions`]): `FrameworkPropertyMetadataOptions` (e.g.
+    /// [`fpm_options::AFFECTS_MEASURE`]), a read-only access flag, and/or
+    /// opt-in coercion. Coercion requires a handler installed via
+    /// [`Self::set_coerce`] and only applies to scalar / `Thickness` / `Color`
+    /// / `Rect` properties (the first 32 properties of a class).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL.
+    pub fn add_property_ex(
+        &mut self,
+        name: &str,
+        kind: PropType,
+        default: PropertyDefault<'_>,
+        options: PropertyOptions,
+    ) -> u32 {
         let cstr = CString::new(name).expect("property name contained NUL");
-        self.props.push((cstr, kind, default.into_owned()));
+        self.props.push(PropSpec {
+            name: cstr,
+            kind,
+            default: default.into_owned(),
+            options,
+        });
         self.props.len() as u32 - 1
+    }
+
+    /// Install a class-level coerce handler. Individual properties opt in by
+    /// passing [`PropertyOptions::coerce`] `= true` to [`Self::add_property_ex`].
+    /// The handler's [`CoerceHandler::coerce`] runs inside Noesis's value
+    /// pipeline whenever a coerced property's effective value is computed, and
+    /// returns the clamped / transformed result (or [`Coerced::Unchanged`] to
+    /// pass the value through).
+    pub fn set_coerce(&mut self, handler: impl CoerceHandler) {
+        self.coerce = Some(Box::new(handler));
+    }
+
+    /// Install a layout handler so the class participates in the layout system
+    /// via `MeasureOverride` / `ArrangeOverride`. Without a handler the base
+    /// class's default layout runs. See [`LayoutHandler`].
+    pub fn set_layout(&mut self, handler: impl LayoutHandler) {
+        self.layout = Some(Box::new(handler));
     }
 
     /// Finalize the registration. Returns `None` if the C++ side rejected
@@ -208,8 +265,10 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             base,
             handler,
             props,
+            coerce,
+            layout,
         } = self;
-        let prop_types: Vec<PropType> = props.iter().map(|(_, k, _)| *k).collect();
+        let prop_types: Vec<PropType> = props.iter().map(|p| p.kind).collect();
 
         // Box twice so we have a stable thin pointer for the C ABI userdata,
         // matching the pattern in `events::subscribe_click`.
@@ -219,7 +278,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         // Record the prop type list BEFORE the FFI call so the trampoline
         // can decode `value_ptr` if the C++ side fires a callback during
         // registration (e.g. on a default-value initialization).
-        record_prop_types(userdata.cast(), prop_types);
+        record_prop_types(userdata.cast(), prop_types.clone());
 
         let token = unsafe {
             dm_noesis_class_register(
@@ -239,23 +298,63 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             return None;
         };
 
-        for (prop_name, kind, default) in &props {
-            let default_ptr = default.as_ffi_ptr();
+        for spec in &props {
+            let default_ptr = spec.default.as_ffi_ptr();
             let idx = unsafe {
-                dm_noesis_class_register_property(
+                dm_noesis_class_register_property_ex(
                     token.as_ptr(),
-                    prop_name.as_ptr(),
-                    *kind,
+                    spec.name.as_ptr(),
+                    spec.kind,
                     default_ptr,
+                    spec.options.fpm_options,
+                    spec.options.read_only,
+                    spec.options.coerce,
                 )
             };
             if idx == u32::MAX {
-                // C++ owns the userdata box now (registered above); calling
-                // `dm_noesis_class_unregister` triggers the free trampoline
-                // when ClassData's last ref drops, which is right here since
-                // no instances were created yet.
+                // C++ owns the property-handler box now; unregister triggers
+                // its free trampoline (no instances exist yet). The coerce /
+                // layout boxes were never donated — drop them here.
                 unsafe { dm_noesis_class_unregister(token.as_ptr()) };
+                drop(coerce);
+                drop(layout);
                 return None;
+            }
+        }
+
+        // Donate the coerce handler (if any). Ownership transfers to the C++
+        // ClassData, freed via `coerce_handler_free_trampoline` at teardown.
+        if let Some(handler) = coerce {
+            let boxed: Box<Box<dyn CoerceHandler>> = Box::new(handler);
+            let coerce_ud = Box::into_raw(boxed);
+            // The coerce trampoline decodes `value_ptr` via the same side
+            // table; key it on the coerce userdata pointer.
+            record_prop_types(coerce_ud.cast(), prop_types);
+            unsafe {
+                dm_noesis_class_set_coerce(
+                    token.as_ptr(),
+                    coerce_trampoline,
+                    coerce_ud.cast(),
+                    coerce_handler_free_trampoline,
+                );
+            }
+        }
+
+        // Donate the layout handler (if any).
+        if let Some(handler) = layout {
+            let boxed: Box<Box<dyn LayoutHandler>> = Box::new(handler);
+            let layout_ud = Box::into_raw(boxed);
+            let vtable = LayoutVtable {
+                measure: Some(layout_measure_trampoline),
+                arrange: Some(layout_arrange_trampoline),
+            };
+            unsafe {
+                dm_noesis_class_set_layout(
+                    token.as_ptr(),
+                    &vtable,
+                    layout_ud.cast(),
+                    layout_handler_free_trampoline,
+                );
             }
         }
 
@@ -804,4 +903,406 @@ unsafe fn decode_value<'a>(
             PropertyValue::BaseComponent(NonNull::new(p))
         }
     }
+}
+
+// ── Richer DP metadata + read-only + coercion + layout (TODO §9) ─────────────
+
+/// `FrameworkPropertyMetadataOptions` bit flags (mirror of the Noesis enum in
+/// `NsGui/FrameworkPropertyMetadata.h`). OR these together into
+/// [`PropertyOptions::fpm_options`] so changing the property invalidates the
+/// matching layout / render pass.
+pub mod fpm_options {
+    /// No framework options.
+    pub const NONE: u32 = 0x000;
+    /// A change re-runs the owning element's measure pass.
+    pub const AFFECTS_MEASURE: u32 = 0x001;
+    /// A change re-runs the owning element's arrange pass.
+    pub const AFFECTS_ARRANGE: u32 = 0x002;
+    /// A change re-runs the parent's measure pass.
+    pub const AFFECTS_PARENT_MEASURE: u32 = 0x004;
+    /// A change re-runs the parent's arrange pass.
+    pub const AFFECTS_PARENT_ARRANGE: u32 = 0x008;
+    /// A change re-runs the owning element's render pass.
+    pub const AFFECTS_RENDER: u32 = 0x010;
+    /// The property value is inherited down the logical tree.
+    pub const INHERITS: u32 = 0x020;
+}
+
+/// Metadata options for [`ClassBuilder::add_property_ex`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PropertyOptions {
+    /// Bitmask of [`fpm_options`] flags. Non-zero promotes the DP's metadata
+    /// to a `FrameworkPropertyMetadata`.
+    pub fpm_options: u32,
+    /// Register the DP read-only: the ordinary setter paths (XAML, bindings,
+    /// [`Instance::set_int32`] & friends) reject writes; only
+    /// [`Instance::set_readonly_int32`] & friends can mutate it.
+    pub read_only: bool,
+    /// Route this DP through the class coerce handler ([`ClassBuilder::set_coerce`]).
+    /// Only honored for scalar / `Thickness` / `Color` / `Rect` properties.
+    pub coerce: bool,
+}
+
+/// A coerced value returned by [`CoerceHandler::coerce`]. The variant MUST
+/// match the property's registered [`PropType`]; a mismatch is ignored (the
+/// pre-coercion value passes through). Use [`Coerced::Unchanged`] to accept the
+/// input as-is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Coerced {
+    /// Leave the value unchanged.
+    Unchanged,
+    Int32(i32),
+    UInt32(u32),
+    Float(f32),
+    Double(f64),
+    Bool(bool),
+    Thickness {
+        left: f32,
+        top: f32,
+        right: f32,
+        bottom: f32,
+    },
+    Color {
+        r: f32,
+        g: f32,
+        b: f32,
+        a: f32,
+    },
+    Rect {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+}
+
+/// Per-class coercion logic. Installed via [`ClassBuilder::set_coerce`]; runs
+/// inside Noesis's value pipeline whenever a coerced property's effective value
+/// is computed (e.g. on every `SetValue`). Return a clamped / transformed
+/// value, or [`Coerced::Unchanged`] to pass it through. A no-op coerce yields
+/// the input verbatim, so a clamp to `[0, 100]` that returns `100` for an input
+/// of `999` is observable through a read-back.
+pub trait CoerceHandler: Send + 'static {
+    fn coerce(&mut self, instance: Instance, prop_index: u32, value: PropertyValue<'_>) -> Coerced;
+}
+
+/// A width/height pair in DIPs, used by [`LayoutHandler`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Size {
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Size {
+    /// The zero size.
+    pub const ZERO: Size = Size {
+        width: 0.0,
+        height: 0.0,
+    };
+
+    #[must_use]
+    pub fn new(width: f32, height: f32) -> Self {
+        Self { width, height }
+    }
+}
+
+/// Custom layout participation, installed via [`ClassBuilder::set_layout`].
+/// The trampoline subclass's `MeasureOverride` / `ArrangeOverride` forward
+/// here. A handler that returns a fixed size makes a self-sizing element; to
+/// lay out children, enumerate them with [`Instance::layout_child_count`] /
+/// [`Instance::layout_child`] and call [`LayoutChild::measure`] /
+/// [`LayoutChild::arrange`].
+///
+/// Default impls make the element take zero space (measure) and accept the
+/// final size (arrange) — override the half you need.
+pub trait LayoutHandler: Send + 'static {
+    /// Return the element's desired size given the available size.
+    fn measure(&mut self, instance: Instance, available: Size) -> Size {
+        let _ = (instance, available);
+        Size::ZERO
+    }
+
+    /// Position children within `final_size` and return the size actually used.
+    fn arrange(&mut self, instance: Instance, final_size: Size) -> Size {
+        let _ = instance;
+        final_size
+    }
+}
+
+/// A borrowed child element handed to a [`LayoutHandler`] for measuring /
+/// arranging. Valid only for the duration of the layout callback (it borrows a
+/// Noesis-owned `UIElement*`; do not store it).
+pub struct LayoutChild {
+    ptr: NonNull<c_void>,
+}
+
+impl LayoutChild {
+    /// Run the child's measure pass with the given available size. Returns
+    /// `false` if the child is not a `UIElement`.
+    pub fn measure(&self, available: Size) -> bool {
+        // SAFETY: ptr is a live UIElement* borrowed for the callback.
+        unsafe { dm_noesis_uielement_measure(self.ptr.as_ptr(), available.width, available.height) }
+    }
+
+    /// Run the child's arrange pass at `(x, y)` with size `(w, h)` in this
+    /// element's coordinate space. Returns `false` if not a `UIElement`.
+    pub fn arrange(&self, x: f32, y: f32, w: f32, h: f32) -> bool {
+        // SAFETY: ptr is a live UIElement* borrowed for the callback.
+        unsafe { dm_noesis_uielement_arrange(self.ptr.as_ptr(), x, y, w, h) }
+    }
+
+    /// Read the child's `DesiredSize` (valid after [`Self::measure`]).
+    #[must_use]
+    pub fn desired_size(&self) -> Option<Size> {
+        let mut w = 0.0f32;
+        let mut h = 0.0f32;
+        // SAFETY: ptr is a live UIElement* borrowed for the callback.
+        let ok = unsafe { dm_noesis_uielement_desired_size(self.ptr.as_ptr(), &mut w, &mut h) };
+        ok.then_some(Size::new(w, h))
+    }
+
+    /// Raw borrowed `Noesis::UIElement*`.
+    #[must_use]
+    pub fn raw(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+impl Instance {
+    /// Number of visual children (for a custom [`LayoutHandler`]).
+    #[must_use]
+    pub fn layout_child_count(self) -> u32 {
+        // SAFETY: self.0 is a live element pointer.
+        unsafe { dm_noesis_visual_children_count(self.0.as_ptr()) }
+    }
+
+    /// Borrow the `index`-th visual child for layout. `None` if out of range.
+    #[must_use]
+    pub fn layout_child(self, index: u32) -> Option<LayoutChild> {
+        // SAFETY: self.0 is a live element pointer.
+        let p = unsafe { dm_noesis_visual_child(self.0.as_ptr(), index) };
+        NonNull::new(p).map(|ptr| LayoutChild { ptr })
+    }
+
+    /// Set a read-only `Int32` DP via the privileged path (the analogue of a
+    /// WPF `DependencyPropertyKey`). Ordinary [`Self::set_int32`] is a no-op on
+    /// a read-only DP. Returns `false` on a bad instance / index.
+    pub fn set_readonly_int32(self, prop_index: u32, value: i32) -> bool {
+        // SAFETY: self.0 is a live instance pointer; value outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const i32).cast(),
+            )
+        }
+    }
+    /// Read-only setter for a `UInt32` DP. See [`Self::set_readonly_int32`].
+    pub fn set_readonly_uint32(self, prop_index: u32, value: u32) -> bool {
+        // SAFETY: self.0 is a live instance pointer; value outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const u32).cast(),
+            )
+        }
+    }
+    /// Read-only setter for a `Float` DP. See [`Self::set_readonly_int32`].
+    pub fn set_readonly_float(self, prop_index: u32, value: f32) -> bool {
+        // SAFETY: self.0 is a live instance pointer; value outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const f32).cast(),
+            )
+        }
+    }
+    /// Read-only setter for a `Double` DP. See [`Self::set_readonly_int32`].
+    pub fn set_readonly_double(self, prop_index: u32, value: f64) -> bool {
+        // SAFETY: self.0 is a live instance pointer; value outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const f64).cast(),
+            )
+        }
+    }
+    /// Read-only setter for a `Bool` DP. See [`Self::set_readonly_int32`].
+    pub fn set_readonly_bool(self, prop_index: u32, value: bool) -> bool {
+        // SAFETY: self.0 is a live instance pointer; value outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const bool).cast(),
+            )
+        }
+    }
+    /// Read-only setter for a `String` DP. See [`Self::set_readonly_int32`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` contains an interior NUL.
+    pub fn set_readonly_string(self, prop_index: u32, value: &str) -> bool {
+        let cstr = CString::new(value).expect("string contained NUL");
+        let ptr: *const i8 = cstr.as_ptr();
+        // SAFETY: self.0 is a live instance pointer; cstr outlives the call.
+        unsafe {
+            dm_noesis_instance_set_readonly_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&ptr as *const *const i8).cast(),
+            )
+        }
+    }
+}
+
+unsafe extern "C" fn coerce_trampoline(
+    userdata: *mut c_void,
+    instance: *mut c_void,
+    prop_index: u32,
+    in_value: *const c_void,
+    out_value: *mut c_void,
+) {
+    if userdata.is_null() {
+        return;
+    }
+    let handler = &mut *userdata.cast::<Box<dyn CoerceHandler>>();
+    let Some(inst) = NonNull::new(instance) else {
+        return;
+    };
+    let value = decode_value(userdata, prop_index, in_value);
+    let coerced = handler.coerce(Instance(inst), prop_index, value);
+    encode_coerced(userdata, prop_index, coerced, out_value);
+}
+
+/// Free trampoline for the donated coerce handler box. Mirrors
+/// [`class_handler_free_trampoline`].
+unsafe extern "C" fn coerce_handler_free_trampoline(userdata: *mut c_void) {
+    if userdata.is_null() {
+        return;
+    }
+    forget_prop_types(userdata);
+    drop(Box::from_raw(userdata.cast::<Box<dyn CoerceHandler>>()));
+}
+
+unsafe fn encode_coerced(
+    userdata: *mut c_void,
+    prop_index: u32,
+    coerced: Coerced,
+    out_value: *mut c_void,
+) {
+    if out_value.is_null() {
+        return;
+    }
+    // Validate the returned variant against the registered type; a mismatch is
+    // ignored so the pre-coercion copy in `out_value` survives.
+    let kind = lookup_prop_type(userdata, prop_index);
+    match (kind, coerced) {
+        (_, Coerced::Unchanged) => {}
+        (Some(PropType::Int32), Coerced::Int32(v)) => *out_value.cast::<i32>() = v,
+        (Some(PropType::UInt32), Coerced::UInt32(v)) => *out_value.cast::<u32>() = v,
+        (Some(PropType::Float), Coerced::Float(v)) => *out_value.cast::<f32>() = v,
+        (Some(PropType::Double), Coerced::Double(v)) => *out_value.cast::<f64>() = v,
+        (Some(PropType::Bool), Coerced::Bool(v)) => *out_value.cast::<bool>() = v,
+        (
+            Some(PropType::Thickness),
+            Coerced::Thickness {
+                left,
+                top,
+                right,
+                bottom,
+            },
+        ) => {
+            let f = out_value.cast::<f32>();
+            *f = left;
+            *f.add(1) = top;
+            *f.add(2) = right;
+            *f.add(3) = bottom;
+        }
+        (Some(PropType::Color), Coerced::Color { r, g, b, a }) => {
+            let f = out_value.cast::<f32>();
+            *f = r;
+            *f.add(1) = g;
+            *f.add(2) = b;
+            *f.add(3) = a;
+        }
+        (
+            Some(PropType::Rect),
+            Coerced::Rect {
+                x,
+                y,
+                width,
+                height,
+            },
+        ) => {
+            let f = out_value.cast::<f32>();
+            *f = x;
+            *f.add(1) = y;
+            *f.add(2) = width;
+            *f.add(3) = height;
+        }
+        // Variant / type mismatch — leave the passthrough copy in place.
+        _ => {}
+    }
+}
+
+unsafe extern "C" fn layout_measure_trampoline(
+    userdata: *mut c_void,
+    instance: *mut c_void,
+    avail_w: f32,
+    avail_h: f32,
+    out_w: *mut f32,
+    out_h: *mut f32,
+) {
+    if userdata.is_null() {
+        return;
+    }
+    let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
+    let size = match NonNull::new(instance) {
+        Some(inst) => handler.measure(Instance(inst), Size::new(avail_w, avail_h)),
+        None => Size::ZERO,
+    };
+    if !out_w.is_null() {
+        *out_w = size.width;
+    }
+    if !out_h.is_null() {
+        *out_h = size.height;
+    }
+}
+
+unsafe extern "C" fn layout_arrange_trampoline(
+    userdata: *mut c_void,
+    instance: *mut c_void,
+    final_w: f32,
+    final_h: f32,
+    out_w: *mut f32,
+    out_h: *mut f32,
+) {
+    if userdata.is_null() {
+        return;
+    }
+    let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
+    let size = match NonNull::new(instance) {
+        Some(inst) => handler.arrange(Instance(inst), Size::new(final_w, final_h)),
+        None => Size::new(final_w, final_h),
+    };
+    if !out_w.is_null() {
+        *out_w = size.width;
+    }
+    if !out_h.is_null() {
+        *out_h = size.height;
+    }
+}
+
+/// Free trampoline for the donated layout handler box. Mirrors
+/// [`class_handler_free_trampoline`].
+unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
+    if userdata.is_null() {
+        return;
+    }
+    drop(Box::from_raw(userdata.cast::<Box<dyn LayoutHandler>>()));
 }
