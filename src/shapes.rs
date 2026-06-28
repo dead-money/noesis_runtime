@@ -53,6 +53,7 @@ use crate::ffi::{
 /// `Noesis::PenLineCap`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum PenLineCap {
     /// A cap that does not extend past the last point of the line.
     Flat = 0,
@@ -68,6 +69,7 @@ pub enum PenLineCap {
 /// `Noesis::PenLineJoin`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum PenLineJoin {
     /// Regular angular (mitered) vertices.
     Miter = 0,

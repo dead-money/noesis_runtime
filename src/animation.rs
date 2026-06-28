@@ -105,12 +105,31 @@ use crate::ffi::{
     dm_noesis_animation_size_keyframes_create, dm_noesis_animation_size_keyframes_get_key_time,
     dm_noesis_animation_size_keyframes_get_value,
 };
+use crate::ffi::{
+    dm_noesis_animation_boolean_keyframes_add, dm_noesis_animation_boolean_keyframes_count,
+    dm_noesis_animation_boolean_keyframes_create,
+    dm_noesis_animation_boolean_keyframes_get_key_time,
+    dm_noesis_animation_boolean_keyframes_get_value,
+    dm_noesis_animation_parallel_timeline_add_child,
+    dm_noesis_animation_parallel_timeline_child_count,
+    dm_noesis_animation_parallel_timeline_create, dm_noesis_animation_point_keyframes_add,
+    dm_noesis_animation_point_keyframes_count, dm_noesis_animation_point_keyframes_create,
+    dm_noesis_animation_point_keyframes_get_key_time,
+    dm_noesis_animation_point_keyframes_get_value, dm_noesis_animation_string_keyframes_add,
+    dm_noesis_animation_string_keyframes_count, dm_noesis_animation_string_keyframes_create,
+    dm_noesis_animation_string_keyframes_get_key_time,
+    dm_noesis_animation_string_keyframes_get_value, dm_noesis_animation_thickness_keyframes_add,
+    dm_noesis_animation_thickness_keyframes_count, dm_noesis_animation_thickness_keyframes_create,
+    dm_noesis_animation_thickness_keyframes_get_key_time,
+    dm_noesis_animation_thickness_keyframes_get_value,
+};
 use crate::view::FrameworkElement;
 
 /// How an easing function interpolates over the animation's progress. Ordinals
 /// match `Noesis::EasingMode`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum EasingMode {
     /// `100% - f(t)` — decelerating.
     EaseOut = 0,
@@ -124,6 +143,7 @@ pub enum EasingMode {
 /// `cpp/noesis_animation.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum EasingKind {
     /// `t^2`.
     Quadratic = 0,
@@ -154,6 +174,7 @@ pub enum EasingKind {
 /// Ordinals match `Noesis::FillBehavior`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FillBehavior {
     /// Hold the final animated value after completion.
     HoldEnd = 0,
@@ -165,6 +186,7 @@ pub enum FillBehavior {
 /// property. Ordinals match `Noesis::HandoffBehavior`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HandoffBehavior {
     /// Snapshot the current value and replace any running animation.
     SnapshotAndReplace = 0,
@@ -176,6 +198,7 @@ pub enum HandoffBehavior {
 /// switch in `cpp/noesis_animation.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KeyFrameKind {
     /// Jump to the value at the key time (no interpolation).
     Discrete = 0,
@@ -185,8 +208,7 @@ pub enum KeyFrameKind {
     /// [`KeyFrameInterp::Easing`]).
     Easing = 2,
     /// Spline interpolation (provide a [`KeySpline`] via
-    /// [`KeyFrameInterp::Spline`]). Not supported by the `Double` / `Color`
-    /// key-frame animations.
+    /// [`KeyFrameInterp::Spline`]).
     Spline = 3,
 }
 
@@ -850,25 +872,26 @@ impl DoubleAnimationUsingKeyFrames {
         }
     }
 
-    /// Append a key frame reaching `value` at `key_time_secs`. For
-    /// [`KeyFrameKind::Easing`], pass the `easing` function (ignored otherwise).
+    /// Append a key frame reaching `value` at `key_time_secs`. Provide the
+    /// matching [`KeyFrameInterp`] for [`KeyFrameKind::Easing`] /
+    /// [`KeyFrameKind::Spline`].
     pub fn add_key_frame(
         &mut self,
         kind: KeyFrameKind,
         key_time_secs: f64,
         value: f32,
-        easing: Option<&EasingFunction>,
+        interp: KeyFrameInterp,
     ) -> bool {
-        let e = easing.map_or(core::ptr::null_mut(), EasingFunction::raw);
-        // SAFETY: self.raw() is a live keyframe animation; `e` is null or a live
-        // easing function; both are only read during the call.
+        // SAFETY: self.raw() is a live keyframe animation; the interp raw pointer
+        // is null or a live easing/spline object; both are only read during the
+        // call.
         unsafe {
             dm_noesis_double_animation_add_keyframe(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
                 value,
-                e,
+                interp.raw(),
             )
         }
     }
@@ -904,25 +927,25 @@ impl ColorAnimationUsingKeyFrames {
         }
     }
 
-    /// Append a key frame reaching `rgba` at `key_time_secs`. For
-    /// [`KeyFrameKind::Easing`], pass the `easing` function (ignored otherwise).
+    /// Append a key frame reaching `rgba` at `key_time_secs`. Provide the
+    /// matching [`KeyFrameInterp`] for [`KeyFrameKind::Easing`] /
+    /// [`KeyFrameKind::Spline`].
     pub fn add_key_frame(
         &mut self,
         kind: KeyFrameKind,
         key_time_secs: f64,
         rgba: [f32; 4],
-        easing: Option<&EasingFunction>,
+        interp: KeyFrameInterp,
     ) -> bool {
-        let e = easing.map_or(core::ptr::null_mut(), EasingFunction::raw);
         // SAFETY: self.raw() is a live keyframe animation; `rgba` outlives the
-        // call; `e` is null or a live easing function.
+        // call; the interp raw pointer is null or a live easing/spline object.
         unsafe {
             dm_noesis_color_animation_add_keyframe(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
                 rgba.as_ptr(),
-                e,
+                interp.raw(),
             )
         }
     }
@@ -1887,6 +1910,326 @@ impl Int64AnimationUsingKeyFrames {
     }
 }
 
+// ── Point / Thickness key-frame animations ───────────────────────────────────
+
+/// A `PointAnimationUsingKeyFrames` — animates a `Point` property (`(x, y)`)
+/// through discrete / linear / eased / splined key frames.
+pub struct PointAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(PointAnimationUsingKeyFrames);
+
+impl Default for PointAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PointAnimationUsingKeyFrames {
+    /// Create an empty key-frame point animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned PointAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_point_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_point_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a key frame reaching `value` (`(x, y)`) at `key_time_secs`. Provide
+    /// the matching [`KeyFrameInterp`] for [`KeyFrameKind::Easing`] /
+    /// [`KeyFrameKind::Spline`].
+    pub fn add_key_frame(
+        &mut self,
+        kind: KeyFrameKind,
+        key_time_secs: f64,
+        value: (f32, f32),
+        interp: KeyFrameInterp,
+    ) -> bool {
+        let p = [value.0, value.1];
+        // SAFETY: self.raw() is live; `p` outlives the call; the interp raw
+        // pointer is null or a live easing/spline object.
+        unsafe {
+            dm_noesis_animation_point_keyframes_add(
+                self.raw(),
+                kind as i32,
+                key_time_secs,
+                p.as_ptr(),
+                interp.raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_point_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value `(x, y)` at `index`, or `None` if out of
+    /// range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<(f32, f32)> {
+        let mut out = [0.0f32; 2];
+        // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
+        let ok = unsafe {
+            dm_noesis_animation_point_keyframes_get_value(
+                self.raw(),
+                index as i32,
+                out.as_mut_ptr(),
+            )
+        };
+        ok.then_some((out[0], out[1]))
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_point_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+/// A `ThicknessAnimationUsingKeyFrames` — animates a `Thickness` property
+/// (`[left, top, right, bottom]`) through discrete / linear / eased / splined
+/// key frames.
+pub struct ThicknessAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(ThicknessAnimationUsingKeyFrames);
+
+impl Default for ThicknessAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ThicknessAnimationUsingKeyFrames {
+    /// Create an empty key-frame thickness animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned ThicknessAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_thickness_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_thickness_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a key frame reaching `value` (`[left, top, right, bottom]`) at
+    /// `key_time_secs`. Provide the matching [`KeyFrameInterp`] for
+    /// [`KeyFrameKind::Easing`] / [`KeyFrameKind::Spline`].
+    pub fn add_key_frame(
+        &mut self,
+        kind: KeyFrameKind,
+        key_time_secs: f64,
+        value: [f32; 4],
+        interp: KeyFrameInterp,
+    ) -> bool {
+        // SAFETY: self.raw() is live; `value` outlives the call; the interp raw
+        // pointer is null or a live easing/spline object.
+        unsafe {
+            dm_noesis_animation_thickness_keyframes_add(
+                self.raw(),
+                kind as i32,
+                key_time_secs,
+                value.as_ptr(),
+                interp.raw(),
+            )
+        }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_thickness_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
+        let ok = unsafe {
+            dm_noesis_animation_thickness_keyframes_get_value(
+                self.raw(),
+                index as i32,
+                out.as_mut_ptr(),
+            )
+        };
+        ok.then_some(out)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t = unsafe {
+            dm_noesis_animation_thickness_keyframes_get_key_time(self.raw(), index as i32)
+        };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+// ── Boolean / String key-frame animations ────────────────────────────────────
+
+/// A `BooleanAnimationUsingKeyFrames` — animates a `bool` property through
+/// discrete key frames (a bool can't be interpolated, so only discrete frames
+/// exist).
+pub struct BooleanAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(BooleanAnimationUsingKeyFrames);
+
+impl Default for BooleanAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BooleanAnimationUsingKeyFrames {
+    /// Create an empty key-frame boolean animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned BooleanAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_boolean_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_boolean_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a discrete key frame setting `value` at `key_time_secs`.
+    pub fn add_key_frame(&mut self, key_time_secs: f64, value: bool) -> bool {
+        // SAFETY: self.raw() is a live keyframe animation for the call.
+        unsafe { dm_noesis_animation_boolean_keyframes_add(self.raw(), key_time_secs, value) }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_boolean_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.raw() is live; `out` is a valid bool.
+        let ok = unsafe {
+            dm_noesis_animation_boolean_keyframes_get_value(self.raw(), index as i32, &mut out)
+        };
+        ok.then_some(out)
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_boolean_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
+/// A `StringAnimationUsingKeyFrames` — animates a `String` property through
+/// discrete key frames (a string can't be interpolated, so only discrete frames
+/// exist).
+pub struct StringAnimationUsingKeyFrames {
+    ptr: NonNull<c_void>,
+}
+
+animation_impls!(StringAnimationUsingKeyFrames);
+
+impl Default for StringAnimationUsingKeyFrames {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StringAnimationUsingKeyFrames {
+    /// Create an empty key-frame string animation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned StringAnimationUsingKeyFrames*.
+        let ptr = unsafe { dm_noesis_animation_string_keyframes_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_string_keyframes_create returned null"),
+        }
+    }
+
+    /// Append a discrete key frame setting `value` at `key_time_secs`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` contains an interior NUL byte.
+    pub fn add_key_frame(&mut self, key_time_secs: f64, value: &str) -> bool {
+        let c = CString::new(value).expect("key frame value contained interior NUL");
+        // SAFETY: self.raw() is live; `c` outlives the call.
+        unsafe { dm_noesis_animation_string_keyframes_add(self.raw(), key_time_secs, c.as_ptr()) }
+    }
+
+    /// Number of key frames.
+    #[must_use]
+    pub fn key_frame_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is live.
+        let n = unsafe { dm_noesis_animation_string_keyframes_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+
+    /// Read back the key frame value at `index`, or `None` if out of range or the
+    /// value is null.
+    #[must_use]
+    pub fn key_frame_value(&self, index: u32) -> Option<String> {
+        // SAFETY: self.raw() is live; the returned pointer (if non-null) is a
+        // borrowed NUL-terminated string valid for the read.
+        let p = unsafe { dm_noesis_animation_string_keyframes_get_value(self.raw(), index as i32) };
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: `p` is a live NUL-terminated C string for the duration of the copy.
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+    }
+
+    /// Read back the key time (seconds) at `index`, or `None` if out of range.
+    #[must_use]
+    pub fn key_frame_time(&self, index: u32) -> Option<f64> {
+        // SAFETY: self.raw() is live.
+        let t =
+            unsafe { dm_noesis_animation_string_keyframes_get_key_time(self.raw(), index as i32) };
+        (t >= 0.0).then_some(t)
+    }
+}
+
 // ── Object key-frame animation ───────────────────────────────────────────────
 
 /// An owned `Noesis::BaseComponent` handle handed back from an
@@ -2147,3 +2490,184 @@ impl BeginStoryboard {
         (!s.is_empty()).then_some(s)
     }
 }
+
+// ── ParallelTimeline (timeline group) ─────────────────────────────────────────
+
+/// A `ParallelTimeline` — a code-built, nestable timeline group whose children
+/// (any [`Timeline`], including animations or nested `ParallelTimeline`s) run in
+/// parallel off the group's clock. Shares the [`Timeline`] knobs (duration,
+/// repeat, auto-reverse, …) with every animation type.
+pub struct ParallelTimeline {
+    ptr: NonNull<c_void>,
+}
+
+base_component_handle!(ParallelTimeline);
+
+impl Timeline for ParallelTimeline {
+    fn timeline_raw(&self) -> *mut c_void {
+        self.raw()
+    }
+}
+
+impl Default for ParallelTimeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ParallelTimeline {
+    /// Create an empty `ParallelTimeline`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: factory returns a +1-owned ParallelTimeline*.
+        let ptr = unsafe { dm_noesis_animation_parallel_timeline_create() };
+        Self {
+            ptr: NonNull::new(ptr)
+                .expect("dm_noesis_animation_parallel_timeline_create returned null"),
+        }
+    }
+
+    /// Add a child timeline. The group's collection takes its own reference, so
+    /// `child` may be dropped afterwards. Returns `false` on a type mismatch.
+    pub fn add_child<T: Timeline>(&mut self, child: &T) -> bool {
+        // SAFETY: both pointers are live for the call.
+        unsafe { dm_noesis_animation_parallel_timeline_add_child(self.raw(), child.timeline_raw()) }
+    }
+
+    /// Number of child timelines, or `None` if the handle is not a timeline group
+    /// (should not happen for a live handle).
+    #[must_use]
+    pub fn child_count(&self) -> Option<u32> {
+        // SAFETY: self.raw() is a live TimelineGroup*.
+        let n = unsafe { dm_noesis_animation_parallel_timeline_child_count(self.raw()) };
+        u32::try_from(n).ok()
+    }
+}
+
+// ── From/To animation builders ────────────────────────────────────────────────
+
+/// Generates a fluent builder for a From/To/By animation type, covering
+/// `from`/`to`/`by`, the common [`Timeline`] knobs and an [`EasingFunction`], in
+/// one chain. The longhand `Type::new()` + `set_*` form keeps working. Builder
+/// methods that fail to apply (e.g. a wrong-typed value) are silently ignored;
+/// read the value back to verify, as the crate's tests do.
+macro_rules! fromto_builder {
+    ($anim:ident, $builder:ident, $val:ty, $vname:literal) => {
+        impl $anim {
+            #[doc = concat!("Start a [`", stringify!($builder), "`] for fluent construction.")]
+            pub fn builder() -> $builder {
+                $builder {
+                    anim: <$anim>::new(),
+                }
+            }
+        }
+
+        #[doc = concat!("Fluent builder for a [`", stringify!($anim), "`] — sets the ", $vname,
+                    " `from`/`to`/`by` plus the common timeline knobs (duration, begin time,\n\
+             auto-reverse, repeat, fill behavior, speed) and an easing function, then\n\
+             [`build`](Self::build)s the animation.")]
+        #[must_use]
+        pub struct $builder {
+            anim: $anim,
+        }
+
+        impl $builder {
+            #[doc = concat!("Set the starting ", $vname, " (`From`).")]
+            pub fn from(mut self, value: $val) -> Self {
+                let _ = self.anim.set_from(Some(value));
+                self
+            }
+
+            #[doc = concat!("Set the ending ", $vname, " (`To`).")]
+            pub fn to(mut self, value: $val) -> Self {
+                let _ = self.anim.set_to(Some(value));
+                self
+            }
+
+            #[doc = concat!("Set the relative ", $vname, " offset (`By`).")]
+            pub fn by(mut self, value: $val) -> Self {
+                let _ = self.anim.set_by(Some(value));
+                self
+            }
+
+            /// Set the single-pass duration, in seconds.
+            pub fn duration_secs(mut self, seconds: f64) -> Self {
+                let _ = self.anim.set_duration_secs(seconds);
+                self
+            }
+
+            /// Set the delay before the timeline begins, in seconds.
+            pub fn begin_time_secs(mut self, seconds: f64) -> Self {
+                let _ = self.anim.set_begin_time_secs(seconds);
+                self
+            }
+
+            /// Play forwards then backwards each iteration when `true`.
+            pub fn auto_reverse(mut self, value: bool) -> Self {
+                let _ = self.anim.set_auto_reverse(value);
+                self
+            }
+
+            /// Set the rate at which time progresses relative to the parent.
+            pub fn speed_ratio(mut self, value: f32) -> Self {
+                let _ = self.anim.set_speed_ratio(value);
+                self
+            }
+
+            /// Set the behaviour once the active period ends.
+            pub fn fill_behavior(mut self, behavior: FillBehavior) -> Self {
+                let _ = self.anim.set_fill_behavior(behavior);
+                self
+            }
+
+            /// Repeat a fixed number of (possibly fractional) iterations.
+            pub fn repeat_count(mut self, count: f32) -> Self {
+                let _ = self.anim.set_repeat_count(count);
+                self
+            }
+
+            /// Repeat for a fixed wall-clock duration, in seconds.
+            pub fn repeat_duration_secs(mut self, seconds: f64) -> Self {
+                let _ = self.anim.set_repeat_duration_secs(seconds);
+                self
+            }
+
+            /// Repeat forever.
+            pub fn repeat_forever(mut self) -> Self {
+                let _ = self.anim.set_repeat_forever();
+                self
+            }
+
+            /// Attach an easing function.
+            pub fn easing(mut self, easing: &EasingFunction) -> Self {
+                let _ = self.anim.set_easing(easing);
+                self
+            }
+
+            #[doc = concat!("Finish and return the built [`", stringify!($anim), "`].")]
+            #[must_use]
+            pub fn build(self) -> $anim {
+                self.anim
+            }
+        }
+    };
+}
+
+fromto_builder!(DoubleAnimation, DoubleAnimationBuilder, f32, "value");
+fromto_builder!(ColorAnimation, ColorAnimationBuilder, [f32; 4], "color");
+fromto_builder!(
+    ThicknessAnimation,
+    ThicknessAnimationBuilder,
+    [f32; 4],
+    "thickness"
+);
+fromto_builder!(PointAnimation, PointAnimationBuilder, (f32, f32), "point");
+fromto_builder!(RectAnimation, RectAnimationBuilder, [f32; 4], "rect");
+fromto_builder!(SizeAnimation, SizeAnimationBuilder, [f32; 2], "size");
+fromto_builder!(Int16Animation, Int16AnimationBuilder, i16, "value");
+fromto_builder!(Int32Animation, Int32AnimationBuilder, i32, "value");
+fromto_builder!(Int64Animation, Int64AnimationBuilder, i64, "value");

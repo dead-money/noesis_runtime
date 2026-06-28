@@ -1,17 +1,11 @@
-//! TODO §7 — build a `Style` from code, assign it to an element, and prove the
-//! setter actually applied by reading the property back THROUGH Noesis.
+//! Phase 5 — `Style::builder(target_type)` fluent construction.
 //!
-//! Fail-if-stubbed: two sibling `TextBlock`s start with the same (default)
-//! `FontSize`. We build `Style{ TargetType=TextBlock, Setter FontSize=33 }` and
-//! assign it to ONE of them. After a layout pump the styled block reads
-//! `FontSize == 33` (the setter took effect) while the unstyled block still
-//! reads the default (`!= 33`). This discriminates "style applied" from "no-op"
-//! — a stubbed `add_setter` or `set_style` leaves both blocks at the default and
-//! fails the first assert. We also exercise `BasedOn` (inherited setter) and
-//! `style` read-back.
+//! Fail-if-stubbed: a style built via the builder is assigned to one of three
+//! sibling `TextBlock`s and the `FontSize` setter is read back THROUGH Noesis
+//! after a layout pump (the styled block changes; the plain sibling keeps the
+//! default). `based_on` is exercised via a derived builder.
 //!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test style_from_code -- --nocapture`
+//! Single `#[test]` per the harness convention (one Noesis init per process).
 
 use std::collections::HashMap;
 
@@ -48,7 +42,7 @@ const STYLED_SIZE: f32 = 33.0;
 const BASED_SIZE: f32 = 41.0;
 
 #[test]
-fn style_setter_applies_to_assigned_element() {
+fn style_builder_applies_to_assigned_element() {
     if let (Ok(name), Ok(key)) = (
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
@@ -82,62 +76,37 @@ fn style_setter_applies_to_assigned_element() {
             .and_then(|c| c.find_name("BasedStyled"))
             .expect("find BasedStyled");
 
-        // Baseline: all three share the same default FontSize.
         let default_size = plain.get_f32("FontSize").expect("Plain FontSize");
-        assert!(
-            (styled.get_f32("FontSize").unwrap() - default_size).abs() < 0.001,
-            "all blocks start at the default FontSize"
-        );
         assert!(
             (default_size - STYLED_SIZE).abs() > 0.001,
             "default must differ from the setter value or the test proves nothing"
         );
 
-        // A fresh element has no Style assigned.
-        assert!(styled.style().is_none(), "no style before assignment");
-
-        // ── Build + assign a Style ───────────────────────────────────────────
-        let mut style = Style::new();
-        assert!(
-            style.set_target_type("TextBlock"),
-            "TextBlock must resolve through reflection"
-        );
-        assert!(
-            style.add_setter("FontSize", &box_f32(STYLED_SIZE)),
-            "FontSize setter must resolve on TextBlock"
-        );
-        // Negative: an unknown DP name on the target type fails.
-        assert!(
-            !style.add_setter("NoSuchProperty", &box_f32(1.0)),
-            "unknown DP name must not add a setter"
-        );
-
-        assert!(styled.set_style(&style), "set_style on a TextBlock");
+        // ── Build a Style via the fluent builder ─────────────────────────────
+        let style = Style::builder("TextBlock")
+            .setter("FontSize", &box_f32(STYLED_SIZE))
+            .build();
+        assert!(styled.set_style(&style), "set built style on a TextBlock");
         view.update(0.016);
-
-        assert!(
-            styled.style().is_some(),
-            "GetStyle returns the assigned style"
-        );
         assert!(
             (styled.get_f32("FontSize").unwrap() - STYLED_SIZE).abs() < 0.001,
-            "styled block FontSize must equal the setter value ({STYLED_SIZE})"
+            "builder style FontSize must equal the setter value ({STYLED_SIZE})"
         );
         assert!(
             (plain.get_f32("FontSize").unwrap() - default_size).abs() < 0.001,
             "unstyled sibling keeps the default FontSize"
         );
 
-        // ── BasedOn: a derived style inherits the base setter, overrides size ─
-        let mut derived = Style::new();
-        assert!(derived.set_target_type("TextBlock"));
-        derived.set_based_on(&style);
-        assert!(derived.add_setter("FontSize", &box_f32(BASED_SIZE)));
-        assert!(based.set_style(&derived), "set derived style");
+        // ── based_on via a derived builder ───────────────────────────────────
+        let derived = Style::builder("TextBlock")
+            .based_on(&style)
+            .setter("FontSize", &box_f32(BASED_SIZE))
+            .build();
+        assert!(based.set_style(&derived), "set derived built style");
         view.update(0.032);
         assert!(
             (based.get_f32("FontSize").unwrap() - BASED_SIZE).abs() < 0.001,
-            "derived style's own setter wins over the BasedOn value"
+            "derived builder's own setter wins over the BasedOn value"
         );
     }
 

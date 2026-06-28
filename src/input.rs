@@ -160,6 +160,7 @@ impl KeyStates {
 /// `static_assert` in `noesis_input.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MouseAction {
     None = 0,
     LeftClick = 1,
@@ -175,6 +176,7 @@ pub enum MouseAction {
 /// the mouse via [`FrameworkElement::capture_mouse_mode`].
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CaptureMode {
     /// Release any capture (no element captures the mouse).
     None = 0,
@@ -191,6 +193,7 @@ pub enum CaptureMode {
 /// `Left` / `Right` / `Up` / `Down` are directional.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FocusNavigationDirection {
     Next = 0,
     Previous = 1,
@@ -208,6 +211,7 @@ pub enum FocusNavigationDirection {
 /// `static_assert` in `noesis_input.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KeyboardNavigationMode {
     /// Tab moves out of the container into the rest of the tab order.
     Continue = 0,

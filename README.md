@@ -66,7 +66,7 @@ use dm_noesis_runtime::ffi::{ClassBase, PropType};
 
 struct NineSlicerHandler { source_idx: u32, /* ... */ }
 impl PropertyChangeHandler for NineSlicerHandler {
-    fn on_changed(&mut self, instance: Instance, idx: u32, _v: PropertyValue<'_>) {
+    fn on_changed(&self, instance: Instance, idx: u32, _v: PropertyValue<'_>) {
         if idx != self.source_idx { return; }
         let (w, h) = instance.get_image_source_size(self.source_idx)
             .unwrap_or((0.0, 0.0));

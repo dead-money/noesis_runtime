@@ -40,10 +40,12 @@ pub mod animation;
 pub mod binding;
 pub mod brushes;
 pub mod classes;
+pub mod collection_view;
 pub mod commands;
 pub mod converters;
 pub mod diagnostics;
 pub mod drawing;
+pub mod element_tree;
 pub mod events;
 // Not part of the stable API; no semver guarantees.
 #[doc(hidden)]
@@ -56,6 +58,7 @@ pub mod imaging;
 pub mod input;
 pub mod integration;
 pub mod markup;
+pub mod mesh;
 pub mod multi_binding;
 pub mod name_scope;
 pub(crate) mod panic_guard;
@@ -161,6 +164,83 @@ pub fn init() {
 pub fn shutdown() {
     // SAFETY: caller responsibility per docs.
     unsafe { ffi::dm_noesis_shutdown() }
+}
+
+/// Curated re-exports of the items most code reaches for. Glob-import it
+/// (`use dm_noesis_runtime::prelude::*;`) to pull in the core view/element
+/// handles, the brush/transform/geometry traits and their common concrete
+/// types, data-binding and collection types, the custom-control and
+/// markup-extension surface, the provider traits, the lifecycle free functions,
+/// and the most-used enums.
+///
+/// This is a convenience surface, not the full API — anything not listed here is
+/// still reachable through its owning module (`crate::animation`,
+/// `crate::input`, `crate::diagnostics`, …).
+///
+/// Compiled (so the names stay honest) but not executed: Noesis [`init`] runs
+/// once per process, and `cargo test` merges all doctests into one binary.
+///
+/// ```no_run
+/// use dm_noesis_runtime::prelude::*;
+///
+/// dm_noesis_runtime::init();
+/// // Freestanding objects round-trip through the FFI without a live view.
+/// let mut items = ObservableCollection::new();
+/// assert!(items.is_empty());
+/// items.push_string("first");
+/// items.push_string("second");
+/// assert_eq!(items.len(), 2);
+///
+/// // Build a brush and read its color back across the FFI boundary.
+/// let mut brush = SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]);
+/// brush.set_color([0.0, 1.0, 0.0, 1.0]);
+/// assert_eq!(brush.color(), [0.0, 1.0, 0.0, 1.0]);
+/// dm_noesis_runtime::shutdown();
+/// ```
+pub mod prelude {
+    // Lifecycle & runtime free functions.
+    pub use crate::{init, set_license, shutdown, version};
+
+    // Core view / element handles.
+    pub use crate::view::{FrameworkElement, View};
+
+    // Data binding & collections.
+    pub use crate::binding::{Binding, BindingMode, ObservableCollection, UpdateSourceTrigger};
+
+    // Brushes & effects (traits + common concrete types).
+    pub use crate::brushes::{
+        Brush, Effect, GradientStop, ImageBrush, LinearGradientBrush, RadialGradientBrush,
+        SolidColorBrush, Stretch,
+    };
+
+    // Transforms (trait + common concrete types).
+    pub use crate::transforms::{
+        RotateTransform, ScaleTransform, Transform, TransformGroup, TranslateTransform,
+    };
+
+    // Geometry (trait + common concrete types).
+    pub use crate::geometry::{
+        EllipseGeometry, FillRule, Geometry, LineGeometry, PathGeometry, Rect, RectangleGeometry,
+    };
+
+    // Resources, styles, templates.
+    pub use crate::resources::ResourceDictionary;
+    pub use crate::styles::{ControlTemplate, Style};
+
+    // Custom controls & markup extensions.
+    pub use crate::classes::{
+        ClassBuilder, ClassRegistration, PropertyChangeHandler, PropertyValue,
+    };
+    pub use crate::ffi::{ClassBase, PropType};
+    pub use crate::markup::MarkupExtensionRegistration;
+
+    // Asset providers (traits + the XAML installer).
+    pub use crate::font_provider::FontProvider;
+    pub use crate::texture_provider::TextureProvider;
+    pub use crate::xaml_provider::{XamlProvider, set_xaml_provider};
+
+    // Most-used enums.
+    pub use crate::view::{HAlign, Key, MouseButton, VAlign};
 }
 
 /// Returns the Noesis runtime build version (e.g. `"3.2.13"`).

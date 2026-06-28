@@ -4,7 +4,7 @@
 //! value. A stubbed key-frame animation leaves the value at its base.
 
 use dm_noesis_runtime::animation::{
-    Animation, DoubleAnimationUsingKeyFrames, KeyFrameKind, Storyboard,
+    Animation, DoubleAnimationUsingKeyFrames, KeyFrameInterp, KeyFrameKind, Storyboard,
 };
 use dm_noesis_runtime::view::{FrameworkElement, View};
 
@@ -37,10 +37,10 @@ fn keyframe_animation_interpolates_and_reaches_end() {
 
         let mut anim = DoubleAnimationUsingKeyFrames::new();
         // Linear ramp 0 -> 100 across the first second...
-        assert!(anim.add_key_frame(KeyFrameKind::Linear, 0.0, 0.0, None));
-        assert!(anim.add_key_frame(KeyFrameKind::Linear, 1.0, 100.0, None));
+        assert!(anim.add_key_frame(KeyFrameKind::Linear, 0.0, 0.0, KeyFrameInterp::None));
+        assert!(anim.add_key_frame(KeyFrameKind::Linear, 1.0, 100.0, KeyFrameInterp::None));
         // ...then a discrete frame holds 200 from 1.5s.
-        assert!(anim.add_key_frame(KeyFrameKind::Discrete, 1.5, 200.0, None));
+        assert!(anim.add_key_frame(KeyFrameKind::Discrete, 1.5, 200.0, KeyFrameInterp::None));
         anim.set_target_name("Box");
         anim.set_target_property("Width");
 

@@ -167,7 +167,7 @@ fn typography_round_trips() {
         );
         assert_eq!(
             typography::font_weight(&tb),
-            Some(FontWeight::Bold as i32),
+            Some(FontWeight::Bold),
             "FontWeight round-trips Bold (700)"
         );
         assert!(
@@ -176,7 +176,7 @@ fn typography_round_trips() {
         );
         assert_eq!(
             typography::font_style(&tb),
-            Some(FontStyle::Italic as i32),
+            Some(FontStyle::Italic),
             "FontStyle round-trips Italic"
         );
         assert!(
@@ -185,7 +185,7 @@ fn typography_round_trips() {
         );
         assert_eq!(
             typography::font_stretch(&tb),
-            Some(FontStretch::Condensed as i32),
+            Some(FontStretch::Condensed),
             "FontStretch round-trips Condensed"
         );
 
@@ -196,7 +196,7 @@ fn typography_round_trips() {
         );
         assert_eq!(
             typography::capitals(&tb),
-            Some(FontCapitals::SmallCaps as i32),
+            Some(FontCapitals::SmallCaps),
             "Typography.Capitals round-trips SmallCaps"
         );
 
@@ -206,7 +206,7 @@ fn typography_round_trips() {
         );
         assert_eq!(
             typography::numeral_style(&tb),
-            Some(FontNumeralStyle::OldStyle as i32),
+            Some(FontNumeralStyle::OldStyle),
             "Typography.NumeralStyle round-trips OldStyle"
         );
 
@@ -216,7 +216,7 @@ fn typography_round_trips() {
         );
         assert_eq!(
             typography::fraction(&tb),
-            Some(FontFraction::Slashed as i32),
+            Some(FontFraction::Slashed),
             "Typography.Fraction round-trips Slashed"
         );
 
@@ -226,7 +226,7 @@ fn typography_round_trips() {
         );
         assert_eq!(
             typography::variants(&tb),
-            Some(FontVariants::Superscript as i32),
+            Some(FontVariants::Superscript),
             "Typography.Variants round-trips Superscript"
         );
 

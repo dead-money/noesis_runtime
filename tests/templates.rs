@@ -6,7 +6,7 @@
 //! via `FrameworkElement::GetTemplateChild` and via `FrameworkTemplate::FindName`
 //! — and `GetTemplate` reads the assigned template back. A button WITHOUT the
 //! template finds no such part (negative discriminator). A stubbed `set_template`
-//! leaves the part unfindable and `get_control_template` empty.
+//! leaves the part unfindable and `control_template` empty.
 //!
 //! `DataTemplate`: a `ContentControl` gets a code-parsed `ContentTemplate`; the
 //! assignment round-trips through Noesis (`get_component("ContentTemplate")`
@@ -114,7 +114,7 @@ fn parse_and_assign_templates() {
         view.update(0.016);
 
         let read_back_template = templated
-            .get_control_template()
+            .control_template()
             .expect("GetTemplate returns a ControlTemplate");
         assert_eq!(
             read_back_template.raw(),

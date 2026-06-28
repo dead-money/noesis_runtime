@@ -573,6 +573,34 @@ unsafe extern "C" {
     pub fn dm_noesis_observable_collection_count(collection: *mut c_void) -> i32;
     pub fn dm_noesis_observable_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
 
+    // ── ICollectionView current-item navigation (Phase 6) ────────────────────
+    pub fn dm_noesis_collection_view_source_create() -> *mut c_void;
+    pub fn dm_noesis_collection_view_source_set_source(
+        cvs: *mut c_void,
+        source: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_collection_view_source_get_view(cvs: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_collection_view_count(view: *mut c_void) -> i32;
+    pub fn dm_noesis_collection_view_current_position(view: *mut c_void) -> i32;
+    pub fn dm_noesis_collection_view_current_item(view: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_collection_view_is_current_before_first(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_is_current_after_last(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_first(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_last(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_next(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_previous(view: *mut c_void) -> bool;
+    pub fn dm_noesis_collection_view_move_current_to_position(
+        view: *mut c_void,
+        position: i32,
+    ) -> bool;
+    pub fn dm_noesis_collection_view_refresh(view: *mut c_void);
+    pub fn dm_noesis_collection_view_subscribe_current_changed(
+        view: *mut c_void,
+        cb: ClickFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_collection_view_unsubscribe_current_changed(token: *mut c_void);
+
     pub fn dm_noesis_framework_element_set_data_context(
         element: *mut c_void,
         context: *mut c_void,
@@ -1156,6 +1184,33 @@ unsafe extern "C" {
     pub fn dm_noesis_templates_event_trigger_get_source_name(trigger: *mut c_void)
     -> *const c_char;
     pub fn dm_noesis_templates_event_trigger_action_count(trigger: *mut c_void) -> i32;
+    pub fn dm_noesis_templates_event_trigger_add_action(
+        trigger: *mut c_void,
+        action: *mut c_void,
+    ) -> bool;
+
+    pub fn dm_noesis_templates_multi_data_trigger_create() -> *mut c_void;
+    pub fn dm_noesis_templates_multi_data_trigger_add_condition(
+        trigger: *mut c_void,
+        binding: *mut c_void,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_multi_data_trigger_condition_count(trigger: *mut c_void) -> i32;
+    pub fn dm_noesis_templates_multi_data_trigger_condition_has_binding(
+        trigger: *mut c_void,
+        index: u32,
+    ) -> i32;
+    pub fn dm_noesis_templates_multi_data_trigger_get_condition_value(
+        trigger: *mut c_void,
+        index: u32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_templates_multi_data_trigger_add_setter(
+        trigger: *mut c_void,
+        type_name: *const c_char,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_templates_multi_data_trigger_setter_count(trigger: *mut c_void) -> i32;
 
     pub fn dm_noesis_templates_style_add_trigger(style: *mut c_void, trigger: *mut c_void) -> bool;
     pub fn dm_noesis_templates_style_trigger_count(style: *mut c_void) -> i32;
@@ -1228,6 +1283,10 @@ unsafe extern "C" {
         out_offset: *mut f32,
         out_color: *mut f32,
     ) -> bool;
+    pub fn dm_noesis_gradient_brush_set_spread_method(brush: *mut c_void, method: i32) -> bool;
+    pub fn dm_noesis_gradient_brush_get_spread_method(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_gradient_brush_set_mapping_mode(brush: *mut c_void, mode: i32) -> bool;
+    pub fn dm_noesis_gradient_brush_get_mapping_mode(brush: *mut c_void) -> i32;
 
     // ImageBrush
     pub fn dm_noesis_image_brush_create(image_source: *mut c_void) -> *mut c_void;
@@ -1341,6 +1400,17 @@ unsafe extern "C" {
         out_shadow_depth: *mut f32,
         out_opacity: *mut f32,
     ) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_color(effect: *mut c_void, color: *const f32) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_blur_radius(
+        effect: *mut c_void,
+        blur_radius: f32,
+    ) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_direction(effect: *mut c_void, direction: f32) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_shadow_depth(
+        effect: *mut c_void,
+        shadow_depth: f32,
+    ) -> bool;
+    pub fn dm_noesis_drop_shadow_effect_set_opacity(effect: *mut c_void, opacity: f32) -> bool;
 
     // RenderOptions
     pub fn dm_noesis_render_options_set_bitmap_scaling_mode(obj: *mut c_void, mode: i32) -> bool;
@@ -1800,6 +1870,14 @@ unsafe extern "C" {
         out_join: *mut i32,
         out_miter_limit: *mut f32,
     ) -> bool;
+    pub fn dm_noesis_pen_set_dash_style(
+        pen: *mut c_void,
+        dashes: *const f32,
+        count: u32,
+        offset: f32,
+    ) -> bool;
+    pub fn dm_noesis_pen_get_dash_offset(pen: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_pen_get_dashes(pen: *mut c_void) -> *const c_char;
 
     // RectangleGeometry
     pub fn dm_noesis_drawing_rect_geometry_create(
@@ -1856,6 +1934,19 @@ unsafe extern "C" {
         pen: *mut c_void,
         geometry: *mut c_void,
     ) -> bool;
+    pub fn dm_noesis_drawing_draw_text(
+        context: *mut c_void,
+        formatted_text: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_drawing_draw_mesh(
+        context: *mut c_void,
+        brush: *mut c_void,
+        mesh: *mut c_void,
+    ) -> bool;
     pub fn dm_noesis_drawing_draw_image(
         context: *mut c_void,
         image_source: *mut c_void,
@@ -1868,6 +1959,47 @@ unsafe extern "C" {
     pub fn dm_noesis_drawing_push_clip(context: *mut c_void, geometry: *mut c_void) -> bool;
     pub fn dm_noesis_drawing_push_transform(context: *mut c_void, transform: *mut c_void) -> bool;
     pub fn dm_noesis_drawing_push_blending_mode(context: *mut c_void, mode: i32) -> bool;
+}
+
+// ── MeshData + Mesh element (TODO §10) ───────────────────────────────────────
+//
+// `_create` entrypoints return a `+1`-owned BaseComponent the Rust handle
+// releases on Drop (see src/mesh.rs). Vertex / UV buffers are interleaved
+// `(x, y)` / `(u, v)` float pairs (`2 * count` floats); the index buffer is
+// 16-bit. `mesh_get_data` / `mesh_get_brush` return BORROWED pointers (no +1).
+unsafe extern "C" {
+    pub fn dm_noesis_mesh_data_create() -> *mut c_void;
+    pub fn dm_noesis_mesh_data_set_vertices(mesh: *mut c_void, xy: *const f32, count: u32) -> bool;
+    pub fn dm_noesis_mesh_data_get_vertices(
+        mesh: *mut c_void,
+        out_xy: *mut f32,
+        count: u32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_set_uvs(mesh: *mut c_void, uv: *const f32, count: u32) -> bool;
+    pub fn dm_noesis_mesh_data_get_uvs(mesh: *mut c_void, out_uv: *mut f32, count: u32) -> bool;
+    pub fn dm_noesis_mesh_data_set_indices(
+        mesh: *mut c_void,
+        indices: *const u16,
+        count: u32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_get_indices(
+        mesh: *mut c_void,
+        out_indices: *mut u16,
+        count: u32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_set_bounds(
+        mesh: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_get_bounds(mesh: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_mesh_create() -> *mut c_void;
+    pub fn dm_noesis_mesh_set_data(mesh: *mut c_void, data: *mut c_void) -> bool;
+    pub fn dm_noesis_mesh_get_data(mesh: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_mesh_set_brush(mesh: *mut c_void, brush: *mut c_void) -> bool;
+    pub fn dm_noesis_mesh_get_brush(mesh: *mut c_void) -> *mut c_void;
 }
 
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
@@ -2260,7 +2392,7 @@ unsafe extern "C" {
         kind: i32,
         key_time_seconds: f64,
         value: f32,
-        easing: *mut c_void,
+        extra: *mut c_void,
     ) -> bool;
     pub fn dm_noesis_color_animation_keyframes_create() -> *mut c_void;
     pub fn dm_noesis_color_animation_add_keyframe(
@@ -2268,7 +2400,7 @@ unsafe extern "C" {
         kind: i32,
         key_time_seconds: f64,
         color: *const f32,
-        easing: *mut c_void,
+        extra: *mut c_void,
     ) -> bool;
 
     // Storyboard-less direct animation
@@ -2514,6 +2646,81 @@ unsafe extern "C" {
         name: *const c_char,
     ) -> bool;
     pub fn dm_noesis_animation_begin_storyboard_get_name(bs: *mut c_void) -> *const c_char;
+
+    // Point key-frame animation
+    pub fn dm_noesis_animation_point_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_point_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        p: *const f32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_point_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_point_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_point_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    // Thickness key-frame animation
+    pub fn dm_noesis_animation_thickness_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_thickness_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        t: *const f32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_thickness_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_thickness_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_thickness_keyframes_get_key_time(
+        anim: *mut c_void,
+        index: i32,
+    ) -> f64;
+
+    // Boolean key-frame animation (discrete only)
+    pub fn dm_noesis_animation_boolean_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_boolean_keyframes_add(
+        anim: *mut c_void,
+        key_time_seconds: f64,
+        value: bool,
+    ) -> bool;
+    pub fn dm_noesis_animation_boolean_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_boolean_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_animation_boolean_keyframes_get_key_time(anim: *mut c_void, index: i32)
+    -> f64;
+
+    // String key-frame animation (discrete only)
+    pub fn dm_noesis_animation_string_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_string_keyframes_add(
+        anim: *mut c_void,
+        key_time_seconds: f64,
+        value: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_animation_string_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_string_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+    ) -> *const c_char;
+    pub fn dm_noesis_animation_string_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    // ParallelTimeline (timeline group)
+    pub fn dm_noesis_animation_parallel_timeline_create() -> *mut c_void;
+    pub fn dm_noesis_animation_parallel_timeline_add_child(
+        group: *mut c_void,
+        timeline: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_parallel_timeline_child_count(group: *mut c_void) -> i32;
 }
 
 // ── FormattedText measurement / layout (TODO §13) ───────────────────────────
@@ -2684,6 +2891,61 @@ unsafe extern "C" {
         collection: *mut c_void,
         index: u32,
     ) -> *mut c_void;
+
+    // Code-side element-tree construction (Phase 1): Decorator/Border Child,
+    // Panel Children, Grid row/column definitions. Collections hand out a +1
+    // BaseComponent* (release via dm_noesis_base_component_release); get/get_at
+    // return borrowed (no +1) pointers owned by the host.
+    pub fn dm_noesis_decorator_set_child(decorator: *mut c_void, child: *mut c_void) -> bool;
+    pub fn dm_noesis_decorator_get_child(decorator: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_panel_children_get(panel: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_panel_children_add(coll: *mut c_void, child: *mut c_void) -> i32;
+    pub fn dm_noesis_panel_children_insert(
+        coll: *mut c_void,
+        index: u32,
+        child: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_panel_children_remove_at(coll: *mut c_void, index: u32) -> bool;
+    pub fn dm_noesis_panel_children_clear(coll: *mut c_void) -> bool;
+    pub fn dm_noesis_panel_children_count(coll: *mut c_void) -> i32;
+    pub fn dm_noesis_panel_children_get_at(coll: *mut c_void, index: u32) -> *mut c_void;
+
+    pub fn dm_noesis_grid_row_definition_create() -> *mut c_void;
+    pub fn dm_noesis_grid_column_definition_create() -> *mut c_void;
+    pub fn dm_noesis_grid_row_definition_set_height(
+        def: *mut c_void,
+        value: f32,
+        unit: i32,
+    ) -> bool;
+    pub fn dm_noesis_grid_row_definition_get_height(
+        def: *mut c_void,
+        out_value: *mut f32,
+        out_unit: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_grid_column_definition_set_width(
+        def: *mut c_void,
+        value: f32,
+        unit: i32,
+    ) -> bool;
+    pub fn dm_noesis_grid_column_definition_get_width(
+        def: *mut c_void,
+        out_value: *mut f32,
+        out_unit: *mut i32,
+    ) -> bool;
+
+    pub fn dm_noesis_grid_get_row_definitions(grid: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_grid_get_column_definitions(grid: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_definition_collection_add(coll: *mut c_void, def: *mut c_void) -> i32;
+    pub fn dm_noesis_definition_collection_insert(
+        coll: *mut c_void,
+        index: u32,
+        def: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_definition_collection_remove_at(coll: *mut c_void, index: u32) -> bool;
+    pub fn dm_noesis_definition_collection_clear(coll: *mut c_void) -> bool;
+    pub fn dm_noesis_definition_collection_count(coll: *mut c_void) -> i32;
+    pub fn dm_noesis_definition_collection_get(coll: *mut c_void, index: u32) -> *mut c_void;
 }
 /// Coerce callback (TODO §9). Invoked inside Noesis's value pipeline when a
 /// coerced DP's effective value is computed. `in_value` is the pre-coercion
@@ -2782,6 +3044,11 @@ unsafe extern "C" {
     pub fn dm_noesis_ui_element_capture_touch(element: *mut c_void, touch_device: u64) -> bool;
     pub fn dm_noesis_ui_element_capture_mouse_mode(element: *mut c_void, mode: i32) -> bool;
     pub fn dm_noesis_ui_element_get_mouse_captured(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_ui_element_get_mouse_position(
+        element: *mut c_void,
+        out_x: *mut f32,
+        out_y: *mut f32,
+    ) -> bool;
 
     // Keyboard state / modifiers
     pub fn dm_noesis_ui_element_get_modifiers(element: *mut c_void, out: *mut i32) -> bool;

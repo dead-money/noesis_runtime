@@ -1699,6 +1699,50 @@ int32_t dm_noesis_observable_collection_count(void* collection);
 // null/non-collection/out-of-range. The collection owns the reference.
 void* dm_noesis_observable_collection_get(void* collection, uint32_t index);
 
+// ── ICollectionView current-item navigation (Phase 6) ───────────────────────
+//
+// CollectionViewSource wraps a source list and produces a CollectionView (an
+// ICollectionView) that tracks a *current item*. *_create / *_get_view /
+// *_current_item hand out +1-owned objects (release via
+// dm_noesis_base_component_release). Sort/filter/group are not exposed (a real
+// SDK limitation). CurrentPosition uses -1 = before-first, Count = after-last.
+
+// Create an empty CollectionViewSource (+1 ref for the caller).
+void* dm_noesis_collection_view_source_create(void);
+// Point the source at `source` (borrowed list, e.g. an ObservableCollection);
+// the view is (re)built. NULL clears. false if not a CollectionViewSource.
+bool dm_noesis_collection_view_source_set_source(void* cvs, void* source);
+// +1-owned CollectionView associated with `cvs`, or NULL if none yet. Set a
+// Source first.
+void* dm_noesis_collection_view_source_get_view(void* cvs);
+
+// Records in the view, or -1 if `view` is not a CollectionView.
+int32_t dm_noesis_collection_view_count(void* view);
+// Ordinal position of CurrentItem, or INT32_MIN if not a CollectionView.
+int32_t dm_noesis_collection_view_current_position(void* view);
+// +1-owned CurrentItem, or NULL if none / not a view.
+void* dm_noesis_collection_view_current_item(void* view);
+bool dm_noesis_collection_view_is_current_before_first(void* view);
+bool dm_noesis_collection_view_is_current_after_last(void* view);
+// Move the current item; each returns whether the resulting CurrentItem is a
+// valid in-range record (ICollectionView contract). false on a non-view handle.
+bool dm_noesis_collection_view_move_current_to_first(void* view);
+bool dm_noesis_collection_view_move_current_to_last(void* view);
+bool dm_noesis_collection_view_move_current_to_next(void* view);
+bool dm_noesis_collection_view_move_current_to_previous(void* view);
+bool dm_noesis_collection_view_move_current_to_position(void* view, int32_t position);
+// Recreate the view (ICollectionView::Refresh).
+void dm_noesis_collection_view_refresh(void* view);
+
+// CurrentChanged event callback (fires after the current item changes). Same
+// threading contract as dm_noesis_click_fn.
+typedef void (*dm_noesis_collection_view_changed_fn)(void* userdata);
+// Subscribe to CurrentChanged; returns an opaque token (release via the
+// unsubscribe call) or NULL on a non-view handle / null cb.
+void* dm_noesis_collection_view_subscribe_current_changed(
+    void* view, dm_noesis_collection_view_changed_fn cb, void* userdata);
+void dm_noesis_collection_view_unsubscribe_current_changed(void* token);
+
 // Set / get a FrameworkElement's `DataContext`. `set` stores its own ref on
 // `context` (pass NULL to clear) and returns false if `element` is not a
 // FrameworkElement. `get` returns a borrowed (no +1) pointer or NULL.
@@ -2008,6 +2052,13 @@ int32_t dm_noesis_gradient_brush_add_stop(void* brush, float offset, const float
 int32_t dm_noesis_gradient_brush_stop_count(void* brush);
 bool dm_noesis_gradient_brush_get_stop(void* brush, uint32_t index, float* out_offset,
                                        float out_color[4]);
+// SpreadMethod (GradientSpreadMethod {Pad,Reflect,Repeat}) / MappingMode
+// (BrushMappingMode {Absolute,RelativeToBoundingBox}). Getters return -1 on a
+// non-GradientBrush pointer.
+bool dm_noesis_gradient_brush_set_spread_method(void* brush, int32_t method);
+int32_t dm_noesis_gradient_brush_get_spread_method(void* brush);
+bool dm_noesis_gradient_brush_set_mapping_mode(void* brush, int32_t mode);
+int32_t dm_noesis_gradient_brush_get_mapping_mode(void* brush);
 
 // ImageBrush. `image_source` is a borrowed ImageSource* (or null); Noesis takes
 // its own reference. get returns a borrowed ImageSource* (no +1) or null.
@@ -2114,6 +2165,13 @@ void* dm_noesis_drop_shadow_effect_create(const float color[4], float blur_radiu
 bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* out_blur,
                                       float* out_direction, float* out_shadow_depth,
                                       float* out_opacity);
+// Individual setters (mirror BlurEffect::set_radius); each returns false on a
+// non-DropShadowEffect pointer.
+bool dm_noesis_drop_shadow_effect_set_color(void* effect, const float color[4]);
+bool dm_noesis_drop_shadow_effect_set_blur_radius(void* effect, float blur_radius);
+bool dm_noesis_drop_shadow_effect_set_direction(void* effect, float direction);
+bool dm_noesis_drop_shadow_effect_set_shadow_depth(void* effect, float shadow_depth);
+bool dm_noesis_drop_shadow_effect_set_opacity(void* effect, float opacity);
 
 // RenderOptions.BitmapScalingMode attached property (ordinals match
 // Noesis::BitmapScalingMode: 0 Unspecified, 1 LowQuality, 2 HighQuality).
@@ -2337,6 +2395,15 @@ bool dm_noesis_pen_set_line_caps(void* pen, int32_t start_cap, int32_t end_cap, 
 bool dm_noesis_pen_get_line_caps(void* pen, int32_t out[3]);
 bool dm_noesis_pen_set_line_join(void* pen, int32_t join, float miter_limit);
 bool dm_noesis_pen_get_line_join(void* pen, int32_t* out_join, float* out_miter_limit);
+// Build a DashStyle from a typed dash array (lengths in pen-thickness multiples)
+// + offset and assign it to the Pen. `count == 0` clears the dash style (solid).
+// False if `pen` is not a Pen (or `dashes` is null with count > 0).
+bool dm_noesis_pen_set_dash_style(void* pen, const float* dashes, uint32_t count, float offset);
+// Read the Pen's DashStyle.Offset into *out. False (untouched) if no dash style.
+bool dm_noesis_pen_get_dash_offset(void* pen, float* out);
+// Borrowed space-separated dash string from the Pen's DashStyle, or null if
+// none. Copy out immediately (valid until the Pen / DashStyle is mutated).
+const char* dm_noesis_pen_get_dashes(void* pen);
 
 // RectangleGeometry (NsGui/RectangleGeometry.h). A minimal Geometry primitive so
 // the DrawGeometry / PushClip context entrypoints are reachable; rect is
@@ -2359,6 +2426,15 @@ bool dm_noesis_drawing_draw_rounded_rectangle(void* context, void* brush, void* 
 bool dm_noesis_drawing_draw_ellipse(void* context, void* brush, void* pen,
                                     float cx, float cy, float rX, float rY);
 bool dm_noesis_drawing_draw_geometry(void* context, void* brush, void* pen, void* geometry);
+// Draw a wrapped FormattedText (dm_noesis_formatted_text_*) into the bounds rect
+// {x, y, w, h}. The brush/foreground is baked into the FormattedText, so there
+// is no brush argument. Returns false if `formatted_text` is null / not a
+// FormattedText.
+bool dm_noesis_drawing_draw_text(void* context, void* formatted_text,
+                                 float x, float y, float w, float h);
+// Fill a MeshData (dm_noesis_mesh_data_*) with `brush` (null ⇒ paints nothing).
+// Returns false if `mesh` is null / not a MeshData.
+bool dm_noesis_drawing_draw_mesh(void* context, void* brush, void* mesh);
 // Returns false if `image_source` is null / not an ImageSource (DrawImage
 // requires a real source — see Known SDK limitations re: building one headless).
 bool dm_noesis_drawing_draw_image(void* context, void* image_source,
@@ -2369,6 +2445,33 @@ bool dm_noesis_drawing_push_transform(void* context, void* transform);
 // `mode` ordinal matches Noesis::BlendingMode (0 Normal, 1 Multiply, 2 Screen,
 // 3 Additive).
 bool dm_noesis_drawing_push_blending_mode(void* context, int32_t mode);
+
+// ── MeshData + Mesh element (TODO §10) ──────────────────────────────────────
+//
+// Implemented in cpp/noesis_mesh.cpp. MeshData is a code-built CPU geometry
+// payload (interleaved (x,y) vertex / (u,v) uv buffers + 16-bit index buffer +
+// an explicit bounds rect) handed out with a single owned +1 reference. The
+// buffers round-trip on the CPU; there is no GetNum* getter in 3.2.13, so a
+// count is proven by reading the same number of elements back. Mesh is a
+// FrameworkElement carrying a MeshData (Data) and a fill Brush.
+void* dm_noesis_mesh_data_create(void);
+// `xy` / `out_xy` are 2*count interleaved floats; `count == 0` allows null.
+bool dm_noesis_mesh_data_set_vertices(void* mesh, const float* xy, uint32_t count);
+bool dm_noesis_mesh_data_get_vertices(void* mesh, float* out_xy, uint32_t count);
+bool dm_noesis_mesh_data_set_uvs(void* mesh, const float* uv, uint32_t count);
+bool dm_noesis_mesh_data_get_uvs(void* mesh, float* out_uv, uint32_t count);
+bool dm_noesis_mesh_data_set_indices(void* mesh, const uint16_t* indices, uint32_t count);
+bool dm_noesis_mesh_data_get_indices(void* mesh, uint16_t* out_indices, uint32_t count);
+bool dm_noesis_mesh_data_set_bounds(void* mesh, float x, float y, float w, float h);
+// out = {x, y, w, h}
+bool dm_noesis_mesh_data_get_bounds(void* mesh, float out[4]);
+void* dm_noesis_mesh_create(void);
+bool dm_noesis_mesh_set_data(void* mesh, void* data);
+// Borrowed MeshData* (no +1; do not release).
+void* dm_noesis_mesh_get_data(void* mesh);
+bool dm_noesis_mesh_set_brush(void* mesh, void* brush);
+// Borrowed Brush* (no +1; do not release).
+void* dm_noesis_mesh_get_brush(void* mesh);
 
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //
@@ -2605,13 +2708,16 @@ bool dm_noesis_easing_function_set_oscillations(void* easing, int32_t value); //
 bool dm_noesis_easing_function_set_springiness(void* easing, float value);    // Elastic/Bounce
 
 // Key-frame animations. add_keyframe kind: 0 Discrete, 1 Linear, 2 Easing
-// (uses `easing` if non-null). key_time is in seconds.
+// (`extra` = EasingFunctionBase*), 3 Spline (`extra` = KeySpline*). key_time is
+// in seconds. (The Rect/Size/Int/Point/Thickness/Object/Matrix/Boolean/String
+// key-frame entry points and the Parallel/BeginStoryboard helpers are declared
+// alongside their externs in src/ffi.rs — see cpp/noesis_animation.cpp.)
 void* dm_noesis_double_animation_keyframes_create(void);
 bool dm_noesis_double_animation_add_keyframe(void* anim, int32_t kind, double key_time_seconds,
-                                             float value, void* easing);
+                                             float value, void* extra);
 void* dm_noesis_color_animation_keyframes_create(void);
 bool dm_noesis_color_animation_add_keyframe(void* anim, int32_t kind, double key_time_seconds,
-                                            const float color[4], void* easing);
+                                            const float color[4], void* extra);
 
 // Storyboard-less direct animation: start `anim` on `target`'s `dp_name`
 // property using the target's view TimeManager. `target` must be a
@@ -3114,6 +3220,64 @@ void* dm_noesis_text_inlines_span_get_inlines(void* span);
 int32_t dm_noesis_text_inlines_collection_add(void* collection, void* inl);
 int32_t dm_noesis_text_inlines_collection_count(void* collection);
 void* dm_noesis_text_inlines_collection_get(void* collection, uint32_t index);
+
+// ── Code-side element-tree construction (Phase 1) ────────────────────────────
+//
+// Build/mutate panel trees, Border/Decorator children, and Grid row/column
+// definitions from code. These collections + the Decorator Child are NOT
+// DependencyProperties, so the by-name DP setters cannot reach them. Collections
+// are handed out at +1 (release via dm_noesis_base_component_release); GetChild
+// and the Get* accessors return borrowed (no +1) pointers owned by the host.
+
+// Decorator (e.g. Border) single Child. `set` makes the Decorator take its own
+// reference (NULL clears) and returns false if `decorator` is not a Decorator or
+// `child` is non-null but not a UIElement. `get` returns a borrowed (no +1)
+// BaseComponent* whose address matches the element set, or NULL.
+bool dm_noesis_decorator_set_child(void* decorator, void* child);
+void* dm_noesis_decorator_get_child(void* decorator);
+
+// Live UIElementCollection of a Panel's children, handed out at +1, or NULL if
+// `panel` is not a Panel.
+void* dm_noesis_panel_children_get(void* panel);
+// `add` appends a borrowed UIElement* (the collection takes its own ref) and
+// returns the insertion index, or -1 on non-collection/non-UIElement. `insert`
+// allows index == count. `remove_at`/`clear` mutate; `count` returns the item
+// count (-1 for a non-collection); `get_at` returns a borrowed (no +1) UIElement*
+// at `index` or NULL on out-of-range.
+int32_t dm_noesis_panel_children_add(void* coll, void* child);
+bool dm_noesis_panel_children_insert(void* coll, uint32_t index, void* child);
+bool dm_noesis_panel_children_remove_at(void* coll, uint32_t index);
+bool dm_noesis_panel_children_clear(void* coll);
+int32_t dm_noesis_panel_children_count(void* coll);
+void* dm_noesis_panel_children_get_at(void* coll, uint32_t index);
+
+// RowDefinition / ColumnDefinition constructors (+1, default 1* length).
+void* dm_noesis_grid_row_definition_create(void);
+void* dm_noesis_grid_column_definition_create(void);
+// Marshalled GridLength get/set. `unit` is a GridUnitType ordinal (0 Auto,
+// 1 Pixel, 2 Star). `set` returns false on non-definition / out-of-range unit;
+// `get` writes *out_value / *out_unit (either may be NULL) and returns false on
+// a non-definition.
+bool dm_noesis_grid_row_definition_set_height(void* def, float value, int32_t unit);
+bool dm_noesis_grid_row_definition_get_height(void* def, float* out_value, int32_t* out_unit);
+bool dm_noesis_grid_column_definition_set_width(void* def, float value, int32_t unit);
+bool dm_noesis_grid_column_definition_get_width(void* def, float* out_value, int32_t* out_unit);
+
+// Live Row/ColumnDefinitionCollection of a Grid, handed out at +1, or NULL if
+// `grid` is not a Grid.
+void* dm_noesis_grid_get_row_definitions(void* grid);
+void* dm_noesis_grid_get_column_definitions(void* grid);
+// Definition-collection mutation/inspection (works on both Row and Column
+// collections; the collection validates the BaseDefinition subtype). `add`
+// returns the insertion index or -1; `insert` allows index == count; `count`
+// returns -1 for a non-collection; `get` returns a borrowed (no +1) definition.
+int32_t dm_noesis_definition_collection_add(void* coll, void* def);
+bool dm_noesis_definition_collection_insert(void* coll, uint32_t index, void* def);
+bool dm_noesis_definition_collection_remove_at(void* coll, uint32_t index);
+bool dm_noesis_definition_collection_clear(void* coll);
+int32_t dm_noesis_definition_collection_count(void* coll);
+void* dm_noesis_definition_collection_get(void* coll, uint32_t index);
+
 // ── FormattedText measurement / layout (TODO §13) ───────────────────────────
 //
 // FormattedText (NsGui/FormattedText.h) computes glyph metrics + a text layout
@@ -3196,6 +3360,12 @@ bool dm_noesis_ui_element_capture_mouse_mode(void* element, int32_t mode);
 // Borrowed UIElement* currently holding mouse capture in `element`'s View
 // (Mouse::GetCaptured), or null.
 void* dm_noesis_ui_element_get_mouse_captured(void* element);
+
+// Pointer position relative to `element` in element-local DIPs
+// (Mouse::GetPosition(UIElement*)), into *out_x/*out_y. False (outputs
+// untouched) if `element` is not a UIElement. Reads the last MouseMove position,
+// so meaningful only once attached to a live, input-pumped View.
+bool dm_noesis_ui_element_get_mouse_position(void* element, float* out_x, float* out_y);
 
 // ModifierKeys bitmask currently held, into *out. False if no UIElement/Keyboard.
 bool dm_noesis_ui_element_get_modifiers(void* element, int32_t* out);

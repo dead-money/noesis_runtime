@@ -48,7 +48,8 @@ use crate::ffi::{
     dm_noesis_controls_treeviewitem_get_is_expanded,
     dm_noesis_controls_treeviewitem_get_is_selected,
     dm_noesis_controls_treeviewitem_set_is_expanded,
-    dm_noesis_controls_treeviewitem_set_is_selected, dm_noesis_dependency_object_check_access,
+    dm_noesis_controls_treeviewitem_set_is_selected, dm_noesis_decorator_get_child,
+    dm_noesis_decorator_set_child, dm_noesis_dependency_object_check_access,
     dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
@@ -91,11 +92,12 @@ use crate::ffi::{
     dm_noesis_ui_element_get_is_keyboard_focused, dm_noesis_ui_element_get_is_mouse_captured,
     dm_noesis_ui_element_get_key_states, dm_noesis_ui_element_get_keyboard_focused,
     dm_noesis_ui_element_get_modifiers, dm_noesis_ui_element_get_mouse_captured,
-    dm_noesis_ui_element_get_render_transform_origin, dm_noesis_ui_element_is_key_down,
-    dm_noesis_ui_element_is_key_toggled, dm_noesis_ui_element_is_key_up,
-    dm_noesis_ui_element_move_focus, dm_noesis_ui_element_predict_focus,
-    dm_noesis_ui_element_release_mouse_capture, dm_noesis_ui_element_set_render_transform_origin,
-    dm_noesis_view_activate, dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
+    dm_noesis_ui_element_get_mouse_position, dm_noesis_ui_element_get_render_transform_origin,
+    dm_noesis_ui_element_is_key_down, dm_noesis_ui_element_is_key_toggled,
+    dm_noesis_ui_element_is_key_up, dm_noesis_ui_element_move_focus,
+    dm_noesis_ui_element_predict_focus, dm_noesis_ui_element_release_mouse_capture,
+    dm_noesis_ui_element_set_render_transform_origin, dm_noesis_view_activate,
+    dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
     dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
     dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
     dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
@@ -470,6 +472,23 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
         let p = unsafe { dm_noesis_ui_element_get_mouse_captured(self.ptr.as_ptr()) };
         NonNull::new(p)
+    }
+
+    /// The pointer position relative to this element, in element-local DIPs
+    /// (`Mouse::GetPosition(UIElement*)`) — the WPF idiom for reading the cursor
+    /// location *outside* a mouse event handler. `None` if this is not a
+    /// `UIElement`.
+    ///
+    /// The value is the last position the `View`'s mouse recorded (updated by
+    /// [`View::mouse_move`]), so it is meaningful only once the element is
+    /// connected to a live, input-pumped `View`; before any pointer event it
+    /// reads back as the element origin `(0.0, 0.0)`.
+    #[must_use]
+    pub fn mouse_position(&self) -> Option<(f32, f32)> {
+        let (mut x, mut y) = (0.0f32, 0.0f32);
+        // SAFETY: self.ptr is a live FrameworkElement*; both out params valid.
+        unsafe { dm_noesis_ui_element_get_mouse_position(self.ptr.as_ptr(), &mut x, &mut y) }
+            .then_some((x, y))
     }
 
     /// The chord [`ModifierKeys`](crate::input::ModifierKeys) currently held, via
@@ -1950,6 +1969,40 @@ impl FrameworkElement {
         )
     }
 
+    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand) — a
+    /// [`Command`](crate::commands::Command),
+    /// [`RoutedCommand`](crate::commands::RoutedCommand),
+    /// [`RoutedUICommand`](crate::commands::RoutedUICommand), or built-in
+    /// [`BorrowedCommand`](crate::commands::BorrowedCommand)) to the
+    /// `BaseComponent`-typed dependency property `name`. Noesis stores its own
+    /// reference, so `command` may be dropped afterwards (the bound object keeps
+    /// it alive). Returns `false` if `name` is unknown on this element's type or
+    /// is not a `BaseComponent`-typed DP.
+    ///
+    /// This is the safe, `unsafe`-free element counterpart of
+    /// [`Instance::set_command`](crate::classes::Instance::set_command): the
+    /// `&impl AsCommand` borrow encodes the live-`BaseComponent` invariant the
+    /// raw [`set_component`](Self::set_component) demands.
+    ///
+    /// This reaches a built-in control's `Command` directly — e.g.
+    /// `button.set_command("Command", &cmd)` wires a Rust command to a `Button`
+    /// from code without a `DataContext` binding. To drive it from a view model
+    /// instead, register a `BaseComponent` property, point it with
+    /// [`Instance::set_command`](crate::classes::Instance::set_command), and bind
+    /// `Command="{Binding …}"` — the route the [`crate::commands`] module
+    /// documents.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the command was not set (unknown name / not a BaseComponent DP)"]
+    pub fn set_command(&mut self, name: &str, command: &impl crate::commands::AsCommand) -> bool {
+        // SAFETY: `command.command_ptr()` is a live ICommand* (a BaseComponent*
+        // at runtime) borrowed for the duration of the call; the DP stores its
+        // own reference.
+        unsafe { self.set_component(name, command.command_ptr()) }
+    }
+
     /// `HorizontalAlignment`, or `None` if this is not a `FrameworkElement`.
     #[must_use]
     pub fn horizontal_alignment(&self) -> Option<HAlign> {
@@ -2300,6 +2353,99 @@ impl FrameworkElement {
     pub fn items_clear(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*.
         unsafe { dm_noesis_items_control_items_clear(self.ptr.as_ptr()) }
+    }
+
+    // ── Decorator / Border Child (Phase 1) ──────────────────────────────────
+    //
+    // `Decorator::Child` is NOT a DependencyProperty, so it cannot be reached by
+    // the by-name DP setters; these wrap the typed `Decorator::SetChild` /
+    // `GetChild` (Border derives from Decorator). Other panel-tree building
+    // blocks (`Panel::Children`, `Grid` definitions) live in
+    // [`crate::element_tree`].
+
+    /// Set this `Decorator`'s (e.g. `Border`'s) single `Child`. The decorator
+    /// takes its own reference, so `child` may be dropped afterwards. Returns
+    /// `false` if this element is not a `Decorator` or `child` is not a
+    /// `UIElement`.
+    #[must_use = "a false return means the child was not set (not a Decorator / not a UIElement)"]
+    pub fn set_decorator_child(&mut self, child: &FrameworkElement) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent* (DynamicCast to Decorator
+        // C-side); child.raw() is a live UIElement*.
+        unsafe { dm_noesis_decorator_set_child(self.ptr.as_ptr(), child.raw()) }
+    }
+
+    /// Clear this `Decorator`'s `Child`. Returns `false` if this element is not a
+    /// `Decorator`.
+    #[must_use = "a false return means this element is not a Decorator"]
+    pub fn clear_decorator_child(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; null clears the child.
+        unsafe { dm_noesis_decorator_set_child(self.ptr.as_ptr(), core::ptr::null_mut()) }
+    }
+
+    /// This `Decorator`'s current `Child` as an owning [`FrameworkElement`]
+    /// (an independent `+1`, so dropping it does not affect the tree), or `None`
+    /// if there is no child or this element is not a `Decorator`.
+    #[must_use]
+    pub fn decorator_child(&self) -> Option<FrameworkElement> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side returns a
+        // borrowed Child* (no +1) or null.
+        let borrowed = unsafe { dm_noesis_decorator_get_child(self.ptr.as_ptr()) };
+        let borrowed = NonNull::new(borrowed)?;
+        // AddRef so the returned handle owns its reference, released on drop.
+        // SAFETY: `borrowed` is a live UIElement* (BaseComponent*).
+        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        NonNull::new(owned).map(|ptr| Self { ptr })
+    }
+
+    // ── ContentControl Content (Phase 2) ────────────────────────────────────
+    //
+    // Unlike `Decorator::Child`, `ContentControl::Content` *is* a
+    // `DependencyProperty` (of type `Object` / `BaseComponent`), so these are
+    // thin, safe sugar over the by-name component-DP path
+    // ([`set_component`](Self::set_component) / [`get_component`](Self::get_component)):
+    // the `&FrameworkElement` borrow encodes the live-`BaseComponent` invariant
+    // the raw setter demands, so callers need no `unsafe`.
+
+    /// Set this `ContentControl`'s (e.g. `Button` / `ContentControl`) `Content`
+    /// to another live element. Noesis stores its own reference, so `content`
+    /// may be dropped afterwards. Returns `false` if this element has no
+    /// `Content` dependency property (i.e. it is not a `ContentControl`).
+    ///
+    /// Safe wrapper over the `Content` component-DP path — the `&FrameworkElement`
+    /// borrow guarantees the value is a live `BaseComponent` for the call, so no
+    /// `unsafe` is needed at the call site (unlike the generic
+    /// [`set_component`](Self::set_component)).
+    #[must_use = "a false return means the content was not set (no Content DP / not a ContentControl)"]
+    pub fn set_content(&mut self, content: &FrameworkElement) -> bool {
+        // SAFETY: content.raw() is a live UIElement* (BaseComponent*) borrowed
+        // for the call; `Content` is a BaseComponent-typed DP, so the C side's
+        // tag check accepts it and stores its own reference.
+        unsafe { self.set_component("Content", content.raw()) }
+    }
+
+    /// Clear this `ContentControl`'s `Content`. Returns `false` if this element
+    /// has no `Content` dependency property.
+    #[must_use = "a false return means this element has no Content DP"]
+    pub fn clear_content(&mut self) -> bool {
+        // SAFETY: clearing a BaseComponent DP with null is always sound.
+        unsafe { self.set_component("Content", core::ptr::null_mut()) }
+    }
+
+    /// This `ContentControl`'s current `Content` as an owning [`FrameworkElement`]
+    /// (an independent `+1`, so dropping it does not affect the tree), or `None`
+    /// if the `Content` is unset, this element is not a `ContentControl`, or the
+    /// content is a non-element value (e.g. a bare string). The returned handle
+    /// is intended for element content set via [`set_content`](Self::set_content).
+    #[must_use]
+    pub fn content(&self) -> Option<FrameworkElement> {
+        // get_component re-reads the live `Content` DP (a borrowed pointer, no
+        // +1) — this proves the value crossed the FFI rather than echoing a
+        // Rust-side cache.
+        let borrowed = self.get_component("Content")?;
+        // AddRef so the returned handle owns its reference, released on drop.
+        // SAFETY: `borrowed` is a live BaseComponent* held by this element.
+        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        NonNull::new(owned).map(|ptr| Self { ptr })
     }
 
     // -- RangeBase: Slider / ProgressBar / ScrollBar --
@@ -3122,7 +3268,7 @@ impl FrameworkElement {
     /// `+1` reference (the accessor `AddRef`'d it), so it stays valid past this
     /// borrow and mutating it mutates the live dictionary on the element.
     #[must_use]
-    pub fn get_resources(&self) -> Option<crate::resources::ResourceDictionary> {
+    pub fn resources(&self) -> Option<crate::resources::ResourceDictionary> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs the
         // result so the wrapper owns a +1.
         let ptr = unsafe { dm_noesis_framework_element_get_resources(self.ptr.as_ptr()) };
@@ -3172,7 +3318,7 @@ impl FrameworkElement {
     /// (`FrameworkElement::GetStyle`), or `None` if none. The returned wrapper
     /// owns its own `+1` reference (the accessor `AddRef`'d it).
     #[must_use]
-    pub fn get_style(&self) -> Option<crate::styles::Style> {
+    pub fn style(&self) -> Option<crate::styles::Style> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs.
         let ptr = unsafe { dm_noesis_framework_element_get_style(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| unsafe { crate::styles::Style::from_owned(ptr) })
@@ -3194,7 +3340,7 @@ impl FrameworkElement {
     /// (`Control::GetTemplate`), or `None` if none / not a `Control`. The
     /// returned wrapper owns its own `+1` reference (the accessor `AddRef`'d it).
     #[must_use]
-    pub fn get_control_template(&self) -> Option<crate::styles::ControlTemplate> {
+    pub fn control_template(&self) -> Option<crate::styles::ControlTemplate> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side AddRefs.
         let ptr = unsafe { dm_noesis_control_get_template(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| unsafe { crate::styles::ControlTemplate::from_owned(ptr) })
@@ -3242,6 +3388,7 @@ pub enum DynValue {
 /// `Noesis::HorizontalAlignment` (`NsGui/Enums.h`). Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HAlign {
     Left = 0,
     Center = 1,
@@ -3267,6 +3414,7 @@ impl HAlign {
 /// `Noesis::VerticalAlignment` (`NsGui/Enums.h`). Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum VAlign {
     Top = 0,
     Center = 1,
@@ -3737,6 +3885,7 @@ impl Drop for View {
 /// the tree walk.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HitTestFilterBehavior {
     /// Skip this visual and its subtree, continue elsewhere.
     ContinueSkipSelfAndChildren = 0,
@@ -3755,6 +3904,7 @@ pub enum HitTestFilterBehavior {
 /// collecting hits or stop.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HitTestResultBehavior {
     /// Stop the hit test after this hit.
     Stop = 0,
@@ -3766,6 +3916,7 @@ pub enum HitTestResultBehavior {
 /// validated at C++ compile time via `static_assert` in `noesis_view.cpp`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MouseButton {
     Left = 0,
     Right = 1,
@@ -3781,6 +3932,7 @@ pub enum MouseButton {
 /// variant here (and a matching assert in C++) to centralize the mapping.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Key {
     None = 0,
     Back = 2,
@@ -3914,6 +4066,7 @@ pub enum Key {
 #[repr(u32)]
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RenderFlag {
     Wireframe = 1,
     ColorBatches = 2,
@@ -4003,6 +4156,7 @@ impl Extend<RenderFlag> for RenderFlags {
 /// screen-space pixel-error thresholds. `Medium` is the Noesis default; `High`
 /// is recommended only when rendering to a multisampled surface.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Quality {
     /// `LowQuality` — 0.7 px error (coarsest curves).
     Low,

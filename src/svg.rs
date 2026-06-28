@@ -42,6 +42,7 @@ pub use crate::geometry::FillRule;
 
 /// Stroke join style for [`Pen`] (`Noesis::SVGPath::StrokeJoinStyle`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StrokeJoin {
     /// Mitered (sharp) corners.
     Miter = 0,
@@ -53,6 +54,7 @@ pub enum StrokeJoin {
 
 /// Stroke cap style for [`Pen`] (`Noesis::SVGPath::StrokeCapStyle`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StrokeCap {
     /// Flat cap flush with the endpoint.
     Butt = 0,
@@ -224,6 +226,7 @@ impl Drop for SvgPath {
 /// The fill-brush kind of a parsed SVG shape, mirroring
 /// `Noesis::SVG::Brush::Type`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SvgBrushType {
     /// No fill.
     None = 0,

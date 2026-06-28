@@ -265,6 +265,7 @@ pub fn box_f32(value: f32) -> Boxed {
 /// `Noesis::BindingMode`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BindingMode {
     /// Use the target property's default mode.
     Default = 0,
@@ -282,6 +283,7 @@ pub enum BindingMode {
 /// the source. Mirrors `Noesis::UpdateSourceTrigger`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UpdateSourceTrigger {
     /// Use the target property's default trigger (`PropertyChanged` for most
     /// properties; `LostFocus` for `TextBox.Text`).

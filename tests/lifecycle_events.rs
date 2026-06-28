@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::events::subscribe_lifecycle;
+use dm_noesis_runtime::events::{LifecycleEvent, subscribe_lifecycle, subscribe_lifecycle_by_name};
 use dm_noesis_runtime::view::{FrameworkElement, View};
 use dm_noesis_runtime::xaml_provider::XamlProvider;
 
@@ -68,21 +68,22 @@ fn lifecycle_events_fire_and_unsubscribe() {
 
         // IsVisibleChanged on the child — fires when IsVisible flips.
         let visible_h = Arc::clone(&visible);
-        let visible_sub = subscribe_lifecycle(&child, "IsVisibleChanged", move || {
-            visible_h.fetch_add(1, Ordering::SeqCst);
-        })
-        .expect("subscribe IsVisibleChanged returned None");
+        let visible_sub =
+            subscribe_lifecycle(&child, LifecycleEvent::IsVisibleChanged, move || {
+                visible_h.fetch_add(1, Ordering::SeqCst);
+            })
+            .expect("subscribe IsVisibleChanged returned None");
 
         // LayoutUpdated / Initialized — wiring must succeed (render-/load-driven;
         // they don't fire again in this headless harness, like Loaded).
-        let layout_sub = subscribe_lifecycle(&content, "LayoutUpdated", || {})
+        let layout_sub = subscribe_lifecycle(&content, LifecycleEvent::LayoutUpdated, || {})
             .expect("subscribe LayoutUpdated returned None");
-        let init_sub = subscribe_lifecycle(&content, "Initialized", || {})
+        let init_sub = subscribe_lifecycle(&content, LifecycleEvent::Initialized, || {})
             .expect("subscribe Initialized returned None");
 
         // Negative: unknown event name must not subscribe.
         assert!(
-            subscribe_lifecycle(&content, "NoSuchLifecycleEvent", || {}).is_none(),
+            subscribe_lifecycle_by_name(&content, "NoSuchLifecycleEvent", || {}).is_none(),
             "unknown lifecycle event name should return None"
         );
 

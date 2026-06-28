@@ -9,8 +9,11 @@
 //!
 //! 1. Register a Rust-backed view model with a `BaseComponent` dependency
 //!    property (see [`ClassBuilder`](crate::classes::ClassBuilder)).
-//! 2. Set that DP to the command:
-//!    `unsafe { instance.handle().set_component(idx, command.raw()) }`.
+//! 2. Set that DP to the command (safe, no `unsafe`):
+//!    `instance.handle().set_command(idx, &command)` (see
+//!    [`Instance::set_command`](crate::classes::Instance::set_command)). The
+//!    raw [`Instance::set_component`](crate::classes::Instance::set_component)
+//!    path remains available for arbitrary `BaseComponent*` values.
 //! 3. Expose the instance as a `DataContext`
 //!    ([`FrameworkElement::set_data_context`](crate::view::FrameworkElement::set_data_context)).
 //! 4. Author `<Button Command="{Binding ThatProperty}"/>` in XAML.
@@ -473,6 +476,7 @@ impl AsCommand for BorrowedCommand {
 /// singleton.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ApplicationCommand {
     CancelPrint = 0,
     Close = 1,
@@ -520,6 +524,7 @@ impl ApplicationCommand {
 /// scrolling commands. [`Self::command`] returns the framework singleton.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ComponentCommand {
     ExtendSelectionDown = 0,
     ExtendSelectionLeft = 1,

@@ -21,13 +21,17 @@ use crate::ffi::{
     dm_noesis_base_component_release, dm_noesis_blur_effect_create,
     dm_noesis_blur_effect_get_radius, dm_noesis_blur_effect_set_radius,
     dm_noesis_drop_shadow_effect_create, dm_noesis_drop_shadow_effect_get,
-    dm_noesis_gradient_brush_add_stop, dm_noesis_gradient_brush_get_stop,
-    dm_noesis_gradient_brush_stop_count, dm_noesis_image_brush_create,
-    dm_noesis_image_brush_get_image_source, dm_noesis_image_brush_set_image_source,
-    dm_noesis_linear_gradient_brush_create, dm_noesis_linear_gradient_brush_get_points,
-    dm_noesis_linear_gradient_brush_set_end_point, dm_noesis_linear_gradient_brush_set_start_point,
-    dm_noesis_radial_gradient_brush_create, dm_noesis_radial_gradient_brush_get_radius,
-    dm_noesis_radial_gradient_brush_set_center,
+    dm_noesis_drop_shadow_effect_set_blur_radius, dm_noesis_drop_shadow_effect_set_color,
+    dm_noesis_drop_shadow_effect_set_direction, dm_noesis_drop_shadow_effect_set_opacity,
+    dm_noesis_drop_shadow_effect_set_shadow_depth, dm_noesis_gradient_brush_add_stop,
+    dm_noesis_gradient_brush_get_mapping_mode, dm_noesis_gradient_brush_get_spread_method,
+    dm_noesis_gradient_brush_get_stop, dm_noesis_gradient_brush_set_mapping_mode,
+    dm_noesis_gradient_brush_set_spread_method, dm_noesis_gradient_brush_stop_count,
+    dm_noesis_image_brush_create, dm_noesis_image_brush_get_image_source,
+    dm_noesis_image_brush_set_image_source, dm_noesis_linear_gradient_brush_create,
+    dm_noesis_linear_gradient_brush_get_points, dm_noesis_linear_gradient_brush_set_end_point,
+    dm_noesis_linear_gradient_brush_set_start_point, dm_noesis_radial_gradient_brush_create,
+    dm_noesis_radial_gradient_brush_get_radius, dm_noesis_radial_gradient_brush_set_center,
     dm_noesis_radial_gradient_brush_set_gradient_origin,
     dm_noesis_radial_gradient_brush_set_radius, dm_noesis_solid_color_brush_create,
     dm_noesis_solid_color_brush_get_color, dm_noesis_solid_color_brush_set_color,
@@ -182,6 +186,51 @@ fn gradient_get_stop(ptr: *mut c_void, index: usize) -> Option<GradientStop> {
     ok.then_some(GradientStop { offset, color })
 }
 
+fn gradient_set_spread_method(ptr: *mut c_void, method: GradientSpreadMethod) -> bool {
+    // SAFETY: `ptr` is a live GradientBrush*.
+    unsafe { dm_noesis_gradient_brush_set_spread_method(ptr, method as i32) }
+}
+
+fn gradient_spread_method(ptr: *mut c_void) -> Option<GradientSpreadMethod> {
+    // SAFETY: `ptr` is a live GradientBrush*.
+    GradientSpreadMethod::from_ordinal(unsafe { dm_noesis_gradient_brush_get_spread_method(ptr) })
+}
+
+fn gradient_set_mapping_mode(ptr: *mut c_void, mode: BrushMappingMode) -> bool {
+    // SAFETY: `ptr` is a live GradientBrush*.
+    unsafe { dm_noesis_gradient_brush_set_mapping_mode(ptr, mode as i32) }
+}
+
+fn gradient_mapping_mode(ptr: *mut c_void) -> Option<BrushMappingMode> {
+    // SAFETY: `ptr` is a live GradientBrush*.
+    BrushMappingMode::from_ordinal(unsafe { dm_noesis_gradient_brush_get_mapping_mode(ptr) })
+}
+
+/// `Noesis::GradientSpreadMethod` (`NsGui/Enums.h`): how a gradient paints the
+/// area outside its `[0, 1]` gradient vector. Ordinals match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum GradientSpreadMethod {
+    /// Fill the remaining space with the boundary colors (the XAML default).
+    Pad = 0,
+    /// Repeat the gradient in the reverse direction.
+    Reflect = 1,
+    /// Repeat the gradient in the original direction.
+    Repeat = 2,
+}
+
+impl GradientSpreadMethod {
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Pad),
+            1 => Some(Self::Reflect),
+            2 => Some(Self::Repeat),
+            _ => None,
+        }
+    }
+}
+
 // ── LinearGradientBrush ──────────────────────────────────────────────────────
 
 /// A `LinearGradientBrush` painting a gradient along the line from `StartPoint`
@@ -248,6 +297,92 @@ impl LinearGradientBrush {
     #[must_use]
     pub fn stop(&self, index: usize) -> Option<GradientStop> {
         gradient_get_stop(self.ptr.as_ptr(), index)
+    }
+
+    /// Set how the gradient paints outside its `[0, 1]` vector.
+    pub fn set_spread_method(&mut self, method: GradientSpreadMethod) -> bool {
+        gradient_set_spread_method(self.ptr.as_ptr(), method)
+    }
+
+    /// Read the spread method back from the live object.
+    #[must_use]
+    pub fn spread_method(&self) -> Option<GradientSpreadMethod> {
+        gradient_spread_method(self.ptr.as_ptr())
+    }
+
+    /// Set whether start/end points are absolute or relative to the bounding box.
+    pub fn set_mapping_mode(&mut self, mode: BrushMappingMode) -> bool {
+        gradient_set_mapping_mode(self.ptr.as_ptr(), mode)
+    }
+
+    /// Read the mapping mode back from the live object.
+    #[must_use]
+    pub fn mapping_mode(&self) -> Option<BrushMappingMode> {
+        gradient_mapping_mode(self.ptr.as_ptr())
+    }
+
+    /// Start a [`LinearGradientBrushBuilder`] for fluent construction.
+    pub fn builder() -> LinearGradientBrushBuilder {
+        LinearGradientBrushBuilder {
+            brush: LinearGradientBrush::new(),
+        }
+    }
+}
+
+/// Fluent builder for a [`LinearGradientBrush`]: set the start/end points, spread
+/// method and mapping mode, append `.stop(..)`s, then [`build`](Self::build).
+///
+/// ```no_run
+/// # use dm_noesis_runtime::brushes::{LinearGradientBrush, GradientSpreadMethod, BrushMappingMode};
+/// let brush = LinearGradientBrush::builder()
+///     .start(0.0, 0.0)
+///     .end(1.0, 1.0)
+///     .spread_method(GradientSpreadMethod::Reflect)
+///     .mapping_mode(BrushMappingMode::RelativeToBoundingBox)
+///     .stop(0.0, [1.0, 0.0, 0.0, 1.0])
+///     .stop(1.0, [0.0, 0.0, 1.0, 1.0])
+///     .build();
+/// ```
+#[must_use]
+pub struct LinearGradientBrushBuilder {
+    brush: LinearGradientBrush,
+}
+
+impl LinearGradientBrushBuilder {
+    /// Set the gradient start point.
+    pub fn start(mut self, x: f32, y: f32) -> Self {
+        self.brush.set_start_point(x, y);
+        self
+    }
+
+    /// Set the gradient end point.
+    pub fn end(mut self, x: f32, y: f32) -> Self {
+        self.brush.set_end_point(x, y);
+        self
+    }
+
+    /// Set the spread method.
+    pub fn spread_method(mut self, method: GradientSpreadMethod) -> Self {
+        self.brush.set_spread_method(method);
+        self
+    }
+
+    /// Set the mapping mode.
+    pub fn mapping_mode(mut self, mode: BrushMappingMode) -> Self {
+        self.brush.set_mapping_mode(mode);
+        self
+    }
+
+    /// Append a gradient stop of `color` at `offset` (`0..=1`).
+    pub fn stop(mut self, offset: f32, color: [f32; 4]) -> Self {
+        self.brush.add_stop(GradientStop { offset, color });
+        self
+    }
+
+    /// Finish and return the built brush.
+    #[must_use]
+    pub fn build(self) -> LinearGradientBrush {
+        self.brush
     }
 }
 
@@ -337,6 +472,99 @@ impl RadialGradientBrush {
     pub fn stop(&self, index: usize) -> Option<GradientStop> {
         gradient_get_stop(self.ptr.as_ptr(), index)
     }
+
+    /// Set how the gradient paints outside its `[0, 1]` vector.
+    pub fn set_spread_method(&mut self, method: GradientSpreadMethod) -> bool {
+        gradient_set_spread_method(self.ptr.as_ptr(), method)
+    }
+
+    /// Read the spread method back from the live object.
+    #[must_use]
+    pub fn spread_method(&self) -> Option<GradientSpreadMethod> {
+        gradient_spread_method(self.ptr.as_ptr())
+    }
+
+    /// Set whether center/radius/origin are absolute or relative to the box.
+    pub fn set_mapping_mode(&mut self, mode: BrushMappingMode) -> bool {
+        gradient_set_mapping_mode(self.ptr.as_ptr(), mode)
+    }
+
+    /// Read the mapping mode back from the live object.
+    #[must_use]
+    pub fn mapping_mode(&self) -> Option<BrushMappingMode> {
+        gradient_mapping_mode(self.ptr.as_ptr())
+    }
+
+    /// Start a [`RadialGradientBrushBuilder`] for fluent construction.
+    pub fn builder() -> RadialGradientBrushBuilder {
+        RadialGradientBrushBuilder {
+            brush: RadialGradientBrush::new(),
+        }
+    }
+}
+
+/// Fluent builder for a [`RadialGradientBrush`]: set the center, gradient origin,
+/// radii, spread method and mapping mode, append `.stop(..)`s, then
+/// [`build`](Self::build).
+///
+/// ```no_run
+/// # use dm_noesis_runtime::brushes::{RadialGradientBrush, GradientSpreadMethod};
+/// let brush = RadialGradientBrush::builder()
+///     .center(0.5, 0.5)
+///     .gradient_origin(0.5, 0.5)
+///     .radius(0.5, 0.5)
+///     .spread_method(GradientSpreadMethod::Pad)
+///     .stop(0.0, [1.0, 1.0, 1.0, 1.0])
+///     .stop(1.0, [0.0, 0.0, 0.0, 1.0])
+///     .build();
+/// ```
+#[must_use]
+pub struct RadialGradientBrushBuilder {
+    brush: RadialGradientBrush,
+}
+
+impl RadialGradientBrushBuilder {
+    /// Set the center of the outermost circle.
+    pub fn center(mut self, x: f32, y: f32) -> Self {
+        self.brush.set_center(x, y);
+        self
+    }
+
+    /// Set the focal point where the gradient begins.
+    pub fn gradient_origin(mut self, x: f32, y: f32) -> Self {
+        self.brush.set_gradient_origin(x, y);
+        self
+    }
+
+    /// Set the horizontal/vertical radii of the outermost circle.
+    pub fn radius(mut self, rx: f32, ry: f32) -> Self {
+        self.brush.set_radius(rx, ry);
+        self
+    }
+
+    /// Set the spread method.
+    pub fn spread_method(mut self, method: GradientSpreadMethod) -> Self {
+        self.brush.set_spread_method(method);
+        self
+    }
+
+    /// Set the mapping mode.
+    pub fn mapping_mode(mut self, mode: BrushMappingMode) -> Self {
+        self.brush.set_mapping_mode(mode);
+        self
+    }
+
+    /// Append a gradient stop of `color` at `offset` (`0..=1`).
+    pub fn stop(mut self, offset: f32, color: [f32; 4]) -> Self {
+        self.brush.add_stop(GradientStop { offset, color });
+        self
+    }
+
+    /// Finish and return the built brush.
+    #[must_use]
+    pub fn build(self) -> RadialGradientBrush {
+        self.brush
+    }
 }
 
 impl Brush for RadialGradientBrush {
@@ -351,6 +579,7 @@ impl Brush for RadialGradientBrush {
 /// content within its base tile. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AlignmentX {
     /// Align toward the left edge.
     Left = 0,
@@ -375,6 +604,7 @@ impl AlignmentX {
 /// within its base tile. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AlignmentY {
     /// Align toward the upper edge.
     Top = 0,
@@ -402,6 +632,7 @@ impl AlignmentY {
 /// and by [shapes](crate::shapes::Shape::set_stretch), which re-exports it.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Stretch {
     /// Preserve original size.
     None = 0,
@@ -429,6 +660,7 @@ impl Stretch {
 /// painted area. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TileMode {
     /// Draw the base tile once; the rest is transparent.
     None = 0,
@@ -460,6 +692,7 @@ impl TileMode {
 /// match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BrushMappingMode {
     /// Coordinates are absolute (local space).
     Absolute = 0,
@@ -825,7 +1058,38 @@ pub struct DropShadowParams {
     pub opacity: f32,
 }
 
+impl Default for DropShadowParams {
+    /// Noesis's `DropShadowEffect` defaults: black, `5` blur, `315°` direction,
+    /// `5` depth, fully opaque.
+    fn default() -> Self {
+        Self {
+            color: [0.0, 0.0, 0.0, 1.0],
+            blur_radius: 5.0,
+            direction: 315.0,
+            shadow_depth: 5.0,
+            opacity: 1.0,
+        }
+    }
+}
+
 impl DropShadowEffect {
+    /// Create a drop-shadow effect from a [`DropShadowParams`] struct (the
+    /// ergonomic alternative to the 5-positional-argument [`new`](Self::new)).
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate the effect.
+    #[must_use]
+    pub fn from_params(params: DropShadowParams) -> Self {
+        Self::new(
+            params.color,
+            params.blur_radius,
+            params.direction,
+            params.shadow_depth,
+            params.opacity,
+        )
+    }
+
     /// Create a drop-shadow effect with all parameters specified.
     ///
     /// # Panics
@@ -880,6 +1144,45 @@ impl DropShadowEffect {
             shadow_depth,
             opacity,
         }
+    }
+
+    /// Replace all shadow parameters from a [`DropShadowParams`] struct.
+    pub fn set_params(&mut self, params: DropShadowParams) {
+        self.set_color(params.color);
+        self.set_blur_radius(params.blur_radius);
+        self.set_direction(params.direction);
+        self.set_shadow_depth(params.shadow_depth);
+        self.set_opacity(params.opacity);
+    }
+
+    /// Set the shadow color `{r, g, b, a}`.
+    pub fn set_color(&mut self, rgba: [f32; 4]) {
+        // SAFETY: self.ptr is a live DropShadowEffect*; `rgba` outlives the call.
+        unsafe { dm_noesis_drop_shadow_effect_set_color(self.ptr.as_ptr(), rgba.as_ptr()) };
+    }
+
+    /// Set the blur radius of the shadow edge.
+    pub fn set_blur_radius(&mut self, blur_radius: f32) {
+        // SAFETY: self.ptr is a live DropShadowEffect*.
+        unsafe { dm_noesis_drop_shadow_effect_set_blur_radius(self.ptr.as_ptr(), blur_radius) };
+    }
+
+    /// Set the shadow direction, in degrees.
+    pub fn set_direction(&mut self, direction: f32) {
+        // SAFETY: self.ptr is a live DropShadowEffect*.
+        unsafe { dm_noesis_drop_shadow_effect_set_direction(self.ptr.as_ptr(), direction) };
+    }
+
+    /// Set the distance of the shadow from the content.
+    pub fn set_shadow_depth(&mut self, shadow_depth: f32) {
+        // SAFETY: self.ptr is a live DropShadowEffect*.
+        unsafe { dm_noesis_drop_shadow_effect_set_shadow_depth(self.ptr.as_ptr(), shadow_depth) };
+    }
+
+    /// Set the shadow opacity, `0..=1`.
+    pub fn set_opacity(&mut self, opacity: f32) {
+        // SAFETY: self.ptr is a live DropShadowEffect*.
+        unsafe { dm_noesis_drop_shadow_effect_set_opacity(self.ptr.as_ptr(), opacity) };
     }
 }
 

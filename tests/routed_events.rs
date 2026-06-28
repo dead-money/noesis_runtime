@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::events::{EventArgs, subscribe_event};
+use dm_noesis_runtime::events::{EventArgs, RoutedEvent, subscribe_event, subscribe_event_by_name};
 use dm_noesis_runtime::view::{FrameworkElement, Key, MouseButton, View};
 use dm_noesis_runtime::xaml_provider::XamlProvider;
 
@@ -83,18 +83,28 @@ fn routed_events_dispatch_typed_args() {
 
         // ── Lifecycle: Loaded (subscribe BEFORE the first update raises it) ──
         let loaded_h = Arc::clone(&loaded);
-        let loaded_sub = subscribe_event(&content, "Loaded", false, move |_args: &EventArgs| {
-            loaded_h.fetch_add(1, Ordering::SeqCst);
-            false
-        })
+        let loaded_sub = subscribe_event(
+            &content,
+            RoutedEvent::Loaded,
+            false,
+            move |_args: &EventArgs| {
+                loaded_h.fetch_add(1, Ordering::SeqCst);
+                false
+            },
+        )
         .expect("subscribe Loaded returned None");
 
         // ── Lifecycle: SizeChanged → captures the new size each fire ──
         let size_h = Arc::clone(&size_state);
-        let size_sub = subscribe_event(&content, "SizeChanged", false, move |args: &EventArgs| {
-            *size_h.lock().unwrap() = args.new_size();
-            false
-        })
+        let size_sub = subscribe_event(
+            &content,
+            RoutedEvent::SizeChanged,
+            false,
+            move |args: &EventArgs| {
+                *size_h.lock().unwrap() = args.new_size();
+                false
+            },
+        )
         .expect("subscribe SizeChanged returned None");
 
         // ── Mouse: MouseLeftButtonDown → position + button ──
@@ -102,7 +112,7 @@ fn routed_events_dispatch_typed_args() {
         let mouse_h = Arc::clone(&mouse_state);
         let mouse_sub = subscribe_event(
             &content,
-            "MouseLeftButtonDown",
+            RoutedEvent::MouseLeftButtonDown,
             true,
             move |args: &EventArgs| {
                 if let (Some(pos), Some(btn)) = (args.position(), args.mouse_button()) {
@@ -120,12 +130,17 @@ fn routed_events_dispatch_typed_args() {
 
         // ── Keyboard: KeyUp → key ordinal ──
         let key_h = Arc::clone(&key_state);
-        let key_sub = subscribe_event(&content, "KeyUp", true, move |args: &EventArgs| {
-            if let Some(k) = args.key() {
-                *key_h.lock().unwrap() = Some(k);
-            }
-            false
-        })
+        let key_sub = subscribe_event(
+            &content,
+            RoutedEvent::KeyUp,
+            true,
+            move |args: &EventArgs| {
+                if let Some(k) = args.key() {
+                    *key_h.lock().unwrap() = Some(k);
+                }
+                false
+            },
+        )
         .expect("subscribe KeyUp returned None");
 
         // ── handled_too + out_handled: two handlers, same element + event ──
@@ -136,7 +151,7 @@ fn routed_events_dispatch_typed_args() {
         let pa = Arc::clone(&preview_a);
         let sub_a = subscribe_event(
             &content,
-            "MouseLeftButtonUp",
+            RoutedEvent::MouseLeftButtonUp,
             true,
             move |_args: &EventArgs| {
                 pa.fetch_add(1, Ordering::SeqCst);
@@ -148,7 +163,7 @@ fn routed_events_dispatch_typed_args() {
         let pb = Arc::clone(&preview_b);
         let sub_b = subscribe_event(
             &content,
-            "MouseLeftButtonUp",
+            RoutedEvent::MouseLeftButtonUp,
             false,
             move |_args: &EventArgs| {
                 pb.fetch_add(1, Ordering::SeqCst);
@@ -158,7 +173,8 @@ fn routed_events_dispatch_typed_args() {
         .expect("subscribe MouseLeftButtonUp (B) returned None");
 
         // ── Negative: unknown event name → None ──
-        let unknown = subscribe_event(&content, "NoSuchEvent", false, |_args: &EventArgs| false);
+        let unknown =
+            subscribe_event_by_name(&content, "NoSuchEvent", false, |_args: &EventArgs| false);
         assert!(unknown.is_none(), "unknown event name should not subscribe");
 
         // First Update builds the render tree, finalizes layout, raises Loaded

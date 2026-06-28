@@ -41,6 +41,7 @@
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
+use crate::animation::BeginStoryboard;
 use crate::binding::{Binding, Boxed};
 use crate::ffi::{
     TemplateSelectorVTable, dm_noesis_base_component_release, dm_noesis_control_template_parse,
@@ -51,11 +52,18 @@ use crate::ffi::{
     dm_noesis_templates_data_trigger_get_binding, dm_noesis_templates_data_trigger_get_value,
     dm_noesis_templates_data_trigger_set_binding, dm_noesis_templates_data_trigger_set_value,
     dm_noesis_templates_data_trigger_setter_count, dm_noesis_templates_event_trigger_action_count,
-    dm_noesis_templates_event_trigger_create,
+    dm_noesis_templates_event_trigger_add_action, dm_noesis_templates_event_trigger_create,
     dm_noesis_templates_event_trigger_get_routed_event_name,
     dm_noesis_templates_event_trigger_get_source_name,
     dm_noesis_templates_event_trigger_set_routed_event,
     dm_noesis_templates_event_trigger_set_source_name,
+    dm_noesis_templates_multi_data_trigger_add_condition,
+    dm_noesis_templates_multi_data_trigger_add_setter,
+    dm_noesis_templates_multi_data_trigger_condition_count,
+    dm_noesis_templates_multi_data_trigger_condition_has_binding,
+    dm_noesis_templates_multi_data_trigger_create,
+    dm_noesis_templates_multi_data_trigger_get_condition_value,
+    dm_noesis_templates_multi_data_trigger_setter_count,
     dm_noesis_templates_multi_trigger_add_condition, dm_noesis_templates_multi_trigger_add_setter,
     dm_noesis_templates_multi_trigger_condition_count, dm_noesis_templates_multi_trigger_create,
     dm_noesis_templates_multi_trigger_get_condition_property_name,
@@ -110,7 +118,7 @@ impl Style {
     }
 
     /// Wrap an already-owned (`+1`) `Noesis::Style*` — e.g. the `AddRef`'d result
-    /// of `get_style`.
+    /// of `style`.
     ///
     /// # Safety
     ///
@@ -205,6 +213,64 @@ impl Style {
         // SAFETY: self.ptr is a live Style*; the result is a +1-owned trigger.
         let p = unsafe { dm_noesis_templates_style_get_trigger(self.ptr.as_ptr(), index) };
         NonNull::new(p).map(|ptr| TriggerReadback { ptr })
+    }
+
+    /// Start a [`StyleBuilder`] targeting `target_type` (e.g. `"TextBlock"`),
+    /// resolved through Noesis's reflection registry like
+    /// [`set_target_type`](Self::set_target_type). Chain
+    /// [`setter`](StyleBuilder::setter) / [`based_on`](StyleBuilder::based_on) /
+    /// [`trigger`](StyleBuilder::trigger), then [`build`](StyleBuilder::build).
+    pub fn builder(target_type: &str) -> StyleBuilder {
+        let mut style = Style::new();
+        let _ = style.set_target_type(target_type);
+        StyleBuilder { style }
+    }
+}
+
+/// Fluent builder for a [`Style`]: set its target type via
+/// [`Style::builder`], append setters / triggers and an optional based-on style,
+/// then [`build`](Self::build). The longhand
+/// [`Style::new`] + [`set_target_type`](Style::set_target_type) +
+/// [`add_setter`](Style::add_setter) form still works.
+///
+/// ```no_run
+/// # use dm_noesis_runtime::styles::Style;
+/// # use dm_noesis_runtime::binding::box_f64;
+/// let style = Style::builder("TextBlock")
+///     .setter("FontSize", &box_f64(24.0))
+///     .build();
+/// ```
+#[must_use]
+pub struct StyleBuilder {
+    style: Style,
+}
+
+impl StyleBuilder {
+    /// Append a `Setter` for the dependency property `dp_name` (resolved on the
+    /// target type) with the boxed `value`. Like
+    /// [`Style::add_setter`], a setter that fails to resolve is silently dropped;
+    /// read it back with [`Style::get_trigger`] / element application to verify.
+    pub fn setter(mut self, dp_name: &str, value: &Boxed) -> Self {
+        let _ = self.style.add_setter(dp_name, value);
+        self
+    }
+
+    /// Set the `BasedOn` style this style inherits from.
+    pub fn based_on(mut self, base: &Style) -> Self {
+        self.style.set_based_on(base);
+        self
+    }
+
+    /// Append a trigger to the style's `Triggers` collection.
+    pub fn trigger<T: TriggerHandle>(mut self, trigger: &T) -> Self {
+        let _ = self.style.add_trigger(trigger);
+        self
+    }
+
+    /// Finish and return the built [`Style`].
+    #[must_use]
+    pub fn build(self) -> Style {
+        self.style
     }
 }
 
@@ -514,6 +580,11 @@ owned_trigger!(
     "A `MultiTrigger` — applies its setters while **all** of its property\nconditions are met (`Noesis::MultiTrigger`)."
 );
 owned_trigger!(
+    MultiDataTrigger,
+    dm_noesis_templates_multi_data_trigger_create,
+    "A `MultiDataTrigger` — applies its setters while **all** of its\nbinding-value conditions are met (`Noesis::MultiDataTrigger`). The\nbinding-condition sibling of [`MultiTrigger`]."
+);
+owned_trigger!(
     EventTrigger,
     dm_noesis_templates_event_trigger_create,
     "An `EventTrigger` — runs its actions in response to a routed event\n(`Noesis::EventTrigger`)."
@@ -707,6 +778,75 @@ impl MultiTrigger {
     }
 }
 
+impl MultiDataTrigger {
+    /// Append a `Condition{ Binding, Value }`. Each condition matches the value
+    /// produced by `binding` (against bound data, e.g. the `DataContext`)
+    /// against `value`; the trigger activates only when **every** condition is
+    /// met. Noesis stores its own references to the binding and value. Returns
+    /// `false` only on invalid handles.
+    pub fn add_condition(&mut self, binding: &Binding, value: &Boxed) -> bool {
+        // SAFETY: self.ptr live; binding.raw() is a live BaseBinding*; value.raw()
+        // a live boxed BaseComponent* — both for the call.
+        unsafe {
+            dm_noesis_templates_multi_data_trigger_add_condition(
+                self.ptr.as_ptr(),
+                binding.raw(),
+                value.raw(),
+            )
+        }
+    }
+
+    /// Number of conditions.
+    #[must_use]
+    pub fn condition_count(&self) -> u32 {
+        count(unsafe { dm_noesis_templates_multi_data_trigger_condition_count(self.ptr.as_ptr()) })
+    }
+
+    /// Whether the condition at `index` has a `Binding` set, observed by reading
+    /// it back from the live object. `false` if `index` is out of range or no
+    /// binding is set.
+    #[must_use]
+    pub fn condition_has_binding(&self, index: u32) -> bool {
+        // SAFETY: self.ptr live; returns -1 / 0 / 1.
+        let has = unsafe {
+            dm_noesis_templates_multi_data_trigger_condition_has_binding(self.ptr.as_ptr(), index)
+        };
+        has == 1
+    }
+
+    /// `Value` of the condition at `index`, `AddRef`'d back out of the live
+    /// object.
+    #[must_use]
+    pub fn condition_value(&self, index: u32) -> Option<OwnedValue> {
+        owned_value(unsafe {
+            dm_noesis_templates_multi_data_trigger_get_condition_value(self.ptr.as_ptr(), index)
+        })
+    }
+
+    /// Append a setter (`dp_name` resolved on `type_name`) applied while all
+    /// conditions are met.
+    pub fn add_setter(&mut self, type_name: &str, dp_name: &str, value: &Boxed) -> bool {
+        let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
+            return false;
+        };
+        // SAFETY: self.ptr live; CStrings + value live for the call.
+        unsafe {
+            dm_noesis_templates_multi_data_trigger_add_setter(
+                self.ptr.as_ptr(),
+                t.as_ptr(),
+                d.as_ptr(),
+                value.raw(),
+            )
+        }
+    }
+
+    /// Number of setters.
+    #[must_use]
+    pub fn setter_count(&self) -> u32 {
+        count(unsafe { dm_noesis_templates_multi_data_trigger_setter_count(self.ptr.as_ptr()) })
+    }
+}
+
 impl EventTrigger {
     /// Set the `RoutedEvent` that fires this trigger, resolved by `event_name`
     /// registered on `owner_type` (e.g. `("Button", "Click")`). Returns `false`
@@ -756,6 +896,20 @@ impl EventTrigger {
     #[must_use]
     pub fn action_count(&self) -> u32 {
         count(unsafe { dm_noesis_templates_event_trigger_action_count(self.ptr.as_ptr()) })
+    }
+
+    /// Append a [`BeginStoryboard`] action to this trigger's `Actions`
+    /// collection (the collection takes its own reference, so the action handle
+    /// may be dropped afterwards). When the trigger's `RoutedEvent` fires, each
+    /// action is invoked — a `BeginStoryboard` starts its [`Storyboard`]. Read
+    /// the count back with [`action_count`](Self::action_count). Returns `false`
+    /// only on invalid handles.
+    ///
+    /// [`Storyboard`]: crate::animation::Storyboard
+    pub fn add_action(&mut self, action: &BeginStoryboard) -> bool {
+        // SAFETY: self.ptr live; action.raw() is a live TriggerAction*
+        // (BeginStoryboard*); Noesis AddRefs it into the Actions collection.
+        unsafe { dm_noesis_templates_event_trigger_add_action(self.ptr.as_ptr(), action.raw()) }
     }
 }
 

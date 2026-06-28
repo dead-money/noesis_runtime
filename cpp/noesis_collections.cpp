@@ -34,9 +34,14 @@
 #include <NsCore/DynamicCast.h>
 #include <NsCore/Ptr.h>
 #include <NsDrawing/Point.h>
+#include <NsGui/CollectionView.h>
+#include <NsGui/CollectionViewSource.h>
 #include <NsGui/DispatcherObject.h>
 #include <NsGui/Enums.h>
+#include <NsGui/Events.h>
 #include <NsGui/FrameworkElement.h>
+#include <NsGui/ICollectionView.h>
+#include <NsGui/IList.h>
 #include <NsGui/ItemCollection.h>
 #include <NsGui/ItemContainerGenerator.h>
 #include <NsGui/ItemsControl.h>
@@ -512,4 +517,173 @@ extern "C" uint32_t dm_noesis_dependency_object_thread_id(void* obj) {
         static_cast<Noesis::BaseComponent*>(obj));
     if (!d) return UINT32_MAX;
     return d->GetThreadId();
+}
+
+// ── ICollectionView current-item navigation (Phase 6) ────────────────────────
+//
+// A CollectionViewSource wraps a source list and lazily produces a
+// CollectionView (an ICollectionView) over it. The view tracks a *current item*
+// — the record-management surface WPF/Noesis controls (Selector etc.) bind to.
+// Sort/filter/group remain a real SDK limitation (no programmatic SortDescription
+// /Filter delegate), so only current-item navigation + Refresh are exposed.
+
+namespace {
+
+Noesis::CollectionView* as_collection_view(void* p) {
+    if (!p) return nullptr;
+    return Noesis::DynamicCast<Noesis::CollectionView*>(static_cast<Noesis::BaseComponent*>(p));
+}
+
+// Adapter between CollectionView::CurrentChanged() (an EventHandler, i.e.
+// Delegate<void(BaseComponent*, const EventArgs&)>) and the C ABI callback.
+// Holds a +1 ref on the view (like RustClickHandler in noesis_events.cpp) so the
+// subscription stays valid; `+=` in subscribe is balanced by `-=` in
+// unsubscribe.
+class RustCurrentChangedHandler {
+public:
+    RustCurrentChangedHandler(dm_noesis_collection_view_changed_fn cb, void* userdata,
+                              Noesis::CollectionView* view)
+        : mCb(cb), mUserdata(userdata), mView(view) {
+        if (mView) mView->AddReference();
+    }
+
+    ~RustCurrentChangedHandler() {
+        if (mView) mView->Release();
+    }
+
+    RustCurrentChangedHandler(const RustCurrentChangedHandler&) = delete;
+    RustCurrentChangedHandler& operator=(const RustCurrentChangedHandler&) = delete;
+
+    void OnChanged(Noesis::BaseComponent* /*sender*/, const Noesis::EventArgs& /*args*/) {
+        if (mCb) mCb(mUserdata);
+    }
+
+    Noesis::CollectionView* view() const { return mView; }
+
+private:
+    dm_noesis_collection_view_changed_fn mCb;
+    void* mUserdata;
+    Noesis::CollectionView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
+};
+
+}  // namespace
+
+// Create an empty CollectionViewSource (+1 ref for the caller).
+extern "C" void* dm_noesis_collection_view_source_create(void) {
+    Noesis::Ptr<Noesis::CollectionViewSource> cvs = *new Noesis::CollectionViewSource();
+    return handout(cvs.GetPtr());
+}
+
+// Point the source at `source` (a borrowed list, e.g. an ObservableCollection);
+// the CollectionViewSource (re)builds its view. Pass null to clear. false if
+// `cvs` is not a CollectionViewSource.
+extern "C" bool dm_noesis_collection_view_source_set_source(void* cvs, void* source) {
+    auto* s = Noesis::DynamicCast<Noesis::CollectionViewSource*>(
+        static_cast<Noesis::BaseComponent*>(cvs));
+    if (!s) return false;
+    s->SetSource(static_cast<Noesis::BaseComponent*>(source));
+    return true;
+}
+
+// +1-owned (AddRef'd) CollectionView currently associated with `cvs`
+// (CollectionViewSource::GetView), or null if `cvs` is not a CollectionViewSource
+// / has no source. Set a Source first.
+//
+// A CollectionViewSource only eagerly materializes its ViewProperty once it is
+// hosted (XAML-parsed / initialized in a tree); a standalone code-built one
+// leaves GetView() null. So when GetView() is null we build a CollectionView
+// directly over the source list (which is exactly what the hosted path would
+// produce) — the current-item navigation surface is identical either way.
+extern "C" void* dm_noesis_collection_view_source_get_view(void* cvs) {
+    auto* s = Noesis::DynamicCast<Noesis::CollectionViewSource*>(
+        static_cast<Noesis::BaseComponent*>(cvs));
+    if (!s) return nullptr;
+    if (Noesis::CollectionView* v = s->GetView()) return handout(v);
+    auto* list = Noesis::DynamicCast<Noesis::IList*>(s->GetSource());
+    if (!list) return nullptr;
+    Noesis::Ptr<Noesis::CollectionView> cv = *new Noesis::CollectionView(list);
+    return cv.GiveOwnership();
+}
+
+// Number of records in the view, or -1 if `view` is not a CollectionView.
+extern "C" int32_t dm_noesis_collection_view_count(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->Count() : -1;
+}
+
+// Ordinal position of the CurrentItem, or INT32_MIN if not a CollectionView.
+// (Noesis uses -1 for "before first" and Count for "after last".)
+extern "C" int32_t dm_noesis_collection_view_current_position(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->CurrentPosition() : INT32_MIN;
+}
+
+// +1-owned (AddRef'd) CurrentItem, or null if there is none / not a view.
+extern "C" void* dm_noesis_collection_view_current_item(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    if (!cv) return nullptr;
+    Noesis::Ptr<Noesis::BaseComponent> item = cv->CurrentItem();
+    return handout(item.GetPtr());
+}
+
+extern "C" bool dm_noesis_collection_view_is_current_before_first(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->IsCurrentBeforeFirst() : false;
+}
+
+extern "C" bool dm_noesis_collection_view_is_current_after_last(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->IsCurrentAfterLast() : false;
+}
+
+extern "C" bool dm_noesis_collection_view_move_current_to_first(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->MoveCurrentToFirst() : false;
+}
+
+extern "C" bool dm_noesis_collection_view_move_current_to_last(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->MoveCurrentToLast() : false;
+}
+
+extern "C" bool dm_noesis_collection_view_move_current_to_next(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->MoveCurrentToNext() : false;
+}
+
+extern "C" bool dm_noesis_collection_view_move_current_to_previous(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->MoveCurrentToPrevious() : false;
+}
+
+extern "C" bool dm_noesis_collection_view_move_current_to_position(void* view, int32_t position) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    return cv ? cv->MoveCurrentToPosition(position) : false;
+}
+
+// Recreate the view (ICollectionView::Refresh).
+extern "C" void dm_noesis_collection_view_refresh(void* view) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    if (cv) cv->Refresh();
+}
+
+// Subscribe `cb` to the view's CurrentChanged event. Returns an opaque handler
+// token (release via dm_noesis_collection_view_unsubscribe_current_changed), or
+// null on a non-CollectionView handle / null cb.
+extern "C" void* dm_noesis_collection_view_subscribe_current_changed(
+    void* view, dm_noesis_collection_view_changed_fn cb, void* userdata) {
+    Noesis::CollectionView* cv = as_collection_view(view);
+    if (!cv || !cb) return nullptr;
+    auto* handler = new RustCurrentChangedHandler(cb, userdata, cv);
+    cv->CurrentChanged() += Noesis::MakeDelegate(handler, &RustCurrentChangedHandler::OnChanged);
+    return handler;
+}
+
+extern "C" void dm_noesis_collection_view_unsubscribe_current_changed(void* token) {
+    if (!token) return;
+    auto* handler = static_cast<RustCurrentChangedHandler*>(token);
+    if (auto* cv = handler->view()) {
+        cv->CurrentChanged() -= Noesis::MakeDelegate(handler, &RustCurrentChangedHandler::OnChanged);
+    }
+    delete handler;
 }

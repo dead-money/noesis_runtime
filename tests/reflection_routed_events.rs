@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::events::subscribe_event;
+use dm_noesis_runtime::events::subscribe_event_by_name;
 use dm_noesis_runtime::ffi::ClassBase;
 use dm_noesis_runtime::reflection::{RoutingStrategy, raise_event, register_routed_event};
 use dm_noesis_runtime::view::FrameworkElement;
@@ -69,12 +69,12 @@ fn custom_routed_event_fires() {
 
         // Subscribing to a never-registered event must fail.
         assert!(
-            subscribe_event(&target, "NotAnEvent", false, |_: &_| false).is_none(),
+            subscribe_event_by_name(&target, "NotAnEvent", false, |_: &_| false).is_none(),
             "subscribing to an unregistered event should return None"
         );
 
         let c = Arc::clone(&counter);
-        let sub = subscribe_event(&target, "MyEvent", false, move |_args: &_| {
+        let sub = subscribe_event_by_name(&target, "MyEvent", false, move |_args: &_| {
             c.fetch_add(1, Ordering::SeqCst);
             false
         })

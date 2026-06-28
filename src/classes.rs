@@ -886,6 +886,29 @@ impl Instance {
         }
     }
 
+    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand) — a
+    /// [`Command`](crate::commands::Command),
+    /// [`RoutedCommand`](crate::commands::RoutedCommand),
+    /// [`RoutedUICommand`](crate::commands::RoutedUICommand), or built-in
+    /// [`BorrowedCommand`](crate::commands::BorrowedCommand)) to a
+    /// `BaseComponent` DP (register it with
+    /// [`ClassBuilder::add_property`](crate::classes::ClassBuilder::add_property)
+    /// and [`PropType::BaseComponent`](crate::ffi::PropType::BaseComponent)).
+    /// The C++ side stores its own reference, so the caller keeps ownership of
+    /// `command`.
+    ///
+    /// This is the safe, `unsafe`-free counterpart of
+    /// [`set_component`](Self::set_component) for the command case: the
+    /// `&impl AsCommand` borrow encodes the live-`BaseComponent` invariant. Set
+    /// the instance as a `DataContext` and bind `Command="{Binding ThatProperty}"`
+    /// in XAML — see the [`crate::commands`] module docs.
+    pub fn set_command(self, prop_index: u32, command: &impl crate::commands::AsCommand) {
+        // SAFETY: `command.command_ptr()` is a live ICommand* (a BaseComponent*
+        // at runtime) borrowed for the duration of this synchronous call; the
+        // DP stores its own reference, leaving the caller's ownership intact.
+        unsafe { self.set_component(prop_index, command.command_ptr()) }
+    }
+
     /// Read back an `Int32` DP. Returns `None` on bad input
     /// (instance pointer / index mismatch).
     pub fn get_int32(self, prop_index: u32) -> Option<i32> {

@@ -552,10 +552,10 @@ impl EventArgs {
 
     // ── Drag accessors ─────────────────────────────────────────────────────
 
-    /// Drag effect / allowed-effect / key-state bitmasks for a drag event
+    /// Drag effect / allowed-effect / key-state bitsets for a drag event
     /// (`DragEnter` / `DragOver` / `DragLeave` / `Drop` and their `Preview*`
-    /// variants). `None` for non-drag events. The bitmask values mirror
-    /// [`drag_effects`] and [`drag_key_states`].
+    /// variants). `None` for non-drag events. See [`DragEffects`] /
+    /// [`DragKeyStates`].
     pub fn drag(&self) -> Option<DragInfo> {
         let mut effects = 0u32;
         let mut allowed = 0u32;
@@ -570,19 +570,19 @@ impl EventArgs {
             )
         };
         ok.then_some(DragInfo {
-            effects,
-            allowed_effects: allowed,
-            key_states,
+            effects: DragEffects(effects),
+            allowed_effects: DragEffects(allowed),
+            key_states: DragKeyStates(key_states),
         })
     }
 
     /// Set the drop result (`DragEventArgs::effects`) a `Drop` / `DragOver`
-    /// handler reports back to the drag source. `effects` is a [`drag_effects`]
-    /// bitmask. Returns `true` if written (i.e. the live args are a drag event).
+    /// handler reports back to the drag source. Returns `true` if written (i.e.
+    /// the live args are a drag event).
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
-    pub fn set_drag_effects(&self, effects: u32) -> bool {
+    pub fn set_drag_effects(&self, effects: DragEffects) -> bool {
         // SAFETY: opaque handle; accessor validates the kind before writing.
-        unsafe { dm_noesis_routed_events_drag_set_effects(self.raw, effects) }
+        unsafe { dm_noesis_routed_events_drag_set_effects(self.raw, effects.bits()) }
     }
 
     /// Borrowed pointer to the dragged data object (`DragEventArgs::data`).
@@ -691,51 +691,163 @@ impl EventArgs {
     }
 }
 
-/// `DragDropEffects` bitmask values (`DragEventArgs` effects / allowed-effects).
-/// Mirror of `Noesis::DragDropEffects`.
-pub mod drag_effects {
+/// A typed bitset of `Noesis::DragDropEffects` (`DragEventArgs` effects /
+/// allowed-effects) — the operations a drag offers or reports. Compose with
+/// [`Self::with`] / [`FromIterator`] and test with [`Self::contains`]; convert
+/// to/from the raw bitmask Noesis uses with [`Self::bits`] / [`Self::from_bits`].
+/// Modeled on [`crate::input::ModifierKeys`] / [`crate::view::RenderFlags`].
+///
+/// ```
+/// use dm_noesis_runtime::events::DragEffects;
+/// let e = DragEffects::COPY.with(DragEffects::MOVE);
+/// assert!(e.contains(DragEffects::COPY));
+/// assert!(!e.contains(DragEffects::LINK));
+/// ```
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DragEffects(pub u32);
+
+impl DragEffects {
     /// The drag-and-drop operation transfers no data.
-    pub const NONE: u32 = 0;
+    pub const NONE: Self = Self(0);
     /// The data is copied.
-    pub const COPY: u32 = 1;
+    pub const COPY: Self = Self(1);
     /// The data is moved.
-    pub const MOVE: u32 = 2;
+    pub const MOVE: Self = Self(2);
     /// The data is linked.
-    pub const LINK: u32 = 4;
+    pub const LINK: Self = Self(4);
     /// Scrolling is about to start or is occurring in the target.
-    pub const SCROLL: u32 = 0x8000_0000;
-    /// Copy | Move | Scroll.
-    pub const ALL: u32 = COPY | MOVE | SCROLL;
+    pub const SCROLL: Self = Self(0x8000_0000);
+    /// `COPY | MOVE | SCROLL`.
+    pub const ALL: Self = Self(Self::COPY.0 | Self::MOVE.0 | Self::SCROLL.0);
+
+    /// Wrap a raw `Noesis::DragDropEffects` bitmask.
+    #[must_use]
+    pub const fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    /// The raw bitmask Noesis uses.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// A copy of this set with `other`'s bits added.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// Whether every bit of `other` is present (with [`Self::NONE`], always
+    /// `true`).
+    #[must_use]
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// Whether no effects are set.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
 }
 
-/// `DragDropKeyStates` bitmask values (`DragEventArgs::keyStates`). Mirror of
-/// `Noesis::DragDropKeyStates`.
-pub mod drag_key_states {
+impl core::ops::BitOr for DragEffects {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl FromIterator<DragEffects> for DragEffects {
+    fn from_iter<I: IntoIterator<Item = DragEffects>>(iter: I) -> Self {
+        let mut acc = 0;
+        for e in iter {
+            acc |= e.0;
+        }
+        Self(acc)
+    }
+}
+
+/// A typed bitset of `Noesis::DragDropKeyStates` (`DragEventArgs::keyStates`) —
+/// the modifier-key / mouse-button state during a drag. Compose and test like
+/// [`DragEffects`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DragKeyStates(pub u32);
+
+impl DragKeyStates {
     /// No modifier keys or mouse buttons are pressed.
-    pub const NONE: u32 = 0;
+    pub const NONE: Self = Self(0);
     /// The left mouse button is pressed.
-    pub const LEFT_MOUSE_BUTTON: u32 = 1;
+    pub const LEFT_MOUSE_BUTTON: Self = Self(1);
     /// The right mouse button is pressed.
-    pub const RIGHT_MOUSE_BUTTON: u32 = 2;
+    pub const RIGHT_MOUSE_BUTTON: Self = Self(2);
     /// The Shift key is pressed.
-    pub const SHIFT_KEY: u32 = 4;
+    pub const SHIFT_KEY: Self = Self(4);
     /// The Ctrl key is pressed.
-    pub const CONTROL_KEY: u32 = 8;
+    pub const CONTROL_KEY: Self = Self(8);
     /// The middle mouse button is pressed.
-    pub const MIDDLE_MOUSE_BUTTON: u32 = 16;
+    pub const MIDDLE_MOUSE_BUTTON: Self = Self(16);
     /// The Alt key is pressed.
-    pub const ALT_KEY: u32 = 32;
+    pub const ALT_KEY: Self = Self(32);
+
+    /// Wrap a raw `Noesis::DragDropKeyStates` bitmask.
+    #[must_use]
+    pub const fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    /// The raw bitmask Noesis uses.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// A copy of this set with `other`'s bits added.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// Whether every bit of `other` is present (with [`Self::NONE`], always
+    /// `true`).
+    #[must_use]
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// Whether no keys/buttons are held.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl core::ops::BitOr for DragKeyStates {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl FromIterator<DragKeyStates> for DragKeyStates {
+    fn from_iter<I: IntoIterator<Item = DragKeyStates>>(iter: I) -> Self {
+        let mut acc = 0;
+        for k in iter {
+            acc |= k.0;
+        }
+        Self(acc)
+    }
 }
 
 /// Drag bitmask snapshot read from a [`DragEventArgs`](EventArgs::drag).
 /// `effects` is the current/result effect, `allowed_effects` the operations the
-/// source permits, `key_states` the modifier/button state ([`drag_effects`] /
-/// [`drag_key_states`] bitmasks).
+/// source permits, `key_states` the modifier/button state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DragInfo {
-    pub effects: u32,
-    pub allowed_effects: u32,
-    pub key_states: u32,
+    pub effects: DragEffects,
+    pub allowed_effects: DragEffects,
+    pub key_states: DragKeyStates,
 }
 
 /// Accumulated manipulation transform (`Noesis::ManipulationDelta`). Translation
@@ -822,7 +934,225 @@ impl Drop for EventSubscription {
     }
 }
 
-/// Subscribe `handler` to the routed event named `event_name` on `element`.
+/// A documented `Noesis::RoutedEvent` accepted by [`subscribe_event`]. Each
+/// variant maps to a curated entry in the C++ event table (`noesis_events.cpp`),
+/// so the typed accessors on [`EventArgs`] know which concrete arg struct fired.
+/// Use [`subscribe_event_by_name`] for arbitrary/custom events not listed here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RoutedEvent {
+    /// `UIElement.MouseEnter`.
+    MouseEnter,
+    /// `UIElement.MouseLeave`.
+    MouseLeave,
+    /// `UIElement.MouseMove`.
+    MouseMove,
+    /// `UIElement.PreviewMouseMove`.
+    PreviewMouseMove,
+    /// `UIElement.GotMouseCapture`.
+    GotMouseCapture,
+    /// `UIElement.LostMouseCapture`.
+    LostMouseCapture,
+    /// `UIElement.MouseDown`.
+    MouseDown,
+    /// `UIElement.MouseUp`.
+    MouseUp,
+    /// `UIElement.MouseLeftButtonDown`.
+    MouseLeftButtonDown,
+    /// `UIElement.MouseLeftButtonUp`.
+    MouseLeftButtonUp,
+    /// `UIElement.MouseRightButtonDown`.
+    MouseRightButtonDown,
+    /// `UIElement.MouseRightButtonUp`.
+    MouseRightButtonUp,
+    /// `UIElement.PreviewMouseDown`.
+    PreviewMouseDown,
+    /// `UIElement.PreviewMouseUp`.
+    PreviewMouseUp,
+    /// `UIElement.PreviewMouseLeftButtonDown`.
+    PreviewMouseLeftButtonDown,
+    /// `UIElement.PreviewMouseLeftButtonUp`.
+    PreviewMouseLeftButtonUp,
+    /// `UIElement.PreviewMouseRightButtonDown`.
+    PreviewMouseRightButtonDown,
+    /// `UIElement.PreviewMouseRightButtonUp`.
+    PreviewMouseRightButtonUp,
+    /// `UIElement.MouseWheel`.
+    MouseWheel,
+    /// `UIElement.PreviewMouseWheel`.
+    PreviewMouseWheel,
+    /// `UIElement.KeyDown`.
+    KeyDown,
+    /// `UIElement.KeyUp`.
+    KeyUp,
+    /// `UIElement.PreviewKeyDown`.
+    PreviewKeyDown,
+    /// `UIElement.PreviewKeyUp`.
+    PreviewKeyUp,
+    /// `UIElement.TextInput`.
+    TextInput,
+    /// `UIElement.PreviewTextInput`.
+    PreviewTextInput,
+    /// `UIElement.GotFocus`.
+    GotFocus,
+    /// `UIElement.LostFocus`.
+    LostFocus,
+    /// `UIElement.GotKeyboardFocus`.
+    GotKeyboardFocus,
+    /// `UIElement.LostKeyboardFocus`.
+    LostKeyboardFocus,
+    /// `UIElement.PreviewGotKeyboardFocus`.
+    PreviewGotKeyboardFocus,
+    /// `UIElement.PreviewLostKeyboardFocus`.
+    PreviewLostKeyboardFocus,
+    /// `FrameworkElement.Loaded`.
+    Loaded,
+    /// `FrameworkElement.Unloaded`.
+    Unloaded,
+    /// `FrameworkElement.SizeChanged`.
+    SizeChanged,
+    /// `UIElement.TouchDown`.
+    TouchDown,
+    /// `UIElement.TouchMove`.
+    TouchMove,
+    /// `UIElement.TouchUp`.
+    TouchUp,
+    /// `UIElement.TouchEnter`.
+    TouchEnter,
+    /// `UIElement.TouchLeave`.
+    TouchLeave,
+    /// `UIElement.Tapped`.
+    Tapped,
+    /// `UIElement.DoubleTapped`.
+    DoubleTapped,
+    /// `UIElement.Holding`.
+    Holding,
+    /// `UIElement.RightTapped`.
+    RightTapped,
+    /// `UIElement.ManipulationStarting`.
+    ManipulationStarting,
+    /// `UIElement.ManipulationStarted`.
+    ManipulationStarted,
+    /// `UIElement.ManipulationDelta`.
+    ManipulationDelta,
+    /// `UIElement.ManipulationInertiaStarting`.
+    ManipulationInertiaStarting,
+    /// `UIElement.ManipulationCompleted`.
+    ManipulationCompleted,
+    /// `UIElement.DragEnter`.
+    DragEnter,
+    /// `UIElement.DragOver`.
+    DragOver,
+    /// `UIElement.DragLeave`.
+    DragLeave,
+    /// `UIElement.Drop`.
+    Drop,
+    /// `UIElement.PreviewDragEnter`.
+    PreviewDragEnter,
+    /// `UIElement.PreviewDragOver`.
+    PreviewDragOver,
+    /// `UIElement.PreviewDragLeave`.
+    PreviewDragLeave,
+    /// `UIElement.PreviewDrop`.
+    PreviewDrop,
+}
+
+impl RoutedEvent {
+    /// The WPF/Noesis event name this variant maps to (the string the C++ event
+    /// table keys on).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MouseEnter => "MouseEnter",
+            Self::MouseLeave => "MouseLeave",
+            Self::MouseMove => "MouseMove",
+            Self::PreviewMouseMove => "PreviewMouseMove",
+            Self::GotMouseCapture => "GotMouseCapture",
+            Self::LostMouseCapture => "LostMouseCapture",
+            Self::MouseDown => "MouseDown",
+            Self::MouseUp => "MouseUp",
+            Self::MouseLeftButtonDown => "MouseLeftButtonDown",
+            Self::MouseLeftButtonUp => "MouseLeftButtonUp",
+            Self::MouseRightButtonDown => "MouseRightButtonDown",
+            Self::MouseRightButtonUp => "MouseRightButtonUp",
+            Self::PreviewMouseDown => "PreviewMouseDown",
+            Self::PreviewMouseUp => "PreviewMouseUp",
+            Self::PreviewMouseLeftButtonDown => "PreviewMouseLeftButtonDown",
+            Self::PreviewMouseLeftButtonUp => "PreviewMouseLeftButtonUp",
+            Self::PreviewMouseRightButtonDown => "PreviewMouseRightButtonDown",
+            Self::PreviewMouseRightButtonUp => "PreviewMouseRightButtonUp",
+            Self::MouseWheel => "MouseWheel",
+            Self::PreviewMouseWheel => "PreviewMouseWheel",
+            Self::KeyDown => "KeyDown",
+            Self::KeyUp => "KeyUp",
+            Self::PreviewKeyDown => "PreviewKeyDown",
+            Self::PreviewKeyUp => "PreviewKeyUp",
+            Self::TextInput => "TextInput",
+            Self::PreviewTextInput => "PreviewTextInput",
+            Self::GotFocus => "GotFocus",
+            Self::LostFocus => "LostFocus",
+            Self::GotKeyboardFocus => "GotKeyboardFocus",
+            Self::LostKeyboardFocus => "LostKeyboardFocus",
+            Self::PreviewGotKeyboardFocus => "PreviewGotKeyboardFocus",
+            Self::PreviewLostKeyboardFocus => "PreviewLostKeyboardFocus",
+            Self::Loaded => "Loaded",
+            Self::Unloaded => "Unloaded",
+            Self::SizeChanged => "SizeChanged",
+            Self::TouchDown => "TouchDown",
+            Self::TouchMove => "TouchMove",
+            Self::TouchUp => "TouchUp",
+            Self::TouchEnter => "TouchEnter",
+            Self::TouchLeave => "TouchLeave",
+            Self::Tapped => "Tapped",
+            Self::DoubleTapped => "DoubleTapped",
+            Self::Holding => "Holding",
+            Self::RightTapped => "RightTapped",
+            Self::ManipulationStarting => "ManipulationStarting",
+            Self::ManipulationStarted => "ManipulationStarted",
+            Self::ManipulationDelta => "ManipulationDelta",
+            Self::ManipulationInertiaStarting => "ManipulationInertiaStarting",
+            Self::ManipulationCompleted => "ManipulationCompleted",
+            Self::DragEnter => "DragEnter",
+            Self::DragOver => "DragOver",
+            Self::DragLeave => "DragLeave",
+            Self::Drop => "Drop",
+            Self::PreviewDragEnter => "PreviewDragEnter",
+            Self::PreviewDragOver => "PreviewDragOver",
+            Self::PreviewDragLeave => "PreviewDragLeave",
+            Self::PreviewDrop => "PreviewDrop",
+        }
+    }
+}
+
+/// Subscribe `handler` to the typed routed `event` on `element`.
+///
+/// `handled_too`: when `false`, the handler is skipped if a prior handler on
+/// the same element already marked the event handled. (This SDK's `AddHandler`
+/// has no `handledEventsToo` parameter, so already-handled events are never
+/// re-routed across elements regardless; the flag governs the per-element
+/// handler chain.)
+///
+/// Returns `None` if `element` is not a `UIElement` or the C++ subscription
+/// fails. The returned [`EventSubscription`] keeps the handler installed until
+/// dropped. For arbitrary/custom events use [`subscribe_event_by_name`].
+///
+/// # Panics
+///
+/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
+/// explicit at the type level).
+pub fn subscribe_event<H: RoutedEventHandler>(
+    element: &FrameworkElement,
+    event: RoutedEvent,
+    handled_too: bool,
+    handler: H,
+) -> Option<EventSubscription> {
+    subscribe_event_by_name(element, event.as_str(), handled_too, handler)
+}
+
+/// Subscribe `handler` to the routed event named `event_name` on `element` — the
+/// `&str` escape hatch behind the typed [`subscribe_event`], for custom or
+/// not-yet-enumerated events.
 ///
 /// `event_name` uses the WPF/Noesis event names — `"MouseMove"`,
 /// `"MouseLeftButtonDown"`, `"MouseWheel"`, `"KeyDown"`, `"KeyUp"`,
@@ -846,7 +1176,7 @@ impl Drop for EventSubscription {
 /// Panics only on internal logic errors — specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
 /// explicit at the type level).
-pub fn subscribe_event<H: RoutedEventHandler>(
+pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     element: &FrameworkElement,
     event_name: &str,
     handled_too: bool,
@@ -941,8 +1271,84 @@ impl Drop for LifecycleSubscription {
     }
 }
 
+/// A documented non-routed lifecycle event accepted by [`subscribe_lifecycle`].
+/// Each variant maps to an entry in the C++ `ApplyLifecycle` table
+/// (`noesis_events.cpp`). Use [`subscribe_lifecycle_by_name`] for any name not
+/// enumerated here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LifecycleEvent {
+    /// `FrameworkElement.Initialized`.
+    Initialized,
+    /// `FrameworkElement.LayoutUpdated`.
+    LayoutUpdated,
+    /// `FrameworkElement.DataContextChanged`.
+    DataContextChanged,
+    /// `UIElement.IsEnabledChanged`.
+    IsEnabledChanged,
+    /// `UIElement.IsVisibleChanged`.
+    IsVisibleChanged,
+    /// `UIElement.IsHitTestVisibleChanged`.
+    IsHitTestVisibleChanged,
+    /// `UIElement.IsKeyboardFocusedChanged`.
+    IsKeyboardFocusedChanged,
+    /// `UIElement.IsKeyboardFocusWithinChanged`.
+    IsKeyboardFocusWithinChanged,
+    /// `UIElement.IsMouseCapturedChanged`.
+    IsMouseCapturedChanged,
+    /// `UIElement.IsMouseCaptureWithinChanged`.
+    IsMouseCaptureWithinChanged,
+    /// `UIElement.IsMouseDirectlyOverChanged`.
+    IsMouseDirectlyOverChanged,
+    /// `UIElement.FocusableChanged`.
+    FocusableChanged,
+}
+
+impl LifecycleEvent {
+    /// The event name this variant maps to (the string the C++ lifecycle table
+    /// keys on).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Initialized => "Initialized",
+            Self::LayoutUpdated => "LayoutUpdated",
+            Self::DataContextChanged => "DataContextChanged",
+            Self::IsEnabledChanged => "IsEnabledChanged",
+            Self::IsVisibleChanged => "IsVisibleChanged",
+            Self::IsHitTestVisibleChanged => "IsHitTestVisibleChanged",
+            Self::IsKeyboardFocusedChanged => "IsKeyboardFocusedChanged",
+            Self::IsKeyboardFocusWithinChanged => "IsKeyboardFocusWithinChanged",
+            Self::IsMouseCapturedChanged => "IsMouseCapturedChanged",
+            Self::IsMouseCaptureWithinChanged => "IsMouseCaptureWithinChanged",
+            Self::IsMouseDirectlyOverChanged => "IsMouseDirectlyOverChanged",
+            Self::FocusableChanged => "FocusableChanged",
+        }
+    }
+}
+
+/// Subscribe `handler` to the typed non-routed lifecycle `event` on `element`.
+///
+/// Returns `None` if `element` is not a `FrameworkElement` or the C++
+/// subscription fails. The returned [`LifecycleSubscription`] keeps the handler
+/// installed until dropped; it holds a `+1` ref on the element so the
+/// subscription survives the caller dropping every other handle. For any name
+/// not enumerated by [`LifecycleEvent`] use [`subscribe_lifecycle_by_name`].
+///
+/// # Panics
+///
+/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
+/// explicit at the type level).
+pub fn subscribe_lifecycle<H: LifecycleHandler>(
+    element: &FrameworkElement,
+    event: LifecycleEvent,
+    handler: H,
+) -> Option<LifecycleSubscription> {
+    subscribe_lifecycle_by_name(element, event.as_str(), handler)
+}
+
 /// Subscribe `handler` to the non-routed lifecycle event named `name` on
-/// `element`.
+/// `element` — the `&str` escape hatch behind the typed [`subscribe_lifecycle`].
 ///
 /// Supported names: `"Initialized"`, `"LayoutUpdated"`, `"DataContextChanged"`,
 /// `"IsEnabledChanged"`, `"IsVisibleChanged"`, `"IsHitTestVisibleChanged"`,
@@ -961,7 +1367,7 @@ impl Drop for LifecycleSubscription {
 /// Panics only on internal logic errors — specifically if `Box::into_raw`
 /// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
 /// explicit at the type level).
-pub fn subscribe_lifecycle<H: LifecycleHandler>(
+pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     element: &FrameworkElement,
     name: &str,
     handler: H,
@@ -1000,7 +1406,7 @@ pub fn subscribe_lifecycle<H: LifecycleHandler>(
 // ── DragDrop source side (TODO §5) ──────────────────────────────────────────
 
 /// Initiate a drag-and-drop operation from `source`, carrying `data` as the
-/// drag payload and advertising `allowed_effects` (a [`drag_effects`] bitmask).
+/// drag payload and advertising `allowed_effects` (a [`DragEffects`] set).
 ///
 /// Wraps `Noesis::DragDrop::DoDragDrop`. The drag is subsequently driven by the
 /// host's pointer/drag input; there is no synchronous result and no headless
@@ -1013,11 +1419,13 @@ pub fn subscribe_lifecycle<H: LifecycleHandler>(
 pub fn do_drag_drop(
     source: &FrameworkElement,
     data: &FrameworkElement,
-    allowed_effects: u32,
+    allowed_effects: DragEffects,
 ) -> bool {
     // SAFETY: both pointers are borrowed live elements; DoDragDrop copies what
     // it needs and does not retain the raw pointers past the call we make here.
-    unsafe { dm_noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects) }
+    unsafe {
+        dm_noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects.bits())
+    }
 }
 
 // ── DataObject copy/paste handlers (TODO §5) ────────────────────────────────
@@ -1089,6 +1497,7 @@ impl Drop for DataObjectSubscription {
 
 /// Which `DataObject` attached event a [`subscribe_data_object`] call targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DataObjectEvent {
     /// `DataObject.Copying` — raised before data is placed on the clipboard
     /// (e.g. by `Ctrl+C` in a `TextBox`).

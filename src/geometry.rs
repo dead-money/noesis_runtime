@@ -92,6 +92,7 @@ impl Rect {
 
 /// How the intersecting areas inside a geometry are combined (Noesis `FillRule`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FillRule {
     /// Odd-crossing rule (the XAML default).
     EvenOdd,
@@ -118,6 +119,7 @@ impl FillRule {
 /// How the two operands of a [`CombinedGeometry`] are combined (Noesis
 /// `GeometryCombineMode`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GeometryCombineMode {
     /// `A ∪ B`.
     Union,
@@ -152,6 +154,7 @@ impl GeometryCombineMode {
 
 /// Direction an [`ArcSegment`] / `ArcTo` sweeps (Noesis `SweepDirection`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SweepDirection {
     /// Counter-clockwise (negative-angle) direction.
     Counterclockwise,
@@ -779,6 +782,26 @@ impl ArcSegment {
         }
     }
 
+    /// Create an elliptical arc from an [`ArcFields`] struct (the ergonomic
+    /// alternative to the 7-positional-argument [`new`](Self::new); round-trips
+    /// with [`get`](Self::get)).
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate the segment.
+    #[must_use]
+    pub fn from_fields(fields: ArcFields) -> Self {
+        Self::new(
+            fields.point.0,
+            fields.point.1,
+            fields.size.0,
+            fields.size.1,
+            fields.rotation_deg,
+            fields.is_large_arc,
+            fields.sweep,
+        )
+    }
+
     /// Read all arc fields back from the live object.
     #[must_use]
     pub fn get(&self) -> ArcFields {
@@ -926,6 +949,18 @@ impl RectangleGeometry {
         Self {
             ptr: NonNull::new(ptr).expect("dm_noesis_rectangle_geometry_create returned null"),
         }
+    }
+
+    /// Create a rectangle from a [`Rect`] and corner radii `(rx, ry)` — the
+    /// ergonomic alternative to the 6-positional-argument [`new`](Self::new).
+    /// Round-trips with [`rect`](Self::rect) / [`radii`](Self::radii).
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate the geometry.
+    #[must_use]
+    pub fn from_rect(rect: Rect, radii: (f32, f32)) -> Self {
+        Self::new(rect.x, rect.y, rect.width, rect.height, radii.0, radii.1)
     }
 
     /// Read the rectangle `[x, y, width, height]` back from the live object.

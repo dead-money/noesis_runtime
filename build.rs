@@ -24,11 +24,13 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_brushes.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_imaging.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_drawing.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_mesh.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_animation.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_geometry.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_shapes.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_svg.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_text_inlines.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_element_tree.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_formatted_text.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_typography.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_xaml.cpp");
@@ -117,11 +119,13 @@ fn main() {
         .file("cpp/noesis_brushes.cpp")
         .file("cpp/noesis_imaging.cpp")
         .file("cpp/noesis_drawing.cpp")
+        .file("cpp/noesis_mesh.cpp")
         .file("cpp/noesis_animation.cpp")
         .file("cpp/noesis_geometry.cpp")
         .file("cpp/noesis_shapes.cpp")
         .file("cpp/noesis_svg.cpp")
         .file("cpp/noesis_text_inlines.cpp")
+        .file("cpp/noesis_element_tree.cpp")
         .file("cpp/noesis_formatted_text.cpp")
         .file("cpp/noesis_typography.cpp")
         .file("cpp/noesis_xaml.cpp")

@@ -28,6 +28,7 @@ use crate::ffi::{
 /// `Noesis::XamlDependencyType` (NsGui/Enums.h) 1:1; the ordinals are guarded
 /// by `static_assert`s in `cpp/noesis_xaml.cpp`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum XamlDependencyKind {
     /// Xamls, audio, textures, and `Uri` properties (e.g. `Image Source`).
     Filename,
