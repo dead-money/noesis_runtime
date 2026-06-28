@@ -167,6 +167,7 @@ fn view_timers_flags_stats_quality_hwheel() {
     let const_ticks = Arc::new(AtomicU32::new(0));
     let once_ticks = Arc::new(AtomicU32::new(0));
     let cancelled_ticks = Arc::new(AtomicU32::new(0));
+    let restart_ticks = Arc::new(AtomicU32::new(0));
 
     {
         // Every owning wrapper must drop before shutdown().
@@ -305,7 +306,10 @@ fn view_timers_flags_stats_quality_hwheel() {
         );
 
         // restart() keeps the timer alive with a new cadence — assert it keeps
-        // firing afterwards.
+        // firing afterwards. (Necessary but not sufficient: the original 16 ms
+        // interval already fires once per 50 ms step, so this alone cannot
+        // distinguish a working restart from a no-op — see the dedicated
+        // huge→short restart below for that proof.)
         sub_const.restart(8);
         for _ in 0..10 {
             t += 0.05;
@@ -314,6 +318,39 @@ fn view_timers_flags_stats_quality_hwheel() {
         assert!(
             const_ticks.load(Ordering::SeqCst) > after_pump,
             "timer should keep firing after restart()"
+        );
+
+        // restart() must actually reprogram the interval inside Noesis. Arm a
+        // timer at an interval so large (~10000 s) it can NEVER fire within the
+        // pumped window, confirm it stays silent, then restart() it down to
+        // 10 ms and confirm it begins firing. A no-op restart leaves the huge
+        // interval in place and the counter pinned at 0 — so this assertion
+        // fails iff RestartTimer never crossed into IView.
+        let r = Arc::clone(&restart_ticks);
+        let sub_restart = view
+            .create_timer(10_000_000, move || {
+                r.fetch_add(1, Ordering::SeqCst);
+                10_000_000
+            })
+            .expect("create_timer returned None");
+        // Pump at the existing 50 ms cadence; a ~10000 s interval must not fire.
+        for _ in 0..10 {
+            t += 0.05;
+            view.update(t);
+        }
+        assert_eq!(
+            restart_ticks.load(Ordering::SeqCst),
+            0,
+            "huge-interval timer must not fire before restart"
+        );
+        sub_restart.restart(10); // reprogram to 10 ms
+        for _ in 0..10 {
+            t += 0.05;
+            view.update(t);
+        }
+        assert!(
+            restart_ticks.load(Ordering::SeqCst) > 0,
+            "timer must fire after restart() shortens the interval"
         );
 
         // ── (E) MouseHWheel positive case: the ScrollViewer handles it. ───────
