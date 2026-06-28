@@ -479,6 +479,24 @@ extern "C" void* dm_noesis_class_register(
     return cd;
 }
 
+// Instantiate a registered class directly from Rust (no XAML reference needed).
+// Returns a BaseComponent* with +1 ref for the caller, released via
+// dm_noesis_base_component_release. NULL on null token.
+//
+// The motivating use is data binding: a synthetic class is a DependencyObject
+// with registered DPs, so an instance created here makes a perfectly good
+// binding source / view model — set it as an element's DataContext and author
+// `{Binding SomeDP}` in XAML. Writing a DP from Rust (dm_noesis_instance_set_*)
+// raises the DependencyObject change notification the binding engine observes.
+extern "C" void* dm_noesis_class_create_instance(void* class_token) {
+    if (!class_token) return nullptr;
+    auto* cd = static_cast<ClassData*>(class_token);
+    auto* instance = new RustContentControl();
+    instance->BindClassData(cd);
+    instance->AddReference();  // +1 for the caller; paired with base_component_release
+    return static_cast<Noesis::BaseComponent*>(instance);
+}
+
 extern "C" uint32_t dm_noesis_class_register_property(
     void* class_token,
     const char* prop_name,

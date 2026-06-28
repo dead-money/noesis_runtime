@@ -8,21 +8,6 @@ Scope is driven by Dead Money's needs, so most of this is intentionally unbuilt.
 of the list is to know what exists before deciding to wrap it, not to imply everything here
 is planned.
 
-## Already exposed (for reference)
-
-Lifecycle (`init`/`shutdown`/`set_license`/`set_log_handler`/`version`); `RenderDevice` trait;
-XAML/font/texture providers (+ font fallbacks, registration, default properties);
-`GUI::LoadXaml`, `LoadApplicationResources`, app-resource chain; View create/size/scale/
-projection/flags/update + renderer init/update/render/offscreen; full input pump
-(mouse/wheel/scroll/touch/key/char/activate); `FrameworkElement` find-by-name, get-name,
-visibility, margin; routed `Click` + `KeyDown` subscriptions; TextBox text get/set + caret;
-focus; `Path` points; generic name-keyed `DependencyProperty` get/set on any
-`DependencyObject` (all 10 FFI value types, with type-tag validation + read-only guard);
-`VisualStateManager::GoToState`; custom classes (`ContentControl` base) + custom markup
-extensions.
-
----
-
 ## 1. View / Renderer
 
 Most of `IView` is unexposed beyond the basics. From `NsGui/IView.h`:
@@ -52,11 +37,11 @@ Building on the generic name-keyed property accessors, the remaining tree-access
 
 ## 3. Data binding
 
-Entirely unexposed. This is the largest functional area.
+`DataContext`, `ObservableCollection` → `ItemsSource`, and `DependencyObject`-backed
+view models are wrapped; bindings can be authored in XAML against Rust data. Still missing:
 
-- **`Binding`** construction + `SetBinding` / `BindingOperations` (Path, Source, ElementName, RelativeSource, Mode, Converter, StringFormat, FallbackValue).
-- **`INotifyPropertyChanged`** implemented from Rust so Rust-backed view models can drive XAML.
-- **`ObservableCollection` / `INotifyCollectionChanged`** so list controls update from Rust data.
+- **`Binding`** construction from code + `SetBinding` / `BindingOperations` (Path, Source, ElementName, RelativeSource, Mode, Converter, StringFormat, FallbackValue) — bindings are XAML-authored only today.
+- **`INotifyPropertyChanged`** from Rust for plain (non-`DependencyObject`) view models — needs runtime-reflected properties.
 - **Value converters.** `IValueConverter` / `IMultiValueConverter` implemented in Rust.
 - **`MultiBinding`**, `PriorityBinding`, `TemplateBinding` (runtime construction).
 - **`CollectionView` / `CollectionViewSource`** (sorting/filtering/grouping/current-item).

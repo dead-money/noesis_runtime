@@ -833,6 +833,81 @@ void* dm_noesis_markup_extension_register(
 // last instance is destroyed. Safe to call with NULL.
 void dm_noesis_markup_extension_unregister(void* token);
 
+// Instantiate a registered class (see dm_noesis_class_register) directly from
+// Rust, without a XAML reference. Returns a BaseComponent* with +1 ref for the
+// caller (release via dm_noesis_base_component_release), or NULL on null token.
+//
+// The instance is a DependencyObject carrying the class's registered DPs, so it
+// works as a data-binding source / view model: set it as an element's
+// DataContext (dm_noesis_framework_element_set_data_context) and bind to its
+// DPs in XAML. Writing a DP from Rust (dm_noesis_instance_set_property) raises
+// the change notification the binding engine observes.
+void* dm_noesis_class_create_instance(void* class_token);
+
+// ── Data binding bridge (Phase 5.E / TODO §3) ──────────────────────────────
+//
+// Drive XAML from Rust-owned data. Bindings are authored in XAML
+// (`{Binding Path}` / `ItemsSource="{Binding}"`); these entrypoints supply the
+// runtime data they resolve against.
+
+// Box a UTF-8 C string into a `BoxedValue<String>`. Returns a BaseComponent*
+// with +1 ref (release via dm_noesis_base_component_release). NULL text is
+// treated as empty. Use it for ObservableCollection items rendered by a
+// `<DataTemplate>` with `{Binding}` (the whole item), and anywhere a string
+// must cross as a BaseComponent.
+void* dm_noesis_box_string(const char* text);
+
+// Create an `ObservableCollection<BaseComponent>`. Returns a BaseComponent*
+// with +1 ref (release via dm_noesis_base_component_release). It implements
+// INotifyCollectionChanged, so once bound to an ItemsControl.ItemsSource every
+// mutation below raises CollectionChanged and the control regenerates.
+void* dm_noesis_observable_collection_create(void);
+
+// Append `item` (a borrowed BaseComponent*; the collection takes its own ref).
+// Returns the insertion index, or -1 if `collection` is not an
+// ObservableCollection.
+int32_t dm_noesis_observable_collection_add(void* collection, void* item);
+
+// Insert / replace at `index`. Return false on a null/non-collection pointer or
+// an out-of-range index (insert allows index == count; set requires
+// index < count).
+bool dm_noesis_observable_collection_insert(void* collection, uint32_t index, void* item);
+bool dm_noesis_observable_collection_set(void* collection, uint32_t index, void* item);
+
+// Remove the item at `index`. False on null/non-collection or out-of-range.
+bool dm_noesis_observable_collection_remove_at(void* collection, uint32_t index);
+
+// Remove every item.
+void dm_noesis_observable_collection_clear(void* collection);
+
+// Item count, or -1 if `collection` is not an ObservableCollection.
+int32_t dm_noesis_observable_collection_count(void* collection);
+
+// Borrowed (no +1) pointer to the item at `index`, or NULL on
+// null/non-collection/out-of-range. The collection owns the reference.
+void* dm_noesis_observable_collection_get(void* collection, uint32_t index);
+
+// Set / get a FrameworkElement's `DataContext`. `set` stores its own ref on
+// `context` (pass NULL to clear) and returns false if `element` is not a
+// FrameworkElement. `get` returns a borrowed (no +1) pointer or NULL.
+bool dm_noesis_framework_element_set_data_context(void* element, void* context);
+void* dm_noesis_framework_element_get_data_context(void* element);
+
+// Set an ItemsControl's `ItemsSource` (e.g. an ObservableCollection). Returns
+// false if `element` is not an ItemsControl. Pass NULL to clear.
+bool dm_noesis_items_control_set_items_source(void* element, void* items);
+
+// Number of items the ItemsControl sees through its bound source (a live
+// passthrough). -1 if `element` is not an ItemsControl.
+int32_t dm_noesis_items_control_items_count(void* element);
+
+// Number of *realized* item containers the generator has materialized. Only
+// grows when the generator regenerates, which for a source mutated after first
+// layout requires INotifyCollectionChanged to have fired — so it is a genuine
+// signal that change notification reached the control (vs. items_count, which
+// passes through regardless). -1 if `element` is not an ItemsControl.
+int32_t dm_noesis_items_control_realized_count(void* element);
+
 #ifdef __cplusplus
 }
 #endif
