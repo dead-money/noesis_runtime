@@ -1688,6 +1688,143 @@ void* dm_noesis_control_get_template(void* control);
 void* dm_noesis_framework_template_find_name(
     void* tmpl, const char* name, void* templated_parent);
 
+// ── Plain (non-DependencyObject) view models + MultiBinding (TODO §9 + §3) ──
+//
+// The bevy-bridge unblocker: a binding source that is NOT a DependencyObject.
+// A `RustPlainVm` is a plain `Noesis::BaseComponent` that (a) implements
+// `INotifyPropertyChanged` so a bound UI target refreshes when Rust raises
+// PropertyChanged, and (b) carries a per-registration synthetic `TypeClass`
+// whose properties resolve through reflection (custom `TypeProperty`
+// accessors) — so `{Binding Title}` against this object as a DataContext reads
+// a value Rust pushed in. Each property's current value is stored per-instance
+// as a boxed `BaseComponent*` (use the dm_noesis_box_* helpers to produce one);
+// reflection reads it back through `TypeProperty::GetComponent`.
+//
+// Lifetime mirrors the synthetic-class registry in noesis_classes.cpp: the
+// registration token (`PlainClassData*`) is refcounted — the Rust caller owns
+// the initial +1 (released by dm_noesis_plain_vm_unregister), every live
+// instance holds its own share, and the donated Rust free handler runs exactly
+// once when the last reference drops. A shutdown sweep
+// (dm_noesis_plain_vm_force_free_at_shutdown) defensively frees any handler box
+// whose instances bypassed normal teardown.
+
+// Content-type tag for a plain-VM reflected property. Determines the property's
+// reflected `Type*` (so the binding engine can convert to the target DP type)
+// and which Boxing the stored value is expected to carry.
+typedef enum dm_noesis_plain_type {
+    DM_NOESIS_PLAIN_INT32          = 0,
+    DM_NOESIS_PLAIN_DOUBLE         = 1,
+    DM_NOESIS_PLAIN_BOOL           = 2,
+    DM_NOESIS_PLAIN_STRING         = 3,
+    DM_NOESIS_PLAIN_BASE_COMPONENT = 4
+} dm_noesis_plain_type;
+
+// Invoked when a TwoWay / OneWayToSource binding writes a value BACK to a
+// plain-VM property (the UI mutated the source). `instance` is the borrowed
+// RustPlainVm*, `prop_index` the dense index returned by register_property, and
+// `boxed_value` a borrowed boxed `BaseComponent*` (may be NULL) — copy it
+// immediately (unbox with the dm_noesis_unbox_* helpers). The value is also
+// stored in the instance so a subsequent reflection read returns it. Optional.
+typedef void (*dm_noesis_plain_set_fn)(
+    void* userdata, void* instance, uint32_t prop_index, void* boxed_value);
+
+// Free callback for the donated registration userdata; runs exactly once when
+// the PlainClassData refcount hits zero. Optional (may be NULL).
+typedef void (*dm_noesis_plain_free_fn)(void* userdata);
+
+// Register a plain-VM type named `type_name`. Returns an opaque registration
+// token (owned via the refcount described above) or NULL on a NULL name or a
+// name already registered with Noesis Reflection. `on_set` / `free_handler`
+// may be NULL; `userdata` ownership transfers to C++.
+void* dm_noesis_plain_vm_register(
+    const char* type_name,
+    dm_noesis_plain_set_fn on_set,
+    void* userdata,
+    dm_noesis_plain_free_fn free_handler);
+
+// Add a reflected property `prop_name` of content type `content_type`
+// (dm_noesis_plain_type). Returns the dense property index, or UINT32_MAX on
+// failure (NULL args / bad tag / called after an instance exists). Call before
+// creating instances.
+uint32_t dm_noesis_plain_vm_register_property(
+    void* token, const char* prop_name, uint32_t content_type);
+
+// Create an instance of a registered plain-VM type. Returns a BaseComponent*
+// with +1 ref for the caller (release via dm_noesis_base_component_release).
+// Set it as an element's DataContext (dm_noesis_framework_element_set_data_context)
+// and author `{Binding PropName}` in XAML. NULL on a NULL token.
+void* dm_noesis_plain_vm_create_instance(void* token);
+
+// Store `boxed_value` (a boxed BaseComponent*, e.g. from dm_noesis_box_string;
+// may be NULL to clear) as the current value of property `prop_index`. The
+// instance takes its OWN reference — the caller still owns / must release its
+// boxed value. Does NOT raise PropertyChanged (call dm_noesis_plain_vm_notify).
+// false on a NULL instance or out-of-range index.
+bool dm_noesis_plain_vm_set_value(void* instance, uint32_t prop_index, void* boxed_value);
+
+// +1-owned boxed value currently stored for `prop_index` (AddRef'd; release via
+// dm_noesis_base_component_release), or NULL if unset / out of range. Reads the
+// reflection-visible value back without going through the binding.
+void* dm_noesis_plain_vm_get_value(void* instance, uint32_t prop_index);
+
+// Raise INotifyPropertyChanged.PropertyChanged for `prop_name` on `instance`,
+// so every binding sourced from this property re-reads. false on NULL args.
+bool dm_noesis_plain_vm_notify(void* instance, const char* prop_name);
+
+// Stop new instances being created and release the Rust caller's +1 on the
+// registration token. Live instances keep the registration alive until they die.
+void dm_noesis_plain_vm_unregister(void* token);
+
+// Shutdown sweep — see dm_noesis_classes_force_free_at_shutdown. Called from
+// dm_noesis_shutdown after Noesis::Shutdown.
+void dm_noesis_plain_vm_force_free_at_shutdown(void);
+
+// ── IMultiValueConverter + MultiBinding (TODO §3) ──────────────────────────
+//
+// MultiBinding combines N child Bindings through an IMultiValueConverter into a
+// single target value. RustMultiValueConverter forwards TryConvert into a Rust
+// vtable over an ARRAY of boxed values (one per child binding); the converter
+// boxes its combined result. Lifetime is modelled on RustValueConverter.
+
+// `values` points at `count` borrowed boxed `BaseComponent*` (each may be NULL),
+// one per child Binding in source order. `target_type` is an opaque
+// `const Noesis::Type*` (ignore it for simple converters). Write a +1-owned
+// `BaseComponent*` into `*out_result` (ownership transfers to Noesis) and return
+// true; return false to signal UnsetValue (fallback / default). Same threading
+// contract as the single-value converter — fires from Noesis's binding pump.
+typedef struct dm_noesis_multi_value_converter_vtable {
+    bool (*convert)(
+        void* userdata, void* const* values, uint32_t count,
+        const void* target_type, void* parameter, void** out_result);
+} dm_noesis_multi_value_converter_vtable;
+
+typedef void (*dm_noesis_multi_value_converter_free_fn)(void* userdata);
+
+// Create a Rust-backed IMultiValueConverter. +1 ref for the caller (release via
+// dm_noesis_multi_value_converter_destroy). NULL if `vt` is NULL.
+void* dm_noesis_multi_value_converter_create(
+    const dm_noesis_multi_value_converter_vtable* vt,
+    void* userdata,
+    dm_noesis_multi_value_converter_free_fn free_handler);
+void dm_noesis_multi_value_converter_destroy(void* converter);
+
+// Create an empty MultiBinding (+1 ref for the caller; release via
+// dm_noesis_multi_binding_destroy). SetBinding takes its own reference.
+void* dm_noesis_multi_binding_create(void);
+void dm_noesis_multi_binding_destroy(void* multi_binding);
+// Append a child Binding (a dm_noesis_binding_create result). The MultiBinding
+// takes its own reference. false on NULL/non-MultiBinding/non-Binding args.
+bool dm_noesis_multi_binding_add_binding(void* multi_binding, void* binding);
+// Attach the IMultiValueConverter (NULL clears). No-op on a bad handle.
+void dm_noesis_multi_binding_set_converter(void* multi_binding, void* converter);
+// Borrowed converter parameter (NULL clears).
+void dm_noesis_multi_binding_set_converter_parameter(void* multi_binding, void* parameter);
+// BindingMode ordinal (see dm_noesis_binding_set_mode).
+void dm_noesis_multi_binding_set_mode(void* multi_binding, int32_t mode);
+// Wire the MultiBinding onto `element`'s `dp_name` property. false if `element`
+// is not a DependencyObject, the DP name is unknown, or args are NULL.
+bool dm_noesis_set_multi_binding(void* element, const char* dp_name, void* multi_binding);
+
 #ifdef __cplusplus
 }
 #endif

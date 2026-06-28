@@ -59,7 +59,7 @@ use crate::ffi::{
 pub struct ConvertArg(Option<NonNull<c_void>>);
 
 impl ConvertArg {
-    fn new(raw: *mut c_void) -> Self {
+    pub(crate) fn new(raw: *mut c_void) -> Self {
         Self(NonNull::new(raw))
     }
 
@@ -134,7 +134,7 @@ pub enum Converted {
 impl Converted {
     /// Box into a `+1`-owned `BaseComponent*` (ownership transfers to C++), or
     /// null for [`Converted::Null`].
-    fn into_boxed(self) -> *mut c_void {
+    pub(crate) fn into_boxed(self) -> *mut c_void {
         match self {
             Converted::Bool(b) => unsafe { dm_noesis_box_bool(b) },
             Converted::Int32(i) => unsafe { dm_noesis_box_int32(i) },

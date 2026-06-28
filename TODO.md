@@ -26,9 +26,9 @@ don't keep re-discovering them.
 
 ## 3. Data binding
 
-- **`IMultiValueConverter` + `MultiBinding`** (runtime construction; `TryConvert` over an array of values).
 - **`PriorityBinding`, `TemplateBinding`** (runtime construction).
-- **`INotifyPropertyChanged` for plain (non-`DependencyObject`) view models.** Large: Noesis resolves non-DP binding paths only through registered `TypeProperty` reflection (no getter-by-name), so this needs the runtime reflection registration from §9. The `DependencyObject`-backed VM path already covers the notification need.
+
+Done: `IMultiValueConverter` + `MultiBinding` (`crate::multi_binding` — runtime construction, `add_binding`, Rust `TryConvert` over an array of boxed values). `INotifyPropertyChanged` for plain (non-`DependencyObject`) view models (`crate::plain_vm` — full read/write reflected properties via custom `TypeProperty` accessors + `PropertyChanged` notification; TwoWay writeback fires a Rust `on_set` hook).
 
 ## 4. Commands
 
@@ -87,12 +87,11 @@ values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `Scrol
 
 ## 9. Custom types / reflection registration
 
-`ClassBuilder` supports a `ContentControl` base plus custom markup extensions. This is also the
-prerequisite for §3 plain-VM `INotifyPropertyChanged` (runtime `TypeProperty` registration).
+`ClassBuilder` supports a `ContentControl` base plus custom markup extensions. Runtime-reflected
+plain properties are done (`crate::plain_vm`), unblocking §3 plain-VM `INotifyPropertyChanged`.
 
 - **More base classes.** `Control`, `FrameworkElement`, `UserControl`, `Panel` (custom layout), `Decorator`, `Freezable`, custom `Brush`/`Effect`/`Geometry`/`Transform`.
 - **Custom dependency properties:** more types, `PropertyMetadata` (defaults, coercion, `FrameworkPropertyMetadataOptions` like AffectsMeasure/Render), read-only DPs, `attached` properties.
-- **Runtime-reflected plain properties** (`NsProp`-equivalent `TypeProperty` registration) so non-DO Rust VMs become bindable — the missing half of §3 INPC.
 - **Custom routed events** registration on Rust-backed types.
 - **Custom enums** (`NsRegisterEnum`) usable from XAML.
 - **`RegisterComponent` / `Factory`** for arbitrary component types; `NsMeta`/content-property/`DependsOn`/`TypeConverter` metadata.

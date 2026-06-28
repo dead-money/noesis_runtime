@@ -77,6 +77,7 @@ extern "C" void dm_noesis_init(void)
 // noesis_classes.cpp / noesis_markup.cpp respectively.
 extern "C" void dm_noesis_classes_force_free_at_shutdown(void);
 extern "C" void dm_noesis_markup_extensions_force_free_at_shutdown(void);
+extern "C" void dm_noesis_plain_vm_force_free_at_shutdown(void);
 
 extern "C" void dm_noesis_shutdown(void)
 {
@@ -89,6 +90,7 @@ extern "C" void dm_noesis_shutdown(void)
     Noesis::Shutdown();
     dm_noesis_classes_force_free_at_shutdown();
     dm_noesis_markup_extensions_force_free_at_shutdown();
+    dm_noesis_plain_vm_force_free_at_shutdown();
 }
 
 extern "C" const char* dm_noesis_version(void)

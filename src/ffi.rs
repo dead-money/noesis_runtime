@@ -492,6 +492,56 @@ unsafe extern "C" {
         object: *mut c_void,
     ) -> bool;
 
+    // ── Plain (non-DependencyObject) view models (TODO §9 + §3) ───────────────
+    pub fn dm_noesis_plain_vm_register(
+        type_name: *const c_char,
+        on_set: Option<PlainSetFn>,
+        userdata: *mut c_void,
+        free_handler: Option<PlainFreeFn>,
+    ) -> *mut c_void;
+    pub fn dm_noesis_plain_vm_register_property(
+        token: *mut c_void,
+        prop_name: *const c_char,
+        content_type: u32,
+    ) -> u32;
+    pub fn dm_noesis_plain_vm_create_instance(token: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_plain_vm_set_value(
+        instance: *mut c_void,
+        prop_index: u32,
+        boxed_value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_plain_vm_get_value(instance: *mut c_void, prop_index: u32) -> *mut c_void;
+    pub fn dm_noesis_plain_vm_notify(instance: *mut c_void, prop_name: *const c_char) -> bool;
+    pub fn dm_noesis_plain_vm_unregister(token: *mut c_void);
+
+    // ── IMultiValueConverter + MultiBinding (TODO §3) ─────────────────────────
+    pub fn dm_noesis_multi_value_converter_create(
+        vt: *const MultiValueConverterVTable,
+        userdata: *mut c_void,
+        free_handler: MultiValueConverterFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_multi_value_converter_destroy(converter: *mut c_void);
+    pub fn dm_noesis_multi_binding_create() -> *mut c_void;
+    pub fn dm_noesis_multi_binding_destroy(multi_binding: *mut c_void);
+    pub fn dm_noesis_multi_binding_add_binding(
+        multi_binding: *mut c_void,
+        binding: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_multi_binding_set_converter(
+        multi_binding: *mut c_void,
+        converter: *mut c_void,
+    );
+    pub fn dm_noesis_multi_binding_set_converter_parameter(
+        multi_binding: *mut c_void,
+        parameter: *mut c_void,
+    );
+    pub fn dm_noesis_multi_binding_set_mode(multi_binding: *mut c_void, mode: i32);
+    pub fn dm_noesis_set_multi_binding(
+        element: *mut c_void,
+        dp_name: *const c_char,
+        multi_binding: *mut c_void,
+    ) -> bool;
+
     // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────
     // Mirrors cpp/noesis_controls.cpp; see cpp/noesis_shim.h for the borrow /
     // sentinel contract of each entrypoint.
@@ -758,6 +808,44 @@ pub struct ValueConverterVTable {
 /// whose ownership transferred to C++ at
 /// [`dm_noesis_value_converter_create`].
 pub type ValueConverterFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+/// Callback for a `TwoWay` / `OneWayToSource` write back to a plain-VM reflected
+/// property. Mirrors `dm_noesis_plain_set_fn`. `instance` is the borrowed
+/// `RustPlainVm*`, `prop_index` the dense index from
+/// [`dm_noesis_plain_vm_register_property`], `boxed_value` the borrowed boxed
+/// `BaseComponent*` the UI pushed (may be null).
+pub type PlainSetFn = unsafe extern "C" fn(
+    userdata: *mut c_void,
+    instance: *mut c_void,
+    prop_index: u32,
+    boxed_value: *mut c_void,
+);
+
+/// Free callback invoked exactly once when a plain-VM registration's refcount
+/// hits zero. Drops the boxed handler whose ownership transferred to C++ at
+/// [`dm_noesis_plain_vm_register`].
+pub type PlainFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+/// Mirror of `dm_noesis_multi_value_converter_vtable` in `cpp/noesis_shim.h`.
+/// `convert` receives the `userdata`, an array of `count` borrowed boxed
+/// `BaseComponent*` (`values`, each may be null), an opaque `target_type`, the
+/// borrowed `parameter`, and an out-slot taking a `+1`-owned `BaseComponent*`.
+#[repr(C)]
+pub struct MultiValueConverterVTable {
+    pub convert: unsafe extern "C" fn(
+        userdata: *mut c_void,
+        values: *const *mut c_void,
+        count: u32,
+        target_type: *const c_void,
+        parameter: *mut c_void,
+        out_result: *mut *mut c_void,
+    ) -> bool,
+}
+
+/// Free callback invoked exactly once when the underlying
+/// `RustMultiValueConverter` is finally destroyed. Drops the boxed handler whose
+/// ownership transferred to C++ at [`dm_noesis_multi_value_converter_create`].
+pub type MultiValueConverterFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 /// Mirror of `dm_noesis_command_vtable` in `cpp/noesis_shim.h`. Both fn
 /// pointers receive the `userdata` passed to [`dm_noesis_command_create`] and
