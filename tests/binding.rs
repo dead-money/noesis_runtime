@@ -86,7 +86,7 @@ fn rust_view_model_drives_binding() {
         // SAFETY: vm is alive for the rest of this scope; its raw() is a live
         // BaseComponent*. Noesis stores its own reference.
         assert!(
-            unsafe { content.set_data_context(vm.raw()) },
+            content.set_data_context(&vm),
             "set_data_context returned false (content not a FrameworkElement?)"
         );
 
