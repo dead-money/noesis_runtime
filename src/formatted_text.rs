@@ -1,5 +1,5 @@
-//! Code-built [`FormattedText`] measurement / layout (TODO §13): measure a
-//! string in a given font without authoring XAML or building a `TextBlock`.
+//! Code-built [`FormattedText`] measurement / layout: measure a string in a
+//! given font without authoring XAML or building a `TextBlock`.
 //!
 //! A [`FormattedText`] is an owning handle over a freshly-created Noesis
 //! `FormattedText` holding a single `+1` reference, released on [`Drop`] — the
@@ -10,7 +10,7 @@
 //!
 //! # Font resolution
 //!
-//! This module deliberately exposes **no** [`FontFamily`] entrypoint — the
+//! This module deliberately exposes **no** [`FontFamily`](crate::typography::FontFamily) entrypoint — the
 //! typography unit owns that. [`FormattedText::builder`] takes the family as a
 //! plain name string and builds the Noesis `FontFamily` internally in C++. The
 //! name resolves through the registered font provider / fallback chain (see

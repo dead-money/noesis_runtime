@@ -1,6 +1,6 @@
-//! Typography & text properties (TODO §13): the [`FontFamily`] wrapper, the
+//! Typography & text properties: the [`FontFamily`] wrapper, the
 //! `TextElement` attached font properties (size / family / foreground / weight /
-//! style / stretch), a representative subset of the OpenType [`Typography`]
+//! style / stretch), a representative subset of the OpenType `Typography`
 //! attached properties, and the IME [`CompositionUnderline`] list on a `TextBox`.
 //!
 //! # Ownership
@@ -12,10 +12,10 @@
 //! may be dropped right after assignment.
 //!
 //! The `TextElement` / `Typography` accessors and the `CompositionUnderline`
-//! list operate on a borrowed [`FrameworkElement`](crate::view::FrameworkElement)
+//! list operate on a borrowed [`FrameworkElement`]
 //! (any element, or specifically a `TextBox` for the IME underlines). Every
-//! setter has a getter that re-reads the value from the *live* Noesis object, so
-//! a stubbed / no-op implementation fails the round-trip tests.
+//! setter has a matching getter that re-reads the value from the *live* Noesis
+//! object.
 //!
 //! # Font family enumeration
 //!
@@ -23,7 +23,7 @@
 //! [`FontFamily::font_name`], which resolve through the registered font
 //! provider). There is no SDK API to enumerate the set of *available family
 //! names* from the font system; the host font provider is the authority on which
-//! families it serves. See `TODO.md` "Known SDK limitations".
+//! families it serves. See `LIMITATIONS.md` "Known SDK limitations".
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
@@ -53,7 +53,7 @@ use crate::view::FrameworkElement;
 
 // ── Enums (ordinals mirror the Noesis headers exactly) ───────────────────────
 
-/// `Noesis::FontWeight` (FontProperties.h). The numeric value *is* the weight
+/// `Noesis::FontWeight`. The numeric value *is* the weight
 /// (e.g. `Normal` = 400, `Bold` = 700), matching the OpenType `usWeightClass`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -84,8 +84,6 @@ pub enum FontWeight {
 }
 
 impl FontWeight {
-    /// Map a raw `Noesis::FontWeight` numeric weight class back to the typed
-    /// enum, or `None` for an unrecognised value.
     fn from_raw(v: i32) -> Option<Self> {
         match v {
             100 => Some(Self::Thin),
@@ -104,7 +102,7 @@ impl FontWeight {
     }
 }
 
-/// `Noesis::FontStyle` (FontProperties.h).
+/// `Noesis::FontStyle`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -118,8 +116,6 @@ pub enum FontStyle {
 }
 
 impl FontStyle {
-    /// Map a raw `Noesis::FontStyle` ordinal back to the typed enum, or `None`
-    /// for an unrecognised value.
     fn from_raw(v: i32) -> Option<Self> {
         match v {
             0 => Some(Self::Normal),
@@ -130,7 +126,7 @@ impl FontStyle {
     }
 }
 
-/// `Noesis::FontStretch` (FontProperties.h).
+/// `Noesis::FontStretch`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -156,8 +152,6 @@ pub enum FontStretch {
 }
 
 impl FontStretch {
-    /// Map a raw `Noesis::FontStretch` ordinal back to the typed enum, or `None`
-    /// for an unrecognised value.
     fn from_raw(v: i32) -> Option<Self> {
         match v {
             1 => Some(Self::UltraCondensed),
@@ -174,7 +168,7 @@ impl FontStretch {
     }
 }
 
-/// `Noesis::FontCapitals` (Typography.h).
+/// `Noesis::FontCapitals`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -196,8 +190,6 @@ pub enum FontCapitals {
 }
 
 impl FontCapitals {
-    /// Map a raw `Noesis::FontCapitals` ordinal back to the typed enum, or
-    /// `None` for an unrecognised value.
     fn from_raw(v: i32) -> Option<Self> {
         match v {
             0 => Some(Self::Normal),
@@ -212,7 +204,7 @@ impl FontCapitals {
     }
 }
 
-/// `Noesis::FontNumeralStyle` (Typography.h).
+/// `Noesis::FontNumeralStyle`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -226,8 +218,6 @@ pub enum FontNumeralStyle {
 }
 
 impl FontNumeralStyle {
-    /// Map a raw `Noesis::FontNumeralStyle` ordinal back to the typed enum, or
-    /// `None` for an unrecognised value.
     fn from_raw(v: i32) -> Option<Self> {
         match v {
             0 => Some(Self::Normal),
@@ -238,7 +228,7 @@ impl FontNumeralStyle {
     }
 }
 
-/// `Noesis::FontFraction` (Typography.h).
+/// `Noesis::FontFraction`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -252,8 +242,6 @@ pub enum FontFraction {
 }
 
 impl FontFraction {
-    /// Map a raw `Noesis::FontFraction` ordinal back to the typed enum, or
-    /// `None` for an unrecognised value.
     fn from_raw(v: i32) -> Option<Self> {
         match v {
             0 => Some(Self::Normal),
@@ -264,7 +252,7 @@ impl FontFraction {
     }
 }
 
-/// `Noesis::FontVariants` (Typography.h).
+/// `Noesis::FontVariants`.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -284,8 +272,6 @@ pub enum FontVariants {
 }
 
 impl FontVariants {
-    /// Map a raw `Noesis::FontVariants` ordinal back to the typed enum, or
-    /// `None` for an unrecognised value.
     fn from_raw(v: i32) -> Option<Self> {
         match v {
             0 => Some(Self::Normal),
@@ -299,8 +285,8 @@ impl FontVariants {
     }
 }
 
-/// `Noesis::CompositionLineStyle` (CompositionUnderline.h) — the line style of
-/// an IME composition underline.
+/// `Noesis::CompositionLineStyle` — the line style of an IME composition
+/// underline.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -478,8 +464,8 @@ pub fn get_font_family(element: &FrameworkElement) -> Option<FontFamilyRef> {
     NonNull::new(p).map(|ptr| FontFamilyRef { ptr })
 }
 
-/// Set `TextElement.Foreground` on `element` to any [`Brush`] (Noesis `AddRef`s
-/// it). Reuses [`crate::brushes`].
+/// Set `TextElement.Foreground` on `element` to any [`Brush`] from
+/// [`crate::brushes`] (Noesis `AddRef`s it).
 #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_foreground(element: &FrameworkElement, brush: &impl Brush) -> bool {
     // SAFETY: both pointers are live for the call.
@@ -666,7 +652,8 @@ pub fn num_composition_underlines(element: &FrameworkElement) -> Option<u32> {
     if n < 0 { None } else { Some(n as u32) }
 }
 
-/// Read the IME composition underline at `index` back from the live `TextBox`.
+/// Read the IME composition underline at `index` back from the live `TextBox`,
+/// or `None` if `index` is out of range or `element` is not a `TextBox`.
 #[must_use]
 pub fn composition_underline(
     element: &FrameworkElement,

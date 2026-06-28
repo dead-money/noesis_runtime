@@ -1,16 +1,5 @@
-//! Phase 1 integration test: drives the C++ `RustRenderDevice` subclass
-//! through one representative frame via the test-only entrypoint
-//! `noesis_test_run_frame_scenario`, with a [`MockDevice`] on the Rust
-//! side recording every virtual call. Asserts the recorded sequence matches
-//! the expected ordering verbatim (including the destructor-driven
-//! `drop_texture` / `drop_render_target` callbacks at scenario exit).
-//!
-//! Requires the `test-utils` Cargo feature:
-//!
-//! ```sh
-//! NOESIS_SDK_DIR=~/deadmoney/sdk/noesis-3.2.13 \
-//!   cargo test --features test-utils --test render_device
-//! ```
+//! Drives `RustRenderDevice` through a frame scenario via `noesis_test_run_frame_scenario`,
+//! with a `MockDevice` recording every virtual call and asserting the full sequence verbatim.
 
 #![cfg(feature = "test-utils")]
 
@@ -23,11 +12,6 @@ use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
     TextureDesc, TextureHandle, TextureRect, register,
 };
-
-// ────────────────────────────────────────────────────────────────────────────
-// Recorded call type — one variant per Noesis virtual the device implements.
-// Compared verbatim against the expected sequence below.
-// ────────────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
 enum Op {
@@ -85,12 +69,8 @@ enum Op {
     },
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// MockDevice — RenderDevice impl that records into a shared op log and hands
-// out monotonically-increasing handle IDs (so the assertion can pin specific
-// handle values without coupling to the Mock's internal state).
-// ────────────────────────────────────────────────────────────────────────────
-
+// Monotonically-increasing handle IDs let the assertion pin specific values
+// without coupling to mock internals.
 struct MockDevice {
     ops: Arc<Mutex<Vec<Op>>>,
     next_handle: u64,
@@ -280,10 +260,6 @@ impl RenderDevice for MockDevice {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// The test
-// ────────────────────────────────────────────────────────────────────────────
-
 #[test]
 #[allow(clippy::too_many_lines)] // expected-op vec dominates the line count
 fn frame_scenario_records_expected_op_sequence() {
@@ -296,7 +272,7 @@ fn frame_scenario_records_expected_op_sequence() {
     noesis_runtime::init();
 
     let log: Arc<Mutex<Vec<Op>>> = Arc::new(Mutex::new(Vec::new()));
-    let registered = register(MockDevice::new(log.clone()));
+    let registered = register(MockDevice::new(Arc::clone(&log)));
 
     // SAFETY: registered.raw() points to a live Noesis::RenderDevice* that
     // remains valid until `drop(registered)` below.

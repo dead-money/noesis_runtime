@@ -1,10 +1,14 @@
-//! Hand-written declarations matching `cpp/noesis_shim.h`.
+//! Raw `extern "C"` declarations for the `noesis_shim` C ABI.
 //!
-//! When the shim grows past ~30 functions, switch to `bindgen` driven from a
-//! `wrapper.h`. For Phase 0 the surface is too small to justify the build dep.
+//! This is the unsafe boundary between Rust and the native Noesis SDK. Every
+//! entrypoint here is hand-mirrored from `cpp/noesis_shim.h`, which is the
+//! source of truth for the per-function pointer-ownership, refcount, and
+//! value-layout contracts. Prefer the safe wrappers in the sibling modules
+//! (`view`, `brushes`, `commands`, ...) over calling these directly.
 
 use std::os::raw::{c_char, c_void};
 
+/// Severity of a log record delivered to a [`LogFn`] handler.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LogLevel {
@@ -15,6 +19,8 @@ pub enum LogLevel {
     Error = 4,
 }
 
+/// Log handler installed via [`noesis_set_log_handler`]. `file`, `channel`, and
+/// `message` are borrowed NUL-terminated strings valid only for the call.
 pub type LogFn = unsafe extern "C" fn(
     userdata: *mut c_void,
     file: *const c_char,
@@ -31,8 +37,8 @@ unsafe extern "C" {
     pub fn noesis_shutdown();
     pub fn noesis_version() -> *const c_char;
 
-    // Inspector / hot-reload toggles + queries (TODO §17). The Disable* trio
-    // must be called before noesis_init.
+    // Inspector / hot-reload toggles + queries. The Disable* trio must be
+    // called before noesis_init.
     pub fn noesis_disable_hot_reload();
     pub fn noesis_disable_socket_init();
     pub fn noesis_disable_inspector();
@@ -41,10 +47,12 @@ unsafe extern "C" {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// XamlProvider + View / Renderer FFI (Phase 4.C). See cpp/noesis_shim.h for
+// XamlProvider + View / Renderer FFI. See cpp/noesis_shim.h for
 // pointer-ownership contracts.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// Resolves XAML `uri`s to in-memory buffers. Install a Rust implementation via
+/// [`noesis_xaml_provider_create`] + [`noesis_set_xaml_provider`].
 #[repr(C)]
 pub struct XamlProviderVTable {
     pub load_xaml: unsafe extern "C" fn(
@@ -60,7 +68,7 @@ pub struct XamlProviderVTable {
 /// Rust — pass it back verbatim.
 pub type RegisterFontFn = unsafe extern "C" fn(register_cx: *mut c_void, filename: *const c_char);
 
-// System integration callback function pointers (Section 14). Each matches a
+// System integration callback function pointers. Each matches a
 // `noesis_*_cb` typedef in `cpp/noesis_shim.h`. `view` / `focused` are
 // borrowed opaque `Noesis::IView*` / `Noesis::UIElement*` pointers.
 pub type CursorCb = unsafe extern "C" fn(user: *mut c_void, view: *mut c_void, cursor_type: i32);
@@ -69,6 +77,8 @@ pub type SoftwareKeyboardCb =
 pub type OpenUrlCb = unsafe extern "C" fn(user: *mut c_void, url: *const c_char);
 pub type PlayAudioCb = unsafe extern "C" fn(user: *mut c_void, uri: *const c_char, volume: f32);
 
+/// Enumerates and opens font files for the text stack. Install a Rust
+/// implementation via [`noesis_font_provider_create`] + [`noesis_set_font_provider`].
 #[repr(C)]
 pub struct FontProviderVTable {
     pub scan_folder: unsafe extern "C" fn(
@@ -97,6 +107,8 @@ pub struct TextureInfoFfi {
     pub dpi_scale: f32,
 }
 
+/// Supplies texture metadata and pixel data for image `uri`s. Install a Rust
+/// implementation via [`noesis_texture_provider_create`] + [`noesis_set_texture_provider`].
 #[repr(C)]
 pub struct TextureProviderVTable {
     pub get_info: unsafe extern "C" fn(
@@ -114,11 +126,10 @@ pub struct TextureProviderVTable {
     ) -> bool,
 }
 
-/// Callback signature for [`noesis_get_xaml_dependencies`] (TODO §15). The
-/// C++ trampoline invokes it once per dependency found in the XAML buffer.
-/// `uri` is a borrowed NUL-terminated string; `kind` is a
-/// `Noesis::XamlDependencyType` ordinal (0 Filename, 1 Font, 2 `UserControl`,
-/// 3 Root).
+/// Callback signature for [`noesis_get_xaml_dependencies`]. The C++ trampoline
+/// invokes it once per dependency found in the XAML buffer. `uri` is a borrowed
+/// NUL-terminated string; `kind` is a `Noesis::XamlDependencyType` ordinal
+/// (0 Filename, 1 Font, 2 `UserControl`, 3 Root).
 pub type XamlDependencyFn = unsafe extern "C" fn(user: *mut c_void, uri: *const c_char, kind: i32);
 
 unsafe extern "C" {
@@ -150,7 +161,7 @@ unsafe extern "C" {
     pub fn noesis_texture_provider_destroy(provider: *mut c_void);
     pub fn noesis_set_texture_provider(provider: *mut c_void);
 
-    // ── XAML loading variants (TODO §15) ─────────────────────────────────────
+    // ── XAML loading variants ────────────────────────────────────────────────
     pub fn noesis_get_xaml_dependencies(
         xaml: *const u8,
         len: u32,
@@ -185,7 +196,7 @@ unsafe extern "C" {
         provider: *mut c_void,
     );
 
-    // System integration callbacks (Section 14).
+    // System integration callbacks.
     pub fn noesis_set_cursor_callback(user: *mut c_void, cb: Option<CursorCb>);
     pub fn noesis_set_software_keyboard_callback(user: *mut c_void, cb: Option<SoftwareKeyboardCb>);
     pub fn noesis_set_open_url_callback(user: *mut c_void, cb: Option<OpenUrlCb>);
@@ -221,7 +232,7 @@ unsafe extern "C" {
     pub fn noesis_renderer_render_offscreen(renderer: *mut c_void) -> bool;
     pub fn noesis_renderer_render(renderer: *mut c_void, flip_y: bool, clear: bool);
 
-    // ── Stereo / VR rendering (TODO §1) ──────────────────────────────────────
+    // ── Stereo / VR rendering ─────────────────────────────────────────────────
     pub fn noesis_renderer_render_stereo(
         renderer: *mut c_void,
         eye_matrix: *const f32,
@@ -256,13 +267,13 @@ unsafe extern "C" {
     pub fn noesis_view_deactivate(view: *mut c_void);
     pub fn noesis_view_mouse_hwheel(view: *mut c_void, x: i32, y: i32, delta: i32) -> bool;
 
-    // ── View flags / quality / stats (TODO §1) ───────────────────────────────
+    // ── View flags / quality / stats ──────────────────────────────────────────
     pub fn noesis_view_get_flags(view: *mut c_void) -> u32;
     pub fn noesis_view_set_tessellation_max_pixel_error(view: *mut c_void, error: f32);
     pub fn noesis_view_get_tessellation_max_pixel_error(view: *mut c_void) -> f32;
     pub fn noesis_view_get_stats(view: *mut c_void, out: *mut crate::view::ViewStats);
 
-    // ── Gesture / touch thresholds (TODO §1) ─────────────────────────────────
+    // ── Gesture / touch thresholds ────────────────────────────────────────────
     pub fn noesis_view_set_holding_time_threshold(view: *mut c_void, ms: u32);
     pub fn noesis_view_set_holding_distance_threshold(view: *mut c_void, pixels: u32);
     pub fn noesis_view_set_manipulation_distance_threshold(view: *mut c_void, pixels: u32);
@@ -270,10 +281,10 @@ unsafe extern "C" {
     pub fn noesis_view_set_double_tap_distance_threshold(view: *mut c_void, pixels: u32);
     pub fn noesis_view_set_emulate_touch(view: *mut c_void, emulate: bool);
 
-    // ── Stereo / VR (TODO §1) ────────────────────────────────────────────────
+    // ── Stereo / VR ────────────────────────────────────────────────────────────
     pub fn noesis_view_set_stereo_offscreen_scale_factor(view: *mut c_void, factor: f32);
 
-    // ── View-driven timers (TODO §1) ─────────────────────────────────────────
+    // ── View-driven timers ─────────────────────────────────────────────────────
     pub fn noesis_view_create_timer(
         view: *mut c_void,
         interval_ms: u32,
@@ -284,7 +295,7 @@ unsafe extern "C" {
     pub fn noesis_view_restart_timer(token: *mut c_void, interval_ms: u32);
     pub fn noesis_view_cancel_timer(token: *mut c_void);
 
-    // ── Rendering event (TODO §1) ────────────────────────────────────────────
+    // ── Rendering event ──────────────────────────────────────────────────────
     pub fn noesis_view_add_rendering_handler(
         view: *mut c_void,
         cb: RenderingFn,
@@ -330,7 +341,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn noesis_unsubscribe_event(token: *mut c_void);
 
-    // ── Non-routed lifecycle events (TODO §5) ─────────────────────────────────
+    // ── Non-routed lifecycle events ───────────────────────────────────────────
     // The callback is the same shape as `ClickFn` (a bare `void(userdata)`), so
     // it is reused here.
     pub fn noesis_subscribe_lifecycle(
@@ -353,7 +364,7 @@ unsafe extern "C" {
     ) -> bool;
     pub fn noesis_routed_args_source(args: *const c_void) -> *mut c_void;
 
-    // ── Typed arg accessors: focus / drag / manipulation (TODO §5) ────────────
+    // ── Typed arg accessors: focus / drag / manipulation ──────────────────────
     pub fn noesis_routed_events_focus_old(args: *const c_void) -> *mut c_void;
     pub fn noesis_routed_events_focus_new(args: *const c_void) -> *mut c_void;
     pub fn noesis_routed_events_drag_effects(
@@ -400,7 +411,7 @@ unsafe extern "C" {
     ) -> bool;
     pub fn noesis_routed_events_manip_is_inertial(args: *const c_void) -> i32;
 
-    // ── DragDrop source side + DataObject copy/paste handlers (TODO §5) ────────
+    // ── DragDrop source side + DataObject copy/paste handlers ──────────────────
     pub fn noesis_routed_events_do_drag_drop(
         source: *mut c_void,
         data: *mut c_void,
@@ -442,7 +453,7 @@ unsafe extern "C" {
         prop_type: PropType,
         default_ptr: *const c_void,
     ) -> u32;
-    // ── Custom base classes + richer DP metadata + layout (TODO §9) ──────────
+    // ── Custom base classes + richer DP metadata + layout ─────────────────────
     pub fn noesis_class_register_property_ex(
         class_token: *mut c_void,
         prop_name: *const c_char,
@@ -552,7 +563,7 @@ unsafe extern "C" {
     pub fn noesis_observable_collection_count(collection: *mut c_void) -> i32;
     pub fn noesis_observable_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
 
-    // ── ICollectionView current-item navigation (Phase 6) ────────────────────
+    // ── ICollectionView current-item navigation ───────────────────────────────
     pub fn noesis_collection_view_source_create() -> *mut c_void;
     pub fn noesis_collection_view_source_set_source(cvs: *mut c_void, source: *mut c_void) -> bool;
     pub fn noesis_collection_view_source_get_view(cvs: *mut c_void) -> *mut c_void;
@@ -587,8 +598,8 @@ unsafe extern "C" {
     pub fn noesis_items_control_items_count(element: *mut c_void) -> i32;
     pub fn noesis_items_control_realized_count(element: *mut c_void) -> i32;
 
-    // ── Element tree access (TODO §2). See cpp/noesis_shim.h for pointer-
-    // ownership + tag-validation contracts. ──────────────────────────────────
+    // ── Element tree access. See cpp/noesis_shim.h for pointer-ownership +
+    // tag-validation contracts. ───────────────────────────────────────────────
 
     // A. Tree traversal.
     pub fn noesis_visual_children_count(element: *mut c_void) -> u32;
@@ -672,7 +683,7 @@ unsafe extern "C" {
         name: *const c_char,
     ) -> bool;
 
-    // Standalone NameScope (TODO §2).
+    // Standalone NameScope.
     pub fn noesis_name_scope_create() -> *mut c_void;
     pub fn noesis_name_scope_get(element: *mut c_void) -> *mut c_void;
     pub fn noesis_name_scope_set(element: *mut c_void, scope: *mut c_void) -> bool;
@@ -691,7 +702,7 @@ unsafe extern "C" {
     pub fn noesis_dependency_object_check_access(obj: *mut c_void) -> bool;
     pub fn noesis_dependency_object_thread_id(obj: *mut c_void) -> u32;
 
-    // ── Commands: ICommand from Rust (TODO §4) ───────────────────────────────
+    // ── Commands: ICommand from Rust ──────────────────────────────────────────
     pub fn noesis_command_create(
         vt: *const CommandVTable,
         userdata: *mut c_void,
@@ -700,7 +711,7 @@ unsafe extern "C" {
     pub fn noesis_command_destroy(command: *mut c_void);
     pub fn noesis_command_raise_can_execute_changed(command: *mut c_void);
 
-    // RoutedCommand / RoutedUICommand (TODO §4).
+    // RoutedCommand / RoutedUICommand.
     pub fn noesis_routed_command_create(
         name: *const c_char,
         owner_type_name: *const c_char,
@@ -724,7 +735,7 @@ unsafe extern "C" {
     pub fn noesis_routed_ui_command_get_text(command: *mut c_void) -> *const c_char;
     pub fn noesis_routed_ui_command_set_text(command: *mut c_void, text: *const c_char);
 
-    // CommandBinding (TODO §4).
+    // CommandBinding.
     pub fn noesis_command_binding_create(
         command: *mut c_void,
         executed: CmdExecutedFn,
@@ -735,11 +746,11 @@ unsafe extern "C" {
     pub fn noesis_command_binding_attach(token: *mut c_void, element: *mut c_void) -> bool;
     pub fn noesis_command_binding_destroy(token: *mut c_void);
 
-    // Built-in command libraries (TODO §4).
+    // Built-in command libraries.
     pub fn noesis_application_command(which: u32) -> *const c_void;
     pub fn noesis_component_command(which: u32) -> *const c_void;
 
-    // ── Value boxing / unboxing primitives (TODO §3) ──────────────────────────
+    // ── Value boxing / unboxing primitives ────────────────────────────────────
     pub fn noesis_box_bool(value: bool) -> *mut c_void;
     pub fn noesis_box_int32(value: i32) -> *mut c_void;
     pub fn noesis_box_double(value: f64) -> *mut c_void;
@@ -748,7 +759,7 @@ unsafe extern "C" {
     pub fn noesis_unbox_double(boxed: *mut c_void, out: *mut f64) -> bool;
     pub fn noesis_unbox_string(boxed: *mut c_void) -> *const c_char;
 
-    // ── Value converters: IValueConverter from Rust (TODO §3) ─────────────────
+    // ── Value converters: IValueConverter from Rust ───────────────────────────
     pub fn noesis_value_converter_create(
         vt: *const ValueConverterVTable,
         userdata: *mut c_void,
@@ -756,7 +767,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn noesis_value_converter_destroy(converter: *mut c_void);
 
-    // ── Code-built Binding + SetBinding (TODO §3) ─────────────────────────────
+    // ── Code-built Binding + SetBinding ────────────────────────────────────────
     pub fn noesis_binding_create(path: *const c_char) -> *mut c_void;
     pub fn noesis_binding_destroy(binding: *mut c_void);
     pub fn noesis_binding_set_source(binding: *mut c_void, source: *mut c_void);
@@ -792,7 +803,7 @@ unsafe extern "C" {
         object: *mut c_void,
     ) -> bool;
 
-    // ── Plain (non-DependencyObject) view models (TODO §9 + §3) ───────────────
+    // ── Plain (non-DependencyObject) view models ──────────────────────────────
     pub fn noesis_plain_vm_register(
         type_name: *const c_char,
         on_set: Option<PlainSetFn>,
@@ -814,7 +825,7 @@ unsafe extern "C" {
     pub fn noesis_plain_vm_notify(instance: *mut c_void, prop_name: *const c_char) -> bool;
     pub fn noesis_plain_vm_unregister(token: *mut c_void);
 
-    // ── IMultiValueConverter + MultiBinding (TODO §3) ─────────────────────────
+    // ── IMultiValueConverter + MultiBinding ────────────────────────────────────
     pub fn noesis_multi_value_converter_create(
         vt: *const MultiValueConverterVTable,
         userdata: *mut c_void,
@@ -839,7 +850,7 @@ unsafe extern "C" {
         multi_binding: *mut c_void,
     ) -> bool;
 
-    // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────
+    // ── Controls — programmatic access ────────────────────────────────────────
     // Mirrors cpp/noesis_controls.cpp; see cpp/noesis_shim.h for the borrow /
     // sentinel contract of each entrypoint.
 
@@ -889,7 +900,7 @@ unsafe extern "C" {
     pub fn noesis_passwordbox_get_password(element: *mut c_void) -> *const c_char;
     pub fn noesis_passwordbox_set_password(element: *mut c_void, password: *const c_char) -> bool;
 
-    // ── §8 remainder (noesis_controls_) ──────────────────────────────────
+    // ── Additional control accessors ──────────────────────────────────────────
     // Selector.SelectedValue / SelectedValuePath
     pub fn noesis_controls_selector_get_selected_value(element: *mut c_void) -> *mut c_void;
     pub fn noesis_controls_selector_set_selected_value(
@@ -999,7 +1010,7 @@ unsafe extern "C" {
     // Image source
     pub fn noesis_controls_image_get_source(element: *mut c_void) -> *mut c_void;
     pub fn noesis_controls_image_set_source(element: *mut c_void, source: *mut c_void) -> bool;
-    // ── ResourceDictionary, Style, templates (TODO §7). See cpp/noesis_shim.h
+    // ── ResourceDictionary, Style, templates. See cpp/noesis_shim.h
     //    for the per-function ownership contract (create/parse → +1 owned;
     //    get_* → AddRef'd +1 owned; find_* / get_application_resources →
     //    borrowed, do not release). ──────────────────────────────────────────
@@ -1051,7 +1062,7 @@ unsafe extern "C" {
         templated_parent: *mut c_void,
     ) -> *mut c_void;
 
-    // ── §7 triggers / selector / resource extensions ───────────────────────
+    // ── Triggers / selector / resource extensions ──────────────────────────────
     //
     // Trigger/DataTrigger/MultiTrigger/EventTrigger are constructed at +1 and
     // attached to a Style's Triggers collection (which takes its own ref).
@@ -1177,7 +1188,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
 }
 
-// ── Brushes, transforms, effects, RenderOptions (TODO §11) ──────────────────
+// ── Brushes, transforms, effects, RenderOptions ─────────────────────────────
 //
 // Object construction from Rust. Each `*_create` returns a `+1`-owned
 // `BaseComponent*` (the owning wrapper in src/brushes.rs / src/transforms.rs
@@ -1351,7 +1362,7 @@ unsafe extern "C" {
     pub fn noesis_render_options_set_bitmap_scaling_mode(obj: *mut c_void, mode: i32) -> bool;
     pub fn noesis_render_options_get_bitmap_scaling_mode(obj: *mut c_void) -> i32;
 
-    // ── Shape elements (TODO §10) — see cpp/noesis_shapes.cpp / src/shapes.rs ─
+    // ── Shape elements — see cpp/noesis_shapes.cpp / src/shapes.rs ─────────────
     pub fn noesis_rectangle_create() -> *mut c_void;
     pub fn noesis_ellipse_create() -> *mut c_void;
     pub fn noesis_line_create() -> *mut c_void;
@@ -1405,7 +1416,7 @@ unsafe extern "C" {
     pub fn noesis_line_get(shape: *mut c_void, out: *mut f32) -> bool;
 }
 
-// Geometry object model (TODO §10). Declarations mirror cpp/noesis_shim.h by
+// Geometry object model. Declarations mirror cpp/noesis_shim.h by
 // hand; see cpp/noesis_geometry.cpp for the ownership contract (each *_create
 // hands out one owned reference released by the Rust handle's Drop).
 unsafe extern "C" {
@@ -1562,7 +1573,7 @@ unsafe extern "C" {
     pub fn noesis_geometry_group_child_count(geometry: *mut c_void) -> i32;
 }
 
-// SVG / SVGPath parsing (TODO §12). See cpp/noesis_svg.cpp. The handles are
+// SVG / SVGPath parsing. See cpp/noesis_svg.cpp. The handles are
 // plain heap objects (NOT BaseComponents); release with the matching *_destroy.
 unsafe extern "C" {
     pub fn noesis_svg_path_parse(str: *const c_char) -> *mut c_void;
@@ -1607,7 +1618,7 @@ unsafe extern "C" {
 pub type TextureRenderCallback =
     unsafe extern "C" fn(device: *mut c_void, user: *mut c_void) -> *mut c_void;
 
-// ── ImageSource / BitmapSource family (TODO §12 "Bitmaps") ──────────────────
+// ── ImageSource / BitmapSource family ───────────────────────────────────────
 //
 // Object construction from Rust. Each `*_create` returns a `+1`-owned
 // `BaseComponent*` (the owning wrapper in src/imaging.rs releases it on Drop).
@@ -1670,7 +1681,7 @@ unsafe extern "C" {
         width: *mut u32,
         height: *mut u32,
     ) -> bool;
-    // Typography & text properties (TODO §13) — cpp/noesis_typography.cpp.
+    // Typography & text properties — cpp/noesis_typography.cpp.
     pub fn noesis_typography_font_family_create(source: *const c_char) -> *mut c_void;
     pub fn noesis_typography_font_family_get_source(family: *mut c_void) -> *const c_char;
     pub fn noesis_typography_font_family_get_num_fonts(family: *mut c_void) -> u32;
@@ -1748,7 +1759,7 @@ unsafe extern "C" {
     pub fn noesis_typography_text_box_clear_composition_underlines(element: *mut c_void) -> bool;
 }
 
-// ── Immediate-mode drawing: Pen + DrawingContext (TODO §10) ──────────────────
+// ── Immediate-mode drawing: Pen + DrawingContext ─────────────────────────────
 //
 // `Pen` / `RectangleGeometry` are code-built like the brushes above (each
 // `*_create` returns a `+1`-owned `BaseComponent*` released on the owning
@@ -1866,7 +1877,7 @@ unsafe extern "C" {
     pub fn noesis_drawing_push_blending_mode(context: *mut c_void, mode: i32) -> bool;
 }
 
-// ── MeshData + Mesh element (TODO §10) ───────────────────────────────────────
+// ── MeshData + Mesh element ──────────────────────────────────────────────────
 //
 // `_create` entrypoints return a `+1`-owned BaseComponent the Rust handle
 // releases on Drop (see src/mesh.rs). Vertex / UV buffers are interleaved
@@ -1996,18 +2007,17 @@ pub struct CommandVTable {
 /// Free callback invoked exactly once when the underlying `RustCommand` is
 /// finally destroyed (last reference released). Drops the boxed handler whose
 /// ownership transferred to C++ at [`noesis_command_create`]. Reused for the
-/// [`CommandBinding`](crate::commands::CommandBinding) bridge (TODO §4) — same
-/// shape and contract.
+/// [`CommandBinding`](crate::commands::CommandBinding) bridge — same shape and
+/// contract.
 pub type CommandFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
-/// [`CommandBinding`](crate::commands::CommandBinding) `Executed` callback (TODO
-/// §4): run the action. `parameter` is the borrowed command parameter (may be
-/// NULL). Fires on the view-driving thread inside the input/command route.
+/// [`CommandBinding`](crate::commands::CommandBinding) `Executed` callback: run
+/// the action. `parameter` is the borrowed command parameter (may be NULL).
+/// Fires on the view-driving thread inside the input/command route.
 pub type CmdExecutedFn = unsafe extern "C" fn(userdata: *mut c_void, parameter: *mut c_void);
 
-/// [`CommandBinding`](crate::commands::CommandBinding) `CanExecute` callback
-/// (TODO §4): return whether the command may run now. `parameter` borrowed; may
-/// be NULL.
+/// [`CommandBinding`](crate::commands::CommandBinding) `CanExecute` callback:
+/// return whether the command may run now. `parameter` borrowed; may be NULL.
 pub type CmdCanExecuteFn =
     unsafe extern "C" fn(userdata: *mut c_void, parameter: *mut c_void) -> bool;
 
@@ -2105,7 +2115,7 @@ pub type NameScopeEnumFn =
 pub type RenderingFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 // ────────────────────────────────────────────────────────────────────────────
-// Custom XAML class registration (Phase 5.C). See cpp/noesis_shim.h for the
+// Custom XAML class registration. See cpp/noesis_shim.h for the
 // per-type value layout convention each variant of `PropType` enforces.
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -2177,7 +2187,7 @@ pub type PropChangedFn = unsafe extern "C" fn(
 pub type ClassFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 // ────────────────────────────────────────────────────────────────────────────
-// Animation & timing (TODO §6 / Phase C). See cpp/noesis_animation.cpp.
+// Animation & timing. See cpp/noesis_animation.cpp.
 // Every `*_create` returns a +1-owned BaseComponent* (released by the owning
 // Rust handle's Drop via noesis_base_component_release).
 // ────────────────────────────────────────────────────────────────────────────
@@ -2551,7 +2561,7 @@ unsafe extern "C" {
     pub fn noesis_animation_parallel_timeline_child_count(group: *mut c_void) -> i32;
 }
 
-// ── FormattedText measurement / layout (TODO §13) ───────────────────────────
+// ── FormattedText measurement / layout ──────────────────────────────────────
 //
 // `_create` returns a `+1`-owned `FormattedText*` (src/formatted_text.rs
 // releases it on Drop via noesis_base_component_release). Enum args are the
@@ -2614,8 +2624,8 @@ unsafe extern "C" {
     ) -> bool;
 }
 
-// Reflection meta: custom enums / routed events / factory + string conversion
-// (TODO §9). See cpp/noesis_shim.h for the full ownership + threading contracts.
+// Reflection meta: custom enums / routed events / factory + string conversion.
+// See cpp/noesis_shim.h for the full ownership + threading contracts.
 // ────────────────────────────────────────────────────────────────────────────
 
 /// One (name, value) pair of a runtime enum, mirroring
@@ -2675,7 +2685,7 @@ unsafe extern "C" {
         out_name: *mut *const c_char,
     ) -> bool;
 
-    // TextBlock inline content model (TODO §13). Constructors hand out a +1
+    // TextBlock inline content model. Constructors hand out a +1
     // BaseComponent* (release via noesis_base_component_release).
     pub fn noesis_text_inlines_run_create(text: *const c_char) -> *mut c_void;
     pub fn noesis_text_inlines_span_create() -> *mut c_void;
@@ -2714,7 +2724,7 @@ unsafe extern "C" {
     pub fn noesis_text_inlines_collection_count(collection: *mut c_void) -> i32;
     pub fn noesis_text_inlines_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
 
-    // Code-side element-tree construction (Phase 1): Decorator/Border Child,
+    // Code-side element-tree construction: Decorator/Border Child,
     // Panel Children, Grid row/column definitions. Collections hand out a +1
     // BaseComponent* (release via noesis_base_component_release); get/get_at
     // return borrowed (no +1) pointers owned by the host.
@@ -2758,7 +2768,7 @@ unsafe extern "C" {
     pub fn noesis_definition_collection_count(coll: *mut c_void) -> i32;
     pub fn noesis_definition_collection_get(coll: *mut c_void, index: u32) -> *mut c_void;
 }
-/// Coerce callback (TODO §9). Invoked inside Noesis's value pipeline when a
+/// Coerce callback. Invoked inside Noesis's value pipeline when a
 /// coerced DP's effective value is computed. `in_value` is the pre-coercion
 /// value (per the DP's `PropType` layout); `out_value` is pre-initialized to a
 /// copy of `in_value` and the implementation overwrites it with the coerced
@@ -2771,7 +2781,7 @@ pub type CoerceFn = unsafe extern "C" fn(
     out_value: *mut c_void,
 );
 
-/// Layout vtable (TODO §9). The trampoline subclass's `MeasureOverride` /
+/// Layout vtable. The trampoline subclass's `MeasureOverride` /
 /// `ArrangeOverride` forward into these. Sizes are in DIPs; `instance` is the
 /// owning object's `BaseComponent*`. Implementations write the desired (measure)
 /// / used (arrange) size to `out_w`/`out_h`. `#[repr(C)]` so the C++ struct
@@ -2804,7 +2814,7 @@ pub struct LayoutVtable {
 /// Free callback for a donated layout `userdata` box. Mirrors [`ClassFreeFn`].
 pub type LayoutFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
-/// Render callback (TODO §10). The trampoline subclass's `OnRender` override
+/// Render callback. The trampoline subclass's `OnRender` override
 /// forwards into this. `instance` is the owning object's `BaseComponent*`;
 /// `context` is a borrowed `Noesis::DrawingContext*` valid only for the call —
 /// issue draw commands through the `noesis_drawing_*` entrypoints.
@@ -2814,7 +2824,7 @@ pub type RenderFn =
 /// Free callback for a donated render `userdata` box. Mirrors [`ClassFreeFn`].
 pub type RenderFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
-// ── Test-only routed-event raisers (TODO §5) ────────────────────────────────
+// ── Test-only routed-event raisers ───────────────────────────────────────────
 //
 // Gated by the `test-utils` Cargo feature. Drag and manipulation events cannot
 // be synthesized headlessly (a drag needs an OS pointer/drag loop; manipulation
@@ -2843,7 +2853,7 @@ unsafe extern "C" {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Input — finer control (TODO §16). Element-level capture, keyboard/focus
+// Input — finer control. Element-level capture, keyboard/focus
 // state, focus traversal, FocusManager / KeyboardNavigation statics, and input
 // gestures + bindings. See cpp/noesis_shim.h for the full contracts.
 // ────────────────────────────────────────────────────────────────────────────
@@ -2942,8 +2952,8 @@ unsafe extern "C" {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Diagnostics: error / assert handlers + memory queries (TODO §17/§18). See
-// cpp/noesis_shim.h. All NsCore kernel functions — kernel must be up.
+// Diagnostics: error / assert handlers + memory queries. See cpp/noesis_shim.h.
+// All NsCore kernel functions — kernel must be up.
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Binary-compatible with `Noesis::ErrorContext` (and the C

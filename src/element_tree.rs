@@ -1,5 +1,5 @@
-//! Code-side element-tree construction (Phase 1): build and mutate panel trees
-//! and `Grid` row/column definitions from Rust.
+//! Code-side element-tree construction: build and mutate panel trees and
+//! `Grid` row/column definitions from Rust.
 //!
 //! The built-in element types are created via XAML parse and driven by name, but
 //! the collections that hold a tree's structure — `Panel::Children`,
@@ -15,7 +15,7 @@
 //!   [`RowDefinition`] / [`ColumnDefinition`] from code, set their
 //!   [`GridLength`], add them, and read the lengths back.
 //! * The `Decorator` / `Border` `Child` slot is on
-//!   [`FrameworkElement`](crate::view::FrameworkElement) itself
+//!   [`FrameworkElement`] itself
 //!   ([`set_decorator_child`](crate::view::FrameworkElement::set_decorator_child)
 //!   / [`decorator_child`](crate::view::FrameworkElement::decorator_child)).
 //!
@@ -49,8 +49,8 @@ use crate::view::FrameworkElement;
 
 /// The kind of value a [`GridLength`] holds, mirroring `Noesis::GridUnitType`.
 ///
-/// Note the WPF-unusual ordinal order (`Auto` precedes `Pixel`), matched to the
-/// SDK's `NsGui/GridLength.h` so the value round-trips by ordinal.
+/// The ordinal order is WPF-unusual (`Auto` precedes `Pixel`) to match the SDK's
+/// `NsGui/GridLength.h`, so the value round-trips across the FFI by ordinal.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
 #[non_exhaustive]

@@ -61,10 +61,6 @@ pub trait FontProvider: Send + Sync + 'static {
     fn open_font(&mut self, folder_uri: &str, filename: &str) -> Option<&[u8]>;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Trampolines
-// ────────────────────────────────────────────────────────────────────────────
-
 /// SAFETY: `userdata` must be a pointer produced by [`set_font_provider`]
 /// and still alive.
 unsafe fn provider<'a>(userdata: *mut c_void) -> &'a mut Box<dyn FontProvider> {
@@ -130,10 +126,6 @@ static VTABLE: FontProviderVTable = FontProviderVTable {
     scan_folder: t_scan_folder,
     open_font: t_open_font,
 };
-
-// ────────────────────────────────────────────────────────────────────────────
-// Registered — RAII wrapper holding the boxed impl and the C++ provider
-// ────────────────────────────────────────────────────────────────────────────
 
 /// Owns a Rust [`FontProvider`] impl together with its C++
 /// `RustFontProvider` instance. Parallel to
@@ -252,8 +244,7 @@ fn register_with<P: FontProvider>(provider: P, install: impl FnOnce(*mut c_void)
 
 /// Install `provider` as the font provider for the URI `scheme` (the part
 /// before `://`). Noesis consults the scheme-scoped provider for matching
-/// font URIs in preference to the global one. Reuses [`set_font_provider`]'s
-/// trampoline + [`Registered`] machinery; only the install call differs.
+/// font URIs in preference to the global one.
 ///
 /// # Panics
 ///
@@ -268,8 +259,7 @@ pub fn set_scheme_font_provider<P: FontProvider>(scheme: &str, provider: P) -> R
 }
 
 /// Install `provider` as the font provider for `assembly` (the assembly name in
-/// a pack URI). Reuses [`set_font_provider`]'s machinery; only the install call
-/// differs.
+/// a pack URI).
 ///
 /// # Panics
 ///
@@ -284,8 +274,7 @@ pub fn set_assembly_font_provider<P: FontProvider>(assembly: &str, provider: P) 
 }
 
 /// Install `provider` as the font provider scoped to both a `scheme` and an
-/// `assembly`. Reuses [`set_font_provider`]'s machinery; only the install call
-/// differs.
+/// `assembly`.
 ///
 /// # Panics
 ///
@@ -342,9 +331,10 @@ pub fn set_font_fallbacks<S: AsRef<str>>(families: &[S]) {
     }
 }
 
-/// Default font properties applied when elements don't set them.
-/// `weight`, `stretch`, `style` mirror the enums in `NsGui/InputEnums.h`;
-/// a WPF-normal default is `(15.0, 400, 5, 0)`.
+/// Default font properties applied to elements that don't set them.
+/// `weight`, `stretch`, and `style` are Noesis font-enum codes
+/// (`FontWeight`, `FontStretch`, `FontStyle`); the WPF-normal default is
+/// `(15.0, 400, 5, 0)`.
 pub fn set_font_default_properties(size: f32, weight: i32, stretch: i32, style: i32) {
     unsafe {
         crate::ffi::noesis_set_font_default_properties(size, weight, stretch, style);

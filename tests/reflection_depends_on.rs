@@ -1,11 +1,5 @@
-//! TODO §9 — `DependsOn` metadata attribution, the analogue of the
-//! `ContentProperty` path (`Noesis::DependsOnMetaData`, NsGui/DependsOnMetaData.h,
-//! attached at the type level like `ContentPropertyMetaData`).
-//!
-//! The round-trip proof reads the recorded property name back THROUGH the live
-//! reflection metadata (`TypeMeta::FindMeta<DependsOnMetaData>` +
-//! `GetDependsOnProperty`): a stub that did not actually attach the metadata
-//! would return `None` from `get_depends_on`.
+//! `DependsOn` and `ContentProperty` metadata round-trip through Noesis reflection; both can
+//! coexist on a single type.
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
 use noesis_runtime::ffi::{ClassBase, PropType};
@@ -37,10 +31,8 @@ fn depends_on_metadata() {
         b.add_property("Second", PropType::Int32);
         let _reg = b.register().expect("class registration failed");
 
-        // No metadata yet.
         assert_eq!(get_depends_on("NzDep.Widget"), None);
 
-        // Attach DependsOn(First) and read it straight back through reflection.
         assert!(
             add_depends_on("NzDep.Widget", "First"),
             "add_depends_on returned false"
@@ -51,19 +43,12 @@ fn depends_on_metadata() {
             "DependsOn metadata did not round-trip through reflection"
         );
 
-        // Unknown type fails for both attach and query.
         assert!(!add_depends_on("NzDep.NoSuchType", "First"));
         assert_eq!(get_depends_on("NzDep.NoSuchType"), None);
 
-        // A type with no DependsOn metadata returns None (built-in Button).
         assert_eq!(get_depends_on("Button"), None);
 
-        // ── ContentProperty + DependsOn coexist on one type ──────────────────
-        // FindMeta is keyed by the metadata TypeClass and AddMeta only appends,
-        // so a type carries BOTH and each reads back independently —
-        // contradicting the stale "can't have both" note in
-        // ContentPropertyMetaData.h (which names a non-existent
-        // DependsOnAttributeMetaData type).
+        // FindMeta is keyed by metadata TypeClass so a type carries both independently.
         let mut b2 = ClassBuilder::new("NzDep.Both", ClassBase::FrameworkElement, Noop);
         b2.add_property("Content", PropType::Int32);
         b2.add_property("Trigger", PropType::Int32);

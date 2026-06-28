@@ -1,10 +1,6 @@
-//! Phase C — attached-property REGISTRATION on a Rust-backed owner type
-//! (TODO §9 "Custom dependency properties: attached").
-//!
-//! Registers a Rust-backed owner class carrying an Int32 DP, then sets/gets it
-//! as an attached property (`owner:Prop`) on an unrelated built-in element and
-//! reads the value back THROUGH Noesis. Also checks the negative case (an
-//! unknown owner type is rejected).
+//! Attached-property registration on a Rust-backed owner type: sets and gets an
+//! Int32 DP as an attached property on a built-in element, and verifies that an
+//! unknown owner type is rejected.
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
 use noesis_runtime::ffi::{ClassBase, PropType};
@@ -29,7 +25,6 @@ fn custom_attached_property() {
     noesis_runtime::init();
 
     {
-        // Register the owner type + its attached DP BEFORE resolving it.
         let mut b = ClassBuilder::new("Att.Owner", ClassBase::FrameworkElement, NoopChange);
         let slot = b.add_property("Slot", PropType::Int32);
         assert_eq!(slot, 0);
@@ -38,7 +33,6 @@ fn custom_attached_property() {
         // An unrelated built-in element carries the attached DP.
         let mut border = FrameworkElement::parse(XAML).expect("parse Border");
 
-        // Set the attached DP via the Rust owner type name, read back via Noesis.
         assert!(
             border.set_attached_i32("Att.Owner", "Slot", 9),
             "set attached on Rust-registered owner failed"
@@ -49,7 +43,6 @@ fn custom_attached_property() {
             "attached DP did not round-trip"
         );
 
-        // Negative: an unknown owner type must be rejected.
         assert!(
             !border.set_attached_i32("Att.DoesNotExist", "Slot", 1),
             "unknown owner type must be rejected"

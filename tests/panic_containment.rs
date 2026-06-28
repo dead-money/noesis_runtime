@@ -1,13 +1,6 @@
-//! Panic-safety: a user callback that `panic!`s inside an FFI trampoline must be
-//! contained (turned into the trampoline's safe default) and must NOT unwind
-//! across the C ABI — unwinding past `extern "C"` is undefined behavior and
-//! would abort the process.
-//!
-//! We drive the real SDK invoker (`InvokeErrorHandler`) so the panic happens
-//! *inside* `error_trampoline` exactly as Noesis would trigger it. If the
-//! `catch_unwind` guard were missing, the unwind would tear the process down
-//! before any later assertion could run; reaching the end of the test (and the
-//! engine still being usable afterwards) is the proof of containment.
+//! Panic-safety: a panicking FFI callback must be caught by the trampoline's
+//! `catch_unwind` guard rather than unwinding across the C ABI (undefined behavior).
+//! Reaching the end of the test with the engine still usable is the proof of containment.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -29,8 +22,6 @@ fn panicking_handler_is_contained_not_aborting() {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
 
-    // Counts how many times the panicking closure was actually entered — proves
-    // the trampoline really invoked it (and then swallowed the unwind).
     let entered = Arc::new(AtomicUsize::new(0));
 
     {
@@ -46,7 +37,6 @@ fn panicking_handler_is_contained_not_aborting() {
         diag::invoke_error("panic.cpp", 2, false, "boom two");
     }
 
-    // We got here, so neither invoke aborted: the panics were contained.
     assert_eq!(
         entered.load(Ordering::SeqCst),
         2,

@@ -1,16 +1,8 @@
-//! Phase 5.A.5 — FFI-level smoke test for View input methods.
+//! FFI-level smoke test for View input methods (mouse, key, touch, scroll).
+//! Asserts `View::update` reports change after the first update; does not test rendering.
 //!
-//! Doesn't exercise rendering. Registers a minimal XAML provider, loads a
-//! `<Button>` scene, drives mouse/key/touch/focus events, and asserts that
-//! `View::update` reports change (`true`) at the expected moments.
-//!
-//! The Click/hit-test assertion would require a `Noesis::EventHandler`
-//! trampoline across the FFI; pushed to a later phase if we decide we want
-//! unit-level dispatch testing. For now, `update() -> true` after an event
-//! proves the event reached the render tree.
-//!
-//! Run with `NOESIS_SDK_DIR` set, e.g.
-//!   cargo test -p `noesis_runtime` --test input -- --nocapture
+//! Run with `NOESIS_SDK_DIR` set:
+//!   `cargo test -p noesis_runtime --test input -- --nocapture`
 
 use std::collections::HashMap;
 
@@ -61,18 +53,10 @@ fn view_input_ffi_smoke() {
         view.set_size(200, 200);
         view.activate();
 
-        // First Update builds the initial render tree → expected true.
-        // (The first Update is the canonical "something changed" moment —
-        // we lock this in as the one hard assertion. Subsequent Update
-        // return values depend on whether the theme wires hover/press
-        // VisualStates, which isn't guaranteed for a bare Button without
-        // an application theme loaded.)
+        // First Update builds the render tree — always reports change.
+        // Subsequent Updates depend on theme VisualStates (not guaranteed headless).
         assert!(view.update(0.0), "first Update should report change");
 
-        // Drive pointer events. Assertions are on "trampoline didn't panic
-        // and returned a bool" — which is all the FFI layer can vouch for.
-        // Functional dispatch (Click firing on a button) is covered at the
-        // integration level once we have the input plugin wired.
         let _ = view.mouse_move(100, 100);
         let _ = view.update(0.016);
 
@@ -83,21 +67,16 @@ fn view_input_ffi_smoke() {
         let _ = view.mouse_double_click(100, 100, MouseButton::Left);
         let _ = view.update(0.064);
 
-        // Key + char smoke — Noesis will route to the focused element
-        // (here the Button). We don't assert on result; we just verify the
-        // trampolines don't crash and return sanely.
         let _ = view.key_down(Key::Tab);
         let _ = view.key_up(Key::Tab);
         let _ = view.key_down(Key::A);
         let _ = view.char_input('a' as u32);
         let _ = view.key_up(Key::A);
 
-        // Touch.
         let _ = view.touch_down(100, 100, 7);
         let _ = view.touch_move(110, 110, 7);
         let _ = view.touch_up(110, 110, 7);
 
-        // Scroll / wheel.
         let _ = view.mouse_wheel(100, 100, 120);
         let _ = view.scroll(100, 100, 1.0);
         let _ = view.hscroll(100, 100, -1.0);

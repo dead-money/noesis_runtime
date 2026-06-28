@@ -1,20 +1,4 @@
-//! TODO §5 — generic routed-event subscription integration test.
-//!
-//! Loads a XAML scene (a stretching `Grid` root with a focusable `TextBox`),
-//! subscribes Rust callbacks to a spread of routed events through the generic
-//! `subscribe_event` surface, drives synthetic mouse / keyboard / layout input
-//! through the headless View, and asserts each handler fired with the expected
-//! typed argument values.
-//!
-//! Covers, in one process (Noesis inits once per test binary):
-//!   * Mouse — `MouseLeftButtonDown` reports the click position + Left button.
-//!   * Keyboard — `KeyUp` reports the released key ordinal.
-//!   * Lifecycle — `Loaded` fires on view setup; `SizeChanged` reports the new
-//!     size after a `set_size` resize.
-//!   * `handled_too` + `out_handled` — two handlers on the same element: the
-//!     first (`handled_too=true`) marks the event handled; the second
-//!     (`handled_too=false`) is correctly skipped.
-//!   * Negative — an unknown event name returns `None`.
+//! Generic routed-event subscription: mouse, keyboard, and lifecycle events dispatched through a headless View, with `handled_too` / `out_handled` semantics.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -81,7 +65,6 @@ fn routed_events_dispatch_typed_args() {
 
         let content = view.content().expect("View::content returned None");
 
-        // ── Lifecycle: Loaded (subscribe BEFORE the first update raises it) ──
         let loaded_h = Arc::clone(&loaded);
         let loaded_sub = subscribe_event(
             &content,
@@ -94,7 +77,6 @@ fn routed_events_dispatch_typed_args() {
         )
         .expect("subscribe Loaded returned None");
 
-        // ── Lifecycle: SizeChanged → captures the new size each fire ──
         let size_h = Arc::clone(&size_state);
         let size_sub = subscribe_event(
             &content,
@@ -107,7 +89,6 @@ fn routed_events_dispatch_typed_args() {
         )
         .expect("subscribe SizeChanged returned None");
 
-        // ── Mouse: MouseLeftButtonDown → position + button ──
         // handled_too=true so we observe the press regardless of other handlers.
         let mouse_h = Arc::clone(&mouse_state);
         let mouse_sub = subscribe_event(
@@ -128,7 +109,6 @@ fn routed_events_dispatch_typed_args() {
         )
         .expect("subscribe MouseLeftButtonDown returned None");
 
-        // ── Keyboard: KeyUp → key ordinal ──
         let key_h = Arc::clone(&key_state);
         let key_sub = subscribe_event(
             &content,
@@ -143,11 +123,9 @@ fn routed_events_dispatch_typed_args() {
         )
         .expect("subscribe KeyUp returned None");
 
-        // ── handled_too + out_handled: two handlers, same element + event ──
-        // A is added first (handled_too=true) and marks the event handled by
-        // returning true. B (handled_too=false) must then be skipped. We use
-        // MouseLeftButtonUp here so A marking the event handled doesn't suppress
-        // the MouseLeftButtonDown the position test above relies on.
+        // A (handled_too=true) marks the event handled by returning true; B
+        // (handled_too=false) must be skipped. We use MouseLeftButtonUp so A
+        // marking handled doesn't suppress the Down event the position test uses.
         let pa = Arc::clone(&preview_a);
         let sub_a = subscribe_event(
             &content,
@@ -172,7 +150,6 @@ fn routed_events_dispatch_typed_args() {
         )
         .expect("subscribe MouseLeftButtonUp (B) returned None");
 
-        // ── Negative: unknown event name → None ──
         let unknown =
             subscribe_event_by_name(&content, "NoSuchEvent", false, |_args: &EventArgs| false);
         assert!(unknown.is_none(), "unknown event name should not subscribe");
@@ -203,16 +180,12 @@ fn routed_events_dispatch_typed_args() {
         let _ = view.key_up(Key::B);
         let _ = view.update(0.112);
 
-        // Resize the view → root grid re-arranges → SizeChanged with new size.
         view.set_size(300, 150);
         let _ = view.update(0.128);
 
-        // ── Assertions while everything is still alive ──
-        // Note: `Loaded` is a render-driven lifecycle event and does not fire
-        // in this headless (no render device) harness — subscribing to it
-        // succeeded above, which is what we verify for that path. The
-        // observable lifecycle assertion uses `SizeChanged` (below), which the
-        // layout pass raises without a renderer.
+        // `Loaded` is render-driven and does not fire in a headless harness;
+        // subscribing without error is what we verify for that path. `SizeChanged`
+        // is layout-driven and fires without a renderer.
 
         let mouse = *mouse_state.lock().unwrap();
         let (pos, btn) = mouse.expect("MouseLeftButtonDown handler never fired");
@@ -234,7 +207,6 @@ fn routed_events_dispatch_typed_args() {
             "SizeChanged new size {size:?} should be ~ (300, 150)"
         );
 
-        // handled_too semantics: A ran and marked handled; B was skipped.
         assert_eq!(
             preview_a.load(Ordering::SeqCst),
             1,

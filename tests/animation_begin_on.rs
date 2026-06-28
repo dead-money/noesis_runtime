@@ -1,9 +1,5 @@
-//! TODO §6 — storyboard-less direct animation (`BeginAnimation` /
-//! `ApplyAnimationClock` equivalent). `Animation::begin_on` starts an animation
-//! straight onto an element's dependency property using that element's view
-//! `TimeManager`, no `Storyboard` required. We assert the animated value reaches
-//! its target, plus the two failure modes: an unknown property and a target not
-//! connected to a live view (no `TimeManager`).
+//! `Animation::begin_on` drives a dependency property directly, without a
+//! `Storyboard`, using the element's view `TimeManager`.
 
 use noesis_runtime::animation::{Animation, DoubleAnimation, HandoffBehavior, Timeline};
 use noesis_runtime::view::{FrameworkElement, View};
@@ -40,7 +36,6 @@ fn begin_on_drives_property_directly() {
         assert!(anim.set_to(Some(1.0)), "setter should succeed");
         anim.set_duration_secs(0.5);
 
-        // Unknown property: should fail.
         assert!(
             !anim.begin_on(
                 &box_el,
@@ -50,7 +45,6 @@ fn begin_on_drives_property_directly() {
             "begin_on with an unknown property should fail"
         );
 
-        // Real run on Opacity.
         assert!(
             anim.begin_on(&box_el, "Opacity", HandoffBehavior::SnapshotAndReplace),
             "begin_on on a connected element should succeed"

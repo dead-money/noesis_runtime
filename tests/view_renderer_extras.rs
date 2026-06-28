@@ -1,16 +1,6 @@
-//! TODO §1 — the remaining View / Renderer surface:
-//!   * the `Rendering` per-frame event (subscribe / fire / detach-on-drop),
-//!   * gesture / touch thresholds + `EmulateTouch`,
-//!   * `SetStereoOffscreenScaleFactor` + the `RenderStereo` VR render path,
-//!   * `RenderDevice` offscreen-texture / glyph-cache tuning (set + get).
-//!
-//! Single `#[test]` per file (Noesis can't be re-init'd in a process): all
-//! work happens in an inner scope so every owning wrapper drops before
-//! `shutdown()`. Mirrors `tests/view_timers.rs`, reusing its headless
-//! `RenderDevice` so the render-driven assertions observe a real render pass.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test --features test-utils --test view_renderer_extras -- --nocapture`
+//! Integration tests for the `Rendering` per-frame event, gesture/touch
+//! thresholds, stereo render paths, and `RenderDevice` offscreen/glyph-cache
+//! tuning.
 
 use std::collections::HashMap;
 use std::num::NonZeroU64;
@@ -47,11 +37,9 @@ impl XamlProvider for InMem {
     }
 }
 
-// Minimal headless RenderDevice: hands out monotonic handles and valid scratch
-// buffers, dropping everything else on the floor. Enough to drive a real
-// Noesis render pass without a GPU. Based on tests/view_timers.rs, plus a
-// `draws` counter so a render path (e.g. RenderStereo) can be proven to have
-// actually issued geometry rather than no-op'd.
+// Minimal headless RenderDevice that drops everything except monotonic handles
+// and scratch buffers. The `draws` counter lets stereo render paths be
+// verified to have actually issued geometry rather than no-op'd.
 struct NullDevice {
     next: u64,
     vb: Vec<u8>,
@@ -144,8 +132,7 @@ impl RenderDevice for NullDevice {
     }
 }
 
-// Row-major identity 4×4. Used as the view projection and the stereo eye
-// matrices: with an identity projection any eye matrix is trivially "enclosed",
+// With an identity projection any eye matrix is trivially "enclosed",
 // satisfying RenderStereo's culling precondition.
 const IDENTITY: [f32; 16] = [
     1.0, 0.0, 0.0, 0.0, //
@@ -155,7 +142,7 @@ const IDENTITY: [f32; 16] = [
 ];
 
 #[test]
-#[allow(clippy::too_many_lines)] // one test exercises the whole §1 remainder
+#[allow(clippy::too_many_lines)]
 fn rendering_event_thresholds_stereo_and_device_tuning() {
     if let (Ok(name), Ok(key)) = (
         std::env::var("NOESIS_LICENSE_NAME"),
@@ -169,18 +156,14 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
     let draws = Arc::new(AtomicU32::new(0));
 
     {
-        // Every owning wrapper must drop before shutdown().
         let mut bytes = HashMap::new();
         bytes.insert("ui.xaml".to_string(), XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
         let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
-        // ── (D) RenderDevice offscreen / glyph-cache tuning: set→get round-trip.
-        //        Print the build's defaults (they are config/version dependent —
-        //        e.g. this SDK ships a 2048 glyph cache, not the 1024 the header
-        //        comments suggest — so we don't assert them), then prove each
-        //        setter writes through to the live Noesis::RenderDevice using
-        //        values deliberately distinct from any plausible default. ──────
+        // Defaults are version-dependent (e.g. SDK ships a 2048 glyph cache,
+        // not the 1024 the header suggests) so we print but do not assert them;
+        // we only assert writes made with values distinct from any plausible default.
         let mut device = register(NullDevice::new(Arc::clone(&draws)));
         eprintln!(
             "RenderDevice defaults: offscreen {}x{} samples={} default_surf={} max_surf={} glyph {}x{}",
@@ -233,8 +216,7 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
             "glyph-cache height round-trip"
         );
 
-        // Restore sane sizes so the real render pass below has a workable glyph
-        // cache (automatic offscreen sizing; default glyph cache).
+        // Restore sane sizes for the real render pass below.
         device.set_offscreen_width(0);
         device.set_offscreen_height(0);
         device.set_offscreen_sample_count(1);
@@ -244,40 +226,30 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         let element = FrameworkElement::load("ui.xaml").expect("ui.xaml load failed");
         let mut view = View::create(element);
         view.set_size(200, 200);
-        // Identity projection: required before RenderStereo (eye matrices must be
-        // enclosed by the view projection — identity makes that trivially true).
+        // Identity projection: eye matrices must be enclosed by the view projection;
+        // identity makes that trivially true.
         view.set_projection_matrix(&IDENTITY);
         view.activate();
         assert!(view.update(0.0), "first Update should report change");
 
-        // ── (B) Gesture / touch thresholds + EmulateTouch. These IView setters
-        //        have NO SDK getter, so there is nothing to round-trip; the
-        //        check is that each reaches a live IView and leaves it healthy
-        //        (asserted by the successful render pass at the end). The
-        //        gesture-recognition behaviour they tune is not observable in a
-        //        headless harness without full multi-touch simulation. ────────
+        // These threshold setters have no SDK getter; correctness is confirmed
+        // by the view remaining healthy through the render pass at the end.
         view.set_holding_time_threshold(750);
         view.set_holding_distance_threshold(20);
         view.set_manipulation_distance_threshold(15);
         view.set_double_tap_time_threshold(400);
         view.set_double_tap_distance_threshold(12);
         view.set_emulate_touch(true);
-        // EmulateTouch makes the mouse drive touch input. Send a mouse press and
-        // confirm the view stays responsive (no crash, processes the event).
+        // EmulateTouch makes the mouse drive touch input.
         let _ = view.mouse_move(100, 100);
         view.update(0.05);
         let _ = view.mouse_button_down(100, 100, noesis_runtime::view::MouseButton::Left);
         let _ = view.mouse_button_up(100, 100, noesis_runtime::view::MouseButton::Left);
         view.set_emulate_touch(false);
 
-        // ── (C) Stereo offscreen scale factor. Also getter-less; 1.0 is the
-        //        non-VR default. Set a VR-recommended value, then drive the
-        //        RenderStereo path below with it in effect. ───────────────────
+        // Getter-less; the stereo path below will run with this factor in effect.
         view.set_stereo_offscreen_scale_factor(2.5);
 
-        // ── (A) Rendering event: subscribe a per-frame handler, drive frames,
-        //        and assert it fires; then drop the subscription and assert it
-        //        goes silent (proving `-=` detach on drop). ───────────────────
         let rt = Arc::clone(&render_ticks);
         let sub = view
             .add_rendering_handler(move || {
@@ -290,8 +262,7 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
             renderer.init(&device);
         }
 
-        // Drive several full frames. The Rendering event is raised once per
-        // frame as the composition tree is finalized.
+        // Drive several full frames to let the Rendering event fire.
         let mut t = 0.1_f64;
         for _ in 0..5 {
             view.update(t);
@@ -310,7 +281,6 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
             "Rendering handler should fire during the render frames, got {fired}"
         );
 
-        // Detach: dropping the subscription must run `-=`; no further ticks.
         drop(sub);
         for _ in 0..5 {
             view.update(t);
@@ -328,14 +298,8 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
             "Rendering handler must stop firing after its subscription is dropped"
         );
 
-        // ── (C) RenderStereo: exercise both the multi-pass (single eye) and
-        //        single-pass (both eyes) VR render entrypoints with identity eye
-        //        matrices (NoesisGUI projects primitives into a [0..w]×[0..h]
-        //        non-normalized space, so an identity eye matrix maps the 200×200
-        //        content onto itself — i.e. geometry stays on-screen, not
-        //        culled). We count draw_batch calls across the stereo block and
-        //        assert it advances: that proves the stereo entrypoints actually
-        //        drove the device through to geometry, not just no-op'd. ───────
+        // Count draw_batch calls across the stereo block to prove the entrypoints
+        // drove the device to actual geometry rather than no-op'd.
         view.update(t);
         let draws_before_stereo = draws.load(Ordering::SeqCst);
         {
@@ -355,8 +319,6 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         );
         t += 0.05;
 
-        // A plain render still works afterwards, and ViewStats reflects geometry
-        // — the whole pipeline survived the §1 surface we just exercised.
         view.update(t);
         {
             let mut renderer = view.renderer();

@@ -1,20 +1,5 @@
-//! Integration tests for the code-built `TextBlock` inline content model
-//! (TODO §13): construct the `Inline` element family, add inlines to a
-//! `TextBlock`'s (and a nested `Span`'s) `InlineCollection`, and read every
-//! value BACK from the live Noesis object.
-//!
-//! The assertions are written to FAIL against a stub: a constructor that
-//! returned the wrong object, a `SetText`/`SetNavigateUri` that didn't reach
-//! Noesis, a collection `Add` that didn't grow `Count()`, a `SetChild` that
-//! dropped the element, or a `TextDecorations` setter that no-op'd would all
-//! break a round-trip here. Structure proofs use pointer identity between the
-//! inline handed to a collection and the inline read back out of it.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process);
-//! all owning handles drop inside the inner scope before `shutdown()`.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test text_inlines -- --nocapture`
+//! Code-built `TextBlock` inline content round-trips: Run, `LineBreak`, Span subclasses,
+//! Hyperlink, and `InlineUIContainer` via live Noesis objects.
 
 use noesis_runtime::text_inlines::{
     Bold, Hyperlink, Inline, InlineUIContainer, Italic, LineBreak, Run, Span, TextDecorations,
@@ -35,7 +20,6 @@ fn text_inlines_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── Run text round-trips through the live Noesis object ─────────────
         let mut run = Run::new("hello");
         assert_eq!(run.text().as_deref(), Some("hello"), "Run text from ctor");
         assert!(run.set_text("world"), "Run::set_text");
@@ -45,7 +29,6 @@ fn text_inlines_round_trip() {
             "Run text after set_text"
         );
 
-        // ── TextBlock.Inlines: empty, then grows as we add ──────────────────
         let tb_xaml = format!("<TextBlock {NS}/>");
         let tb = FrameworkElement::parse(&tb_xaml).expect("parse TextBlock");
         let mut inlines = text_block_inlines(&tb).expect("TextBlock inlines");
@@ -67,14 +50,12 @@ fn text_inlines_round_trip() {
             "TextBlock inline[0] is the Run we added"
         );
 
-        // A non-TextBlock element has no TextBlock inlines.
         let border = FrameworkElement::parse(&format!("<Border {NS}/>")).expect("parse Border");
         assert!(
             text_block_inlines(&border).is_none(),
             "Border is not a TextBlock"
         );
 
-        // ── Nested Span structure: Run inside a Span inside the TextBlock ───
         let span = Span::new();
         let inner_run = Run::new("nested");
         {
@@ -88,7 +69,6 @@ fn text_inlines_round_trip() {
                 "Span inline[0] is the nested Run"
             );
         }
-        // Add the Span to the TextBlock — three top-level inlines now.
         let span_idx = inlines.add(&span).expect("add span to TextBlock");
         assert_eq!(span_idx, 2, "Span is the third top-level inline");
         assert_eq!(inlines.count(), 3, "TextBlock now has three inlines");
@@ -107,7 +87,6 @@ fn text_inlines_round_trip() {
             "nested Run survives via the live Span collection"
         );
 
-        // ── Span subclasses construct and expose nested inlines ─────────────
         let bold = Bold::new();
         let italic = Italic::new();
         let underline = Underline::new();
@@ -121,7 +100,6 @@ fn text_inlines_round_trip() {
         assert!(italic.inlines().is_some(), "Italic exposes inlines");
         assert!(underline.inlines().is_some(), "Underline exposes inlines");
 
-        // ── Hyperlink NavigateUri round-trips ───────────────────────────────
         let mut link = Hyperlink::new();
         assert_eq!(link.navigate_uri(), None, "fresh Hyperlink has no URI");
         assert!(
@@ -133,7 +111,6 @@ fn text_inlines_round_trip() {
             Some("https://noesisengine.com/"),
             "Hyperlink NavigateUri read back from Noesis"
         );
-        // Hyperlink is a Span subclass: it can host inline content too.
         {
             let mut li = link.inlines().expect("Hyperlink inlines");
             let label = Run::new("click me");
@@ -141,7 +118,6 @@ fn text_inlines_round_trip() {
             assert_eq!(li.count(), 1, "Hyperlink hosts its label Run");
         }
 
-        // ── Inline TextDecorations round-trips on the base Inline ───────────
         let deco_run = Run::new("decorated");
         assert_eq!(
             deco_run.text_decorations(),
@@ -157,7 +133,6 @@ fn text_inlines_round_trip() {
             Some(TextDecorations::Strikethrough),
             "TextDecorations read back from live Inline"
         );
-        // Also exercises the setter on a Span subclass via the trait.
         assert!(bold.set_text_decorations(TextDecorations::Underline));
         assert_eq!(
             bold.text_decorations(),
@@ -165,7 +140,6 @@ fn text_inlines_round_trip() {
             "Bold TextDecorations round-trip"
         );
 
-        // ── InlineUIContainer hosts a UIElement (Child) by identity ─────────
         let mut container = InlineUIContainer::new();
         assert!(!container.has_child(), "fresh container has no child");
         let button = FrameworkElement::parse(&format!("<Button {NS} Content=\"Go\"/>"))
@@ -177,7 +151,6 @@ fn text_inlines_round_trip() {
             button.raw(),
             "InlineUIContainer.Child is the exact Button we set"
         );
-        // The container is itself an inline — add it to the TextBlock.
         let cidx = inlines.add(&container).expect("add container to TextBlock");
         assert_eq!(cidx, 3, "container is the fourth top-level inline");
         assert_eq!(inlines.count(), 4, "TextBlock now has four inlines");

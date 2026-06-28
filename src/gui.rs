@@ -57,9 +57,10 @@ pub fn load_application_resources(uri: &str) -> bool {
 /// `Fonts/`. If your font provider's `register_font` calls register
 /// under `Fonts/`, the corresponding leaf needs to use a relative-up
 /// URI (`../Fonts/#X`) — or the leaf needs to live at the same
-/// directory level as the assets it references. `AoR`'s original
-/// theme uses absolute `/Assets/Fonts/...` URIs to sidestep this;
-/// in our setup the equivalent is the relative-up form.
+/// directory level as the assets it references. Absolute URIs
+/// (`/Assets/Fonts/#X`) sidestep leaf-relative resolution entirely;
+/// the relative-up form is the alternative when assets live above the
+/// leaf.
 ///
 /// # Panics
 ///

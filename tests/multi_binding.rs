@@ -1,20 +1,5 @@
-//! TODO §3 — `MultiBinding` + a Rust `IMultiValueConverter`.
-//!
-//! Binds a `TextBlock.Text` to a `MultiBinding` over two child `{Binding}`s
-//! (`First` and `Last`) sourced from a plain Rust view model, combined by a Rust
-//! multi-value converter that concatenates them with a space.
-//!
-//! Fail-if-stubbed assertions, all read BACK through the live `TextBlock.Text`:
-//!
-//!   * The initial combined value equals `"Ada Lovelace"` — proves the converter
-//!     received BOTH source values (a stub that ignores its `values` array, or
-//!     only reads one, produces the wrong string).
-//!   * After mutating one source + notifying, the target tracks the change to
-//!     `"Grace Lovelace"` — proves the `MultiBinding` re-runs the converter on a
-//!     source change and re-reads every child.
-//!
-//! It also asserts the converter actually ran by counting invocations through a
-//! shared atomic, so a no-op converter can't pass by accident.
+//! `MultiBinding` with a Rust `IMultiValueConverter`: two-source combination,
+//! initial value and source-change tracking.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -55,7 +40,6 @@ fn multi_binding_combines_two_sources_through_rust_converter() {
     noesis_runtime::init();
 
     {
-        // Plain VM exposing two reflected string properties.
         let mut builder = PlainVmBuilder::new("Sample.NameVM");
         let first = builder.add_property("First", PlainType::String);
         let last = builder.add_property("Last", PlainType::String);
@@ -67,12 +51,10 @@ fn multi_binding_combines_two_sources_through_rust_converter() {
         assert!(vm.set(first, PlainValue::String("Ada".into())));
         assert!(vm.set(last, PlainValue::String("Lovelace".into())));
 
-        // Rust multi-converter: concatenate the two source values, counting runs.
         let calls = Arc::new(AtomicUsize::new(0));
         let calls_cb = Arc::clone(&calls);
         let converter = MultiConverter::new(move |values: &[ConvertArg], _p: &ConvertArg| {
             calls_cb.fetch_add(1, Ordering::SeqCst);
-            // Require BOTH values to be present and stringly-typed.
             let a = values.first().and_then(ConvertArg::as_str)?;
             let b = values.get(1).and_then(ConvertArg::as_str)?;
             Some(Converted::String(format!("{a} {b}")))
@@ -95,7 +77,6 @@ fn multi_binding_combines_two_sources_through_rust_converter() {
 
         let label = content.find_name("Label").expect("find_name(Label) failed");
 
-        // Build + wire the MultiBinding: Text = "{First} {Last}".
         let mb = MultiBinding::new()
             .converter(&converter)
             .add_binding(Binding::new("First"))
@@ -113,8 +94,6 @@ fn multi_binding_combines_two_sources_through_rust_converter() {
             "the multi-value converter never ran"
         );
 
-        // Change one source + notify: the target must re-run the converter and
-        // re-read BOTH children.
         let before = calls.load(Ordering::SeqCst);
         assert!(vm.set_and_notify(first, "First", PlainValue::String("Grace".into())));
         view.update(0.0);

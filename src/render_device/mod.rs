@@ -1,15 +1,19 @@
-//! Rust-side machinery for implementing `Noesis::RenderDevice`.
+//! Implement a custom GPU backend for Noesis by writing a Rust `Noesis::RenderDevice`.
 //!
-//! Phase plan in `../../docs/PHASE_1_PLAN.md`. Layers, in dependency order:
+//! Reach for this module when you want Noesis to render through your own
+//! graphics API instead of a bundled backend: implement the [`RenderDevice`]
+//! trait, then hand it to [`register`] to wire it up across the C ABI.
+//!
+//! The pieces, in dependency order:
 //!
 //! - [`types`] — `#[repr(C)]` mirrors of the public Noesis types in
-//!   `Include/NsRender/RenderDevice.h`. ABI surface; layout-checked at
-//!   compile time.
-//! - [`device`] — the [`RenderDevice`] trait that Rust-side device impls
-//!   satisfy, plus its handle / desc / binding plain-data types.
-//! - [`ffi`] — Rust mirrors of the C ABI types in `cpp/noesis_shim.h`,
-//!   plus `extern "C"` decls for the factory and helpers.
-//! - [`vtable`] — `extern "C"` trampolines + the [`register`] entry point
+//!   `Include/NsRender/RenderDevice.h`. These are the ABI surface and their
+//!   layouts are checked against the C++ headers at compile time.
+//! - [`device`] — the [`RenderDevice`] trait your device impl satisfies, plus
+//!   its handle / desc / binding plain-data types.
+//! - [`ffi`] — Rust mirrors of the C ABI types in `cpp/noesis_shim.h`, plus the
+//!   `extern "C"` declarations for the factory and helpers.
+//! - [`vtable`] — the `extern "C"` trampolines and the [`register`] entry point
 //!   that owns the boxed impl and the C++ `RustRenderDevice` handle.
 
 pub mod device;

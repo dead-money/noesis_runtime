@@ -1,15 +1,5 @@
-//! Phase 4 — additional key-frame animation coverage: `Point` / `Thickness`
-//! key frames ({Discrete, Linear, Easing, Spline}), the discrete-only `Boolean`
-//! / `String` key frames, the newly-enabled `Spline` path for the `Double` /
-//! `Color` key-frame animations, and the `ParallelTimeline` timeline group.
-//!
-//! Every assertion is a read-back round-trip through the live Noesis object
-//! (key-frame count / value / key time, or child count). The `Double` spline
-//! path — which previously hard-returned `false` — is additionally driven on a
-//! live `View` to prove the spline key frame actually interpolates a property.
-//!
-//! Single `#[test]` per file (Noesis can't be re-init'd in a process); all work
-//! happens in an inner scope so every owning wrapper drops before `shutdown()`.
+//! Key-frame animation round-trips for Point, Thickness, Boolean, String, Color,
+//! and Double (all interpolation kinds), plus `ParallelTimeline` grouping.
 
 use noesis_runtime::animation::{
     Animation, BooleanAnimationUsingKeyFrames, ColorAnimationUsingKeyFrames, DoubleAnimation,
@@ -40,7 +30,6 @@ fn keyframe_types_round_trip() {
         let spline = KeySpline::new((0.25, 0.1), (0.25, 1.0));
         let easing = EasingFunction::new(EasingKind::Cubic, EasingMode::EaseInOut);
 
-        // ── Point key frames (Discrete / Linear / Easing / Spline) ───────────
         let mut pointkf = PointAnimationUsingKeyFrames::new();
         assert!(pointkf.add_key_frame(
             KeyFrameKind::Discrete,
@@ -67,7 +56,6 @@ fn keyframe_types_round_trip() {
         assert_eq!(pointkf.key_frame_time(2), Some(0.75));
         assert_eq!(pointkf.key_frame_value(4), None);
 
-        // ── Thickness key frames (Linear / Spline) ───────────────────────────
         let mut thickkf = ThicknessAnimationUsingKeyFrames::new();
         assert!(thickkf.add_key_frame(
             KeyFrameKind::Linear,
@@ -87,7 +75,6 @@ fn keyframe_types_round_trip() {
         assert_eq!(thickkf.key_frame_time(1), Some(1.0));
         assert_eq!(thickkf.key_frame_value(2), None);
 
-        // ── Boolean key frames (discrete only) ───────────────────────────────
         let mut boolkf = BooleanAnimationUsingKeyFrames::new();
         assert!(boolkf.add_key_frame(0.0, false));
         assert!(boolkf.add_key_frame(1.0, true));
@@ -97,7 +84,6 @@ fn keyframe_types_round_trip() {
         assert_eq!(boolkf.key_frame_time(1), Some(1.0));
         assert_eq!(boolkf.key_frame_value(2), None);
 
-        // ── String key frames (discrete only) ────────────────────────────────
         let mut strkf = StringAnimationUsingKeyFrames::new();
         assert!(strkf.add_key_frame(0.0, "hello"));
         assert!(strkf.add_key_frame(2.0, "world"));
@@ -107,7 +93,6 @@ fn keyframe_types_round_trip() {
         assert_eq!(strkf.key_frame_time(1), Some(2.0));
         assert_eq!(strkf.key_frame_value(2), None);
 
-        // ── Color spline key frame now accepted (previously returned false) ──
         let mut colorkf = ColorAnimationUsingKeyFrames::new();
         assert!(
             colorkf.add_key_frame(
@@ -119,7 +104,6 @@ fn keyframe_types_round_trip() {
             "Color spline key frame should be supported"
         );
 
-        // ── ParallelTimeline: nestable timeline group ────────────────────────
         let mut inner = ParallelTimeline::new();
         let inner_child = DoubleAnimation::new();
         assert!(inner.add_child(&inner_child));
@@ -131,13 +115,9 @@ fn keyframe_types_round_trip() {
         assert!(group.add_child(&group_child));
         assert!(group.add_child(&inner)); // nest a timeline group inside another
         assert_eq!(group.child_count(), Some(2));
-        // Timeline knobs reach the group through the shared trait.
         assert!(group.set_duration_secs(3.0));
         assert_eq!(group.duration_secs(), Some(3.0));
 
-        // ── Double spline key frame driven live ──────────────────────────────
-        // A stubbed spline path (the old hard `false`) would add no frame and
-        // leave Width at its base 0; here the spline ramps 0 -> 100.
         let mut dspline = DoubleAnimationUsingKeyFrames::new();
         assert!(dspline.add_key_frame(KeyFrameKind::Linear, 0.0, 0.0, KeyFrameInterp::None));
         assert!(dspline.add_key_frame(

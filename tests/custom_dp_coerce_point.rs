@@ -1,11 +1,5 @@
-//! TODO §9 — COERCION on a NEW DP value type (`Point`).
-//!
-//! Mirrors the scalar coerce test in `tests/custom_dp_metadata.rs`, but on a
-//! `Point` DP: a handler clamps both coordinates to `>= 0` and returns
-//! `Coerced::Point`. A no-op coerce would leave the negative input intact, so
-//! clamping discriminates a stubbed trampoline and proves the new `Coerced::Point`
-//! encode arm + the C++ `coercible_size`/`create_dp_ex` Point path round-trip.
-//! (Read back THROUGH Noesis on a code-created instance.)
+//! Coercion on a `Point` DP: clamps both coordinates to `>= 0`, read back
+//! through Noesis to confirm the `Coerced::Point` arm and the C++ Point path.
 
 use std::sync::{Arc, Mutex};
 

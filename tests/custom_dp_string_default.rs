@@ -51,7 +51,6 @@ fn custom_dp_string_default() {
             "type-default string should be empty"
         );
 
-        // And it is still writable / reads back the new value.
         h.set_string(titled, "world");
         assert_eq!(h.get_string(titled).as_deref(), Some("world"));
 

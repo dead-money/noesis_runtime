@@ -1,23 +1,8 @@
-//! Integration test for the `VisualStateManager::GoToState` FFI surface
-//! (TODO §6) added on the `feat/visual-state-goto` branch.
-//!
-//! Loads a XAML tree from an in-memory provider and exercises
-//! [`FrameworkElement::go_to_state`]:
-//!
-//! 1. A `Button` whose `ControlTemplate` declares a `CommonStates`
-//!    `VisualStateGroup` (`Normal` / `MouseOver` / `Pressed` / `Disabled`)
-//!    transitions to each of those states (returns `true`), with and without
-//!    transitions.
-//! 2. An unknown state name on that same control returns `false`.
-//! 3. A non-control element (the `TextBlock`) and the root `Grid` (a `Panel`,
-//!    not a templated control) both return `false`.
+//! Integration test for `FrameworkElement::go_to_state`.
 //!
 //! The template is declared inline rather than relying on a loaded theme so
 //! the valid-state assertions hold regardless of whether a default Noesis
-//! style dictionary is available in the test environment.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine for a smoke test):
-//!   `cargo test -p noesis_runtime --test visual_state -- --nocapture`
+//! style dictionary is available.
 
 use std::collections::HashMap;
 
@@ -81,8 +66,7 @@ fn visual_state_go_to_state() {
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
         let mut view = View::create(element);
         view.set_size(400, 200);
-        // Run a layout pass so the Button applies its ControlTemplate (and thus
-        // its VisualStateGroups become resolvable by GoToState).
+        // Layout pass required before VisualStateGroups become resolvable by GoToState.
         view.update(0.0);
 
         let content = view.content().expect("View::content returned None");
@@ -91,7 +75,6 @@ fn visual_state_go_to_state() {
             .find_name("Label")
             .expect("Label not found in scene");
 
-        // ── Valid states on a templated control ──────────────────────────────
         assert!(
             button.go_to_state("Normal", false),
             "GoToState(Normal) should succeed on the templated Button",
@@ -105,19 +88,16 @@ fn visual_state_go_to_state() {
             "GoToState(MouseOver) should succeed",
         );
 
-        // ── Unknown state name → false ───────────────────────────────────────
         assert!(
             !button.go_to_state("NotARealState", false),
             "GoToState with an unknown state name should return false",
         );
 
-        // ── Non-control element (TextBlock) → false ──────────────────────────
         assert!(
             !label.go_to_state("Normal", false),
             "GoToState on a TextBlock (no template/states) should return false",
         );
 
-        // ── Root Grid (a Panel, not a templated control) → false ─────────────
         assert!(
             !content.go_to_state("Normal", false),
             "GoToState on the root Grid should return false",

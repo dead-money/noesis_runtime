@@ -1,36 +1,15 @@
-//! TODO §2.A — visual / logical tree traversal + hit testing.
-//!
-//! Exercises the tree-walk accessors on [`FrameworkElement`]:
-//!   * `logical_children_count` / `logical_child` — exact count + XAML order.
-//!   * `visual_children_count` / `visual_child`   — reachability of the same
-//!     children through the visual tree.
-//!   * `logical_parent` / `visual_parent`         — child→parent round-trips,
-//!     identity confirmed via the parent's distinguishing `x:Name`.
-//!   * `hit_test`                                 — a point inside a known,
-//!     explicitly-sized child returns that child; a point in empty space
-//!     returns the documented sentinel.
-//!   * `template_child`                           — negative path (no template
-//!     part exists on a plain panel without an applied `ControlTemplate`).
-//!
-//! The fixture is a `Grid` with three explicitly-placed `Border`s whose
-//! `x:Name`s AND `Width`s are all distinct, so every traversal can be
-//! cross-checked two independent ways (name + width) — a stubbed impl that
-//! handed back the wrong element, or the root, would be caught.
-//!
-//!   `cargo test -p noesis_runtime --test element_tree -- --nocapture`
+//! Visual and logical tree traversal, parent round-trips, hit testing, and
+//! template-child negative path on a three-Border Grid fixture.
 
 use std::collections::HashMap;
 
 use noesis_runtime::view::{FrameworkElement, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// Root Grid "Root" with three Borders. Each Border has a Background (so it is
-// hit-testable) and a distinct Width so identity is checkable independently of
-// the name. Positions (via alignment + margin) are non-overlapping:
-//   Left   (w=100,h=50) HAlign=Left  VAlign=Top    Margin 0,0      → x[0,100]   y[0,50]
-//   Middle (w=120,h=50) HAlign=Left  VAlign=Top    Margin 150,75   → x[150,270] y[75,125]
+// Non-overlapping layout; the Grid has no Background (empty space is not hit-testable):
+//   Left   (w=100,h=50) HAlign=Left  VAlign=Top    Margin 0,0    → x[0,100]   y[0,50]
+//   Middle (w=120,h=50) HAlign=Left  VAlign=Top    Margin 150,75 → x[150,270] y[75,125]
 //   Right  (w=140,h=50) HAlign=Right VAlign=Bottom               → x[260,400] y[150,200]
-// The Grid itself has NO Background, so empty space is not hit-testable.
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid x:Name="Root"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -83,7 +62,6 @@ fn element_tree_traversal() {
         let root = view.content().expect("View::content returned None");
         assert_eq!(root.name().as_deref(), Some("Root"), "root name");
 
-        // ── Logical tree: exact count + XAML order ───────────────────────────
         assert_eq!(
             root.logical_children_count(),
             3,
@@ -92,7 +70,6 @@ fn element_tree_traversal() {
         let lc0 = root.logical_child(0).expect("logical_child(0)");
         let lc1 = root.logical_child(1).expect("logical_child(1)");
         let lc2 = root.logical_child(2).expect("logical_child(2)");
-        // Logical order follows XAML declaration order.
         assert_eq!(lc0.name().as_deref(), Some("Left"), "logical_child(0) name");
         assert_eq!(
             lc1.name().as_deref(),
@@ -109,16 +86,13 @@ fn element_tree_traversal() {
         assert_eq!(lc1.get_f32("Width"), Some(120.0), "Middle width");
         assert_eq!(lc2.get_f32("Width"), Some(140.0), "Right width");
 
-        // Out-of-range logical child → None.
         assert!(
             root.logical_child(9999).is_none(),
             "logical_child(9999) should be None",
         );
 
-        // ── Visual tree: same three children reachable ───────────────────────
-        // A plain Grid inserts no wrapper visuals, so visual children == logical
-        // children here. (Assert >= as the robust invariant, then the exact
-        // equality that actually holds for a Panel.)
+        // A plain Grid inserts no wrapper visuals, so visual count == logical count.
+        // Assert >= first (robust), then the exact equality that holds for a Panel.
         let vcount = root.visual_children_count();
         assert!(
             vcount >= 3,
@@ -129,7 +103,6 @@ fn element_tree_traversal() {
             "a plain Grid's visual children should equal its 3 logical children",
         );
         let vc1 = root.visual_child(1).expect("visual_child(1)");
-        // Visual order also follows the children collection order.
         assert_eq!(
             vc1.name().as_deref(),
             Some("Middle"),
@@ -137,13 +110,11 @@ fn element_tree_traversal() {
         );
         assert_eq!(vc1.get_f32("Width"), Some(120.0), "visual_child(1) width");
 
-        // Out-of-range visual child → None.
         assert!(
             root.visual_child(9999).is_none(),
             "visual_child(9999) should be None",
         );
 
-        // ── Parent round-trips: child → parent identity == Root ──────────────
         let middle = root.find_name("Middle").expect("find_name(Middle)");
         let lp = middle.logical_parent().expect("Middle.logical_parent()");
         assert_eq!(
@@ -158,11 +129,8 @@ fn element_tree_traversal() {
             "visual_parent(Middle) should be Root",
         );
 
-        // Root's parents: OBSERVED — the root content is NOT the top of either
-        // tree. `View::create` reparents it under an internal, unnamed root
-        // container, so both `logical_parent` and `visual_parent` of the root
-        // are `Some` with an empty `x:Name` (i.e. not one of our named Borders).
-        // We assert that observed shape rather than the naive `None`.
+        // View::create reparents the content under an internal unnamed container,
+        // so the root's logical/visual parent is Some("") rather than None.
         let root_lp = root
             .logical_parent()
             .expect("root logical_parent is the View's internal container (Some)");
@@ -180,14 +148,12 @@ fn element_tree_traversal() {
             "root's visual parent is the unnamed View container",
         );
 
-        // ── Hit testing (layout has settled) ─────────────────────────────────
-        // Confirm layout really ran before trusting hit geometry.
         assert!(
             middle.actual_width().unwrap() > 0.0,
             "Middle should have a laid-out width after update()",
         );
 
-        // A point inside Middle's bounds (x[150,270], y[75,125]) hits Middle.
+        // x[150,270], y[75,125] → Middle.
         let hit = root
             .hit_test(200.0, 100.0)
             .expect("hit_test inside Middle should hit something");
@@ -202,8 +168,7 @@ fn element_tree_traversal() {
             "hit element width cross-check (Middle)",
         );
 
-        // A point inside Left's bounds (x[0,100], y[0,50]) hits Left — a second
-        // distinct target rules out a stub that always returns the same node.
+        // x[0,100], y[0,50] → Left; a second distinct target rules out a stub that returns one fixed element.
         let hit_left = root
             .hit_test(50.0, 25.0)
             .expect("hit_test inside Left should hit something");
@@ -213,19 +178,14 @@ fn element_tree_traversal() {
             "hit_test(50,25) should land on Left",
         );
 
-        // A point in empty Grid space (no Border, Grid has no Background) →
-        // nothing hit. Observed: None (the transparent Grid is not hit-testable).
+        // Empty Grid space (no Background) is not hit-testable → None.
         assert!(
             root.hit_test(120.0, 30.0).is_none(),
             "hit_test on empty space should be None",
         );
 
-        // ── template_child: negative path ───────────────────────────────────
-        // A plain Border has no applied ControlTemplate, so no template part of
-        // any name exists. Positive template-part coverage would require a
-        // templated control with a theme/ControlTemplate supplying named parts
-        // (not available without app resources here), so we assert the
-        // documented None and don't fake a pass.
+        // No ControlTemplate applied, so template_child returns None.
+        // Positive coverage would require theme resources not available in this test context.
         assert!(
             middle.template_child("PART_DoesNotExist").is_none(),
             "template_child on a non-templated Border should be None",
@@ -235,7 +195,6 @@ fn element_tree_traversal() {
             "template_child for an unknown part on the Grid should be None",
         );
 
-        // ── Ordered teardown — drop every handle before shutdown ─────────────
         drop(hit_left);
         drop(hit);
         drop(root_vp);

@@ -1,17 +1,5 @@
-//! Integration tests for the dependency-property extras added in TODO §2:
-//!
-//! * **B. Attached properties** — `get/set_attached_{i32,f32,bool}` resolving a
-//!   `DependencyProperty` registered on an owner type (`Grid.Row`,
-//!   `Canvas.Left`).
-//! * **C. Clear / `CurrentValue` / `BaseValue`** — `clear_value`,
-//!   `set_current_{...}`, `get_base_{...}`.
-//! * **D. Dynamic tag inference** — `property_tag`, `get_dynamic`.
-//!
-//! One `#[test]` per integration binary (Noesis must `init` exactly once per
-//! process); every Noesis handle is dropped before `shutdown()`.
-//!
-//! Run with `NOESIS_LICENSE_*` set (trial mode is fine):
-//!   `cargo test --test dependency_extras -- --nocapture`
+//! Attached properties (Grid.Row, Canvas.Left, Panel.ZIndex), `clear_value`,
+//! `set_current/get_base`, and dynamic tag inference (`property_tag`, `get_dynamic`).
 
 use std::collections::HashMap;
 
@@ -89,16 +77,8 @@ fn dependency_extras() {
         let mut canv_child = content.find_name("CanvChild").expect("CanvChild");
         let mut clear_child = content.find_name("ClearChild").expect("ClearChild");
 
-        // ── Section B: attached properties ──────────────────────────────────
-        //
-        // FINDING: Noesis declares Grid.Row / Grid.Column / RowSpan / ColumnSpan
-        // as `uint32_t` (NsGui/Grid.h: `static uint32_t GetRow(...)`). The FFI's
-        // Int32 tag validates against `TypeOf<int32_t>()` and so cannot reach
-        // them, but the UInt32 tag validates against `TypeOf<uint32_t>()` and
-        // does — see the Grid.Row coverage below. We exercise the positive
-        // int32 round-trip on `Panel.ZIndex` (declared `int32_t`) and the
-        // positive uint32 round-trip on `Grid.Row`, plus the strict negative
-        // that the Int32 tag still rejects the uint32 Grid.Row.
+        // Grid.Row/Column are declared uint32_t in Noesis (not int32_t), so they
+        // are only reachable through the UInt32 tag; the Int32 tag must reject them.
 
         // Panel.ZIndex is an Int32 attached property; XAML set it to 2.
         assert_eq!(
@@ -116,8 +96,7 @@ fn dependency_extras() {
             "Panel.ZIndex should now be 1",
         );
 
-        // Grid.Row is a *uint32* attached property → reachable through the
-        // UInt32 tag. XAML set it to 2; round-trip it down to 1.
+        // Grid.Row is uint32 → use the UInt32 tag.
         assert_eq!(
             row_child.get_attached_u32("Grid", "Row"),
             Some(2),
@@ -133,12 +112,8 @@ fn dependency_extras() {
             "Grid.Row should now be 1",
         );
 
-        // Strict-tag negative: the Int32 tag genuinely mismatches the uint32
-        // Grid.Row type, so the i32 path must still reject it cleanly. (Grid.Row
-        // is an attached property registered on Grid, not on the child's own
-        // class, so there is no plain — non-attached — `property_tag`/
-        // `get_dynamic` query for it; that path stays exercised via Margin /
-        // Width / IsEnabled in Section D below.)
+        // The Int32 tag genuinely mismatches the uint32 Grid.Row type and must
+        // reject it cleanly.
         assert_eq!(
             row_child.get_attached_i32("Grid", "Row"),
             None,
@@ -161,7 +136,6 @@ fn dependency_extras() {
             "Grid.IsSharedSizeScope should now be true",
         );
 
-        // Canvas.Left / Canvas.Top are Float attached properties.
         assert_eq!(
             canv_child.get_attached_f32("Canvas", "Left"),
             Some(40.0),
@@ -201,9 +175,8 @@ fn dependency_extras() {
             None,
             "unknown attached property get should be None",
         );
-        // Tag mismatch: Panel.ZIndex resolves but is Int32, so the Float setter
-        // and getter must be rejected (the property is found; only the tag is
-        // wrong).
+        // Tag mismatch: the property resolves but the type is wrong; only the
+        // tag is rejected, not the lookup.
         assert!(
             !row_child.set_attached_f32("Panel", "ZIndex", 1.0),
             "tag mismatch (Panel.ZIndex is Int32, not Float) should fail",
@@ -214,9 +187,6 @@ fn dependency_extras() {
             "tag-mismatched get should be None",
         );
 
-        // ── Section C: clear / current / base value ─────────────────────────
-
-        // Width is a local value (120 from XAML; reassert by setting fresh).
         assert!(clear_child.set_f32("Width", 250.0), "set Width=250");
         assert_eq!(clear_child.get_f32("Width"), Some(250.0), "Width is 250");
 
@@ -230,7 +200,6 @@ fn dependency_extras() {
             "Width after clear should be the NaN 'Auto' default, got {after:?}",
         );
 
-        // clear_value on a read-only property and on an unknown property fail.
         assert!(
             !clear_child.clear_value("ActualWidth"),
             "clear_value on read-only ActualWidth should fail",
@@ -240,10 +209,8 @@ fn dependency_extras() {
             "clear_value on unknown property should fail",
         );
 
-        // SetCurrentValue vs base value. Establish a LOCAL base via set_f32,
-        // then override the effective value via set_current_f32. Noesis keeps
-        // the local value as the *base* while the effective getter returns the
-        // current value.
+        // set_current overrides the effective value; Noesis keeps the local
+        // (set_f32) value as the base.
         assert!(clear_child.set_f32("Width", 200.0), "set base Width=200");
         assert!(
             clear_child.set_current_f32("Width", 123.0),
@@ -260,7 +227,6 @@ fn dependency_extras() {
             "base Width remains the local value (200), unaffected by SetCurrentValue",
         );
 
-        // String SetCurrentValue on a TextBlock's Text, read back via text().
         assert_eq!(
             clear_child.get_base_string("Text").as_deref(),
             Some("base-text"),
@@ -280,22 +246,18 @@ fn dependency_extras() {
             Some("current-text"),
             "get_string(Text) agrees with text()",
         );
-        // Base Text is unchanged by SetCurrentValue.
         assert_eq!(
             clear_child.get_base_string("Text").as_deref(),
             Some("base-text"),
             "base Text unaffected by SetCurrentValue",
         );
 
-        // Note: there is no get_base_component — component (BaseComponent) tags
-        // are not supported by the base-value FFI, so that path is unreachable
-        // from Rust by construction; nothing to assert here.
+        // There is no get_base_component — BaseComponent tags are not supported
+        // by the base-value FFI, so that path is unreachable from Rust by
+        // construction.
 
-        // ── Section D: dynamic tag inference ────────────────────────────────
-
-        // Width is `float` in Noesis (NOT WPF's double) — the existing
-        // dependency_property test round-trips it via get_f32, so the reflected
-        // type is float => PropType::Float.
+        // Width is `float` in Noesis (NOT WPF's double), so its reflected type
+        // is PropType::Float.
         assert_eq!(
             clear_child.property_tag("Width"),
             Some(PropType::Float),
@@ -311,7 +273,6 @@ fn dependency_extras() {
             Some(PropType::Thickness),
             "Margin tag is Thickness",
         );
-        // Background is a Brush (a BaseComponent, not an ImageSource).
         assert_eq!(
             content.property_tag("Background"),
             Some(PropType::BaseComponent),
@@ -323,18 +284,15 @@ fn dependency_extras() {
             "unknown property has no tag",
         );
 
-        // get_dynamic dispatches via the inferred tag. Width is currently 123
-        // (SetCurrentValue effective above).
+        // Width is currently 123 (the SetCurrentValue effective value above).
         match clear_child.get_dynamic("Width") {
             Some(DynValue::F32(v)) => {
                 assert_eq!(v, 123.0, "dynamic Width value");
-                // Cross-check against the typed getter.
                 assert_eq!(clear_child.get_f32("Width"), Some(v));
             }
             other => panic!("expected DynValue::F32 for Width, got {other:?}"),
         }
 
-        // Bool property via dynamic dispatch, cross-checked against get_bool.
         match clear_child.get_dynamic("IsEnabled") {
             Some(DynValue::Bool(v)) => {
                 assert_eq!(clear_child.get_bool("IsEnabled"), Some(v));
@@ -343,7 +301,6 @@ fn dependency_extras() {
             other => panic!("expected DynValue::Bool for IsEnabled, got {other:?}"),
         }
 
-        // Thickness via dynamic dispatch, cross-checked against get_thickness.
         match clear_child.get_dynamic("Margin") {
             Some(DynValue::Thickness(m)) => {
                 assert_eq!(m, [3.0, 5.0, 7.0, 9.0], "Margin from XAML");
@@ -352,13 +309,11 @@ fn dependency_extras() {
             other => panic!("expected DynValue::Thickness for Margin, got {other:?}"),
         }
 
-        // Unknown property yields no dynamic value.
         assert!(
             clear_child.get_dynamic("NotARealProperty").is_none(),
             "unknown property has no dynamic value",
         );
 
-        // ── ordered teardown ────────────────────────────────────────────────
         drop(clear_child);
         drop(canv_child);
         drop(row_child);

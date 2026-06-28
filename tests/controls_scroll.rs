@@ -1,15 +1,4 @@
-// TODO §8 — ScrollViewer read metrics + ScrollTo* methods.
-//
-// One headless `#[test]`. A `ScrollViewer` with content taller than its
-// viewport is driven inside a live `View` so layout computes the scroll
-// extent. Then:
-//
-//   * `scrollable_height()` is positive (~content - viewport) — proves the
-//     scroll info is real, not a stubbed 0.
-//   * `scroll_to_vertical_offset(50)` + pump ⇒ `vertical_offset()` reaches ~50.
-//   * `scroll_to_end()` ⇒ offset reaches the bottom (== scrollable_height);
-//     `scroll_to_home()` ⇒ offset returns to 0.
-//   * Negative: a non-ScrollViewer reports `vertical_offset()==None`.
+//! `ScrollViewer` offset metrics and `ScrollTo*` methods; negative type-guard.
 
 use noesis_runtime::view::{FrameworkElement, View};
 
@@ -62,7 +51,6 @@ fn scrollviewer_offsets_and_methods() {
             scrollable > 100.0,
             "content (600) taller than viewport (100) should be scrollable, got {scrollable}"
         );
-        // Start at the top.
         assert_eq!(sv.vertical_offset(), Some(0.0));
 
         // Scroll to a mid offset; the command applies on the next layout pass.
@@ -74,7 +62,6 @@ fn scrollviewer_offsets_and_methods() {
             "vertical_offset should reach ~50, got {off}"
         );
 
-        // Scroll to the very bottom.
         assert!(sv.scroll_to_end());
         pump(&mut view, 21..=30);
         let bottom = sv.vertical_offset().expect("vertical_offset");
@@ -83,7 +70,6 @@ fn scrollviewer_offsets_and_methods() {
             "scroll_to_end should reach scrollable_height {scrollable}, got {bottom}"
         );
 
-        // Back to the top.
         assert!(sv.scroll_to_home());
         pump(&mut view, 31..=40);
         assert!(
@@ -91,7 +77,6 @@ fn scrollviewer_offsets_and_methods() {
             "scroll_to_home returns to the top"
         );
 
-        // -- Horizontal axis (content 600 wide vs 100 viewport) --
         let scrollable_w = sv.scrollable_width().expect("scrollable_width");
         assert!(
             scrollable_w > 100.0,

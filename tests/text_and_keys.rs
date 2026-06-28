@@ -1,18 +1,4 @@
-//! Integration test for the text-property + keydown-subscription + focus
-//! FFI surface added on the `text-keydown-focus-ffi` branch.
-//!
-//! Loads a XAML with a named `<TextBox>` + a named `<TextBlock>`, exercises
-//! every helper:
-//!
-//! 1. `set_text` / `text()` round-trip on both element types.
-//! 2. `set_caret_to_end` on the `TextBox`.
-//! 3. `focus()` on the `TextBox`.
-//! 4. `subscribe_keydown` — callback receives a synthetic `Key::Return`
-//!    plus a synthetic `Key::OemTilde`, mirrors `AoR`'s command-input flow.
-//!
-//! Run with `NOESIS_SDK_DIR` set (and ideally a license, though trial mode
-//! is fine for a smoke test):
-//!   `cargo test -p noesis_runtime --test text_and_keys -- --nocapture`
+//! Text, caret, focus, and `KeyDown` subscription round-trip on `TextBox` and `TextBlock`.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -78,7 +64,6 @@ fn text_keydown_focus_round_trip() {
 
         let content = view.content().expect("View::content returned None");
 
-        // ── Text round-trip on the TextBlock ──────────────────────────────
         let mut log = content
             .find_name("LogText")
             .expect("LogText not found in scene");
@@ -97,7 +82,6 @@ fn text_keydown_focus_round_trip() {
             "TextBlock Text didn't update",
         );
 
-        // ── Text round-trip on the TextBox ────────────────────────────────
         let mut input = content
             .find_name("CommandInput")
             .expect("CommandInput not found in scene");
@@ -113,24 +97,18 @@ fn text_keydown_focus_round_trip() {
             "TextBox Text didn't update",
         );
 
-        // ── Caret nudge — only meaningful on TextBox; the TextBlock helper
-        //    must short-circuit gracefully.
+        // set_caret_to_end must short-circuit gracefully on non-TextBox elements.
         assert!(input.set_caret_to_end(), "set_caret_to_end(TextBox) failed");
         assert!(
             !log.set_caret_to_end(),
             "set_caret_to_end(TextBlock) should fail cleanly"
         );
 
-        // ── Focus the input box so subsequent KeyDowns route to it. The
-        //    `key_down` event below would otherwise route to the focused
-        //    element which, post-Activate, is the View root — not the
-        //    TextBox we subscribed against.
+        // Focus the TextBox so KeyDowns route to it; post-Activate the focus is on
+        // the View root, not on the TextBox we subscribed against.
         let focused = input.focus();
         assert!(focused, "TextBox refused focus");
 
-        // ── Subscribe to KeyDown. Mark `Return` handled (mirrors AoR's
-        //    flow: swallow Enter so the line break doesn't get inserted),
-        //    let `OemTilde` propagate.
         let return_in_handler = Arc::clone(&return_count);
         let tilde_in_handler = Arc::clone(&tilde_count);
         let sub = subscribe_keydown(&input, move |key| match key {
@@ -146,17 +124,8 @@ fn text_keydown_focus_round_trip() {
         })
         .expect("subscribe_keydown returned None — TextBox not a UIElement?");
 
-        // Sanity: subscribing on a non-UIElement should fail. Every
-        // FrameworkElement we have at hand IS a UIElement (TextBox /
-        // TextBlock / Grid all derive), so we can't easily synthesize a
-        // negative case here without a ResourceDictionary lookup. Skipped
-        // until the markup-extension pipeline lands a non-UIElement
-        // reference into FFI reach.
-
-        // First Update builds the initial render tree.
         assert!(view.update(0.0), "first Update should report change");
 
-        // Drive the keys through the View's input pump.
         let _ = view.key_down(Key::Return);
         let _ = view.update(0.016);
         let _ = view.key_down(Key::OemTilde);

@@ -1,17 +1,5 @@
-// TODO §8 — Selector selection + ItemsControl direct items mutation.
-//
-// One headless `#[test]` (the "init once per process" rule). It drives real
-// controls inside a live `View` and asserts behaviour that a no-op stub would
-// fail:
-//
-//   * A `ListBox` bound to a Rust `ObservableSource` of three boxed strings:
-//     `set_selected_index(2)` round-trips, and `selected_item()` is *pointer-
-//     identical* to the third source element (read back through Noesis).
-//     Clearing (`-1`) and an out-of-range index (coerced to `-1`) are checked.
-//   * An `ItemsControl`'s own `Items`: add two strings (count==2, both realized
-//     after layout), remove one (count==1), clear (count==0).
-//   * Negatives: a non-`Selector` reports `selected_index()==None`; a
-//     non-`ItemsControl` reports `items_count()==None`.
+//! `Selector` selection (identity through Noesis, coercion) and `ItemsControl`
+//! direct item mutation including position-accurate insert; wrong-type negatives.
 
 use noesis_runtime::binding::ObservableCollection;
 use noesis_runtime::view::{FrameworkElement, View};
@@ -48,7 +36,6 @@ fn selector_and_items_mutation() {
         let mut view = View::create(root);
         view.set_size(200, 400);
         view.activate();
-        // Initial layout pass before touching the controls.
         for i in 1..=4 {
             view.update(f64::from(i) * 0.016);
         }
@@ -58,16 +45,14 @@ fn selector_and_items_mutation() {
         let mut ic = content.find_name("IC").expect("find ItemsControl");
         let mut lbd = content.find_name("LBD").expect("find direct ListBox");
 
-        // -- Selector via ItemsSource + selected-item identity --
         assert!(lb.set_items_source(&coll));
         for i in 5..=9 {
             view.update(f64::from(i) * 0.016);
         }
         assert_eq!(lb.items_count(), Some(3), "ListBox sees 3 source items");
 
-        // -- set_selected_item drives Noesis selection (genuinely-new entrypoint).
         // Selecting by item must move SelectedIndex/SelectedItem to that element,
-        // read back THROUGH Noesis. A no-op setter would leave the index at -1.
+        // read back through Noesis. A no-op setter would leave the index at -1.
         let item0 = coll.get(0).expect("source item 0");
         // SAFETY: coll outlives lb; item0 is a live element of the bound source.
         assert!(unsafe { lb.set_selected_item(item0.as_ptr()) });
@@ -116,7 +101,6 @@ fn selector_and_items_mutation() {
             "out-of-range index coerces to -1"
         );
 
-        // -- ItemsControl direct Items mutation --
         assert_eq!(ic.items_add_string("X"), Some(0));
         assert_eq!(ic.items_add_string("Y"), Some(1));
         assert_eq!(ic.items_count(), Some(2), "two items in the collection");
@@ -138,9 +122,8 @@ fn selector_and_items_mutation() {
         assert!(ic.items_clear());
         assert_eq!(ic.items_count(), Some(0), "empty after clear");
 
-        // -- items_insert is position-accurate (genuinely-new entrypoint) --
-        // Direct-items ListBox so we can confirm the landing index via selection
-        // identity (a non-Selector ItemsControl can't prove WHERE the item went).
+        // Direct-items ListBox: selection identity proves insert is position-accurate
+        // (a non-Selector ItemsControl can't prove WHERE the item landed).
         assert_eq!(lbd.items_add_string("X"), Some(0));
         assert_eq!(lbd.items_add_string("Y"), Some(1));
         let z = noesis_runtime::binding::box_string("Z");
@@ -151,7 +134,6 @@ fn selector_and_items_mutation() {
             "insert Z at index 1"
         );
         assert_eq!(lbd.items_count(), Some(3), "three items after insert");
-        // Out-of-range insert is rejected and leaves the collection untouched.
         let w = noesis_runtime::binding::box_string("W");
         // SAFETY: `w` is a live boxed value for the duration of the call.
         assert!(
@@ -192,7 +174,6 @@ fn selector_and_items_mutation() {
         drop(ic);
         drop(content);
         drop(view);
-        // Last source reference drops here.
         drop(coll);
     }
 

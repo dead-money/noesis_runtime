@@ -1,18 +1,7 @@
-//! Phase 3 regression — re-entrant property-change handler.
-//!
-//! The crate's documented "computed property" pattern has a
-//! [`PropertyChangeHandler`] write *another* DP synchronously from inside
-//! `on_changed`. That write re-enters Noesis, which re-invokes the *same*
-//! handler box before the outer call returns. The trampoline must therefore
-//! never hold a `&mut` to the handler across the user callback (that would alias
-//! on re-entry — undefined behaviour). Here `on_changed` for the `In` DP writes
-//! the `Out` DP on the same instance; we assert the re-entrant callback runs to
-//! completion and both values land.
-//!
-//! Like the other custom-DP callback tests, the change callback only fires on a
-//! parsed / tree-attached instance, so we register the class, load it in a live
-//! `View`, settle the tree, then mutate the input DP through the parsed
-//! instance.
+//! Re-entrant property-change handler: `on_changed` for `In` writes `Out`
+//! synchronously, re-invoking the same handler box before the outer call
+//! returns. The trampoline must not hold `&mut` to the handler across the
+//! callback — that would be aliasing UB on re-entry.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -102,13 +91,9 @@ fn custom_dp_reentrant_change() {
         let widget = content.find_name("W").expect("find_name(W) returned None");
         let inst = unsafe { Instance::from_raw(std::ptr::NonNull::new(widget.raw()).unwrap()) };
 
-        // Drive the input DP. The change callback fires on the tree-attached
-        // instance, and its body re-enters the trampoline via set_float(out).
         log.lock().unwrap().clear();
         inst.set_float(in_idx, 21.0);
 
-        // Both values landed: the input we wrote, and the computed output the
-        // re-entrant callback wrote.
         assert_eq!(inst.get_float(in_idx), Some(21.0), "input DP did not land");
         assert_eq!(
             inst.get_float(out_idx),

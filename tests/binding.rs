@@ -1,20 +1,5 @@
-//! TODO §3 — data-binding bridge: a Rust-backed view model drives XAML.
-//!
-//! Registers a Rust class with a `Title` string DP, creates an instance from
-//! Rust (no XAML reference), sets it as the root's `DataContext`, and binds a
-//! `TextBlock.Text` to `{Binding Title}`. Then it asserts the binding engine
-//! actually moved the data both ways across `View::update`:
-//!
-//!   * the value set on the VM *before* binding shows up in the bound `TextBlock`;
-//!   * mutating the VM's DP *after* the view is live updates the `TextBlock` —
-//!     which only happens if the `DependencyObject` change notification reached
-//!     the binding (the INotifyPropertyChanged-equivalent for a DO source).
-//!
-//! Reading the rendered value back through `TextBlock::Text` (not through the
-//! VM) is the point: it proves the data crossed the binding, not just that our
-//! own setter round-trips.
-//!
-//!   `cargo test -p noesis_runtime --test binding -- --nocapture`
+//! Rust-backed view model drives XAML bindings; asserts data flows both ways
+//! across `View::update` (initial value delivery and post-load mutation).
 
 use std::collections::HashMap;
 
@@ -58,7 +43,6 @@ fn rust_view_model_drives_binding() {
     noesis_runtime::init();
 
     {
-        // A Rust-backed view model: one string DP, `Title`.
         let mut builder =
             ClassBuilder::new("Sample.BindingVM", ClassBase::ContentControl, NoopHandler);
         let title_idx = builder.add_property("Title", PropType::String);
@@ -81,8 +65,6 @@ fn rust_view_model_drives_binding() {
         view.activate();
 
         let mut content = view.content().expect("View::content returned None");
-        // Wire the VM as the DataContext — the TextBlock's {Binding Title}
-        // resolves against it.
         // SAFETY: vm is alive for the rest of this scope; its raw() is a live
         // BaseComponent*. Noesis stores its own reference.
         assert!(
@@ -90,7 +72,6 @@ fn rust_view_model_drives_binding() {
             "set_data_context returned false (content not a FrameworkElement?)"
         );
 
-        // First layout pass settles the binding.
         assert!(view.update(0.0));
 
         let label = content.find_name("Label").expect("find_name(Label) failed");

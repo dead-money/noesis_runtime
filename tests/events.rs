@@ -1,8 +1,5 @@
-//! Phase 5.B — `find_name` + `subscribe_click` integration test.
-//!
-//! Loads a XAML with a single named `<Button>`, subscribes a Rust callback
-//! to its `Click` event, drives a synthetic mouse click through the input
-//! pump, and asserts the callback fired exactly once.
+//! `find_name` + `subscribe_click` integration: loads a Button XAML, subscribes
+//! a Rust click callback, drives a synthetic click, asserts the callback fires once.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
 //!   `cargo test -p noesis_runtime --test events -- --nocapture`
@@ -58,11 +55,9 @@ fn click_event_fires_callback() {
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
 
-        // Both find_name paths should work: pre-view-creation (against the
-        // raw FrameworkElement just loaded) and post-view-creation (via
-        // `View::content()`). The Bevy plugin uses the latter — the
-        // FrameworkElement is consumed by `View::create`, and click
-        // subscriptions need to be wired after the view is up.
+        // Tests both paths: pre-view (raw element) and post-view via
+        // View::content(). Post-view is the plugin's pattern — View::create
+        // consumes the element, so subscriptions must wire after.
         let pre_view = element
             .find_name("MyButton")
             .expect("pre-view find_name returned None");
@@ -85,7 +80,6 @@ fn click_event_fires_callback() {
         })
         .expect("subscribe_click returned None — element not a button?");
 
-        // Sanity: subscribing a non-button (the Grid root) should return None.
         let grid_handle = view.content().expect("View::content returned None");
         let grid_subscription = subscribe_click(&grid_handle, || {
             unreachable!("Grid is not a button; subscribe should not have succeeded");
@@ -96,11 +90,9 @@ fn click_event_fires_callback() {
         );
         drop(grid_handle);
 
-        // First Update builds the initial render tree. Required before
-        // hit-testing works.
+        // first Update builds the render tree; hit-testing needs it
         assert!(view.update(0.0), "first Update should report change");
 
-        // Drive a click on the button (centered at 100,100).
         let _ = view.mouse_move(100, 100);
         let _ = view.update(0.016);
         let _ = view.mouse_button_down(100, 100, MouseButton::Left);
@@ -108,8 +100,7 @@ fn click_event_fires_callback() {
         let _ = view.mouse_button_up(100, 100, MouseButton::Left);
         let _ = view.update(0.048);
 
-        // Drop the subscription before the view so the C++ -= happens while
-        // the button is still alive.
+        // drop before view — C++ -= must happen while the button is still alive
         drop(click_sub);
         view.deactivate();
         drop(view);

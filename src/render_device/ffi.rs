@@ -9,10 +9,6 @@ use std::os::raw::{c_char, c_void};
 
 use crate::render_device::types::DeviceCaps;
 
-// ────────────────────────────────────────────────────────────────────────────
-// FFI binding structs — mirror the C definitions in noesis_shim.h.
-// ────────────────────────────────────────────────────────────────────────────
-
 /// Mirror of `noesis_texture_binding`. `handle == 0` is reserved invalid;
 /// the trampoline panics on zero on the way back up to a Rust [`TextureHandle`].
 ///
@@ -42,19 +38,13 @@ const _: () = assert!(align_of::<TextureBindingFfi>() == 8);
 const _: () = assert!(size_of::<RenderTargetBindingFfi>() == 32);
 const _: () = assert!(align_of::<RenderTargetBindingFfi>() == 8);
 
-// ────────────────────────────────────────────────────────────────────────────
-// vtable — mirror of `noesis_render_device_vtable`. Every fn pointer is an
-// `unsafe extern "C"` because trampolines deref raw `userdata` and assume
-// Noesis honors the frame protocol (no nesting of Map/Unmap, etc).
-//
-// `void*` parameters in the C struct map to typed pointers here so trampolines
-// can cast directly:
-//   - `out_caps`     ↔ `*mut DeviceCaps`
-//   - `tile`         ↔ `*const Tile`
-//   - `tiles`        ↔ `*const Tile` (array)
-//   - `batch`        ↔ `*const Batch`
-// ────────────────────────────────────────────────────────────────────────────
-
+/// Mirror of `noesis_render_device_vtable`. Every function pointer is
+/// `unsafe extern "C"`: the trampolines dereference a raw `userdata` and trust
+/// Noesis to honor the frame protocol (Map/Unmap calls never nest, etc.).
+///
+/// The C struct's `void*` parameters are typed here so trampolines can cast
+/// directly — `out_caps` is `*mut DeviceCaps`, `tile`/`tiles` are `*const Tile`,
+/// and `batch` is `*const Batch`.
 #[repr(C)]
 pub struct RenderDeviceVTable {
     pub get_caps: unsafe extern "C" fn(userdata: *mut c_void, out_caps: *mut DeviceCaps),
@@ -131,10 +121,7 @@ pub struct RenderDeviceVTable {
     ),
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Factory + helper extern decls — implemented in noesis_render_device.cpp.
-// ────────────────────────────────────────────────────────────────────────────
-
+// Implemented in noesis_render_device.cpp.
 unsafe extern "C" {
     /// Create a `RustRenderDevice` with refcount = 1. Returns
     /// `Noesis::RenderDevice*` cast to `*mut c_void`. Pair with
@@ -144,12 +131,15 @@ unsafe extern "C" {
         userdata: *mut c_void,
     ) -> *mut c_void;
 
+    /// Release a device from [`noesis_render_device_create`], dropping its +1
+    /// refcount. Call exactly once.
     pub fn noesis_render_device_destroy(device: *mut c_void);
 
+    /// Read the `u64` binding handle out of a `Noesis::Texture*`.
     pub fn noesis_texture_get_handle(texture: *const c_void) -> u64;
+    /// Read the `u64` binding handle out of a `Noesis::RenderTarget*`.
     pub fn noesis_render_target_get_handle(surface: *const c_void) -> u64;
 
-    // ── Offscreen / glyph-cache tuning (TODO §1) ─────────────────────────────
     // Resource sizing on the `Noesis::RenderDevice` base; set before the first
     // frame. Offscreen 0 == automatic; glyph cache defaults to 1024×1024.
     pub fn noesis_render_device_set_offscreen_width(device: *mut c_void, width: u32);
@@ -169,11 +159,8 @@ unsafe extern "C" {
     pub fn noesis_render_device_get_glyph_cache_height(device: *const c_void) -> u32;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test-only entrypoints — gated by the `test-utils` Cargo feature, which
-// defines `NOESIS_TEST_UTILS` for the C++ build.
-// ────────────────────────────────────────────────────────────────────────────
-
+// Gated by the `test-utils` Cargo feature, which defines `NOESIS_TEST_UTILS`
+// for the C++ build.
 #[cfg(feature = "test-utils")]
 unsafe extern "C" {
     /// Drive the C++ device through one representative frame (caps query,

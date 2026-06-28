@@ -1,5 +1,5 @@
-//! Code-built `Shape` elements (TODO §10): construct `Rectangle`, `Ellipse`,
-//! and `Line` from Rust and set their drawing properties without authoring XAML.
+//! Build [`Rectangle`], [`Ellipse`], and [`Line`] shapes from Rust and set
+//! their drawing properties without authoring XAML.
 //!
 //! Each handle owns a freshly-created Noesis shape holding a single `+1`
 //! reference released on [`Drop`] — the same ownership idiom as
@@ -9,21 +9,18 @@
 //! `Panel` child) and let Noesis take its own reference, after which the Rust
 //! handle may be dropped.
 //!
-//! `Fill` and `Stroke` reuse the existing brush wrappers in
-//! [`crate::brushes`]: the setters accept any [`Brush`] handle and Noesis takes
-//! its own reference to the brush.
+//! `Fill` and `Stroke` accept any [`Brush`] handle from [`crate::brushes`];
+//! Noesis takes its own reference to the brush, so the handle may be dropped
+//! afterwards.
 //!
-//! Every setter has a read-back getter that re-reads from the live Noesis
-//! object (`GetRadiusX`, `GetStrokeThickness`, `GetX1`, …), so a test proves a
-//! value actually crossed the FFI rather than echoing a Rust-side cache: a
-//! stubbed setter fails the round-trip.
+//! Every setter has a matching getter that re-reads from the live Noesis object
+//! rather than echoing a Rust-side cache.
 //!
-//! ## SDK scope
+//! # SDK scope
 //!
-//! Noesis 3.2.13 ships only `Rectangle`, `Ellipse`, `Line`, and `Path` as shape
+//! Noesis ships only `Rectangle`, `Ellipse`, `Line`, and `Path` as shape
 //! elements — there is **no** `Polygon`/`Polyline`. Build a polygon or polyline
-//! as a `PathGeometry`/`StreamGeometry` hosted in a `Path` (the §10 geometry
-//! path).
+//! as a `PathGeometry`/`StreamGeometry` hosted in a `Path`.
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
@@ -110,8 +107,7 @@ impl PenLineJoin {
 /// inherited `FrameworkElement` `Width`/`Height`, so all three concrete shapes
 /// share one implementation.
 ///
-/// Getters re-read from the live Noesis object; a stubbed setter therefore fails
-/// the round-trip in `tests/shapes.rs`.
+/// Getters re-read from the live Noesis object.
 pub trait Shape {
     /// Borrowed `Noesis::Shape*` (also a `FrameworkElement*` / `BaseComponent*`),
     /// valid for `self`'s lifetime. Used by the shared property methods and by
@@ -287,7 +283,7 @@ pub trait Shape {
         unsafe { noesis_shape_set_stroke_dash_cap(self.shape_raw(), cap as i32) };
     }
 
-    /// Read the dash cap back from the live object (`None` if not a shape).
+    /// Read the dash cap back from the live object.
     #[must_use]
     fn stroke_dash_cap(&self) -> Option<PenLineCap> {
         // SAFETY: shape_raw() is live.

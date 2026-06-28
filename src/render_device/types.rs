@@ -24,6 +24,7 @@ use std::os::raw::c_void;
 // Texture formats — `Noesis::TextureFormat::Enum`
 // ────────────────────────────────────────────────────────────────────────────
 
+/// Pixel layout of a texture you create for the render device.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -43,6 +44,7 @@ pub const TEXTURE_FORMAT_COUNT: usize = 3;
 // `MipFilter::Enum`, `Noesis::SamplerState`
 // ────────────────────────────────────────────────────────────────────────────
 
+/// How a sampler treats texture coordinates outside the `[0, 1]` range.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -62,6 +64,7 @@ pub enum WrapMode {
 
 pub const WRAP_MODE_COUNT: usize = 6;
 
+/// Filtering applied when a texture is minified or magnified.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -72,6 +75,7 @@ pub enum MinMagFilter {
 
 pub const MIN_MAG_FILTER_COUNT: usize = 2;
 
+/// Filtering applied between mipmap levels.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -124,6 +128,10 @@ impl SamplerState {
 // `Noesis::RenderState`
 // ────────────────────────────────────────────────────────────────────────────
 
+/// Blend equation a batch uses to combine its output with the target.
+///
+/// The formulas are written `color / alpha`, with `s` the source and `d` the
+/// destination; all assume premultiplied alpha.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -144,6 +152,7 @@ pub enum BlendMode {
 
 pub const BLEND_MODE_COUNT: usize = 6;
 
+/// Stencil (and, in some variants, depth) test a batch applies.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -171,6 +180,7 @@ pub const STENCIL_MODE_COUNT: usize = 7;
 pub struct RenderState(pub u8);
 
 impl RenderState {
+    /// Pack the four render-state fields into the canonical byte layout.
     #[must_use]
     pub const fn new(
         color_enable: bool,
@@ -185,21 +195,25 @@ impl RenderState {
         Self(bits)
     }
 
+    /// Whether color writes are enabled for the batch.
     #[must_use]
     pub const fn color_enable(self) -> bool {
         (self.0 & 0b1) != 0
     }
 
+    /// Raw 3-bit blend-mode field. Matches `BlendMode as u8`.
     #[must_use]
     pub const fn blend_mode_raw(self) -> u8 {
         (self.0 >> 1) & 0b111
     }
 
+    /// Raw 3-bit stencil-mode field. Matches `StencilMode as u8`.
     #[must_use]
     pub const fn stencil_mode_raw(self) -> u8 {
         (self.0 >> 4) & 0b111
     }
 
+    /// Whether the batch renders in wireframe.
     #[must_use]
     pub const fn wireframe(self) -> bool {
         (self.0 >> 7) != 0
@@ -220,16 +234,16 @@ impl RenderState {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Shader(pub u8);
 
-#[allow(non_upper_case_globals)] // intentionally not — see consts below
+#[allow(non_upper_case_globals)]
 impl Shader {
-    // ─── Debug ────────────────────────────────────────────────────────────
+    // Debug
     pub const RGBA: Self = Self(0);
     /// Stencil-only rendering for masks.
     pub const MASK: Self = Self(1);
     /// Clear render target.
     pub const CLEAR: Self = Self(2);
 
-    // ─── Path (no PPAA) ───────────────────────────────────────────────────
+    // Path (no PPAA)
     pub const PATH_SOLID: Self = Self(3);
     pub const PATH_LINEAR: Self = Self(4);
     pub const PATH_RADIAL: Self = Self(5);
@@ -240,7 +254,7 @@ impl Shader {
     pub const PATH_PATTERN_MIRROR_V: Self = Self(10);
     pub const PATH_PATTERN_MIRROR: Self = Self(11);
 
-    // ─── Path (with PPAA) ─────────────────────────────────────────────────
+    // Path (with PPAA)
     pub const PATH_AA_SOLID: Self = Self(12);
     pub const PATH_AA_LINEAR: Self = Self(13);
     pub const PATH_AA_RADIAL: Self = Self(14);
@@ -251,7 +265,7 @@ impl Shader {
     pub const PATH_AA_PATTERN_MIRROR_V: Self = Self(19);
     pub const PATH_AA_PATTERN_MIRROR: Self = Self(20);
 
-    // ─── SDF (text) ───────────────────────────────────────────────────────
+    // SDF (text)
     pub const SDF_SOLID: Self = Self(21);
     pub const SDF_LINEAR: Self = Self(22);
     pub const SDF_RADIAL: Self = Self(23);
@@ -262,7 +276,7 @@ impl Shader {
     pub const SDF_PATTERN_MIRROR_V: Self = Self(28);
     pub const SDF_PATTERN_MIRROR: Self = Self(29);
 
-    // ─── SDF LCD (subpixel text; needs DeviceCaps::subpixelRendering) ─────
+    // SDF LCD (subpixel text; needs DeviceCaps::subpixel_rendering)
     pub const SDF_LCD_SOLID: Self = Self(30);
     pub const SDF_LCD_LINEAR: Self = Self(31);
     pub const SDF_LCD_RADIAL: Self = Self(32);
@@ -273,7 +287,7 @@ impl Shader {
     pub const SDF_LCD_PATTERN_MIRROR_V: Self = Self(37);
     pub const SDF_LCD_PATTERN_MIRROR: Self = Self(38);
 
-    // ─── Opacity (offscreen) ──────────────────────────────────────────────
+    // Opacity (offscreen)
     pub const OPACITY_SOLID: Self = Self(39);
     pub const OPACITY_LINEAR: Self = Self(40);
     pub const OPACITY_RADIAL: Self = Self(41);
@@ -284,7 +298,7 @@ impl Shader {
     pub const OPACITY_PATTERN_MIRROR_V: Self = Self(46);
     pub const OPACITY_PATTERN_MIRROR: Self = Self(47);
 
-    // ─── Misc ─────────────────────────────────────────────────────────────
+    // Misc
     pub const UPSAMPLE: Self = Self(48);
     pub const DOWNSAMPLE: Self = Self(49);
     pub const SHADOW: Self = Self(50);
@@ -449,7 +463,8 @@ pub struct DeviceCaps {
 
 impl Default for DeviceCaps {
     fn default() -> Self {
-        // Matches the C++ in-class member initializers.
+        // Values must match the C++ in-class member initializers (note
+        // depth_range_zero_to_one defaults to true, not false).
         Self {
             center_pixel_offset: 0.0,
             linear_rendering: false,
@@ -530,11 +545,11 @@ impl UniformData {
 
 /// Opaque handle to a `Noesis::Texture` instance.
 ///
-/// Created by the device's `create_texture` callback (Phase 1.5 onwards) and
-/// referenced from `update_texture`, `Batch.pattern/ramps/image/glyphs/shadow`,
-/// and the other texture-bearing virtuals. Use only as `*mut Texture`; the
-/// type is uninhabited from Rust because the underlying class is owned by the
-/// C++ shim.
+/// Your device's `create_texture` callback produces these; they then come back
+/// to you in `update_texture`, in `Batch.pattern`/`ramps`/`image`/`glyphs`/`shadow`,
+/// and the other texture-bearing callbacks. Only ever hold it behind a
+/// `*mut Texture` — the underlying class is owned by the C++ shim, so you can
+/// never construct or dereference one from Rust.
 #[repr(C)]
 pub struct Texture {
     _opaque: [u8; 0],
@@ -551,7 +566,7 @@ pub struct Texture {
 ///
 /// The `*_handle()` helpers translate the opaque `*mut Texture` pointers
 /// (which come from Noesis and reference `RustTexture` instances inside the
-/// C++ shim) into the [`TextureHandle`] values originally returned by
+/// C++ shim) into the `TextureHandle` values originally returned by
 /// `RenderDevice::create_texture`. Safe to call: the shim getter does a
 /// null check and reads a stored handle field — no further dereferencing.
 #[repr(C)]
@@ -590,14 +605,14 @@ pub struct Batch {
     /// Pixel-shader uniform buffers, one per slot.
     pub pixel_uniforms: [UniformData; 2],
 
-    /// Custom pixel-shader pointer (set via `ShaderEffect::SetPixelShader` or
-    /// `BrushShader::SetPixelShader`). Round-tripped through the device by
-    /// Phase 1; consumed by Phase 6 (custom effects).
+    /// Custom pixel-shader pointer used by custom effects (set on the Noesis
+    /// side via `ShaderEffect::SetPixelShader` or `BrushShader::SetPixelShader`).
+    /// Null unless the batch uses a custom effect.
     pub pixel_shader: *mut c_void,
 }
 
 impl Batch {
-    /// Translate the pattern texture pointer into the [`TextureHandle`] the
+    /// Translate the pattern texture pointer into the `TextureHandle` the
     /// Rust-side device returned from `create_texture`. `None` when unused.
     #[must_use]
     pub fn pattern_handle(&self) -> Option<crate::render_device::TextureHandle> {

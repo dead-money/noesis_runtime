@@ -1,20 +1,5 @@
-//! TODO §4 — `ICommand` from Rust: XAML `Command="{Binding ...}"` invokes Rust.
-//!
-//! A single headless `#[test]` (one per file: the "init once per process"
-//! rule). It proves the command bridge end-to-end through a real XAML-bound
-//! Button click, plus the enable/disable + lifecycle behaviours:
-//!
-//!   * A `<Button Command="{Binding Go}">` bound (via a Rust view-model
-//!     `DataContext`) to a Rust [`Command`]. A synthetic click increments a
-//!     shared counter from the Rust `execute` — and the command parameter
-//!     (`CommandParameter="42"`, a boxed string) arrives non-null.
-//!   * `can_execute=false` + `raise_can_execute_changed` disables the button
-//!     (`is_enabled() == Some(false)`) and suppresses `execute` on click.
-//!     Flipping it back re-enables and lets the click through again.
-//!   * Lifecycle: a command created and dropped WITHOUT ever binding it runs
-//!     its free handler exactly once (a Drop counter), and a null vtable can't
-//!     even be constructed here (that path is unit-covered by the FFI null
-//!     guard — `Command::new` never passes a null vtable).
+//! `ICommand` bridge: XAML `Command="{Binding ...}"` invokes Rust; covers
+//! enable/disable via `raise_can_execute_changed` and unbound-drop semantics.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -101,8 +86,6 @@ fn rust_command_drives_button() {
     let drop_count = Arc::new(AtomicU32::new(0));
 
     {
-        // ── Lifecycle: a command built and dropped WITHOUT binding must run
-        // its free handler exactly once. ──────────────────────────────────
         assert_eq!(drop_count.load(Ordering::SeqCst), 0);
         {
             let probe = Command::new(DropProbe(Arc::clone(&drop_count)));
@@ -120,7 +103,6 @@ fn rust_command_drives_button() {
             "unbound command's free handler must run exactly once on drop"
         );
 
-        // ── View-model exposing the command as a bindable BaseComponent DP. ─
         let mut builder =
             ClassBuilder::new("Sample.CommandVM", ClassBase::ContentControl, NoopHandler);
         let go_idx = builder.add_property("Go", PropType::BaseComponent);
@@ -130,19 +112,14 @@ fn rust_command_drives_button() {
             .create_instance()
             .expect("create_instance returned None");
 
-        // The bound command.
         let command = Command::new(Counting {
             executes: Arc::clone(&executes),
             saw_param: Arc::clone(&saw_param),
             enabled: Arc::clone(&enabled),
         });
-        // Hand the command to the VM's `Go` property; the binding resolves
-        // `{Binding Go}` against it. Safe `set_command` (no `unsafe`): the
-        // `&command` borrow encodes the live-BaseComponent invariant. The VM
-        // stores its own reference.
+        // `&command` borrow encodes the live-BaseComponent invariant; the VM stores its own reference.
         vm.handle().set_command(go_idx, &command);
 
-        // ── Wire the scene. ─────────────────────────────────────────────────
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), XAML.as_bytes().to_vec());
         let _guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
@@ -164,14 +141,12 @@ fn rust_command_drives_button() {
         let button = content
             .find_name("GoButton")
             .expect("find_name(GoButton) failed");
-        // With can_execute=true, the command-bound button is enabled.
         assert_eq!(
             button.is_enabled(),
             Some(true),
             "button bound to an executable command should be enabled"
         );
 
-        // ── Click #1: command runs, parameter arrives. ──────────────────────
         click(&mut view, 100, 100);
         assert_eq!(
             executes.load(Ordering::SeqCst),
@@ -184,8 +159,6 @@ fn rust_command_drives_button() {
             "command did not receive the CommandParameter"
         );
 
-        // ── Disable: can_execute=false + raise → button disabled, click is a
-        // no-op. ───────────────────────────────────────────────────────────
         enabled.store(0, Ordering::SeqCst);
         command.raise_can_execute_changed();
         let _ = view.update(0.0);
@@ -202,7 +175,6 @@ fn rust_command_drives_button() {
             "execute ran while the command reported can_execute=false"
         );
 
-        // ── Re-enable: click works again. ───────────────────────────────────
         enabled.store(1, Ordering::SeqCst);
         command.raise_can_execute_changed();
         let _ = view.update(0.0);
@@ -215,7 +187,6 @@ fn rust_command_drives_button() {
             "execute should run again after re-enabling"
         );
 
-        // ── Teardown (drop every Noesis handle before shutdown). ───────────
         drop(button);
         drop(content);
         view.deactivate();
@@ -228,9 +199,6 @@ fn rust_command_drives_button() {
 
     noesis_runtime::shutdown();
 
-    // The bound command's free handler is covered by the no-leak/no-double-free
-    // refcount contract; the explicit Drop-counter assertion above proves the
-    // free path fires exactly once for the unbound command.
     assert_eq!(drop_count.load(Ordering::SeqCst), 1);
 }
 

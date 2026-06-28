@@ -1,12 +1,5 @@
-//! Phase 5.D — custom `MarkupExtension` integration test.
-//!
-//! Registers `<sample:Loc>` as a Rust-backed `MarkupExtension`. Loads a XAML
-//! that uses `{sample:Loc menu.greeting}` to set a `TextBlock`'s `Text`
-//! property, and asserts that the resolved string ("Hello, world!") shows
-//! up on the live element.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test markup -- --nocapture`
+//! Custom `MarkupExtension` integration: a Rust-backed `{sample:Loc}` extension resolves
+//! a positional key and the resulting string appears on the live element.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -45,8 +38,6 @@ fn markup_extension_resolves_positional_key() {
     }
     noesis_runtime::init();
 
-    // Track what the callback saw, so we can assert the parser dispatched
-    // with the right key.
     let observed_keys: Arc<Mutex<Vec<String>>> = Arc::default();
 
     {
@@ -76,26 +67,21 @@ fn markup_extension_resolves_positional_key() {
         let greeting = content
             .find_name("Greeting")
             .expect("find_name returned None for Greeting");
-        // Sanity: the parser invoked our callback at least once with the
-        // expected key.
         let observed = observed_keys.lock().unwrap().clone();
         assert!(
             observed.iter().any(|k| k == "menu.greeting"),
             "expected callback to fire with key='menu.greeting'; saw {observed:?}"
         );
 
-        // Re-registering the same name should fail — the C++ side asserts
-        // the Reflection slot isn't already taken. Confirm before teardown
-        // (Noesis only allows a single init/shutdown cycle per process, so
-        // this lives inside the same test).
+        // Duplicate registration must fail: C++ rejects a second claim on the same Reflection slot.
+        // Tested here because Noesis allows only one init/shutdown per process.
         let dup = MarkupExtensionRegistration::from_closure("Sample.Loc", |_| Some(String::new()));
         assert!(
             dup.is_none(),
             "duplicate-name registration unexpectedly succeeded"
         );
 
-        // Drop wrappers BEFORE dropping the registration so any extension
-        // instances surface as freed first.
+        // Drop wrappers before the registration so extension instances are freed first.
         drop(greeting);
         drop(content);
         view.deactivate();

@@ -1,4 +1,4 @@
-//! XAML loading variants (TODO §15).
+//! XAML loading variants.
 //!
 //! Two surfaces that complement the [`crate::view::FrameworkElement`] load /
 //! parse path:
@@ -24,9 +24,7 @@ use crate::ffi::{
     noesis_gui_load_xaml_component,
 };
 
-/// Classifies a dependency reported by [`get_xaml_dependencies`]. Mirrors
-/// `Noesis::XamlDependencyType` (NsGui/Enums.h) 1:1; the ordinals are guarded
-/// by `static_assert`s in `cpp/noesis_xaml.cpp`.
+/// Classifies a dependency reported by [`get_xaml_dependencies`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum XamlDependencyKind {
@@ -97,7 +95,8 @@ unsafe extern "C" fn collect(user: *mut c_void, uri: *const c_char, kind: i32) {
 ///
 /// # Panics
 ///
-/// Panics if `base_uri` contains an interior NUL byte.
+/// Panics if `base_uri` contains an interior NUL byte, or if `xaml` is larger
+/// than 4 GiB.
 #[must_use]
 pub fn get_xaml_dependencies(xaml: &[u8], base_uri: &str) -> Vec<XamlDependency> {
     let base = CString::new(base_uri).expect("base_uri contained interior NUL");

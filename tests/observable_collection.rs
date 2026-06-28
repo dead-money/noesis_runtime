@@ -1,25 +1,5 @@
-//! TODO §3 — `ObservableCollection` / `INotifyCollectionChanged`: Rust data drives
-//! a list control.
-//!
-//! Two layers of assertion:
-//!
-//!   1. Pure CRUD over the `ObservableCollection` handle (count/get/insert/
-//!      remove/clear) — exercises the FFI marshaling directly.
-//!
-//!   2. Bind the collection to an `ItemsControl.ItemsSource`, then mutate it
-//!      from Rust *after* the first layout and assert the control's *realized
-//!      container count* tracks the new size. A realized container only appears
-//!      when the generator regenerates, which after the first layout happens
-//!      only if `INotifyCollectionChanged` fired and invalidated measure. A
-//!      non-observable list would leave the realized count frozen at its
-//!      initial value even though the live item count moved — so this is a
-//!      genuine end-to-end proof of change notification, not a passthrough.
-//!
-//! The `ItemsControl` carries an explicit `ControlTemplate` (`ItemsPresenter`) and
-//! `ItemTemplate` so it generates containers without depending on a loaded
-//! theme.
-//!
-//!   `cargo test -p noesis_runtime --test observable_collection -- --nocapture`
+//! `ObservableCollection` CRUD and `INotifyCollectionChanged` end-to-end: Rust
+//! mutations propagate to a bound `ItemsControl`'s realized container count.
 
 use std::collections::HashMap;
 
@@ -65,7 +45,6 @@ fn observable_collection() {
     }
     noesis_runtime::init();
 
-    // ── Part 1: pure CRUD over the collection handle ────────────────────────
     {
         let mut coll = ObservableCollection::new();
         assert!(coll.is_empty());
@@ -76,7 +55,6 @@ fn observable_collection() {
         assert!(coll.get(2).is_some());
         assert!(coll.get(3).is_none());
 
-        // insert at front
         let mid = noesis_runtime::binding::box_string("z");
         // SAFETY: `mid` is a live boxed value for the duration of the call.
         assert!(unsafe { coll.insert_component(0, mid.raw()) });
@@ -90,7 +68,6 @@ fn observable_collection() {
         assert!(coll.is_empty());
     }
 
-    // ── Part 2: bind to an ItemsControl and prove change notification ───────
     {
         let mut coll = ObservableCollection::new();
         coll.push_string("Alpha");
@@ -107,14 +84,12 @@ fn observable_collection() {
 
         let mut content = view.content().expect("View::content returned None");
 
-        // Bind the live collection as the source.
         // SAFETY: coll outlives this scope; raw() is a live ObservableCollection*.
         assert!(
             content.set_items_source(&coll),
             "set_items_source returned false (root not an ItemsControl?)"
         );
 
-        // First layout: the control should see and realize both items.
         assert!(view.update(0.0));
         assert_eq!(
             content.items_count(),

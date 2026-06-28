@@ -1,5 +1,5 @@
-//! Code-built `ImageSource` / `BitmapSource` family (TODO §12 "Bitmaps"):
-//! construct [`CroppedBitmap`], [`TextureSource`], [`BitmapImage`], and
+//! Code-built `ImageSource` / `BitmapSource` family: construct
+//! [`CroppedBitmap`], [`TextureSource`], [`BitmapImage`], and
 //! [`DynamicTextureSource`] objects from Rust without authoring XAML.
 //!
 //! Each type here is an owning handle over a freshly-created Noesis object
@@ -21,12 +21,14 @@
 //!
 //! - [`TextureSource::texture`] is `None` until a host
 //!   `RenderDevice`-created `Texture` is bound (a `Noesis::Texture*` is only
-//!   minted by a live render device — see "Known SDK limitations" in `TODO.md`).
+//!   minted by a live render device — see "Known SDK limitations" in
+//!   `LIMITATIONS.md`).
 //! - [`BitmapSource`] pixel dims / dpi ([`BitmapSource::pixel_size`],
 //!   [`BitmapSource::dpi`]) stay `0` until a texture provider resolves the image.
 //! - [`DynamicTextureSource`]'s callback fires from the render thread, so it is
-//!   only invoked under a live render pass; construction + [`Resize`](
-//!   DynamicTextureSource::resize) + the pixel-size getter are exercised here.
+//!   only invoked under a live render pass; construction +
+//!   [`resize`](DynamicTextureSource::resize) + the pixel-size getter are
+//!   exercised here.
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString};
@@ -141,8 +143,6 @@ macro_rules! base_component_handle {
     };
 }
 
-// ── CroppedBitmap ────────────────────────────────────────────────────────────
-
 /// A `CroppedBitmap`: an image source that crops another [`BitmapSource`] to a
 /// rectangular [`Int32Rect`]. Fully round-trippable headless — no GPU needed.
 pub struct CroppedBitmap {
@@ -229,8 +229,6 @@ impl BitmapSource for CroppedBitmap {
     }
 }
 
-// ── TextureSource ────────────────────────────────────────────────────────────
-
 /// A `TextureSource`: a [`BitmapSource`] backed by a `Noesis::Texture`.
 ///
 /// A real `Texture` is only minted by a host `RenderDevice`, so the default-
@@ -305,8 +303,6 @@ impl BitmapSource for TextureSource {
         self.raw()
     }
 }
-
-// ── BitmapImage ──────────────────────────────────────────────────────────────
 
 /// A `BitmapImage`: a [`BitmapSource`] created from an image file at a URI.
 ///
@@ -388,8 +384,6 @@ impl BitmapSource for BitmapImage {
         self.raw()
     }
 }
-
-// ── DynamicTextureSource ─────────────────────────────────────────────────────
 
 /// A `DynamicTextureSource`: an `ImageSource` that regenerates its texture per
 /// frame via a render-thread callback (appropriate for video-like content).

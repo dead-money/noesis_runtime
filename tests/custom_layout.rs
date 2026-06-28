@@ -1,15 +1,10 @@
-//! Phase C — layout participation (TODO §9 "Layout participation").
+//! Layout participation for a Rust-backed `Panel`.
 //!
-//! Registers a Rust-backed `Panel` whose `MeasureOverride` returns a FIXED
-//! size (150 x 80) and whose `ArrangeOverride` stacks its children vertically
-//! at their desired sizes. After a real layout pass it asserts (read back
-//! THROUGH Noesis):
-//!   * the panel's `ActualWidth`/`ActualHeight` equal the size our Rust measure
-//!     returned (with Left/Top alignment so the element sizes to `DesiredSize`)
-//!     — stubbing the trampoline (base `Panel` measure -> 0) fails this,
-//!   * the children were arranged by our Rust arrange (their `ActualWidth`
-//!     comes from the rects we passed to `LayoutChild::arrange`),
-//!   * the measure + arrange callbacks actually fired.
+//! Registers a `Panel` whose `MeasureOverride` returns a fixed size (150×80)
+//! and whose `ArrangeOverride` stacks children vertically. After a real layout
+//! pass it asserts `ActualWidth`/`ActualHeight` equal the Rust measure result
+//! (stubbing the trampoline would yield 0), children were arranged by Rust, and
+//! both callbacks fired.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -100,7 +95,6 @@ fn custom_panel_layout() {
         let content = view.content().expect("content");
         let panel = content.find_name("P").expect("find P");
 
-        // Panel sized to what our Rust MeasureOverride returned.
         assert_eq!(
             panel.actual_width(),
             Some(150.0),
@@ -112,7 +106,6 @@ fn custom_panel_layout() {
             "panel height != Rust measure result"
         );
 
-        // Children arranged by our Rust ArrangeOverride.
         let r1 = content.find_name("R1").expect("find R1");
         let r2 = content.find_name("R2").expect("find R2");
         assert_eq!(r1.actual_width(), Some(20.0), "R1 not arranged");

@@ -1,20 +1,5 @@
-//! `MeshData` / `Mesh` + `DrawingContext::draw_text` / `draw_mesh` (TODO §10).
-//!
-//! Two FFI-crossing proofs in one process (Noesis inits once):
-//!
-//!   1. **Headless round-trip** — build a `MeshData` (a quad: 4 vertices, 4 UVs,
-//!      6 indices, an explicit bounds rect), then read every buffer + the bounds
-//!      back through the live Noesis object and assert they match. A stub that
-//!      dropped the data would fail these. A `Mesh` element round-trips its
-//!      `Data` (pointer identity) and `Brush`.
-//!   2. **Render drive** — register a custom `FrameworkElement` whose `OnRender`
-//!      draws a built `MeshData` (via `draw_mesh`) and a `FormattedText` (via
-//!      `draw_text`) through the delivered `DrawingContext`, bind a counting
-//!      `RenderDevice`, and drive a real update + offscreen + onscreen pass. The
-//!      filled mesh produces STRICTLY MORE `draw_batch` calls than an identical
-//!      element that draws nothing (cancelling the constant trial-watermark
-//!      batches), proving the draw reached the GPU; both draw calls also report
-//!      success, proving the context + mesh + formatted-text casts crossed FFI.
+//! `MeshData` / `Mesh` + `DrawingContext::draw_mesh` / `draw_text`: headless
+//! buffer round-trips and a render-drive batch-count proof.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -45,7 +30,6 @@ struct Signals {
     all_draws_ok: Arc<AtomicBool>,
 }
 
-/// Build a quad `MeshData`: a 100x80 rectangle as two triangles.
 fn build_quad() -> MeshData {
     let mut md = MeshData::new();
     md.set_vertices(&[[0.0, 0.0], [100.0, 0.0], [100.0, 80.0], [0.0, 80.0]]);
@@ -55,10 +39,6 @@ fn build_quad() -> MeshData {
     md
 }
 
-/// Render handler that owns its drawing resources (so they outlive each
-/// `OnRender`). When `draw` is set it fills a mesh and draws formatted text via
-/// the delivered context; with `draw` clear it issues no draw commands (the
-/// baseline that cancels the trial watermark's batches).
 struct MeshRender {
     draw: bool,
     signals: Signals,
@@ -95,8 +75,6 @@ fn xaml(ns_class: &str) -> String {
     )
 }
 
-/// Register `class_name`, mount it in a View, drive a full render pass with a
-/// fresh counting device, and return the number of `draw_batch` calls recorded.
 fn render_batches(class_name: &str, draw: bool, signals: Signals) -> u32 {
     let painter = MeshRender {
         draw,
@@ -150,7 +128,6 @@ fn mesh_round_trips_and_draws() {
     noesis_runtime::init();
 
     {
-        // ── Headless MeshData round-trip (proves buffers + bounds crossed FFI).
         let md = build_quad();
         assert_eq!(md.num_vertices(), 4, "vertex count");
         assert_eq!(md.num_uvs(), 4, "uv count");
@@ -175,7 +152,6 @@ fn mesh_round_trips_and_draws() {
             "bounds round-trip: {b:?}"
         );
 
-        // Re-setting with a different length resizes and round-trips.
         let mut md2 = MeshData::new();
         md2.set_vertices(&[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]);
         assert_eq!(md2.num_vertices(), 3, "resized vertex count");
@@ -185,7 +161,6 @@ fn mesh_round_trips_and_draws() {
             "resized vertices round-trip"
         );
 
-        // ── Mesh element: Data + Brush round-trip (pointer identity).
         let mut mesh = Mesh::new();
         assert!(mesh.data().is_none(), "fresh Mesh has no data");
         assert!(mesh.brush().is_none(), "fresh Mesh has no brush");
@@ -201,7 +176,6 @@ fn mesh_round_trips_and_draws() {
         drop(mesh);
         drop(md);
 
-        // ── OnRender drive: baseline (no draws) vs painter (mesh + text) ─────
         let blank = Signals::default();
         let baseline = render_batches("Blank", false, blank.clone());
         assert!(
@@ -227,11 +201,6 @@ fn mesh_round_trips_and_draws() {
 
     noesis_runtime::shutdown();
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// CountingDevice — minimal RenderDevice that hands out monotonic handles and
-// counts draw batches (copied from tests/drawing.rs).
-// ────────────────────────────────────────────────────────────────────────────
 
 struct CountingDevice {
     next_handle: u64,

@@ -1,20 +1,4 @@
-//! TODO §5 — richer typed routed-event arg accessors + `DragDrop` source side.
-//!
-//! Three groups, all in one process (Noesis inits once per test binary):
-//!
-//!   * **Focus-changed** — drive real keyboard focus through the headless View
-//!     and assert `KeyboardFocusChangedEventArgs::oldFocus` / `newFocus` read
-//!     back the elements focus moved between.
-//!   * **Drag + manipulation** (`--features test-utils`) — a real
-//!     `DragEventArgs` / `Manipulation*EventArgs` is constructed C++-side with
-//!     known field values and dispatched exactly as the live pump would; the
-//!     production accessors read every typed field back. A stubbed accessor
-//!     returning a sentinel would fail these. (Drag/manipulation events can't be
-//!     synthesised headlessly — a drag needs an OS drag loop, manipulation needs
-//!     a multi-frame touch stream under a live render pass.)
-//!   * **`DragDrop` source side + `DataObject` handlers** — `DoDragDrop` crosses
-//!     the FFI without crashing; `DataObject.Copying` / `.Pasting` handlers
-//!     attach and detach cleanly (a stub returning a null token fails `expect`).
+//! Typed routed-event arg accessors: focus-changed old/new elements, `DragDrop` source side, `DataObject` handlers, and (with `test-utils`) drag/manipulation field round-trips.
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -59,9 +43,8 @@ fn typed_args_focus_drag_manipulation() {
     }
     noesis_runtime::init();
 
-    // Last GotKeyboardFocus newFocus / LostKeyboardFocus oldFocus pointers,
-    // stored as `usize` (a raw `*mut c_void` is not `Send` so can't ride the
-    // capture into a `RoutedEventHandler`). Compared by identity only.
+    // Stored as `usize` because `*mut c_void` is not `Send` and can't be captured
+    // into a `RoutedEventHandler`. Compared by pointer identity only.
     let got_focus: Arc<Mutex<Option<usize>>> = Arc::new(Mutex::new(None));
     let lost_focus: Arc<Mutex<Option<usize>>> = Arc::new(Mutex::new(None));
     let focus_fires = Arc::new(AtomicU32::new(0));
@@ -80,7 +63,6 @@ fn typed_args_focus_drag_manipulation() {
 
         let content = view.content().expect("View::content returned None");
 
-        // ── Focus-changed: capture old/new focus as focus moves A → B ──
         let gf = Arc::clone(&got_focus);
         let ff = Arc::clone(&focus_fires);
         let got_sub = subscribe_event(
@@ -124,9 +106,8 @@ fn typed_args_focus_drag_manipulation() {
         assert!(b.focus(), "TextBox B should accept focus");
         let _ = view.update(0.048);
 
-        // The headless View runs the keyboard-focus machinery, so the focus
-        // events genuinely fire — assert the typed old/new focus fields read
-        // back the elements focus moved between (a stub returning null fails).
+        // The headless View does run the keyboard-focus machinery, so focus events
+        // genuinely fire; a stub returning null would fail the identity asserts.
         assert!(
             focus_fires.load(Ordering::SeqCst) > 0,
             "GotKeyboardFocus should fire as focus moves"
@@ -136,23 +117,19 @@ fn typed_args_focus_drag_manipulation() {
             Some(b_ptr as usize),
             "last GotKeyboardFocus newFocus should be TextBox B"
         );
-        // oldFocus on the A→B transition should be A.
         assert_eq!(
             *lost_focus.lock().unwrap(),
             Some(a_ptr as usize),
             "LostKeyboardFocus oldFocus should be TextBox A"
         );
 
-        // ── DragDrop source side: crosses the FFI without crashing ──
-        // No headless completion (no OS drag loop) — we assert the call returns
-        // true for live elements (a stub returning false on the null-guard path
-        // would still pass here, but the null path is covered by the C guard).
+        // No headless completion (no OS drag loop); we assert the call returns
+        // without crashing. The null-guard path is covered by the C-side guard.
         assert!(
             do_drag_drop(&content, &content, DragEffects::ALL),
             "DoDragDrop on a live element should cross the FFI"
         );
 
-        // ── DataObject copy/paste handlers attach + detach ──
         let copying = subscribe_data_object(
             &content,
             DataObjectEvent::Copying,
@@ -166,7 +143,6 @@ fn typed_args_focus_drag_manipulation() {
         )
         .expect("subscribe DataObject.Pasting returned None");
 
-        // ── Drag + manipulation typed accessors (test-utils raisers) ──
         #[cfg(feature = "test-utils")]
         {
             use noesis_runtime::events::DragKeyStates;
@@ -176,9 +152,8 @@ fn typed_args_focus_drag_manipulation() {
                 noesis_routed_events_test_raise_manip_delta,
             };
 
-            // Trampoline that re-exposes the borrowed args to a Rust closure,
-            // matching the production `RoutedEventFn` shape. `userdata` is a
-            // `*mut &mut dyn FnMut(&EventArgs)`.
+            // Trampoline matching the production `RoutedEventFn` shape.
+            // `userdata` is a `*mut &mut dyn FnMut(&EventArgs)`.
             unsafe extern "C" fn raise_tramp(
                 userdata: *mut c_void,
                 args: *const c_void,
@@ -194,9 +169,8 @@ fn typed_args_focus_drag_manipulation() {
                 }
             }
 
-            // Invoke a C++ raiser synchronously, routing the constructed args
-            // into `f`. Borrows (never moves) the surrounding state, so the same
-            // `content` can be reused across raisers and at teardown.
+            // Invoke a C++ raiser synchronously. Borrows (never moves) surrounding
+            // state so `content` can be reused across raisers and at teardown.
             let run_raise =
                 |raise: unsafe extern "C" fn(*mut c_void, RoutedEventFn, *mut c_void),
                  mut f: &mut dyn FnMut(&EventArgs)| {
@@ -206,7 +180,6 @@ fn typed_args_focus_drag_manipulation() {
                     unsafe { raise(content.raw(), raise_tramp, ud.cast()) };
                 };
 
-            // ---- Drag ----
             let mut drag_seen = 0u32;
             run_raise(noesis_routed_events_test_raise_drag, &mut |args| {
                 let info = args.drag().expect("drag() should be Some for a drag event");
@@ -236,7 +209,6 @@ fn typed_args_focus_drag_manipulation() {
             });
             assert_eq!(drag_seen, 1, "drag handler fired once");
 
-            // ---- Manipulation delta ----
             let mut md_seen = 0u32;
             run_raise(noesis_routed_events_test_raise_manip_delta, &mut |args| {
                 assert_eq!(args.manip_origin(), Some((100.0, 200.0)), "origin");
@@ -257,7 +229,6 @@ fn typed_args_focus_drag_manipulation() {
             });
             assert_eq!(md_seen, 1, "manip-delta fired once");
 
-            // ---- Manipulation completed ----
             let mut mc_seen = 0u32;
             run_raise(
                 noesis_routed_events_test_raise_manip_completed,

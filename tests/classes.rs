@@ -1,15 +1,5 @@
-//! Phase 5.C — custom XAML class registration integration test.
-//!
-//! Registers a Rust-backed `<Sample.NineSlicer>` `ContentControl` with three
-//! DPs (`Source` / `SliceThickness` / `TopLeftViewbox`), loads a XAML that
-//! sets `SliceThickness` on an instance, and asserts:
-//!   * the property-changed callback fired with the right value
-//!   * a write-back via `Instance::set_rect` round-trips through `get_rect`
-//!   * the synthetic class registers with Noesis's reflection so XAML
-//!     successfully resolves `<sample:NineSlicer>` to our trampoline
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test classes -- --nocapture`
+//! Custom XAML class registration: property-changed callbacks, `Rect` round-trips,
+//! and Noesis reflection resolving `<sample:NineSlicer>` to a Rust trampoline.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -139,8 +129,6 @@ fn class_registration_roundtrip() {
             recorded
         );
 
-        // Round-trip a Rect via the public API. The slicer instance is the
-        // raw FrameworkElement pointer; cast through Instance::from_raw.
         let instance = unsafe { Instance::from_raw(std::ptr::NonNull::new(slicer.raw()).unwrap()) };
         instance.set_rect(viewbox_idx, 1.0, 2.0, 3.0, 4.0);
         let read = instance

@@ -1,16 +1,6 @@
-//! Phase 6 — `ICollectionView` current-item navigation over a populated source.
-//!
-//! Builds an `ObservableCollection` of boxed strings, wraps it in a
-//! `CollectionViewSource`, and drives the produced `CollectionView`'s current
-//! item through every navigation method. Each assertion re-reads the LIVE view
-//! (`current_position`, `current_item`, the off-the-ends flags) so a stubbed
-//! shim fails the round-trip; pointer identity between the current item and the
-//! source slot, plus a `CurrentChanged` counter, prove the FFI crossing.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test collection_view -- --nocapture`
+//! `ICollectionView` current-item navigation: every navigation method is driven
+//! and asserted via live reads; pointer identity and a `CurrentChanged` counter
+//! prove the FFI crossing.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -54,7 +44,6 @@ fn collection_view_current_item_navigation() {
             })
             .expect("subscribe to CurrentChanged");
 
-        // First.
         assert!(view.move_current_to_first(), "first is a valid record");
         assert_eq!(view.current_position(), 0);
         assert_eq!(
@@ -63,7 +52,6 @@ fn collection_view_current_item_navigation() {
             "current item is alpha"
         );
 
-        // Next.
         assert!(view.move_current_to_next());
         assert_eq!(view.current_position(), 1);
         assert_eq!(
@@ -71,7 +59,6 @@ fn collection_view_current_item_navigation() {
             Some("beta"),
         );
 
-        // Last.
         assert!(view.move_current_to_last());
         assert_eq!(view.current_position(), 2);
         assert_eq!(
@@ -89,7 +76,6 @@ fn collection_view_current_item_navigation() {
         );
         assert_eq!(view.current_position(), 3, "after-last position is count");
 
-        // Absolute position.
         assert!(view.move_current_to_position(1));
         assert_eq!(view.current_position(), 1);
         assert_eq!(
@@ -97,7 +83,6 @@ fn collection_view_current_item_navigation() {
             Some("beta"),
         );
 
-        // Previous, then before the beginning.
         let _ = view.move_current_to_previous();
         assert_eq!(view.current_position(), 0);
         let _ = view.move_current_to_previous();
@@ -119,7 +104,6 @@ fn collection_view_current_item_navigation() {
             "current item is the same boxed object as source[0]"
         );
 
-        // Refresh re-creates the view without crashing.
         view.refresh();
 
         assert!(

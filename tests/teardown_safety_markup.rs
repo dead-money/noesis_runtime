@@ -1,12 +1,5 @@
-//! Markup-extension counterpart of `teardown_safety.rs`.
-//!
-//! Same intrusive-refcount contract as the class case, applied to
-//! `MarkupClassData`. The handler box must outlive the
-//! `MarkupExtensionRegistration` if any live extension instance still
-//! references it. See `tests/teardown_safety.rs` for the full rationale.
-//!
-//! Lives in its own integration-test binary so it gets a fresh Noesis
-//! init/shutdown cycle (Noesis is process-singleton).
+//! Markup-extension counterpart of `teardown_safety.rs`: same deferred-free contract
+//! for `MarkupClassData`. Separate binary for a fresh Noesis init/shutdown cycle.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -83,9 +76,8 @@ fn markup_handler_drops_exactly_once_after_view_teardown() {
         view.activate();
         assert!(view.update(0.0));
 
-        // Drop the registration before the view is torn down — exercises
-        // the deferred-free path through the C++ MarkupClassData refcount
-        // when an extension instance is still live in the visual tree.
+        // Drop registration while an extension instance is still live in the tree —
+        // exercises the deferred-free path through MarkupClassData's refcount.
         drop(registration);
 
         view.deactivate();

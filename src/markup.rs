@@ -1,11 +1,8 @@
-//! Register Rust-backed XAML `MarkupExtension`s (Phase 5.D).
+//! Register Rust-backed XAML `MarkupExtension`s — Rust callbacks XAML can
+//! invoke as `{myns:Foo positional_arg}`.
 //!
-//! Mirrors the C# / Unity binding's approach: a per-base C++ trampoline
-//! ([`MarkupExtension`](https://docs.noesisengine.com/...) on the C++ side)
-//! plus a synthetic per-name `TypeClassBuilder` so XAML can resolve
-//! `{myns:Foo positional_arg}` to a Rust callback.
-//!
-//! `AoR`'s `LocalizeExtension` is the motivating example —
+//! Reach for this when you want XAML markup to resolve a value through your
+//! own code at parse time. The motivating example is localization:
 //! `{aor:Localize menu.main_menu.new_game}` resolves the key through a
 //! locale table and substitutes the result.
 //!
@@ -16,8 +13,7 @@
 //!   `BaseComponent*`.
 //! * No reactive bindings — the callback runs at XAML parse time and the
 //!   returned value is substituted statically. Locale switching requires
-//!   re-loading the XAML. Reactive bindings (locale switch updates the UI
-//!   in place) follow in a separate PR.
+//!   re-loading the XAML.
 //!
 //! # Threading
 //!
@@ -58,8 +54,8 @@ pub enum MarkupValue<'a> {
 /// handler-owned scratch storage (the [`MarkupValue::String`] case). Unlike the
 /// other callback traits in this crate it is therefore **not** re-entrant-safe:
 /// do not drive a nested XAML parse that resolves this same extension from
-/// inside `provide_value` (e.g. calling [`crate::xaml::parse_xaml`] /
-/// `FrameworkElement::load` on markup that uses this extension). Doing so would
+/// inside `provide_value` (e.g. calling [`crate::xaml::load_xaml_component`]
+/// on markup that uses this extension). Doing so would
 /// alias the handler box. The parser itself never re-enters `provide_value`
 /// — multiple `{Ext ...}` usages in one document are resolved sequentially, not
 /// nested — so ordinary usage is sound.
@@ -156,7 +152,7 @@ impl MarkupExtensionRegistration {
         Self::new(name, handler)
     }
 
-    /// Internal token (a `void*` to the C++-side `ClassData`).
+    /// Opaque registry handle (a `void*` to the C++-side `MarkupClassData`).
     pub fn token(&self) -> NonNull<c_void> {
         self.token
     }
@@ -193,8 +189,6 @@ unsafe extern "C" fn markup_handler_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-// ── Trampoline ─────────────────────────────────────────────────────────────
-
 unsafe extern "C" fn provide_trampoline(
     userdata: *mut c_void,
     key: *const c_char,
@@ -219,17 +213,13 @@ unsafe extern "C" fn provide_trampoline(
                 true
             }
             MarkupValue::String(s) => {
-                // The borrowed &str must remain valid for the C++ side to copy
-                // the bytes into Noesis's String storage. The string returned by
-                // `provide_value` borrows from the handler — typically scratch
-                // storage on the handler itself, which the C++ side copies before
-                // the next callback or any further handler mutation. Stash a
-                // CString in a per-handler slot so the trailing NUL is in place.
+                // Noesis copies the bytes synchronously; stash a NUL-terminated
+                // CString in a per-handler slot to give the pointer a stable
+                // lifetime across this call.
                 let cstring = CString::new(s.as_bytes()).unwrap_or_default();
                 let key = userdata as usize;
                 let mut table = STRING_SCRATCH.lock().expect("STRING_SCRATCH poisoned");
-                // Replace any prior scratch for this handler — the C++ side
-                // copies bytes synchronously, so the previous slot can go.
+                // Prior scratch for this handler is already copied, so reuse the slot.
                 let slot = table.iter_mut().find(|(k, _)| *k == key);
                 let cstr_ptr = match slot {
                     Some(slot) => {
@@ -248,10 +238,8 @@ unsafe extern "C" fn provide_trampoline(
     })
 }
 
-// Per-handler CString scratch. Handlers borrow &str into Rust-owned data;
-// we need a stable C-string slot for the bytes Noesis sees so the trailing
-// NUL is in place. Keyed by handler userdata pointer (unique per
-// registration); cleaned up when the registration drops.
+// Stable NUL-terminated slot for the bytes Noesis sees, keyed by handler
+// userdata pointer (unique per registration); cleaned up when the registration drops.
 static STRING_SCRATCH: Mutex<Vec<(usize, CString)>> = Mutex::new(Vec::new());
 
 fn forget_string_scratch(userdata: *mut c_void) {

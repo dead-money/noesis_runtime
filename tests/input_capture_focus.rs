@@ -1,19 +1,4 @@
-//! TODO §16 — mouse capture + focus-state, end-to-end across the FFI.
-//!
-//! Builds a real `View` over a two-button scene, then drives Noesis-computed
-//! state and asserts on it:
-//!   * `capture_mouse()` flips `is_mouse_captured()` false→true→false and
-//!     `Mouse::GetCaptured` (via `mouse_captured()`) points at the captured
-//!     element while held, then null after release.
-//!   * `focus()` makes `is_keyboard_focused()` true and `Keyboard::GetFocused`
-//!     (via `keyboard_focused()`) point at the focused element.
-//!   * `FocusManager` focus-scope set/get round-trips, and `focused_element`
-//!     reports the focused button.
-//!   * `capture_touch` binds an active touch device (and is refused with none),
-//!     and `predict_focus(Down)` resolves to the stacked sibling button.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   cargo test --test `input_capture_focus` -- --nocapture
+//! Mouse capture, focus state, and focus traversal — end-to-end across the FFI.
 
 use std::collections::HashMap;
 
@@ -71,7 +56,6 @@ fn capture_focus_roundtrip() {
         assert!(view.update(0.0), "first update builds tree");
         let _ = view.update(0.016);
 
-        // ── Mouse capture ───────────────────────────────────────────────────
         assert!(!one.is_mouse_captured(), "nothing captured initially");
         assert!(one.mouse_captured().is_none(), "Mouse::GetCaptured null");
 
@@ -82,7 +66,6 @@ fn capture_focus_roundtrip() {
         let _ = view.update(0.032);
         assert!(one.is_mouse_captured(), "is_mouse_captured flips true");
 
-        // Mouse::GetCaptured must point at exactly the element we captured.
         let captured = one.mouse_captured().expect("a captured element");
         assert_eq!(
             captured.as_ptr(),
@@ -100,7 +83,6 @@ fn capture_focus_roundtrip() {
             "nothing captured after release"
         );
 
-        // SubTree capture mode through Mouse::Capture, then release via mode None.
         assert!(
             two.capture_mouse_mode(CaptureMode::SubTree),
             "capture with SubTree mode"
@@ -117,7 +99,6 @@ fn capture_focus_roundtrip() {
         two.release_mouse_capture();
         let _ = view.update(0.08);
 
-        // ── Keyboard focus ──────────────────────────────────────────────────
         assert!(!one.is_keyboard_focused(), "not focused before focus()");
         assert!(one.focus(), "Button accepts focus");
         let _ = view.update(0.096);
@@ -127,7 +108,6 @@ fn capture_focus_roundtrip() {
         );
         assert!(one.is_focused(), "logical focus too");
 
-        // Keyboard::GetFocused must be exactly `one`.
         let focused = one.keyboard_focused().expect("a focused element");
         assert_eq!(
             focused.as_ptr(),
@@ -135,21 +115,17 @@ fn capture_focus_roundtrip() {
             "Keyboard::GetFocused points at the focused button"
         );
 
-        // Focus-within: the StackPanel parent should report focus within it.
         let panel = two.logical_parent().expect("button has a logical parent");
         assert!(
             panel.is_keyboard_focus_within(),
             "ancestor reports keyboard focus within"
         );
 
-        // Move focus to `two` and confirm the flip.
         assert!(two.focus(), "two accepts focus");
         let _ = view.update(0.112);
         assert!(two.is_keyboard_focused(), "two now keyboard-focused");
         assert!(!one.is_keyboard_focused(), "one lost keyboard focus");
 
-        // ── FocusManager focus scope round-trip ─────────────────────────────
-        // Buttons aren't focus scopes by default; mark one and read it back.
         assert!(
             !FocusManager::is_focus_scope(&one),
             "not a scope by default"
@@ -165,8 +141,6 @@ fn capture_focus_roundtrip() {
         assert!(FocusManager::set_is_focus_scope(&one, false));
         assert!(!FocusManager::is_focus_scope(&one), "and back to false");
 
-        // Make the StackPanel a focus scope, set its FocusedElement to `one`,
-        // and read it back through FocusManager — a full get/set round-trip.
         assert!(
             FocusManager::set_is_focus_scope(&panel, true),
             "panel is a scope"
@@ -182,7 +156,6 @@ fn capture_focus_roundtrip() {
             one.raw(),
             "FocusManager.FocusedElement round-trips to `one`"
         );
-        // GetFocusScope from inside the scope resolves back to the panel.
         let scope = FocusManager::focus_scope(&one).expect("an enclosing focus scope");
         assert_eq!(
             scope.as_ptr(),
@@ -190,8 +163,6 @@ fn capture_focus_roundtrip() {
             "GetFocusScope resolves to the marked panel"
         );
 
-        // ── Focus traversal: MoveFocus + focus engagement ───────────────────
-        // Re-focus `one`, then Tab-style MoveFocus(Next) should leave it.
         assert!(one.focus());
         let _ = view.update(0.128);
         assert!(one.is_keyboard_focused());
@@ -209,9 +180,6 @@ fn capture_focus_roundtrip() {
         let _ = view.update(0.16);
         assert!(one.is_keyboard_focused(), "engage path focused `one`");
 
-        // ── Touch capture (UIElement::CaptureTouch) ─────────────────────────
-        // CaptureTouch binds an *active* touch device id to the element. With no
-        // active touch, an arbitrary id can't be captured — a real negative.
         assert!(
             !one.capture_touch(99),
             "no active touch device #99 to capture"
@@ -237,11 +205,8 @@ fn capture_focus_roundtrip() {
         let _ = view.touch_up(60, 100, 7);
         let _ = view.update(0.192);
 
-        // ── PredictFocus (directional) ──────────────────────────────────────
-        // `one` is focused; the only sibling below it is `two`, so directional
-        // PredictFocus(Down) resolves to `two` without moving focus. (The
-        // tab-order directions Next/Previous/First/Last are unsupported and
-        // return None — asserted here too.)
+        // PredictFocus only supports spatial directions; tab-order directions
+        // (Next/Previous/First/Last) return None.
         assert!(one.focus());
         let _ = view.update(0.2);
         let predicted = one

@@ -1,14 +1,5 @@
-//! Safety smoke test — exercises the `noesis_runtime` FFI surface against a
-//! catalogue of valid-but-edge-case inputs and asserts no crashes.
-//!
-//! The whole file is a single `#[test]` because Noesis's `Init` /
-//! `Shutdown` are once-per-process; sub-blocks isolated by `{}` scopes
-//! cover one bug class each. Each block is preceded by an
-//! `eprintln!("=== block name ===")` so a process abort tells you where
-//! it died.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test safety_smoke -- --nocapture`
+//! Safety smoke: edge-case FFI inputs (all `PropType`s, template bindings, re-entrant handlers, drop order) asserted to not crash.
+//! Single `#[test]` — Noesis init/shutdown is once-per-process; each `{}` block covers one crash class.
 
 use std::collections::HashMap;
 
@@ -68,7 +59,6 @@ fn safety_smoke() {
     }
     noesis_runtime::init();
 
-    // ── Block 1: every PropType, registered and round-tripped ──────────────
     eprintln!("=== Block 1: PropType registration matrix ===");
     {
         let mut b = ClassBuilder::new("Smoke.AllProps", ClassBase::ContentControl, QuietHandler);
@@ -88,17 +78,13 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 2: instantiate a class with NO properties set ────────────────
-    // Tests that DependencyObject::Init can box defaults for every PropType
-    // without crashing. The motivating bug: ImageSource / BaseComponent
-    // DPs created with `PropertyMetadata::Create()` (no default) crash
-    // inside `ValueStorageManagerImpl<Ptr<BaseComponent>>::Box(null)` when
-    // the visual-tree init walks deep enough to invoke a typed Box on the
-    // missing default. The crash needs an *implicit Style with a
-    // ControlTemplate* applied to the synthetic class — without that, the
-    // init shortcut never invokes the typed Box. This block reproduces
-    // hommlet's menu structure: app-resources Style with a binding-heavy
-    // ControlTemplate, instance is a deeply-nested child of a Grid.
+    // The motivating crash: `ImageSource` / `BaseComponent` DPs created with
+    // `PropertyMetadata::Create()` (no default) crash inside
+    // `ValueStorageManagerImpl<Ptr<BaseComponent>>::Box(null)` when the
+    // visual-tree init walks deep enough to invoke a typed Box on the missing
+    // default. Reproducing it requires an *implicit Style + ControlTemplate*
+    // applied to the synthetic class; without that the init shortcut never
+    // invokes the typed Box.
     eprintln!("=== Block 2: all-default props inside a templated Style ===");
     {
         let mut b = ClassBuilder::new("Smoke.AllDefaults", ClassBase::ContentControl, QuietHandler);
@@ -181,9 +167,7 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 3: Style TargetType matches synthetic class ──────────────────
-    // Exercises Noesis's `IsAssignableFrom` + `GetAncestorInfo` against our
-    // synthetic TypeClass.
+    // Exercises `IsAssignableFrom` + `GetAncestorInfo` against a synthetic TypeClass.
     eprintln!("=== Block 3: Style TargetType against synthetic class ===");
     {
         let mut b = ClassBuilder::new("Smoke.Styled", ClassBase::ContentControl, QuietHandler);
@@ -210,11 +194,8 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 4: ControlTemplate with TemplatedParent bindings to synthetic DP ──
-    // This is the crash path the menu hits — NineSlicer's ControlTemplate
-    // uses `<Binding ... RelativeSource={RelativeSource TemplatedParent}>`
-    // against the slicer's own DPs. Tests that the binding system can read
-    // synthetic DPs without exploding.
+    // The binding system must be able to read synthetic DPs through a
+    // ControlTemplate's `RelativeSource TemplatedParent` without crashing.
     eprintln!("=== Block 4: ControlTemplate w/ TemplatedParent bindings ===");
     {
         let mut b = ClassBuilder::new("Smoke.Templated", ClassBase::ContentControl, QuietHandler);
@@ -223,10 +204,8 @@ fn safety_smoke() {
         b.add_property("LeftRect", PropType::Rect);
         let reg = b.register().expect("Templated registration failed");
 
-        // Mirrors the structure of `assets/Controls/NineSlicer.xaml` —
-        // ControlTemplate that binds back to the templated parent's DPs
-        // for both layout (ColumnDefinition.Width) and visual
-        // (ImageBrush.Viewbox) properties.
+        // ControlTemplate that binds back to the templated parent's DPs for both
+        // layout (ColumnDefinition.Width) and visual (ImageBrush.Viewbox).
         let xaml = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -265,10 +244,8 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 5: multiple classes registered + cross-referenced in one XAML ──
-    // Mirrors hommlet's "register NineSlicer + ThreeSlicer + Localize before
-    // the menu loads" pattern. Catches any cross-talk between synthetic
-    // TypeClass entries.
+    // Multiple synthetic classes registered before the XAML loads; catches
+    // cross-talk between TypeClass entries.
     eprintln!("=== Block 5: multi-class registration + cross-reference ===");
     {
         let mut b1 = ClassBuilder::new("Smoke.Outer", ClassBase::ContentControl, QuietHandler);
@@ -300,8 +277,7 @@ fn safety_smoke() {
         drop(reg1);
     }
 
-    // ── Block 6: MarkupExtension feeding into a synthetic-class property ────
-    // Localize-style markup providing the value for a registered DP.
+    // Markup extension providing the value for a registered synthetic DP.
     eprintln!("=== Block 6: markup extension feeding synthetic DP ===");
     {
         let mut b = ClassBuilder::new("Smoke.Labeled", ClassBase::ContentControl, QuietHandler);
@@ -330,11 +306,6 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 7: ResourceDictionary as application resources ────────────────
-    // Mirrors hommlet's `load_application_resources("Theme/Theme.xaml")` —
-    // a ResourceDictionary that holds a Style TargetType="{x:Type smoke:X}".
-    // The application-resources install happens BEFORE the scene XAML
-    // loads. This is the most-likely source of the menu's crash.
     eprintln!("=== Block 7: app-resources w/ synthetic-class style ===");
     {
         let mut b = ClassBuilder::new("Smoke.AppRes", ClassBase::ContentControl, QuietHandler);
@@ -380,11 +351,8 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 7b: app-resources with MergedDictionaries indirection ────────
-    // Hommlet's Theme.xaml is a ResourceDictionary that pulls in
-    // Controls/NineSlicer.xaml via MergedDictionaries; the inner
-    // dictionary holds the `{x:Type aor:NineSlicer}` Style + a real
-    // ControlTemplate. This replicates that layout.
+    // App resources via `MergedDictionaries`; the inner dictionary holds the
+    // Style + ControlTemplate for the synthetic class.
     eprintln!("=== Block 7b: app-resources via MergedDictionaries ===");
     {
         let mut b = ClassBuilder::new("Smoke.MdNine", ClassBase::ContentControl, QuietHandler);
@@ -462,11 +430,9 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 7c: handler re-enters Instance::set_* during its own callback ─
-    // A handler that writes back to a DP it just observed (the slicer
-    // pattern: SliceThickness changes → recompute viewboxes → set_rect).
-    // Verifies the C++ trampoline + Rust side-table can be re-entered
-    // without deadlocking the registry mutex or corrupting state.
+    // A handler that writes back to a DP during its own callback (set_* on
+    // `instance` while the callback is running). Verifies the C++ trampoline
+    // and Rust side-table tolerate re-entrance without deadlock or corruption.
     eprintln!("=== Block 7c: re-entrant Instance::set_* in handler ===");
     {
         struct ReentrantHandler {
@@ -517,7 +483,6 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // ── Block 8: drop-order regression — registration outlives view ────────
     eprintln!("=== Block 7: registration outlives view ===");
     {
         let mut b = ClassBuilder::new("Smoke.Long", ClassBase::ContentControl, QuietHandler);

@@ -1,25 +1,6 @@
-//! TODO §15 — scheme-/assembly-scoped **font** providers (routing test).
-//!
-//! Companion to `xaml_scoped_providers.rs` / `texture_scoped_providers.rs`, but
-//! for the font-provider triple. Each scoped font setter maps to a DISTINCT
-//! Noesis call (`SetSchemeFontProvider` / `SetAssemblyFontProvider` /
-//! `SetSchemeAssemblyFontProvider`), so a copy-paste bug wiring one setter to
-//! the wrong Noesis function would slip through a compile-only test.
-//!
-//! Four font providers are installed at once — global, scheme (`myassets`),
-//! assembly (`App`), and scheme+assembly (`packs`+`Skin`) — each a `Recorder`
-//! logging the folder URI handed to its `scan_folder` (Noesis `ScanFolder`)
-//! and `open_font` (`OpenFont`) callbacks. A `<StackPanel>` of four
-//! `<TextBlock>`s, one per scope, references the real `Bitter` face through a
-//! scoped `FontFamily` URI; a single measure pass resolves each font, and the
-//! test asserts Noesis routed each folder URI to exactly the right provider and
-//! to no other.
-//!
-//! Font resolution (`ScanFolder` → `OpenFont` to scan face metadata) runs
-//! during the text-measure pass with no GPU / render device, so this is fully
-//! headless. The real `Data/Fonts/Bitter-Regular.ttf` is read so the requested
-//! `#Bitter` family actually matches a registered face and the lookup
-//! completes.
+//! Routing test for scoped font providers: verifies each of the four setters
+//! (`SetSchemeFontProvider` / `SetAssemblyFontProvider` / `SetSchemeAssemblyFontProvider`)
+//! routes to a distinct Noesis call — a compile-only test can't catch a wiring swap.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
 //!   `cargo test -p noesis_runtime --test font_scoped_providers -- --nocapture`
@@ -46,16 +27,12 @@ const FONT_XAML: &str = r##"<StackPanel xmlns="http://schemas.microsoft.com/winf
   <TextBlock x:Name="TbGlobal"   Text="DDD" FontFamily="Fonts/#Bitter"/>
 </StackPanel>"##;
 
-/// Logs the folder URI of every `(scan_folder, open_font)` call, tagged with
-/// `label`. `scan_folder` registers the single Bitter face; `open_font` serves
-/// the real Bitter bytes so the face metadata scans and the `#Bitter` lookup
-/// resolves through this provider.
+// Logs (label, op, folder_uri) triples for scan_folder/open_font calls.
 struct FontRecorder {
     label: &'static str,
     bytes: Vec<u8>,
-    /// Holds the most recently opened bytes alive across the `&[u8]` borrow.
+    // keeps opened bytes alive across the &[u8] borrow
     current: Option<Vec<u8>>,
-    /// `(label, op, folder_uri)` entries shared with the test body.
     log: Arc<Mutex<Vec<(&'static str, &'static str, String)>>>,
 }
 impl FontProvider for FontRecorder {
@@ -110,7 +87,6 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
         let _assembly = set_assembly_font_provider("App", make("assembly"));
         let _both = set_scheme_assembly_font_provider("packs", "Skin", make("both"));
 
-        // Parse the four-TextBlock tree and drive a measure pass through a View.
         // ScanFolder/OpenFont fire during text measure to resolve #Bitter.
         let root = FrameworkElement::parse(FONT_XAML).expect("parse TextBlock stack");
         let mut view = View::create(root);
@@ -125,7 +101,6 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
              ScanFolder/OpenFont never fired — log = {entries:?}"
         );
 
-        // ── Each scoped FontFamily landed on its own provider ───────────────
         assert!(
             entries
                 .iter()
@@ -153,7 +128,6 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
             "global provider was not asked for the unscoped Fonts folder; log = {entries:?}"
         );
 
-        // ── Exclusivity: no provider saw a folder outside its scope ─────────
         // "App" (capital) appears only in the assembly URI — "application"
         // (lowercase) in the pack/packs URIs does NOT match.
         assert!(

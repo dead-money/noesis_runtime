@@ -1,11 +1,5 @@
-//! TODO §6 — a `DoubleAnimation` driven by a `Storyboard` animates a named
-//! element's `Opacity` from 0 to 1 over a short duration. We pump the view
-//! clock across the duration and read `Opacity` back through Noesis: a stubbed
-//! `Begin` / no-op animation leaves it unchanged, so the moving value and the
-//! endpoints discriminate a real implementation.
-//!
-//! Single `#[test]` per file (Noesis can't be re-init'd in a process); all work
-//! happens in an inner scope so every owning wrapper drops before `shutdown()`.
+//! `DoubleAnimation` in a `Storyboard` animates `Opacity` 0→1; clock ticks read
+//! back the live interpolated value through Noesis.
 
 use noesis_runtime::animation::{Animation, DoubleAnimation, Storyboard, Timeline};
 use noesis_runtime::view::{FrameworkElement, View};
@@ -43,7 +37,6 @@ fn double_animation_drives_opacity() {
             "base opacity should start at 0, got {base}"
         );
 
-        // Opacity 0 -> 1 over 0.5s, linear.
         let mut anim = DoubleAnimation::new();
         assert!(anim.set_from(Some(0.0)), "setter should succeed");
         assert!(anim.set_to(Some(1.0)), "setter should succeed");
@@ -75,7 +68,6 @@ fn double_animation_drives_opacity() {
             "opacity mid should be between endpoints, got {mid}"
         );
 
-        // Past the end: the value should have reached ~To (1.0).
         view.update(0.6);
         let end = box_el.get_f32("Opacity").expect("opacity");
         assert!(end > 0.98, "opacity at end should be ~1, got {end}");

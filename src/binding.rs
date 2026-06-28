@@ -1,4 +1,4 @@
-//! Data-binding bridge (TODO §3): drive XAML from Rust-owned data.
+//! Data-binding bridge: drive XAML from Rust-owned data.
 //!
 //! Bindings are authored in XAML — `{Binding Path}` on a property,
 //! `ItemsSource="{Binding}"` on a list control. This module supplies the
@@ -44,9 +44,9 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// Box a UTF-8 string as a `Noesis::BoxedValue<String>`, returned as a borrowed
-/// opaque pointer wrapped in an owning [`Boxed`]. Noesis copies the bytes, so
-/// the input may go away after this call.
+/// Box a UTF-8 string as a `Noesis::BoxedValue<String>`, returned as an owning
+/// [`Boxed`] handle. Noesis copies the bytes, so the input may go away after
+/// this call.
 ///
 /// # Panics
 ///

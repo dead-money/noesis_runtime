@@ -1,15 +1,5 @@
-//! TODO §6 — the additional animation value types (`Rect` / `Size` / `Int16` /
-//! `Int32` / `Int64` From-To + their `*UsingKeyFrames`, plus the discrete
-//! `Object` / `Matrix` key-frame animations), `KeySpline` spline key frames, and
-//! the `BeginStoryboard` trigger action.
-//!
-//! Each assertion is a read-back round-trip: a value is set on (or a key frame
-//! added to) the live Noesis object, then re-read through a getter that queries
-//! that same object. A stubbed / no-op / hardcoded implementation leaves the
-//! getter returning the wrong value (or `None`) and fails the test.
-//!
-//! Single `#[test]` per file (Noesis can't be re-init'd in a process); all work
-//! happens in an inner scope so every owning wrapper drops before `shutdown()`.
+//! Round-trip tests for Rect/Size/Int16/Int32/Int64 From-To, their key-frame
+//! variants, Object/Matrix key frames, `KeySpline`, and `BeginStoryboard`.
 
 use noesis_runtime::animation::{
     Animation, AsComponent, BeginStoryboard, DoubleAnimation, HandoffBehavior, Int16Animation,
@@ -38,7 +28,6 @@ fn animation_value_types_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── Rect From/To/By ──────────────────────────────────────────────────
         let mut rect = RectAnimation::new();
         assert!(rect.set_from(Some([1.0, 2.0, 3.0, 4.0])));
         assert!(rect.set_to(Some([5.0, 6.0, 7.0, 8.0])));
@@ -49,7 +38,6 @@ fn animation_value_types_round_trip() {
         assert!(rect.set_from(None));
         assert_eq!(rect.from(), None);
 
-        // ── Size From/To/By ──────────────────────────────────────────────────
         let mut size = SizeAnimation::new();
         assert!(size.set_from(Some([10.0, 20.0])));
         assert!(size.set_to(Some([30.0, 40.0])));
@@ -57,7 +45,6 @@ fn animation_value_types_round_trip() {
         assert_eq!(size.to(), Some([30.0, 40.0]));
         assert_eq!(size.by(), None);
 
-        // ── Int16 / Int32 / Int64 From/To ────────────────────────────────────
         let mut i16a = Int16Animation::new();
         assert!(i16a.set_from(Some(-7)));
         assert!(i16a.set_to(Some(123)));
@@ -78,7 +65,6 @@ fn animation_value_types_round_trip() {
         assert_eq!(i64a.from(), Some(-5_000_000_000));
         assert_eq!(i64a.to(), Some(9_000_000_000));
 
-        // ── KeySpline (used below for spline key frames) ─────────────────────
         let mut spline = KeySpline::new((0.25, 0.1), (0.25, 1.0));
         assert_eq!(spline.control_point1(), Some((0.25, 0.1)));
         assert_eq!(spline.control_point2(), Some((0.25, 1.0)));
@@ -92,7 +78,6 @@ fn animation_value_types_round_trip() {
             noesis_runtime::animation::EasingMode::EaseInOut,
         );
 
-        // ── Rect key frames (Discrete / Linear / Easing / Spline) ────────────
         let mut rectkf = RectAnimationUsingKeyFrames::new();
         assert!(rectkf.add_key_frame(
             KeyFrameKind::Discrete,
@@ -124,7 +109,6 @@ fn animation_value_types_round_trip() {
         assert_eq!(rectkf.key_frame_time(2), Some(0.75));
         assert_eq!(rectkf.key_frame_value(4), None);
 
-        // ── Size key frames ──────────────────────────────────────────────────
         let mut sizekf = SizeAnimationUsingKeyFrames::new();
         assert!(sizekf.add_key_frame(
             KeyFrameKind::Discrete,
@@ -142,7 +126,6 @@ fn animation_value_types_round_trip() {
         assert_eq!(sizekf.key_frame_value(1), Some([5.0, 6.0]));
         assert_eq!(sizekf.key_frame_time(1), Some(1.0));
 
-        // ── Int key frames ───────────────────────────────────────────────────
         let mut i16kf = Int16AnimationUsingKeyFrames::new();
         assert!(i16kf.add_key_frame(KeyFrameKind::Discrete, 0.0, -3, KeyFrameInterp::None));
         assert!(i16kf.add_key_frame(KeyFrameKind::Linear, 1.0, 42, KeyFrameInterp::None));
@@ -171,7 +154,6 @@ fn animation_value_types_round_trip() {
         assert_eq!(i64kf.key_frame_value(0), Some(8_000_000_000));
         assert_eq!(i64kf.key_frame_time(0), Some(2.0));
 
-        // ── Object key frames (discrete only; value is a real component) ─────
         let value_obj = DoubleAnimation::new();
         let mut objkf = ObjectAnimationUsingKeyFrames::new();
         assert!(objkf.add_key_frame(0.25, &value_obj));
@@ -184,7 +166,6 @@ fn animation_value_types_round_trip() {
         );
         assert_eq!(objkf.key_frame_time(0), Some(0.25));
 
-        // ── Matrix key frames (discrete only) ────────────────────────────────
         let mut matkf = MatrixAnimationUsingKeyFrames::new();
         assert!(matkf.add_key_frame(0.0, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
         assert!(matkf.add_key_frame(1.0, [2.0, 0.0, 0.0, 2.0, 5.0, 7.0]));
@@ -195,7 +176,6 @@ fn animation_value_types_round_trip() {
         );
         assert_eq!(matkf.key_frame_time(1), Some(1.0));
 
-        // ── BeginStoryboard trigger action ───────────────────────────────────
         let mut begin = BeginStoryboard::new();
         assert!(!begin.has_storyboard());
         assert!(begin.set_handoff(HandoffBehavior::Compose));
@@ -209,9 +189,6 @@ fn animation_value_types_round_trip() {
         assert!(begin.set_storyboard(&sb));
         assert!(begin.has_storyboard());
 
-        // ── Storyboard.Begin with an explicit HandoffBehavior, driven live ───
-        // Proves the new HandoffBehavior begin path actually starts the clocks:
-        // a stubbed begin would leave Opacity at 0.
         let element = FrameworkElement::parse(XAML).expect("parse returned None");
         let mut view = View::create(element);
         view.set_size(200, 200);

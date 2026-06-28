@@ -1,20 +1,11 @@
-//! TODO §9 — custom `Freezable` base class.
+//! Custom `Freezable` base class with custom DPs and freeze state machine.
 //!
-//! Proves the synthetic-`TypeClass` reflection machinery extends to the
-//! non-`UIElement` `DependencyObject` side of the hierarchy: a Rust-backed
-//! `Noesis::Freezable` subclass with custom DPs. We assert (all read back
-//! THROUGH the live Noesis object):
-//!   * registration of a `ClassBase::Freezable` succeeds and is creatable,
-//!   * a DP round-trips through Noesis DP storage on a code-created instance,
-//!   * the freeze state machine works: `can_freeze` -> `freeze` -> `is_frozen`.
-//!
-//! Note: the property-changed callback is NOT asserted here — it does not fire
-//! on a code-created (un-parsed, tree-detached) `Freezable`, the same SDK
-//! constraint documented for the element bases (see TODO.md "Known SDK
-//! limitations"). The handler below is a `Noop` for that reason.
+//! The property-changed callback is NOT asserted here — it does not fire on
+//! code-created (un-parsed, tree-detached) `Freezable` instances; see
+//! LIMITATIONS.md. The handler below is a `Noop` for that reason.
 //!
 //! The sibling `Animatable` subtrees (`Brush`/`Geometry`/`Transform`/`Effect`)
-//! are NOT subclassable this way — see TODO.md "Known SDK limitations".
+//! are NOT subclassable this way — see LIMITATIONS.md.
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
 use noesis_runtime::ffi::{ClassBase, PropType};
@@ -42,15 +33,13 @@ fn custom_freezable() {
         let inst = reg.create_instance().expect("create_instance");
         let h = inst.handle();
 
-        // DP round-trip through the live Freezable's DP storage: a stubbed
-        // trampoline (no real synthetic TypeClass / DependencyData) could not
-        // store and read this back.
+        // A stubbed trampoline (no real synthetic TypeClass / DependencyData)
+        // could not store and read this back.
         h.set_int32(amount, 42);
         assert_eq!(h.get_int32(amount), Some(42), "Freezable DP round-trip");
         h.set_int32(amount, -9);
         assert_eq!(h.get_int32(amount), Some(-9), "Freezable DP second write");
 
-        // Freeze state machine, read back through Noesis::Freezable.
         assert!(!inst.is_frozen(), "instance should start unfrozen");
         assert!(inst.can_freeze(), "instance should be freezable");
         assert!(inst.freeze(), "freeze() failed");

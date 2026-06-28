@@ -1,11 +1,11 @@
-//! Code-built [`MeshData`] + [`Mesh`] element (TODO §10 immediate-mode drawing).
+//! Code-built [`MeshData`] + [`Mesh`] element for immediate-mode drawing.
 //!
 //! [`MeshData`] is the low-level CPU geometry payload Noesis submits straight to
 //! the GPU: interleaved `(x, y)` vertices, optional `(u, v)` texture
 //! coordinates, a 16-bit triangle index buffer, and an explicit bounding box. It
 //! is consumed two ways — by
 //! [`DrawingContext::draw_mesh`](crate::drawing::DrawingContext::draw_mesh) in an
-//! `OnRender` callback, or hosted in a [`Mesh`] [`FrameworkElement`] in the
+//! `OnRender` callback, or hosted in a [`Mesh`] [`FrameworkElement`](crate::view::FrameworkElement) in the
 //! element tree.
 //!
 //! Both handles own a freshly-created Noesis object holding a single `+1`

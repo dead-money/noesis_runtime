@@ -1,7 +1,5 @@
-//! TODO §6 — a `DoubleAnimationUsingKeyFrames` walks a `Width` through linear
-//! key frames (0 @ 0s, 100 @ 1s) plus a held discrete tail. We assert the value
-//! interpolates between frames (linear midpoint ~50) and reaches the final frame
-//! value. A stubbed key-frame animation leaves the value at its base.
+//! `DoubleAnimationUsingKeyFrames` with linear and discrete key frames; verifies
+//! midpoint interpolation and that the discrete frame holds its value.
 
 use noesis_runtime::animation::{
     Animation, DoubleAnimationUsingKeyFrames, KeyFrameInterp, KeyFrameKind, Storyboard,
@@ -52,7 +50,6 @@ fn keyframe_animation_interpolates_and_reaches_end() {
         let start = box_el.get_f32("Width").expect("width");
         assert!(start < 1.0, "width should start at 0, got {start}");
 
-        // Halfway along the first linear segment: ~50.
         view.update(0.5);
         let mid = box_el.get_f32("Width").expect("width");
         assert!(
@@ -68,7 +65,6 @@ fn keyframe_animation_interpolates_and_reaches_end() {
             "should hold the 100 key value before the discrete frame, got {at_linear_end}"
         );
 
-        // After the discrete frame jumps to 200.
         view.update(1.6);
         let end = box_el.get_f32("Width").expect("width");
         assert!(end > 199.0, "discrete frame should reach 200, got {end}");

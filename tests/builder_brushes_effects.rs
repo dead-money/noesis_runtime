@@ -1,11 +1,5 @@
-//! Phase 5 — gradient-brush builders + `DropShadowEffect` struct-arg ctor/setters.
-//!
-//! Fail-if-stubbed: every assertion reads a value BACK from the live Noesis
-//! object (points / radius / spread method / mapping mode / stops / shadow
-//! params), and the builder result is compared against the longhand `new()` +
-//! `set_*` form to prove equivalence.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
+//! Gradient-brush builders and `DropShadowEffect` struct-arg constructor/setters:
+//! round-tripped against read-back accessors and compared to the longhand form.
 
 use noesis_runtime::brushes::{
     BrushMappingMode, DropShadowEffect, DropShadowParams, GradientSpreadMethod, GradientStop,
@@ -31,7 +25,6 @@ fn builder_brushes_effects_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── LinearGradientBrush builder ─────────────────────────────────────
         let lin = LinearGradientBrush::builder()
             .start(0.1, 0.2)
             .end(0.8, 0.9)
@@ -66,7 +59,6 @@ fn builder_brushes_effects_round_trip() {
         assert!(approx(st0.offset, 0.0) && approx4(st0.color, [1.0, 0.0, 0.0, 1.0]));
         assert!(approx(st1.offset, 1.0) && approx4(st1.color, [0.0, 0.0, 1.0, 1.0]));
 
-        // Equivalence with the longhand form.
         let mut longhand = LinearGradientBrush::new();
         longhand.set_start_point(0.1, 0.2);
         longhand.set_end_point(0.8, 0.9);
@@ -91,7 +83,6 @@ fn builder_brushes_effects_round_trip() {
         );
         assert_eq!(lin.stop_count(), longhand.stop_count());
 
-        // ── RadialGradientBrush builder ─────────────────────────────────────
         let rad = RadialGradientBrush::builder()
             .center(0.5, 0.5)
             .gradient_origin(0.4, 0.6)
@@ -112,7 +103,6 @@ fn builder_brushes_effects_round_trip() {
         );
         assert_eq!(rad.stop_count(), 1, "one radial stop");
 
-        // ── DropShadowEffect from_params + setters ──────────────────────────
         let params = DropShadowParams {
             color: [0.1, 0.2, 0.3, 0.8],
             blur_radius: 6.0,
@@ -123,7 +113,6 @@ fn builder_brushes_effects_round_trip() {
         let shadow = DropShadowEffect::from_params(params);
         assert_eq!(shadow.params(), params, "from_params round-trip");
 
-        // Equivalent to the 5-positional-arg constructor.
         let longhand_shadow = DropShadowEffect::new([0.1, 0.2, 0.3, 0.8], 6.0, 315.0, 4.0, 0.7);
         assert_eq!(
             shadow.params(),
@@ -131,7 +120,6 @@ fn builder_brushes_effects_round_trip() {
             "from_params == new() positional"
         );
 
-        // Individual setters mutate the live object.
         let mut s2 = DropShadowEffect::from_params(DropShadowParams::default());
         s2.set_color([0.9, 0.8, 0.7, 1.0]);
         s2.set_blur_radius(12.0);
@@ -148,7 +136,6 @@ fn builder_brushes_effects_round_trip() {
         assert!(approx(p.shadow_depth, 3.0), "set_shadow_depth round-trip");
         assert!(approx(p.opacity, 0.5), "set_opacity round-trip");
 
-        // set_params replaces every field at once.
         s2.set_params(params);
         assert_eq!(s2.params(), params, "set_params round-trip");
     }

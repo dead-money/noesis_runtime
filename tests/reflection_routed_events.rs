@@ -1,11 +1,4 @@
-//! TODO §9 (B) — custom routed events on a Rust-backed type.
-//!
-//! Registers a routed event on a Rust-backed `ContentControl` type, subscribes a
-//! Rust handler via the generic `subscribe_event` surface, raises the event from
-//! Rust, and asserts the handler fired exactly once. Negative cases: an
-//! unregistered event name cannot be subscribed/raised, and after the
-//! subscription drops, raising fires nothing. A stubbed registration makes the
-//! event unresolvable, so subscribe / raise return false and the counter stays 0.
+//! Custom routed event registration, subscription, raising, and unsubscribe on a Rust-backed type.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -41,8 +34,7 @@ fn custom_routed_event_fires() {
     let counter = Arc::new(AtomicU32::new(0));
 
     {
-        // Register the Rust-backed type, then a routed event on it, BEFORE the
-        // XAML that references it is parsed.
+        // Type and event must both be registered before the XAML that references them is parsed.
         let _reg = ClassBuilder::new("NzTest.Eventful", ClassBase::ContentControl, NoopHandler)
             .register()
             .expect("class registration failed");
@@ -51,12 +43,10 @@ fn custom_routed_event_fires() {
             register_routed_event("NzTest.Eventful", "MyEvent", RoutingStrategy::Bubble),
             "register_routed_event returned false"
         );
-        // Duplicate registration on the same type must be rejected.
         assert!(
             !register_routed_event("NzTest.Eventful", "MyEvent", RoutingStrategy::Bubble),
             "duplicate routed-event registration should be rejected"
         );
-        // Registering on an unknown type must fail.
         assert!(
             !register_routed_event("NzTest.NoSuchType", "MyEvent", RoutingStrategy::Bubble),
             "routed event on unknown type should be rejected"
@@ -67,7 +57,6 @@ fn custom_routed_event_fires() {
             .find_name("Target")
             .expect("find_name(Target) returned None");
 
-        // Subscribing to a never-registered event must fail.
         assert!(
             subscribe_event_by_name(&target, "NotAnEvent", false, |_: &_| false).is_none(),
             "subscribing to an unregistered event should return None"
@@ -80,14 +69,12 @@ fn custom_routed_event_fires() {
         })
         .expect("subscribe_event(MyEvent) returned None");
 
-        // Raising an unregistered event is a no-op (false, no fire).
         assert!(
             !raise_event(&target, "NotAnEvent"),
             "raising an unregistered event should return false"
         );
         assert_eq!(counter.load(Ordering::SeqCst), 0);
 
-        // Raise the real event — the handler must fire exactly once.
         assert!(
             raise_event(&target, "MyEvent"),
             "raise_event returned false"
@@ -98,7 +85,6 @@ fn custom_routed_event_fires() {
             "handler should have fired exactly once"
         );
 
-        // After unsubscribing, raising fires nothing more.
         drop(sub);
         assert!(
             raise_event(&target, "MyEvent"),

@@ -1,21 +1,6 @@
-// TODO §8 — RangeBase / ToggleButton / Expander / Popup / TextBox / PasswordBox
-// programmatic property + method round-trips.
-//
-// One headless `#[test]`. The RangeBase/Toggle/Expander/Popup paths are pure
-// property round-trips on parsed control roots (no render pass needed). The
-// text controls are hosted in a live `View` (their selection/caret model is
-// built during layout) and pumped before asserting:
-//
-//   * `Slider`: value round-trips, and a value beyond `Maximum`/`Minimum` is
-//     COERCED by RangeBase (a strong non-vacuous assertion a DP-only stub that
-//     skipped `SetValue` would fail).
-//   * `CheckBox`: three-state `IsChecked` — `Some(true)` / `Some(false)` /
-//     `None` (indeterminate) all round-trip; the null state is NOT collapsed.
-//   * `Expander.IsExpanded` / `Popup.IsOpen` toggle + read back.
-//   * `TextBox`: `Select(1,3)` ⇒ start==1, length==3, selected_text=="ell";
-//     `set_caret_index` + `select_all` round-trip.
-//   * `PasswordBox`: password get/set round-trip.
-//   * Negatives: each typed accessor returns `None`/`false` on the wrong type.
+//! Property round-trips for `RangeBase`, `ToggleButton`, `Expander`, `Popup`,
+//! `TextBox`, and `PasswordBox`; includes `RangeBase` coercion and wrong-type
+//! negatives.
 
 use noesis_runtime::view::{FrameworkElement, View};
 
@@ -56,7 +41,6 @@ fn control_property_round_trips() {
     noesis_runtime::init();
 
     {
-        // -- RangeBase (Slider) with coercion -- no view needed --
         let mut slider = FrameworkElement::parse(&format!(
             r#"<Slider {NS} Minimum="0" Maximum="100" Value="10"/>"#
         ))
@@ -96,7 +80,6 @@ fn control_property_round_trips() {
             "value still within the raised [5, 40] band"
         );
 
-        // -- ToggleButton three-state -- no view needed --
         let mut cb = FrameworkElement::parse(&format!(r#"<CheckBox {NS} IsThreeState="True"/>"#))
             .expect("parse CheckBox");
         assert!(cb.set_is_checked(Some(true)));
@@ -110,7 +93,6 @@ fn control_property_round_trips() {
             "indeterminate state must NOT collapse to Some(false)"
         );
 
-        // -- Expander --
         let mut exp = FrameworkElement::parse(&format!(
             r#"<Expander {NS} IsExpanded="False"><TextBlock Text="body"/></Expander>"#
         ))
@@ -119,7 +101,6 @@ fn control_property_round_trips() {
         assert!(exp.set_is_expanded(true));
         assert_eq!(exp.is_expanded(), Some(true));
 
-        // -- Popup --
         let mut pop =
             FrameworkElement::parse(&format!(r#"<Popup {NS}><TextBlock Text="body"/></Popup>"#))
                 .expect("parse Popup");

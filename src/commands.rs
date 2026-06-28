@@ -1,5 +1,4 @@
-//! `ICommand` from Rust (TODO §4): let XAML `Command="{Binding ...}"` invoke
-//! Rust logic.
+//! `ICommand` from Rust: let XAML `Command="{Binding ...}"` invoke Rust logic.
 //!
 //! A [`Command`] wraps a `Noesis::BaseCommand` subclass whose `CanExecute` /
 //! `Execute` forward into a Rust [`CommandHandler`]. The command is a
@@ -93,7 +92,7 @@ pub trait CommandHandler: Send + 'static {
     fn execute(&self, param: CommandParameter);
 }
 
-/// Adapter so a bare `FnMut` closure is a fire-always [`CommandHandler`]
+/// Adapter so a bare `Fn` closure is a fire-always [`CommandHandler`]
 /// (`can_execute` is always `true`). Use [`Command::new`] with a struct
 /// implementing [`CommandHandler`] when you need a controllable
 /// `can_execute`.
@@ -154,7 +153,7 @@ unsafe impl Send for Command {}
 
 impl Command {
     /// Build a command from a [`CommandHandler`]. A bare
-    /// `FnMut(CommandParameter)` closure also works (fire-always — its
+    /// `Fn(CommandParameter)` closure also works (fire-always — its
     /// `can_execute` is always `true`).
     ///
     /// # Panics
@@ -164,8 +163,7 @@ impl Command {
     /// never does).
     #[must_use]
     pub fn new<H: CommandHandler>(handler: H) -> Self {
-        // Double-Box for a stable thin pointer across the C ABI, matching the
-        // ClickHandler / PropertyChangeHandler pattern.
+        // Double-Box for a stable thin pointer across the C ABI.
         let boxed: Box<Box<dyn CommandHandler>> = Box::new(Box::new(handler));
         let userdata = Box::into_raw(boxed);
 
@@ -178,9 +176,7 @@ impl Command {
         match NonNull::new(ptr) {
             Some(ptr) => Command { ptr },
             None => {
-                // The C side returns null only for a null vtable, which we
-                // never pass — so this is unreachable in practice. Reclaim the
-                // leaked box defensively rather than leak it.
+                // Reclaim the leaked box defensively rather than leak it.
                 // SAFETY: userdata came from Box::into_raw above; C++ never
                 // stored it (null return = nothing took ownership).
                 unsafe { drop(Box::from_raw(userdata)) };
@@ -217,8 +213,6 @@ impl Drop for Command {
         unsafe { noesis_command_destroy(self.ptr.as_ptr()) }
     }
 }
-
-// ── Routed commands (TODO §4) ────────────────────────────────────────────────
 
 /// Anything that can be referenced as a `Noesis::ICommand*` — a [`Command`],
 /// [`RoutedCommand`], [`RoutedUICommand`], or a built-in [`BorrowedCommand`].
@@ -405,8 +399,6 @@ fn param_ptr(param: CommandParameter) -> *mut c_void {
     param.map_or(core::ptr::null_mut(), NonNull::as_ptr)
 }
 
-// ── Built-in command libraries (TODO §4) ─────────────────────────────────────
-
 /// A borrowed reference to a framework-owned `RoutedUICommand` singleton (the
 /// built-in [`ApplicationCommand`] / [`ComponentCommand`] libraries). It holds
 /// no reference and runs no `Drop` — the framework owns these for the process
@@ -569,11 +561,9 @@ impl ComponentCommand {
     }
 }
 
-// ── CommandBinding (TODO §4) ─────────────────────────────────────────────────
-
 /// Rust handlers for a [`CommandBinding`]: `execute` runs the action when a
 /// bound command is invoked through the attached element; `can_execute` gates
-/// it (default always-`true`). A bare `FnMut(CommandParameter)` closure works as
+/// it (default always-`true`). A bare `Fn(CommandParameter)` closure works as
 /// a fire-always handler.
 pub trait CommandBindingHandler: Send + 'static {
     /// Whether the command may run now. Default `true`.

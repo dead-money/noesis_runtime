@@ -1,14 +1,6 @@
-//! Phase C — custom base classes (TODO §9 "More base classes").
-//!
-//! Registers a Rust-backed subclass for EACH new base (`Control`,
-//! `FrameworkElement`, `UserControl`, `Panel`, `Decorator`), and asserts:
-//!   * every registration succeeds (the synthetic `TypeClass` + Factory creator
-//!     install for each base),
-//!   * a DP round-trips through Noesis DP storage on a code-created instance of
-//!     each base,
-//!   * a non-`ContentControl` base (`Control`) resolves from XAML, participates
-//!     in layout (`Width="120"` -> `ActualWidth` 120 read back through Noesis),
-//!     and fires the property-changed callback for a DP set in XAML.
+//! Custom base-class registration (`Control`, `FrameworkElement`, `UserControl`,
+//! `Panel`, `Decorator`): DP round-trip on code-created instances, layout
+//! participation via XAML, and property-changed callback.
 
 use std::sync::{Arc, Mutex};
 
@@ -49,8 +41,7 @@ fn custom_base_classes() {
     noesis_runtime::init();
 
     {
-        // One code-created instance per base; round-trip an Int32 DP through
-        // Noesis DP storage (read back via Noesis, not a Rust cache).
+        // Read back via Noesis, not a Rust-side cache.
         let bases = [
             ("Bases.FE", ClassBase::FrameworkElement, 11),
             ("Bases.UC", ClassBase::UserControl, 22),
@@ -82,7 +73,6 @@ fn custom_base_classes() {
             regs.push((reg, inst));
         }
 
-        // Control base from XAML: resolve, lay out, and fire the change cb.
         let recorder = Recorder::default();
         let mut cb = ClassBuilder::new(
             "Bases.MyControl",

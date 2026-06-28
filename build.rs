@@ -37,11 +37,9 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_integration.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_diagnostics.cpp");
 
-    // docs.rs builds in a sandbox without the proprietary Noesis SDK, so there is
-    // no NOESIS_SDK_DIR and no libNoesis to link against. The crate's surface is
-    // all FFI declarations that type-check without linking, so skip the native
-    // compile and link directives and let rustdoc build the docs. docs.rs sets
-    // DOCS_RS in the build environment; set it locally to preview that build.
+    // docs.rs has no SDK to link against; the FFI surface type-checks without
+    // linking, so skip the native compile and let rustdoc build. Set DOCS_RS
+    // locally to preview that build.
     if env::var_os("DOCS_RS").is_some() {
         return;
     }
@@ -82,16 +80,14 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", bin.display());
     println!("cargo:rustc-link-lib=dylib=Noesis");
 
-    // Publish the resolved Bin/<platform> path to downstream crates as
-    // DEP_NOESIS_LIB_DIR (per cargo's `links = "Noesis"` metadata mechanism).
-    // noesis_bevy reads this in its own build.rs to bake the same rpath into
-    // example/test binaries; rustc-link-arg below only applies to OUR own bins.
+    // Via cargo's `links = "Noesis"` metadata, this surfaces to downstream
+    // crates as DEP_NOESIS_LIB_DIR; the rustc-link-arg below only reaches our
+    // own binaries.
     println!("cargo:lib_dir={}", bin.display());
 
     if target_os == "linux" {
-        // Bake the SDK Bin/ path into rpath so noesis_runtime's own integration tests
-        // find libNoesis.so without LD_LIBRARY_PATH. Downstream consumers do the
-        // same in their build.rs via DEP_NOESIS_LIB_DIR.
+        // Bake the SDK Bin/ path into rpath so integration tests find
+        // libNoesis.so without LD_LIBRARY_PATH.
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", bin.display());
     }
 
@@ -134,8 +130,8 @@ fn main() {
         .include(&include)
         .flag_if_supported("-Wno-unused-parameter");
 
-    // The `test-utils` Cargo feature gates the noesis_test_* C entrypoints
-    // (defined in noesis_render_device.cpp under #ifdef NOESIS_TEST_UTILS).
+    // Gates the noesis_test_* C entrypoints behind #ifdef NOESIS_TEST_UTILS
+    // in noesis_render_device.cpp.
     if env::var_os("CARGO_FEATURE_TEST_UTILS").is_some() {
         build.define("NOESIS_TEST_UTILS", None);
     }

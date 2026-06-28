@@ -1,4 +1,4 @@
-//! Immediate-mode drawing via `DrawingContext` (TODO §10).
+//! Immediate-mode drawing via `DrawingContext`.
 //!
 //! In Noesis 3.2.13 a [`DrawingContext`] has a private constructor (friend
 //! `UIElement`) and is delivered ONLY to `UIElement::OnRender` — there is no
@@ -10,7 +10,7 @@
 //!   join), the stroke descriptor several draw calls need. Owning handle with a
 //!   `+1` reference released on [`Drop`], like the brushes in [`crate::brushes`].
 //!   Read-back getters ([`Pen::thickness`], [`Pen::line_caps`], …) re-read the
-//!   live object so a test proves the value crossed the FFI.
+//!   live object.
 //! * [`DrawingContext::draw_geometry`] / [`DrawingContext::push_clip`] take any
 //!   [`Geometry`] — the rich code-built geometry types
 //!   ([`RectangleGeometry`], [`PathGeometry`](crate::geometry::PathGeometry),
@@ -41,11 +41,9 @@ use crate::ffi::{
     noesis_pen_set_dash_style, noesis_pen_set_line_caps, noesis_pen_set_line_join,
     noesis_pen_set_thickness,
 };
-// `Geometry` / `RectangleGeometry` are the canonical types from `geometry`,
-// re-exported so `drawing::{Geometry, RectangleGeometry}` keep resolving and the
-// draw / clip calls accept any real built geometry.
+// Canonical types live in `geometry`; re-exported so the draw / clip calls here
+// resolve them without an extra import.
 pub use crate::geometry::{Geometry, RectangleGeometry};
-// `PenLineCap` / `PenLineJoin` are the canonical types from `shapes`.
 pub use crate::shapes::{PenLineCap, PenLineJoin};
 use crate::transforms::Transform;
 
@@ -214,8 +212,7 @@ impl Pen {
 
     /// Read the dash pattern back from the live object as a typed `Vec<f32>`,
     /// re-parsed from Noesis's `DashStyle.Dashes` string. `None` if no dash
-    /// style is set. Proves the typed pattern survived the round-trip through
-    /// the live `Noesis::DashStyle`.
+    /// style is set.
     #[must_use]
     pub fn dashes(&self) -> Option<Vec<f32>> {
         // SAFETY: self.ptr is a live Pen*; the returned pointer (if non-null) is

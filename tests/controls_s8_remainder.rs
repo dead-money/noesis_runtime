@@ -1,24 +1,5 @@
-//! TODO §8 remainder — `Selector` value/path, `TreeView` selection,
-//! `ItemContainerGenerator` mapping, `GridView` columns, `ToolTip`/`ContextMenu`,
-//! line/page/edge scrolling, and Image source assignment.
-//!
-//! Every assertion re-reads from the LIVE Noesis object after a setter (or
-//! cross-checks via an independent path), so a stubbed / hardcoded / no-op
-//! implementation fails:
-//!   * `SelectedValuePath` is set then read back as a string.
-//!   * `SetSelectedValue` (default path) selects a known container, asserted via
-//!     `SelectedIndex`; `SelectedValue` is cross-checked against `SelectedItem`.
-//!   * the generator round-trips index→container→item→container→index.
-//!   * a `GridView` column's `Width` is set then read back; the type-guard returns
-//!     `None`/`-1`/`false` for non-matching element types.
-//!   * `ToolTip` / `ContextMenu` content pointers round-trip (and the attached
-//!     `*Service` value mirrors the inline DP); their `IsOpen` type-guards
-//!     return `Some`/`true` only for the right control type.
-//!   * a `ScrollViewer` is page/line/edge scrolled and the resulting
-//!     `VerticalOffset` is read back from the live object.
-//!   * an `Image`'s `Source` round-trips a `BitmapImage` handle pointer.
-//!
-//!   `cargo test -p noesis_runtime --test controls_s8_remainder -- --nocapture`
+//! Round-trips for `Selector`/`ItemContainerGenerator`, `TreeView`, `GridView`
+//! columns, `ToolTip`/`ContextMenu`, `ScrollViewer` scrolling, and `Image` source.
 
 use std::collections::HashMap;
 
@@ -136,12 +117,10 @@ fn controls_s8_remainder_round_trips() {
 
         let mut root = view.content().expect("content");
 
-        // ── ItemContainerGenerator: index → container → item → … ─────────────
         let mut list = root.find_name("List").expect("find List");
         let c0 = list
             .container_from_index(0)
             .expect("container_from_index(0) should be realized after layout");
-        // index round-trips back from the container.
         let idx0 = unsafe { list.index_from_container(c0.as_ptr()) };
         assert_eq!(idx0, Some(0), "index_from_container(container0)");
         // A directly-authored ListBoxItem is its own container: item == container.
@@ -152,14 +131,12 @@ fn controls_s8_remainder_round_trips() {
             c0b, c0,
             "container_from_item round-trips to the same container"
         );
-        // A bogus container is not found.
         assert_eq!(
             unsafe { list.index_from_container(root.raw()) },
             None,
             "Root grid is not a container of List",
         );
 
-        // ── Selector: SelectedValue (default path == SelectedItem) ───────────
         assert!(list.set_selected_index(2), "select index 2");
         let sel_item = list.selected_item().expect("selected_item");
         let sel_val = list
@@ -182,7 +159,6 @@ fn controls_s8_remainder_round_trips() {
             "SetSelectedValue moved selection to index 0",
         );
 
-        // SelectedValuePath string round-trips.
         assert!(
             list.selected_value_path().is_some(),
             "SelectedValuePath is Some for a Selector",
@@ -200,7 +176,6 @@ fn controls_s8_remainder_round_trips() {
             "Grid is not a Selector (no SelectedValuePath)",
         );
 
-        // ── TreeView selection ───────────────────────────────────────────────
         let mut ti0 = root.find_name("TI0").expect("find TI0");
         let mut ti1 = root.find_name("TI1").expect("find TI1");
         let tree = root.find_name("Tree").expect("find Tree");
@@ -225,18 +200,15 @@ fn controls_s8_remainder_round_trips() {
             ti1.raw(),
             "SelectedItem followed the selection to TI1",
         );
-        // IsExpanded round-trips.
         assert_eq!(ti0.tree_item_is_expanded(), Some(false), "TI0 collapsed");
         assert!(ti0.set_tree_item_is_expanded(true), "expand TI0");
         assert_eq!(ti0.tree_item_is_expanded(), Some(true), "TI0 expanded");
-        // Type-guard.
         assert_eq!(
             root.tree_item_is_selected(),
             None,
             "Grid is not a TreeViewItem"
         );
 
-        // ── ListView / GridView columns ──────────────────────────────────────
         let lv = root.find_name("LV").expect("find LV");
         let gv = lv.listview_gridview().expect("ListView.View GridView");
         assert_eq!(
@@ -262,7 +234,6 @@ fn controls_s8_remainder_round_trips() {
             unsafe { FrameworkElement::gridview_column_header(gv, 0) }.is_some(),
             "column 0 Header present",
         );
-        // Out-of-range column.
         assert_eq!(
             unsafe { FrameworkElement::gridview_column_width(gv, 9) },
             None,
@@ -271,7 +242,6 @@ fn controls_s8_remainder_round_trips() {
         // Non-ListView has no GridView.
         assert!(root.listview_gridview().is_none(), "Grid is not a ListView");
 
-        // ── ToolTip / ToolTipService ─────────────────────────────────────────
         let mut tip_target = root.find_name("TipTarget").expect("find TipTarget");
         let tip = box_string("hover me");
         assert!(
@@ -289,7 +259,6 @@ fn controls_s8_remainder_round_trips() {
             Some(tip.raw()),
             "ToolTipService.ToolTip mirrors the inline ToolTip DP",
         );
-        // String overload.
         assert!(
             tip_target.set_tooltip_string("plain text"),
             "set ToolTip from string",
@@ -312,7 +281,6 @@ fn controls_s8_remainder_round_trips() {
             "a Border is not a ToolTip control",
         );
 
-        // ── ContextMenu / ContextMenuService ─────────────────────────────────
         let mut cm = FrameworkElement::parse(
             r##"<ContextMenu xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><MenuItem Header="Cut"/></ContextMenu>"##,
         )
@@ -351,7 +319,6 @@ fn controls_s8_remainder_round_trips() {
             "a Border is not a ContextMenu control",
         );
 
-        // ── ScrollViewer line / page / edge scrolling ────────────────────────
         let mut scroll = root.find_name("Scroll").expect("find Scroll");
         pump(&mut view);
         assert_eq!(scroll.vertical_offset(), Some(0.0), "starts at top");
@@ -395,7 +362,6 @@ fn controls_s8_remainder_round_trips() {
         // Type-guard: a Grid is not a ScrollViewer.
         assert!(!root.page_down(), "Grid has no PageDown");
 
-        // ── Image source ─────────────────────────────────────────────────────
         let mut img = root.find_name("Img").expect("find Img");
         assert_eq!(img.image_source(), None, "Image starts with no Source");
         let bitmap = BitmapImage::new();
@@ -408,7 +374,6 @@ fn controls_s8_remainder_round_trips() {
             Some(bitmap.raw()),
             "Image.Source round-trips the BitmapImage handle",
         );
-        // Type-guard.
         assert!(
             !unsafe { root.set_image_source(bitmap.raw()) },
             "a Grid is not an Image",

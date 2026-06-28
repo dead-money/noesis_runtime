@@ -1,18 +1,6 @@
-//! Integration test for the generic name-keyed `DependencyProperty` get/set
-//! FFI surface (TODO §2) added on the `feat/dependency-property-getset`
-//! branch.
-//!
-//! Loads a XAML tree from an in-memory provider and exercises the
-//! [`FrameworkElement`] accessors:
-//!
-//! 1. `Width` / `Opacity` round-trip (`f32` — Noesis exposes these as `float`).
-//! 2. `Text` round-trip on a `TextBlock` (`String`, owned-copy getter).
-//! 3. `Background` read-back as a borrowed component pointer (`BaseComponent`).
-//! 4. Graceful failure: unknown name, type mismatch, and read-only
-//!    (`ActualWidth`) all return `false` / `None`.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine for a smoke test):
-//!   `cargo test -p noesis_runtime --test dependency_property -- --nocapture`
+//! Name-keyed `DependencyProperty` get/set round-trips on `FrameworkElement`:
+//! float (Width, Opacity), string (Text), component read-back (Background),
+//! and graceful failure on unknown name, type mismatch, and read-only property.
 
 use std::collections::HashMap;
 
@@ -68,7 +56,6 @@ fn dependency_property_round_trip() {
             .find_name("Label")
             .expect("Label not found in scene");
 
-        // ── f32 (Float) round-trip: Width ────────────────────────────────────
         assert_eq!(
             label.get_f32("Width"),
             Some(120.0),
@@ -77,7 +64,6 @@ fn dependency_property_round_trip() {
         assert!(label.set_f32("Width", 256.0), "set_f32(Width) failed");
         assert_eq!(label.get_f32("Width"), Some(256.0), "Width didn't update",);
 
-        // ── f32 (Float) round-trip: Opacity (declared on UIElement) ──────────
         assert_eq!(
             label.get_f32("Opacity"),
             Some(0.5),
@@ -86,7 +72,6 @@ fn dependency_property_round_trip() {
         assert!(label.set_f32("Opacity", 1.0), "set_f32(Opacity) failed");
         assert_eq!(label.get_f32("Opacity"), Some(1.0), "Opacity didn't update");
 
-        // ── String round-trip: Text ──────────────────────────────────────────
         assert_eq!(
             label.get_string("Text").as_deref(),
             Some("initial"),
@@ -102,13 +87,11 @@ fn dependency_property_round_trip() {
             "Text didn't update",
         );
 
-        // ── Component read-back: the Grid's Background brush ──────────────────
         assert!(
             content.get_component("Background").is_some(),
             "Background should resolve to a non-null Brush",
         );
 
-        // ── Graceful failure: unknown name ───────────────────────────────────
         assert_eq!(
             label.get_f32("NotARealProperty"),
             None,
@@ -119,7 +102,6 @@ fn dependency_property_round_trip() {
             "unknown property set should be false",
         );
 
-        // ── Graceful failure: type mismatch (Width is float, not String) ─────
         assert_eq!(
             label.get_string("Width"),
             None,
@@ -130,7 +112,6 @@ fn dependency_property_round_trip() {
             "type-mismatched set should be false",
         );
 
-        // ── Graceful failure: read-only property (ActualWidth) ───────────────
         assert!(
             !label.set_f32("ActualWidth", 99.0),
             "set on read-only ActualWidth should be false",

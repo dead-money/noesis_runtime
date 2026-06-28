@@ -1,15 +1,5 @@
-//! TODO §7 — per-element `Resources` get/set + non-throwing `FindResource`.
-//!
-//! Fail-if-stubbed: a freshly-parsed element either has no local resources or a
-//! dictionary without our key; after `set_resources` with a code-built
-//! dictionary, `find_resource` resolves the key THROUGH Noesis's logical-chain
-//! lookup (and unboxes to the stored string), a child element inherits it via
-//! that same chain, a missing key returns `None`, and `resources` reads the
-//! installed dictionary back (containing the key). A no-op `set_resources` would
-//! leave `find_resource` empty.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test element_resources -- --nocapture`
+//! Per-element `Resources` dictionary: set, look up (including logical-chain
+//! inheritance by children), and clear; missing keys return `None` without throwing.
 
 use std::ffi::CStr;
 
@@ -45,7 +35,6 @@ fn element_resources_set_and_find() {
         let mut root = FrameworkElement::parse(SCENE).expect("parse scene");
         let child = root.find_name("Child").expect("find Child");
 
-        // Nothing resolves the key before we install resources.
         assert!(
             root.find_resource("Accent").is_none(),
             "key must not resolve before set_resources"
@@ -55,7 +44,6 @@ fn element_resources_set_and_find() {
         assert!(dict.add_string("Accent", "tango"));
         assert!(root.set_resources(&dict), "set_resources on a Grid");
 
-        // FindResource resolves on the element that owns the dictionary…
         let hit = root
             .find_resource("Accent")
             .expect("Accent resolves on the owner element");
@@ -65,19 +53,16 @@ fn element_resources_set_and_find() {
             "resolved resource unboxes to the stored string"
         );
 
-        // …and on a descendant via the logical parent chain.
         assert!(
             child.find_resource("Accent").is_some(),
             "child resolves the ancestor's resource through the logical chain"
         );
 
-        // Negative: an unknown key is a clean None (non-throwing lookup).
         assert!(
             root.find_resource("Missing").is_none(),
             "unknown key -> None"
         );
 
-        // resources() reads the installed dictionary back.
         let read_back = root.resources().expect("resources() after set");
         assert!(
             read_back.contains("Accent"),

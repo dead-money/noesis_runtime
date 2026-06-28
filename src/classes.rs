@@ -1,11 +1,12 @@
-//! Register Rust-backed XAML classes (Phase 5.C).
+//! Register Rust-backed XAML classes.
 //!
 //! This is the Rust analogue of what the Noesis C# / Unity binding does for
 //! managed code: it lets you declare new `<myns:Foo>` types whose dependency
 //! properties + property-change logic live entirely in Rust. The C++ side
 //! synthesizes a `Noesis::TypeClassBuilder` per consumer-named class and
 //! installs a Factory creator that returns a per-base trampoline subclass
-//! ([`ContentControl`] is the v1 base; sibling bases plug in incrementally).
+//! (`ClassBase::ContentControl` is the v1 base; sibling bases plug in
+//! incrementally).
 //!
 //! # Lifecycle
 //!
@@ -32,7 +33,7 @@
 //!
 //! # Re-entrancy
 //!
-//! [`Instance::set_*`] calls fire the property-changed callback synchronously
+//! [`Instance`] `set_*` calls fire the property-changed callback synchronously
 //! if the new value differs. Guard against re-entrancy in the handler if you
 //! plan to write back to the same property.
 
@@ -248,18 +249,17 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         }
     }
 
-    /// Append a dependency property. The returned `u32` is the dense index
-    /// the change callback receives for this property; indices grow in
-    /// addition order starting at 0.
-    ///
-    /// Defaults are best-effort for v1: scalar / Thickness / Color / Rect
-    /// work; `ImageSource` and `BaseComponent` always default to null
-    /// (matching `AoR`'s authoring style).
+    /// Append a dependency property initialized to its type's default value.
+    /// The returned `u32` is the dense index the change callback receives for
+    /// this property; indices grow in addition order starting at 0. Use
+    /// [`Self::add_property_with`] to supply an explicit default.
     pub fn add_property(&mut self, name: &str, kind: PropType) -> u32 {
         self.add_property_with(name, kind, PropertyDefault::None)
     }
 
     /// Same as [`Self::add_property`] but with an explicit default value.
+    /// `ImageSource` and `BaseComponent` properties have no default variant and
+    /// always start null.
     pub fn add_property_with(
         &mut self,
         name: &str,
@@ -461,7 +461,6 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             }
         }
 
-        // Donate the layout handler (if any).
         if let Some(handler) = layout {
             let boxed: Box<Box<dyn LayoutHandler>> = Box::new(handler);
             let layout_ud = Box::into_raw(boxed);
@@ -479,7 +478,6 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             }
         }
 
-        // Donate the render handler (if any).
         if let Some(handler) = render {
             let boxed: Box<Box<dyn RenderHandler>> = Box::new(handler);
             let render_ud = Box::into_raw(boxed);
@@ -742,8 +740,8 @@ impl Drop for ClassRegistration {
 }
 
 /// Stable pointer to a Rust-backed instance, as observed by the
-/// [`PropertyChangeHandler`] callback. Use it to drive
-/// [`Instance::set_*`] / [`Instance::get_*`] without holding a Noesis ref
+/// [`PropertyChangeHandler`] callback. Use it to drive the
+/// [`Instance`] `set_*` / `get_*` methods without holding a Noesis ref
 /// — the instance is owned by the visual tree.
 #[derive(Copy, Clone, Debug)]
 pub struct Instance(NonNull<c_void>);
@@ -891,7 +889,7 @@ impl Instance {
     /// [`BorrowedCommand`](crate::commands::BorrowedCommand)) to a
     /// `BaseComponent` DP (register it with
     /// [`ClassBuilder::add_property`](crate::classes::ClassBuilder::add_property)
-    /// and [`PropType::BaseComponent`](crate::ffi::PropType::BaseComponent)).
+    /// and [`PropType::BaseComponent`]).
     /// The C++ side stores its own reference, so the caller keeps ownership of
     /// `command`.
     ///
@@ -1203,8 +1201,6 @@ unsafe fn decode_value<'a>(
         }
     }
 }
-
-// ── Richer DP metadata + read-only + coercion + layout (TODO §9) ─────────────
 
 /// `FrameworkPropertyMetadataOptions` bit flags (mirror of the Noesis enum in
 /// `NsGui/FrameworkPropertyMetadata.h`). OR these together into
@@ -1701,8 +1697,6 @@ unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
         drop(Box::from_raw(userdata.cast::<Box<dyn LayoutHandler>>()));
     })
 }
-
-// ── Immediate-mode rendering (TODO §10) ──────────────────────────────────────
 
 /// Custom immediate-mode rendering, installed via [`ClassBuilder::set_render`].
 /// The trampoline subclass's `OnRender` forwards here after the base

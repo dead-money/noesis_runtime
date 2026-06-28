@@ -1,7 +1,7 @@
-//! `ICollectionView` current-item navigation (Phase 6).
+//! `ICollectionView` current-item navigation.
 //!
 //! A [`CollectionViewSource`] wraps a source list (e.g. an
-//! [`ObservableCollection`](crate::binding::ObservableCollection)) and lazily
+//! [`ObservableCollection`]) and lazily
 //! produces a [`CollectionView`] — an `ICollectionView` — over it. The view
 //! tracks a *current item*: the record-management surface WPF/Noesis controls
 //! (a `Selector`'s `IsSynchronizedWithCurrentItem`, master/detail bindings)
@@ -132,7 +132,7 @@ impl Drop for CollectionViewSource {
 /// [`current_item`](Self::current_item),
 /// [`is_current_before_first`](Self::is_current_before_first) and
 /// [`is_current_after_last`](Self::is_current_after_last) — these re-read the
-/// *live* view, so a reading test proves the navigation crossed the FFI.
+/// live view after each move.
 pub struct CollectionView {
     ptr: NonNull<c_void>,
 }

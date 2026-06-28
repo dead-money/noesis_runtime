@@ -1,13 +1,5 @@
-//! TODO §9 (C) — Factory registration + `ContentProperty` metadata.
-//!
-//! A Rust-backed class registers a Factory creator (so XAML can instantiate
-//! `<ns:Card/>`). This test asserts the factory introspection surface and that
-//! `ContentProperty` attribution actually redirects XAML child content into the
-//! named property: it parses `<nz:Card>hello</nz:Card>` and reads the text back
-//! out of the redirected `Caption` property THROUGH Noesis. A stubbed
-//! `set_content_property` leaves content on the inherited `Content` property, so
-//! `Caption` stays empty and the assertion fails. A type with no factory is not
-//! instantiated, so its named element is absent from the parsed tree.
+//! Factory registration and `ContentProperty` metadata: XAML text content redirects into a
+//! named property; unregistered types are silently skipped (not errored) during parsing.
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
 use noesis_runtime::ffi::{ClassBase, PropType};
@@ -50,8 +42,6 @@ fn factory_and_content_property() {
         builder.add_property("Caption", PropType::String);
         let _reg = builder.register().expect("class registration failed");
 
-        // Factory introspection: the registered class is creatable from XAML;
-        // an unregistered name is not.
         assert!(
             is_component_registered("NzTest.Card"),
             "registered class should be in the Factory"
@@ -61,7 +51,6 @@ fn factory_and_content_property() {
             "unregistered class should not be in the Factory"
         );
 
-        // Redirect XAML child content into our own `Caption` property.
         assert!(
             set_content_property("NzTest.Card", "Caption"),
             "set_content_property returned false"
@@ -71,8 +60,6 @@ fn factory_and_content_property() {
             "set_content_property on unknown type should fail"
         );
 
-        // Parse + instantiate via the factory, then read Caption back THROUGH
-        // Noesis. The text content landed there because of the ContentProperty.
         let root = FrameworkElement::parse(CARD_XAML).expect("parse(CARD_XAML) returned None");
         let card = root
             .find_name("TheCard")
@@ -83,8 +70,6 @@ fn factory_and_content_property() {
             "ContentProperty did not redirect text content into Caption"
         );
 
-        // A type with no factory is not instantiated: the unknown tag is
-        // skipped, so the named ghost element is absent from the tree.
         let ghost_root =
             FrameworkElement::parse(MISSING_XAML).expect("parse(MISSING_XAML) returned None");
         assert!(

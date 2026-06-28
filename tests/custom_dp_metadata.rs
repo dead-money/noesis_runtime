@@ -1,14 +1,6 @@
-//! Phase C — richer custom dependency-property metadata (TODO §9 "Custom
-//! dependency properties").
-//!
-//! Asserts, on a code-created instance (read back THROUGH Noesis):
-//!   * COERCION: a Float DP that clamps to [0, 100] returns 100 for an input of
-//!     999 and 0 for -5 (a no-op coerce would yield 999, so this discriminates
-//!     a stubbed trampoline).
-//!   * READ-ONLY: the ordinary setter path cannot mutate a read-only DP, but
-//!     the privileged key-path setter can, and the value reads back.
-//!   * `FrameworkPropertyMetadataOptions` (`AffectsMeasure`) is accepted by
-//!     registration.
+//! Custom dependency-property metadata: coercion (Float clamped to [0, 100]),
+//! read-only DPs (ordinary setter rejected; privileged key-path setter writes),
+//! and `AffectsMeasure` accepted at registration.
 
 use std::sync::{Arc, Mutex};
 
@@ -119,7 +111,6 @@ fn custom_dp_metadata() {
             "read-only DP did not update via key path"
         );
 
-        // AffectsMeasure DP accepted + writable + reads back.
         h.set_float(measured, 7.5);
         assert_eq!(h.get_float(measured), Some(7.5));
 

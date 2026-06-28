@@ -1,18 +1,5 @@
-//! Integration tests for code-built brushes, transforms, effects, and
-//! `RenderOptions` (TODO §11).
-//!
-//! Headless object construction + assignment + read-back: no GPU is needed. The
-//! assertions are written to fail if any constructor/setter were stubbed —
-//! every feature reads at least one value BACK from the live Noesis object
-//! (`brush.color()`, `effect.radius()`, `transform.get()`, …) and/or asserts
-//! pointer identity between the object handed to Noesis and the one read back
-//! through `get_component`.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process):
-//! all owning wrappers drop inside the inner scope before `shutdown()`.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test brushes_transforms -- --nocapture`
+//! Code-built brushes, transforms, effects, and `RenderOptions`: headless
+//! construction, round-trip read-back, and pointer-identity assignment.
 
 use noesis_runtime::brushes::{
     BlurEffect, DropShadowEffect, GradientStop, ImageBrush, LinearGradientBrush,
@@ -45,10 +32,8 @@ fn brushes_transforms_effects_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── SolidColorBrush ─────────────────────────────────────────────────
         let red = [0.9_f32, 0.1, 0.2, 1.0];
         let mut brush = SolidColorBrush::new(red);
-        // Read color BACK from the live Noesis object — fails if create stubbed.
         assert!(approx4(brush.color(), red), "solid color round-trip");
         brush.set_color([0.0, 0.5, 1.0, 0.5]);
         assert!(
@@ -75,7 +60,6 @@ fn brushes_transforms_effects_round_trip() {
             "Background is the exact brush we assigned"
         );
 
-        // ── LinearGradientBrush + stops ─────────────────────────────────────
         let mut grad = LinearGradientBrush::new();
         grad.set_start_point(0.0, 0.0);
         grad.set_end_point(1.0, 1.0);
@@ -99,7 +83,6 @@ fn brushes_transforms_effects_round_trip() {
         assert!(approx(stop1.offset, 1.0) && approx4(stop1.color, [1.0, 0.0, 0.0, 1.0]));
         assert!(grad.stop(2).is_none(), "out-of-range stop is None");
 
-        // Assign the gradient to a Rectangle's Fill.
         let rect_xaml = format!("<Rectangle {NS} Width=\"50\" Height=\"50\"/>");
         let mut rect = FrameworkElement::parse(&rect_xaml).expect("parse Rectangle");
         assert!(
@@ -115,7 +98,6 @@ fn brushes_transforms_effects_round_trip() {
         // Border has no Fill DP — the typed sugar must report failure.
         assert!(!border.set_fill(&brush), "Border has no Fill");
 
-        // ── RadialGradientBrush ─────────────────────────────────────────────
         let mut radial = RadialGradientBrush::new();
         radial.set_radius(0.75, 0.25);
         radial.set_center(0.5, 0.5);
@@ -128,7 +110,6 @@ fn brushes_transforms_effects_round_trip() {
         radial.add_stop(GradientStop::new(0.5, [0.2, 0.2, 0.2, 1.0]));
         assert_eq!(radial.stop_count(), 1);
 
-        // ── ImageBrush ──────────────────────────────────────────────────────
         // No GPU/imaging surface needed: construct, read the source back through
         // Noesis GetImageSource (None proves it's a real ImageBrush, not a stub),
         // then assign it and verify pointer identity through get_component.
@@ -152,13 +133,6 @@ fn brushes_transforms_effects_round_trip() {
             ib.raw(),
             "Background is the exact ImageBrush we assigned"
         );
-        // Source-wiring read-back (setting a real ImageSource* and reading it
-        // back) is deferred to §12 imaging, which provides a headless way to
-        // construct an ImageSource. `set_image_source` is exercised there.
-
-        // ── Foreground / Stroke typed sugar ─────────────────────────────────
-        // set_background and set_fill are covered above; close the gap on the
-        // remaining thin wrappers with pointer-identity read-back.
         let tb_xaml = format!("<TextBlock {NS} Text=\"x\"/>");
         let mut tb = FrameworkElement::parse(&tb_xaml).expect("parse TextBlock");
         assert!(tb.set_foreground(&brush), "set Foreground");
@@ -176,7 +150,6 @@ fn brushes_transforms_effects_round_trip() {
             "Stroke is the exact radial brush we assigned"
         );
 
-        // ── Transforms ──────────────────────────────────────────────────────
         let translate = TranslateTransform::new(3.0, -4.0);
         assert_eq!(translate.get(), (3.0, -4.0), "translate round-trip");
 
@@ -231,7 +204,6 @@ fn brushes_transforms_effects_round_trip() {
         assert!(group.add_child(&rotate));
         assert_eq!(group.child_count(), 2, "group has two children");
 
-        // Assign a transform as RenderTransform; pump a layout pass.
         let panel_xaml =
             format!("<Border {NS} Width=\"100\" Height=\"100\"><TextBlock Text=\"x\"/></Border>");
         let mut panel = FrameworkElement::parse(&panel_xaml).expect("parse panel");
@@ -247,7 +219,6 @@ fn brushes_transforms_effects_round_trip() {
             "RenderTransform is the exact group we assigned"
         );
 
-        // ── Effects ─────────────────────────────────────────────────────────
         let mut blur = BlurEffect::new(8.0);
         assert!(approx(blur.radius(), 8.0), "blur radius round-trip");
         blur.set_radius(3.5);
@@ -273,8 +244,6 @@ fn brushes_transforms_effects_round_trip() {
             "shadow params round-trip"
         );
 
-        // ── RenderOptions ───────────────────────────────────────────────────
-        // Default before any set should not equal our HighQuality(2) write.
         assert!(panel.set_bitmap_scaling_mode(2), "set BitmapScalingMode");
         assert_eq!(
             panel.bitmap_scaling_mode(),

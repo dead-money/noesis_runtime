@@ -1,13 +1,4 @@
-//! TODO §4 — the routed-command system: `RoutedCommand` / `RoutedUICommand`,
-//! `CommandBinding` (`Executed` / `CanExecute` Rust handlers attached to an
-//! element), and the built-in `ApplicationCommands` / `ComponentCommands`
-//! libraries. Complements `tests/commands.rs` (the Rust `ICommand` base).
-//!
-//! Single headless `#[test]` (init once per process); all owning wrappers drop
-//! before `shutdown()`. Routed commands need a laid-out view (they route
-//! through the element tree to a matching `CommandBinding`).
-//!
-//!   `cargo test -p noesis_runtime --test routed_commands -- --nocapture`
+//! `RoutedCommand` / `RoutedUICommand` / `CommandBinding`: execute, can-execute gating, RAII detach, and built-in `ApplicationCommands` / `ComponentCommands` libraries.
 
 use std::collections::HashMap;
 use std::ptr::NonNull;
@@ -40,8 +31,6 @@ impl XamlProvider for InMem {
     }
 }
 
-// A CommandBinding handler that counts executions, records whether the last
-// invocation carried a non-null parameter, and gates execution on a shared flag.
 struct Probe {
     executed: Arc<AtomicU32>,
     saw_param: Arc<AtomicBool>,
@@ -81,7 +70,6 @@ fn routed_commands_bindings_and_builtin_libraries() {
         assert!(view.update(0.0), "layout must run before command routing");
         let root = view.content().expect("View::content returned None");
 
-        // ── RoutedCommand + CommandBinding: Execute routes to the handler ─────
         let cmd = RoutedCommand::new("DoThing", "UIElement").expect("create RoutedCommand");
         assert_eq!(cmd.name().as_deref(), Some("DoThing"), "GetName round-trip");
 
@@ -106,7 +94,6 @@ fn routed_commands_bindings_and_builtin_libraries() {
         .expect("create CommandBinding");
         assert!(binding.attach(&root), "attach to the root UIElement");
 
-        // Now it routes: CanExecute reflects the handler, Execute fires it.
         assert!(
             cmd.can_execute(None, &root),
             "bound command should be executable when the handler allows it"
@@ -135,7 +122,6 @@ fn routed_commands_bindings_and_builtin_libraries() {
             "a non-null parameter should arrive as Some in the handler"
         );
 
-        // CanExecute gating reflects the shared flag, both ways.
         can.store(false, Ordering::SeqCst);
         assert!(
             !cmd.can_execute(None, &root),
@@ -147,7 +133,7 @@ fn routed_commands_bindings_and_builtin_libraries() {
             "flipping the flag back re-enables CanExecute"
         );
 
-        // ── RAII: dropping the binding detaches its handlers ─────────────────
+        // RAII: dropping the binding detaches its handlers.
         drop(binding);
         let before = executed.load(Ordering::SeqCst);
         cmd.execute(None, &root);
@@ -161,7 +147,6 @@ fn routed_commands_bindings_and_builtin_libraries() {
             "after drop, the command is unhandled again"
         );
 
-        // ── RoutedUICommand: Text + Name ─────────────────────────────────────
         let mut uic =
             RoutedUICommand::new("Save", "Save File", "UIElement").expect("create RoutedUICommand");
         assert_eq!(uic.name().as_deref(), Some("Save"));
@@ -169,7 +154,6 @@ fn routed_commands_bindings_and_builtin_libraries() {
         uic.set_text("Saved");
         assert_eq!(uic.text().as_deref(), Some("Saved"), "SetText round-trip");
 
-        // ── Built-in libraries: identity, names, singleton stability ─────────
         let copy = ApplicationCommand::Copy.command();
         assert_eq!(
             copy.name().as_deref(),
@@ -198,8 +182,6 @@ fn routed_commands_bindings_and_builtin_libraries() {
             "ComponentCommands.MoveDown name"
         );
 
-        // The same library entry resolves to the same framework singleton; two
-        // different entries are distinct objects.
         assert_eq!(
             ApplicationCommand::Copy.command().raw(),
             ApplicationCommand::Copy.command().raw(),
@@ -211,7 +193,6 @@ fn routed_commands_bindings_and_builtin_libraries() {
             "distinct built-ins are distinct objects"
         );
 
-        // ── Built-in command through a CommandBinding (integration) ──────────
         let copy_runs = Arc::new(AtomicU32::new(0));
         let cr = Arc::clone(&copy_runs);
         let copy_binding = CommandBinding::new(&copy, move |_param: CommandParameter| {

@@ -1,4 +1,4 @@
-//! `Style` from code + template assignment (TODO §7).
+//! `Style` from code + template assignment.
 //!
 //! The XAML you'd write as:
 //!
@@ -21,9 +21,9 @@
 //! then assigned with
 //! [`FrameworkElement::set_style`](crate::view::FrameworkElement::set_style).
 //!
-//! Templates ([`ControlTemplate`], [`DataTemplate`]) are the high-value,
-//! tractable path: parse a `<ControlTemplate>` / `<DataTemplate>` from an
-//! in-memory XAML string and assign it — a `ControlTemplate` via
+//! Templates ([`ControlTemplate`], [`DataTemplate`]) are authored by parsing a
+//! `<ControlTemplate>` / `<DataTemplate>` from an in-memory XAML string and
+//! assigning it — a `ControlTemplate` via
 //! [`FrameworkElement::set_control_template`](crate::view::FrameworkElement::set_control_template),
 //! a `DataTemplate` via the existing `set_component` path on `ContentTemplate` /
 //! `ItemTemplate`.
@@ -203,10 +203,10 @@ impl Style {
         u32::try_from(n.max(0)).unwrap_or(0)
     }
 
-    /// Borrow the trigger at `index` back out of the live `Triggers` collection,
-    /// `AddRef`'d so Rust owns it. Use the [`TriggerReadback`] accessors to
-    /// re-read its property / value / setter surface straight from Noesis (a
-    /// genuine FFI round-trip). `None` if `index` is out of range.
+    /// Take the trigger at `index` back out of the live `Triggers` collection as
+    /// an owned [`TriggerReadback`] (`AddRef`'d). Its accessors re-read the
+    /// property / value / setter surface from the live Noesis object. `None` if
+    /// `index` is out of range.
     #[must_use]
     pub fn get_trigger(&self, index: u32) -> Option<TriggerReadback> {
         // SAFETY: self.ptr is a live Style*; the result is a +1-owned trigger.
@@ -246,9 +246,8 @@ pub struct StyleBuilder {
 
 impl StyleBuilder {
     /// Append a `Setter` for the dependency property `dp_name` (resolved on the
-    /// target type) with the boxed `value`. Like
-    /// [`Style::add_setter`], a setter that fails to resolve is silently dropped;
-    /// read it back with [`Style::get_trigger`] / element application to verify.
+    /// target type) with the boxed `value`. Like [`Style::add_setter`], a setter
+    /// that fails to resolve is silently dropped.
     pub fn setter(mut self, dp_name: &str, value: &Boxed) -> Self {
         let _ = self.style.add_setter(dp_name, value);
         self
@@ -435,11 +434,9 @@ impl Drop for DataTemplate {
     }
 }
 
-// ── Triggers (TODO §7) ───────────────────────────────────────────────────────
-
 /// An owned (`+1`) boxed value handed back from a trigger / condition getter.
-/// Released on drop. The `as_*` accessors unbox the common primitive payloads so
-/// a test can prove the value survived the round-trip through Noesis.
+/// Released on drop. The `as_*` accessors unbox the common primitive payloads
+/// (`bool`, `i32`, `String`).
 pub struct OwnedValue {
     ptr: NonNull<c_void>,
 }
@@ -472,8 +469,8 @@ impl OwnedValue {
         ok.then_some(out)
     }
 
-    /// Borrow the bytes of a boxed `String` payload, or `None` if the value is
-    /// not a boxed string.
+    /// Copy a boxed `String` payload out as an owned `String`, or `None` if the
+    /// value is not a boxed string.
     #[must_use]
     pub fn as_string(&self) -> Option<String> {
         // SAFETY: self.ptr is a live boxed BaseComponent*; the returned pointer
@@ -911,10 +908,9 @@ impl EventTrigger {
 }
 
 /// A trigger `AddRef`'d back out of a [`Style`]'s `Triggers` collection by
-/// [`Style::get_trigger`]. Its accessors re-read the *live* Noesis object, so a
-/// reading test proves the construction actually crossed the FFI. Each accessor
-/// targets one concrete trigger kind (via a `DynamicCast` on the C side) and
-/// returns `None` / `0` if this handle is a different kind.
+/// [`Style::get_trigger`]. Its accessors re-read the *live* Noesis object. Each
+/// accessor targets one concrete trigger kind (via a `DynamicCast` on the C
+/// side) and returns `None` / `0` if this handle is a different kind.
 pub struct TriggerReadback {
     ptr: NonNull<c_void>,
 }
@@ -969,8 +965,6 @@ impl Drop for TriggerReadback {
     }
 }
 
-// ── shared read-back helpers ─────────────────────────────────────────────────
-
 fn read_name(p: *const std::os::raw::c_char) -> Option<String> {
     if p.is_null() {
         return None;
@@ -986,8 +980,6 @@ fn owned_value(p: *mut c_void) -> Option<OwnedValue> {
 fn count(n: i32) -> u32 {
     u32::try_from(n.max(0)).unwrap_or(0)
 }
-
-// ── DataTemplateSelector from Rust (TODO §7) ─────────────────────────────────
 
 /// User logic for a [`TemplateSelector`]: choose a [`DataTemplate`] for a data
 /// item. Return `None` to select no template.

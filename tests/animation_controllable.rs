@@ -1,9 +1,5 @@
-//! TODO §6 — the controllable `Storyboard` actions (Pause / Resume / Stop) have
-//! observable effects. We begin an `Opacity` 0->1 animation as controllable,
-//! then: pause and confirm the value holds across further ticks; resume and
-//! confirm it advances again; stop and confirm the value reverts to its base.
-//! Each step reads `Opacity` back through Noesis, so a stubbed Pause/Stop (which
-//! would let the value keep climbing to 1) fails the assertions.
+//! Controllable `Storyboard` Pause/Resume/Stop have observable effects: value
+//! holds while paused, advances after resume, reverts to base after stop.
 
 use noesis_runtime::animation::{Animation, DoubleAnimation, Storyboard, Timeline};
 use noesis_runtime::view::{FrameworkElement, View};
@@ -48,14 +44,12 @@ fn controllable_storyboard_pause_resume_stop() {
         assert!(sb.begin(&content, true));
         view.update(0.0);
 
-        // Advance to ~0.3.
         view.update(0.3);
         let running = box_el.get_f32("Opacity").expect("opacity");
         assert!(running > 0.1, "should be running, got {running}");
         assert!(sb.is_playing(&content), "should report playing");
         assert!(!sb.is_paused(&content), "should not report paused yet");
 
-        // Pause: the value must hold across further ticks.
         assert!(sb.pause(&content));
         assert!(sb.is_paused(&content), "should report paused");
         view.update(0.6);
@@ -65,7 +59,6 @@ fn controllable_storyboard_pause_resume_stop() {
             "paused value should hold ~{running}, got {held}"
         );
 
-        // Resume: the value advances again past where it was held.
         assert!(sb.resume(&content));
         view.update(0.8);
         let resumed = box_el.get_f32("Opacity").expect("opacity");
@@ -74,7 +67,6 @@ fn controllable_storyboard_pause_resume_stop() {
             "resumed value {resumed} should exceed held {held}"
         );
 
-        // Stop: the animation is removed and the property reverts to its base.
         assert!(sb.stop(&content));
         assert!(
             !sb.is_playing(&content),

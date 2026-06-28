@@ -1,5 +1,5 @@
 //! Safe wrappers around the Noesis `FrameworkElement`, `IView`, and
-//! `IRenderer` opaque pointers (Phase 4.C).
+//! `IRenderer` opaque pointers.
 //!
 //! ```text
 //!   load_xaml(uri) -> FrameworkElement
@@ -380,9 +380,8 @@ impl FrameworkElement {
     }
 
     /// Set the caret of a `TextBox` to the end of its current text. No-op
-    /// (returns `false`) if the element is not a `TextBox`. Mirrors `AoR`'s
-    /// `_commandInput.CaretIndex = _commandInput.Text.Length` pattern
-    /// after a history-nav substitution.
+    /// (returns `false`) if the element is not a `TextBox`. Useful after
+    /// replacing the text programmatically (e.g. a history-nav substitution).
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_caret_to_end(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
@@ -399,7 +398,7 @@ impl FrameworkElement {
         unsafe { noesis_focus_element(self.ptr.as_ptr()) }
     }
 
-    // ── Input — finer control (TODO §16) ────────────────────────────────────
+    // ── Input — finer control ───────────────────────────────────────────────
     //
     // Element-level mouse/touch capture, keyboard-state queries, focus-state
     // DPs, focus engagement, and focus traversal. All narrow this element to a
@@ -1016,7 +1015,7 @@ impl FrameworkElement {
         NonNull::new(p)
     }
 
-    // ── Data binding (TODO §3) ──────────────────────────────────────────────
+    // ── Data binding ────────────────────────────────────────────────────────
     //
     // Point this element's `DataContext` at a Rust view model, or an
     // ItemsControl's `ItemsSource` at an [`crate::binding::ObservableCollection`].
@@ -1136,15 +1135,14 @@ impl FrameworkElement {
         (n >= 0).then_some(n as usize)
     }
 
-    // ── Tree traversal (TODO §2.A) ──────────────────────────────────────────
+    // ── Tree traversal ──────────────────────────────────────────────────────
     //
     // Walk the visual and logical trees from this element. Returned elements
     // hold an independent `+1` reference (dropping them does not affect
     // `self`). Visual-tree children may be plain `Visual`s rather than
     // `FrameworkElement`s, but the wrapper is just an owned `BaseComponent*`
     // whose `FrameworkElement` methods `DynamicCast` internally, so a `Visual`
-    // round-trips fine — its FE-specific accessors simply return `None` /
-    // no-op.
+    // round-trips fine — its FE-specific accessors return `None` / no-op.
 
     /// Number of visual children. `0` if this element is not a `Visual`.
     #[must_use]
@@ -1325,7 +1323,7 @@ impl FrameworkElement {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    // ── Attached properties (TODO §2.B) ─────────────────────────────────────
+    // ── Attached properties ─────────────────────────────────────────────────
     //
     // Resolve a DependencyProperty registered on `owner` (e.g. `Grid` / `Row`,
     // `Canvas` / `Left`) and set / get it on this object. The owner type must
@@ -1469,7 +1467,7 @@ impl FrameworkElement {
             .then_some(out)
     }
 
-    // ── ClearValue / SetCurrentValue / GetBaseValue (TODO §2.C) ─────────────
+    // ── ClearValue / SetCurrentValue / GetBaseValue ─────────────────────────
 
     /// Clear the local value of the named dependency property
     /// (`ClearLocalValue`), reverting it to its default / inherited / styled
@@ -1761,7 +1759,7 @@ impl FrameworkElement {
             .then_some(out)
     }
 
-    // ── Dynamic tag inference (TODO §2.D) ───────────────────────────────────
+    // ── Dynamic tag inference ───────────────────────────────────────────────
 
     /// The [`PropType`] tag of the named dependency property, or `None` if this
     /// is not a `DependencyObject`, the property is unknown, or its reflected
@@ -1827,7 +1825,7 @@ impl FrameworkElement {
         }
     }
 
-    // ── Typed FrameworkElement sugar (TODO §2.E) ────────────────────────────
+    // ── Typed FrameworkElement sugar ────────────────────────────────────────
     //
     // Thin wrappers over the generic name-keyed accessors for the common
     // `FrameworkElement` scalars, plus a bespoke alignment path (the alignment
@@ -2007,7 +2005,7 @@ impl FrameworkElement {
         unsafe { noesis_framework_element_set_valign(self.ptr.as_ptr(), a as i32) }
     }
 
-    // ── Namescope register / unregister (TODO §2.F) ─────────────────────────
+    // ── Namescope register / unregister ─────────────────────────────────────
 
     /// Register `name` for `object` in the namescope hosting this element, so
     /// that subsequent [`find_name`](Self::find_name) lookups resolve it. The
@@ -2042,7 +2040,7 @@ impl FrameworkElement {
         unsafe { noesis_framework_element_unregister_name(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
-    // ── Thread affinity (TODO §2.G) ─────────────────────────────────────────
+    // ── Thread affinity ─────────────────────────────────────────────────────
 
     /// Whether the calling thread owns this object
     /// (`DispatcherObject::CheckAccess`). `false` if this is not a
@@ -2062,7 +2060,7 @@ impl FrameworkElement {
         unsafe { noesis_dependency_object_thread_id(self.ptr.as_ptr()) }
     }
 
-    // ── Brushes / transforms / effects / RenderOptions (TODO §11) ────────────
+    // ── Brushes / transforms / effects / RenderOptions ───────────────────────
     //
     // Thin typed sugar over the generic `set_component` DP path for the
     // code-built objects in `crate::brushes` / `crate::transforms`. Each routes
@@ -2209,7 +2207,7 @@ impl FrameworkElement {
         (v >= 0).then_some(v)
     }
 
-    // ── Controls (§8) ────────────────────────────────────────────────────────
+    // ── Controls ──────────────────────────────────────────────────────────────
     //
     // Typed sugar + genuinely-new entrypoints over the standard Noesis controls.
     // Each method DynamicCasts (C++ side) to the right control type and degrades
@@ -2262,7 +2260,7 @@ impl FrameworkElement {
     /// # Safety
     ///
     /// `item` must be a valid live `Noesis::BaseComponent*` (e.g. a
-    /// [`crate::binding::Boxed::raw`] or a pointer from [`selected_item`] /
+    /// [`crate::binding::Boxed::raw`] or a pointer from [`Self::selected_item`] /
     /// [`crate::binding::ObservableCollection::get`]) or null.
     pub unsafe fn set_selected_item(&mut self, item: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; `item` is a live
@@ -2329,7 +2327,7 @@ impl FrameworkElement {
         unsafe { noesis_items_control_items_clear(self.ptr.as_ptr()) }
     }
 
-    // ── Decorator / Border Child (Phase 1) ──────────────────────────────────
+    // ── Decorator / Border Child ────────────────────────────────────────────
     //
     // `Decorator::Child` is NOT a DependencyProperty, so it cannot be reached by
     // the by-name DP setters; these wrap the typed `Decorator::SetChild` /
@@ -2371,7 +2369,7 @@ impl FrameworkElement {
         NonNull::new(owned).map(|ptr| Self { ptr })
     }
 
-    // ── ContentControl Content (Phase 2) ────────────────────────────────────
+    // ── ContentControl Content ──────────────────────────────────────────────
     //
     // Unlike `Decorator::Child`, `ContentControl::Content` *is* a
     // `DependencyProperty` (of type `Object` / `BaseComponent`), so these are
@@ -2412,11 +2410,9 @@ impl FrameworkElement {
     /// is intended for element content set via [`set_content`](Self::set_content).
     #[must_use]
     pub fn content(&self) -> Option<FrameworkElement> {
-        // get_component re-reads the live `Content` DP (a borrowed pointer, no
-        // +1) — this proves the value crossed the FFI rather than echoing a
-        // Rust-side cache.
         let borrowed = self.get_component("Content")?;
-        // AddRef so the returned handle owns its reference, released on drop.
+        // get_component returns a borrowed pointer; AddRef so the handle owns its
+        // reference, released on drop.
         // SAFETY: `borrowed` is a live BaseComponent* held by this element.
         let owned = unsafe { noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|ptr| Self { ptr })
@@ -3220,7 +3216,7 @@ impl FrameworkElement {
         unsafe { noesis_controls_image_set_source(self.ptr.as_ptr(), source) }
     }
 
-    // ── resources-styles-templates (§7) ─────────────────────────────────────
+    // ── Resources / styles / templates ──────────────────────────────────────
     //
     // Per-element Resources get/set + non-throwing FindResource, Style
     // assign/read-back, and ControlTemplate assign/read-back. The owned
@@ -3460,9 +3456,9 @@ impl View {
         unsafe { noesis_view_set_projection_matrix(self.ptr.as_ptr(), matrix.as_ptr()) }
     }
 
-    /// Combination of [`RenderFlag`] values — see `NsGui/IView.h` for the
-    /// canonical list. Kept for back-compat / interop with raw bitmasks;
-    /// prefer [`Self::set_render_flags`] for a typed set.
+    /// Set the view's render flags from a raw `Noesis::RenderFlags` bitmask
+    /// (an OR of [`RenderFlag`] values). For a typed set that avoids hand-ORing
+    /// `u32`s, prefer [`Self::set_render_flags`].
     pub fn set_flags(&mut self, flags: u32) {
         unsafe { noesis_view_set_flags(self.ptr.as_ptr(), flags) }
     }
@@ -3599,8 +3595,7 @@ impl View {
         interval_ms: u32,
         handler: H,
     ) -> Option<TimerSubscription> {
-        // Double-Box gives a stable thin pointer for the C ABI userdata, the
-        // same pattern as the event subscriptions.
+        // Double-Box: stable thin pointer for the C ABI userdata.
         let outer: Box<Box<dyn TimerHandler>> = Box::new(Box::new(handler));
         let userdata = Box::into_raw(outer);
 
@@ -3642,8 +3637,7 @@ impl View {
         &mut self,
         handler: H,
     ) -> Option<RenderingSubscription> {
-        // Double-Box gives a stable thin pointer for the C ABI userdata, the
-        // same pattern as the timers and event subscriptions.
+        // Double-Box: stable thin pointer for the C ABI userdata.
         let outer: Box<Box<dyn RenderingHandler>> = Box::new(Box::new(handler));
         let userdata = Box::into_raw(outer);
 
@@ -3690,14 +3684,21 @@ impl View {
         unsafe { noesis_view_mouse_move(self.ptr.as_ptr(), x, y) }
     }
 
+    /// Press `button` at `(x, y)` (physical pixels, origin top-left). Issue a
+    /// [`Self::mouse_move`] to the same point first so the hit-test resolves.
+    /// Returns whether Noesis handled the event.
     pub fn mouse_button_down(&mut self, x: i32, y: i32, button: MouseButton) -> bool {
         unsafe { noesis_view_mouse_button_down(self.ptr.as_ptr(), x, y, button as i32) }
     }
 
+    /// Release `button` at `(x, y)` (physical pixels). Returns whether Noesis
+    /// handled the event.
     pub fn mouse_button_up(&mut self, x: i32, y: i32, button: MouseButton) -> bool {
         unsafe { noesis_view_mouse_button_up(self.ptr.as_ptr(), x, y, button as i32) }
     }
 
+    /// Deliver a double-click of `button` at `(x, y)` (physical pixels).
+    /// Returns whether Noesis handled the event.
     pub fn mouse_double_click(&mut self, x: i32, y: i32, button: MouseButton) -> bool {
         unsafe { noesis_view_mouse_double_click(self.ptr.as_ptr(), x, y, button as i32) }
     }
@@ -3727,22 +3728,31 @@ impl View {
         unsafe { noesis_view_hscroll(self.ptr.as_ptr(), x, y, value) }
     }
 
+    /// Begin touch contact `id` at `(x, y)` (physical pixels). Returns whether
+    /// Noesis handled the event.
     pub fn touch_down(&mut self, x: i32, y: i32, id: u64) -> bool {
         unsafe { noesis_view_touch_down(self.ptr.as_ptr(), x, y, id) }
     }
 
+    /// Move touch contact `id` to `(x, y)` (physical pixels). Returns whether
+    /// Noesis handled the event.
     pub fn touch_move(&mut self, x: i32, y: i32, id: u64) -> bool {
         unsafe { noesis_view_touch_move(self.ptr.as_ptr(), x, y, id) }
     }
 
+    /// End touch contact `id` at `(x, y)` (physical pixels). Returns whether
+    /// Noesis handled the event.
     pub fn touch_up(&mut self, x: i32, y: i32, id: u64) -> bool {
         unsafe { noesis_view_touch_up(self.ptr.as_ptr(), x, y, id) }
     }
 
+    /// Press [`Key`] `key`. Returns whether Noesis handled the event. The view
+    /// must be activated ([`Self::activate`]) to receive keyboard input.
     pub fn key_down(&mut self, key: Key) -> bool {
         unsafe { noesis_view_key_down(self.ptr.as_ptr(), key as i32) }
     }
 
+    /// Release [`Key`] `key`. Returns whether Noesis handled the event.
     pub fn key_up(&mut self, key: Key) -> bool {
         unsafe { noesis_view_key_up(self.ptr.as_ptr(), key as i32) }
     }
@@ -3891,11 +3901,11 @@ pub enum MouseButton {
     XButton2 = 4,
 }
 
-/// Subset of `Noesis::Key` from `NsGui/InputEnums.h` — the keys Bevy's
-/// `KeyCode` can produce. Values are the C++ enum ordinals, validated by
-/// `static_assert` in `noesis_view.cpp`. Anything outside this subset can
-/// still be sent via [`View::key_down`] with a raw cast; prefer adding a
-/// variant here (and a matching assert in C++) to centralize the mapping.
+/// Common subset of `Noesis::Key` from `NsGui/InputEnums.h`. Values are the
+/// C++ enum ordinals, validated by `static_assert` in `noesis_view.cpp`.
+/// Anything outside this subset can still be sent via [`View::key_down`] with
+/// a raw cast; prefer adding a variant here (and a matching assert in C++) to
+/// centralize the mapping.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -4189,7 +4199,7 @@ pub struct ViewStats {
     pub discarded_glyph_tiles: u32,
 }
 
-// ── View-driven timers (TODO §1) ─────────────────────────────────────────────
+// ── View-driven timers ───────────────────────────────────────────────────────
 
 /// Rust-side handler for a view timer (see [`View::create_timer`]). Called once
 /// per tick from inside [`View::update`]; returns the next interval in
@@ -4265,7 +4275,7 @@ impl Drop for TimerSubscription {
     }
 }
 
-// ── Rendering event (TODO §1) ────────────────────────────────────────────────
+// ── Rendering event ──────────────────────────────────────────────────────────
 
 /// Rust-side handler for a view's `Rendering` event (see
 /// [`View::add_rendering_handler`]). Called once per frame from inside

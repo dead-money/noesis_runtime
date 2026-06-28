@@ -1,19 +1,5 @@
-//! TODO §9 + §3 — `TwoWay` writeback into a plain-VM reflected property.
-//!
-//! Complements `plain_vm_binding.rs` (the read + notify path) by exercising the
-//! WRITE path: a `TwoWay` binding from a `TextBox.Text` back to a plain-VM
-//! property. Mutating the target DP from Rust (with
-//! `UpdateSourceTrigger=PropertyChanged`) drives the binding to call the custom
-//! `TypeProperty::SetComponent`, which both stores the value in the instance and
-//! fires the Rust `on_set` hook.
-//!
-//! Fail-if-stubbed assertions:
-//!
-//!   * The reflected store (read back via `get_string`, NOT via the UI) holds
-//!     the value the `TextBox` pushed — proves `SetComponent` wrote the store.
-//!   * The `on_set` hook fired with the right index + value — proves the
-//!     writeback trampoline reached Rust (a stubbed `SetComponent` leaves the
-//!     store at its seed value and never calls back).
+//! `TwoWay` binding writeback from a `TextBox` into a plain-VM reflected property; verifies
+//! the `on_set` hook fires and the reflected store is updated.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -41,7 +27,6 @@ impl XamlProvider for InMem {
     }
 }
 
-// Records the last (index, value) the writeback hook observed.
 static HITS: AtomicUsize = AtomicUsize::new(0);
 static LAST: Mutex<Option<(u32, String)>> = Mutex::new(None);
 
@@ -85,8 +70,6 @@ fn plain_view_model_twoway_writeback() {
 
         let mut textbox = content.find_name("Box").expect("find_name(Box) failed");
 
-        // TwoWay binding TextBox.Text <-> Title, updating the source on every
-        // target change.
         let binding = Binding::new("Title")
             .mode(BindingMode::TwoWay)
             .update_source_trigger(UpdateSourceTrigger::PropertyChanged);
@@ -96,22 +79,17 @@ fn plain_view_model_twoway_writeback() {
         );
 
         view.update(0.0);
-        // OneWay leg first: the seed reached the TextBox.
         assert_eq!(textbox.text().as_deref(), Some("Seed"));
         assert_eq!(HITS.load(Ordering::SeqCst), 0, "no writeback expected yet");
 
-        // Now edit the target from code — the binding writes back to the source.
         assert!(textbox.set_text("Edited"));
         view.update(0.0);
 
-        // The reflected store now holds the edited value (read straight back,
-        // not through the UI) — proves SetComponent wrote it.
         assert_eq!(
             vm.get_string(title).as_deref(),
             Some("Edited"),
             "TwoWay writeback did not reach the reflected store (SetComponent broken)"
         );
-        // And the Rust on_set hook fired with the right index + value.
         assert!(HITS.load(Ordering::SeqCst) >= 1, "on_set hook never fired");
         assert_eq!(
             *LAST.lock().unwrap(),

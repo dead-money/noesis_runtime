@@ -1,9 +1,7 @@
-//! TODO §18 — `FrameworkElement::num_references`
-//! (`BaseRefCounted::GetNumReferences`).
+//! `FrameworkElement::num_references` (`BaseRefCounted::GetNumReferences`).
 //!
-//! The absolute refcount is a Noesis internal, so the test pins the **deltas**:
-//! a live owned handle reports `>= 1`; `clone_ref` (an `AddReference`) bumps it
-//! `+1`; dropping that clone (a `Release`) drops it `-1`.
+//! The absolute refcount is a Noesis internal, so the test pins deltas:
+//! a live handle reports `>= 1`; `clone_ref` bumps it `+1`; dropping the clone drops it `-1`.
 
 use noesis_runtime::view::FrameworkElement;
 
@@ -31,7 +29,6 @@ fn num_references_tracks_add_and_release() {
             "a live owned handle must report >= 1 reference (got {base})"
         );
 
-        // clone_ref == AddReference → exactly +1.
         let clone = el.clone_ref();
         let after_clone = el.num_references();
         assert_eq!(
@@ -46,7 +43,6 @@ fn num_references_tracks_add_and_release() {
             "both handles point at the same component → same refcount"
         );
 
-        // Dropping the clone == Release → exactly -1, back to the baseline.
         drop(clone);
         let after_drop = el.num_references();
         assert_eq!(

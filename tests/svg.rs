@@ -1,16 +1,4 @@
-//! Integration tests for SVG / `SVGPath` parsing (TODO §12).
-//!
-//! Fully headless: no GPU `RenderDevice` or render pass is needed. Every
-//! assertion reads a value BACK from the live Noesis object (parsed bounds,
-//! fill hit-test results, parsed document size / shape count), so a stubbed
-//! parser, a bounds fn returning zeros, or a constant-returning hit-test would
-//! FAIL these.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process);
-//! all owning handles drop inside the inner scope before `shutdown()`.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test svg -- --nocapture`
+//! SVG path parsing and `SVGImage` document round-trip tests.
 
 use noesis_runtime::svg::{FillRule, Pen, StrokeJoin, SvgImage, SvgPath};
 
@@ -29,7 +17,6 @@ fn svg_path_and_document_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── SVGPath::TryParse + CalculateBounds ─────────────────────────────
         // A 100x50 triangle-ish closed quad anchored at the origin.
         let path = SvgPath::parse("M0 0 L100 0 L100 50 Z").expect("parse path");
         assert!(
@@ -42,7 +29,6 @@ fn svg_path_and_document_round_trip() {
             "CalculateBounds ~= (0,0,100,50), got {b:?}"
         );
 
-        // ── FillContains: interior vs exterior ──────────────────────────────
         // (60,10) is inside the triangle formed by (0,0)-(100,0)-(100,50);
         // (200,200) is well outside.
         assert!(
@@ -60,7 +46,6 @@ fn svg_path_and_document_round_trip() {
             "point (10,40) is outside the triangle"
         );
 
-        // Garbage path data fails to parse.
         assert!(
             SvgPath::parse("this is not a path").is_none()
                 || SvgPath::parse("this is not a path")
@@ -70,7 +55,6 @@ fn svg_path_and_document_round_trip() {
             "invalid path data should not yield a populated path"
         );
 
-        // ── Builder statics: construct a rect and query it ──────────────────
         let mut built = SvgPath::new();
         assert_eq!(built.command_count(), 0, "fresh path is empty");
         built.move_to(10.0, 20.0);
@@ -96,7 +80,6 @@ fn svg_path_and_document_round_trip() {
             "origin is outside the built rect"
         );
 
-        // AddRect static produces an equivalent box.
         let mut rect = SvgPath::new();
         rect.add_rect(0.0, 0.0, 40.0, 40.0);
         let rb = rect.bounds();
@@ -105,7 +88,6 @@ fn svg_path_and_document_round_trip() {
             "AddRect bounds size ~= 40x40, got {rb:?}"
         );
 
-        // ── StrokeContains: a point on the stroked outline ──────────────────
         // The left edge of the built rect runs x=10 from y=20..70; a wide pen
         // centered there contains a point sitting on that edge, but not the
         // rect's far interior.
@@ -123,7 +105,6 @@ fn svg_path_and_document_round_trip() {
             "rect interior is not within an 8px-wide stroke of the outline"
         );
 
-        // ── SVG::Parse: whole document into an SVG::Image ───────────────────
         let doc = r##"<svg width="120" height="80" xmlns="http://www.w3.org/2000/svg">
             <rect x="0" y="0" width="120" height="80" fill="#ff0000"/>
             <circle cx="60" cy="40" r="20" fill="#00ff00"/>
@@ -144,7 +125,6 @@ fn svg_path_and_document_round_trip() {
             image.shape_fill_type(0).is_some(),
             "first shape has a parsed fill type"
         );
-        // Out-of-range index returns None.
         assert!(
             image.shape_fill_type(10_000).is_none(),
             "out-of-range shape index returns None"

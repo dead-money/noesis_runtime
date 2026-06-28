@@ -1,20 +1,7 @@
-//! TODO §5 — non-routed lifecycle events (`Event_` mechanism).
+//! Non-routed lifecycle events (`Event_` / `AddEventHandler` mechanism) — fire and unsubscribe.
 //!
-//! One headless `#[test]` (Noesis inits once per process). Subscribes Rust
-//! callbacks to the non-routed lifecycle events that ride
-//! `AddEventHandler(Symbol, EventHandler)` (NOT `AddHandler(RoutedEvent, ...)`)
-//! and asserts they actually fire:
-//!
-//!   * `IsVisibleChanged` — toggling an element's `Visibility` flips `IsVisible`,
-//!     which must raise the notification; asserted via a before/after delta on a
-//!     fired-callback counter (the meaningful "it actually fired" check).
-//!   * `LayoutUpdated` / `Initialized` — subscription wiring must succeed. These
-//!     are render-/load-driven and do not fire again in this headless harness
-//!     (same as `Loaded`), so only the subscribe path is asserted for them.
-//!
-//! Plus the contract edges: an unknown event name returns `None`, and dropping a
-//! subscription mid-run unsubscribes cleanly (no crash on continued updates or
-//! shutdown).
+//! `LayoutUpdated` and `Initialized` are render-/load-driven and do not re-fire
+//! in a headless harness; only their subscription wiring is asserted.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -66,7 +53,6 @@ fn lifecycle_events_fire_and_unsubscribe() {
         let content = view.content().expect("View::content returned None");
         let mut child = content.find_name("Child").expect("find Child");
 
-        // IsVisibleChanged on the child — fires when IsVisible flips.
         let visible_h = Arc::clone(&visible);
         let visible_sub =
             subscribe_lifecycle(&child, LifecycleEvent::IsVisibleChanged, move || {
@@ -74,14 +60,11 @@ fn lifecycle_events_fire_and_unsubscribe() {
             })
             .expect("subscribe IsVisibleChanged returned None");
 
-        // LayoutUpdated / Initialized — wiring must succeed (render-/load-driven;
-        // they don't fire again in this headless harness, like Loaded).
         let layout_sub = subscribe_lifecycle(&content, LifecycleEvent::LayoutUpdated, || {})
             .expect("subscribe LayoutUpdated returned None");
         let init_sub = subscribe_lifecycle(&content, LifecycleEvent::Initialized, || {})
             .expect("subscribe Initialized returned None");
 
-        // Negative: unknown event name must not subscribe.
         assert!(
             subscribe_lifecycle_by_name(&content, "NoSuchLifecycleEvent", || {}).is_none(),
             "unknown lifecycle event name should return None"
@@ -92,7 +75,6 @@ fn lifecycle_events_fire_and_unsubscribe() {
         let _ = view.update(0.016);
         let _ = view.update(0.032);
 
-        // Toggle visibility and confirm IsVisibleChanged observes the change.
         let before = visible.load(Ordering::SeqCst);
         child.set_visibility(false);
         let _ = view.update(0.048);
@@ -104,8 +86,7 @@ fn lifecycle_events_fire_and_unsubscribe() {
             "IsVisibleChanged should fire when toggling Visibility (before={before}, after={after})"
         );
 
-        // Drop the IsVisibleChanged subscription mid-run; continued updates +
-        // toggles must not crash and must not increment its counter further.
+        // Drop mid-run: continued updates and visibility toggles must not crash.
         drop(visible_sub);
         let at_drop = visible.load(Ordering::SeqCst);
         child.set_visibility(false);
