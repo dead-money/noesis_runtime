@@ -186,6 +186,7 @@ unsafe extern "C" {
     ) -> bool;
     pub fn dm_noesis_base_component_release(obj: *mut c_void);
     pub fn dm_noesis_base_component_add_reference(obj: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_base_component_get_num_references(obj: *mut c_void) -> i32;
 
     pub fn dm_noesis_view_create(framework_element: *mut c_void) -> *mut c_void;
     pub fn dm_noesis_view_destroy(view: *mut c_void);
@@ -2776,4 +2777,89 @@ unsafe extern "C" {
         element: *mut c_void,
         binding: *mut c_void,
     ) -> bool;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Diagnostics: error / assert handlers + memory queries (TODO §17/§18). See
+// cpp/noesis_shim.h. All NsCore kernel functions — kernel must be up.
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Binary-compatible with `Noesis::ErrorContext` (and the C
+/// `dm_noesis_error_context`). Surfaces the offending uri/line/column for e.g.
+/// XAML parse errors carried by the per-thread `ErrorHandler2`.
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct ErrorContext {
+    pub uri: *const c_char,
+    pub line: u32,
+    pub column: u32,
+}
+
+/// Global error handler trampoline signature (no per-call context).
+pub type ErrorFn = unsafe extern "C" fn(
+    userdata: *mut c_void,
+    file: *const c_char,
+    line: u32,
+    message: *const c_char,
+    fatal: bool,
+);
+
+/// Global assert handler trampoline signature. Return `true` to request a
+/// debug break.
+pub type AssertFn = unsafe extern "C" fn(
+    userdata: *mut c_void,
+    file: *const c_char,
+    line: u32,
+    expr: *const c_char,
+) -> bool;
+
+/// Per-thread error handler (`Noesis::ErrorHandler2`) trampoline signature.
+/// `context` is null when none was supplied.
+pub type Error2Fn = unsafe extern "C" fn(
+    file: *const c_char,
+    line: u32,
+    message: *const c_char,
+    fatal: bool,
+    context: *mut ErrorContext,
+    userdata: *mut c_void,
+);
+
+unsafe extern "C" {
+    pub fn dm_noesis_set_error_handler(
+        cb: Option<ErrorFn>,
+        userdata: *mut c_void,
+        out_prev_cb: *mut Option<ErrorFn>,
+        out_prev_user: *mut *mut c_void,
+    );
+    pub fn dm_noesis_set_assert_handler(
+        cb: Option<AssertFn>,
+        userdata: *mut c_void,
+        out_prev_cb: *mut Option<AssertFn>,
+        out_prev_user: *mut *mut c_void,
+    );
+    pub fn dm_noesis_set_thread_error_handler(
+        handler: Option<Error2Fn>,
+        userdata: *mut c_void,
+        out_prev_handler: *mut Option<Error2Fn>,
+        out_prev_user: *mut *mut c_void,
+    );
+    pub fn dm_noesis_invoke_error_handler(
+        file: *const c_char,
+        line: u32,
+        fatal: bool,
+        has_context: bool,
+        uri: *const c_char,
+        ctx_line: u32,
+        ctx_col: u32,
+        message: *const c_char,
+    );
+    pub fn dm_noesis_invoke_assert_handler(
+        file: *const c_char,
+        line: u32,
+        expr: *const c_char,
+    ) -> bool;
+
+    pub fn dm_noesis_get_allocated_memory() -> u32;
+    pub fn dm_noesis_get_allocated_memory_accum() -> u32;
+    pub fn dm_noesis_get_allocations_count() -> u32;
 }

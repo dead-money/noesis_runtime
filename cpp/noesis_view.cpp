@@ -142,6 +142,15 @@ extern "C" void* dm_noesis_base_component_add_reference(void* obj) {
     return obj;
 }
 
+// Current strong reference count of any BaseComponent (BaseRefCounted::
+// GetNumReferences). Returns 0 on NULL input. The absolute value is an internal
+// detail — callers should reason about deltas (AddReference => +1, Release =>
+// -1), not the raw number.
+extern "C" int32_t dm_noesis_base_component_get_num_references(void* obj) {
+    if (!obj) return 0;
+    return static_cast<Noesis::BaseComponent*>(obj)->GetNumReferences();
+}
+
 extern "C" bool dm_noesis_gui_load_application_resources(const char* uri) {
     if (!uri) return false;
     Noesis::Ptr<Noesis::ResourceDictionary> dict =
