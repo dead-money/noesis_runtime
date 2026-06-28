@@ -111,8 +111,8 @@ let _registration = MarkupExtensionRegistration::from_closure(
 ## Building
 
 ```sh
-unzip NoesisGUI-NativeSDK-linux-3.2.12-Indie.zip -d ~/sdks/noesis-3.2.12
-export NOESIS_SDK_DIR=~/sdks/noesis-3.2.12
+unzip NoesisGUI-NativeSDK-linux-3.2.13-Indie.zip -d ~/sdks/noesis-3.2.13
+export NOESIS_SDK_DIR=~/sdks/noesis-3.2.13
 cargo test
 ```
 

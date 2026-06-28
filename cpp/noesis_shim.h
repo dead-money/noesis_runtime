@@ -50,7 +50,7 @@ void dm_noesis_init(void);
 // have been released.
 void dm_noesis_shutdown(void);
 
-// Returns the Noesis runtime build version (e.g. "3.2.12"). The pointer is
+// Returns the Noesis runtime build version (e.g. "3.2.13"). The pointer is
 // owned by the Noesis runtime; do not free.
 const char* dm_noesis_version(void);
 
@@ -188,6 +188,32 @@ void dm_noesis_render_device_destroy(void* device);
 // pointers back into Rust-side `TextureHandle` values.
 uint64_t dm_noesis_texture_get_handle(const void* texture);
 uint64_t dm_noesis_render_target_get_handle(const void* surface);
+
+// ── Offscreen / glyph-cache tuning (TODO §1) ───────────────────────────────
+//
+// Configure resource sizing on a `Noesis::RenderDevice` (the opaque value from
+// `dm_noesis_render_device_create`). Set these before the renderer draws its
+// first frame. Offscreen width/height of 0 selects automatic sizing (the
+// default). Glyph-cache dimensions have a build-dependent default (read it back
+// via the getter rather than assuming a value). All are no-ops on a NULL
+// device.
+void dm_noesis_render_device_set_offscreen_width(void* device, uint32_t width);
+void dm_noesis_render_device_set_offscreen_height(void* device, uint32_t height);
+void dm_noesis_render_device_set_offscreen_sample_count(void* device, uint32_t count);
+void dm_noesis_render_device_set_offscreen_default_num_surfaces(void* device, uint32_t num);
+void dm_noesis_render_device_set_offscreen_max_num_surfaces(void* device, uint32_t num);
+void dm_noesis_render_device_set_glyph_cache_width(void* device, uint32_t width);
+void dm_noesis_render_device_set_glyph_cache_height(void* device, uint32_t height);
+
+// Read back the configured values (the companion getters). Return 0 on a NULL
+// device. Width/height of 0 means automatic for the offscreen knobs.
+uint32_t dm_noesis_render_device_get_offscreen_width(const void* device);
+uint32_t dm_noesis_render_device_get_offscreen_height(const void* device);
+uint32_t dm_noesis_render_device_get_offscreen_sample_count(const void* device);
+uint32_t dm_noesis_render_device_get_offscreen_default_num_surfaces(const void* device);
+uint32_t dm_noesis_render_device_get_offscreen_max_num_surfaces(const void* device);
+uint32_t dm_noesis_render_device_get_glyph_cache_width(const void* device);
+uint32_t dm_noesis_render_device_get_glyph_cache_height(const void* device);
 
 // ── XAML provider (Phase 4.C) ──────────────────────────────────────────────
 //
@@ -410,6 +436,12 @@ void* dm_noesis_view_create(void* framework_element);
 // Release an IView* obtained from dm_noesis_view_create.
 void dm_noesis_view_destroy(void* view);
 
+// Add a +1 reference to an IView and return it (NULL on a NULL view). Used to
+// build an owned, thread-movable renderer handle that keeps the view alive
+// independently of the View wrapper. Balance each call with
+// dm_noesis_view_destroy.
+void* dm_noesis_view_add_reference(void* view);
+
 void dm_noesis_view_set_size(void* view, uint32_t width, uint32_t height);
 
 // DPI scale for the view's content (1.0 == 96 ppi). Crisp at any density.
@@ -438,6 +470,20 @@ void dm_noesis_renderer_shutdown(void* renderer);
 bool dm_noesis_renderer_update_render_tree(void* renderer);
 bool dm_noesis_renderer_render_offscreen(void* renderer);
 void dm_noesis_renderer_render(void* renderer, bool flip_y, bool clear);
+
+// ── Stereo / VR rendering (TODO §1) ────────────────────────────────────────
+// `IRenderer::RenderStereo` overloads (the non-deprecated VR render path). Each
+// eye matrix is 16 floats, row-major (same layout as
+// dm_noesis_view_set_projection_matrix). Culling uses the view's projection
+// matrix, so the eye matrices must be enclosed by it. No-ops on NULL args.
+//
+// Multi-pass: render one eye per call (call twice, into each eye's target).
+void dm_noesis_renderer_render_stereo(
+    void* renderer, const float* eye_matrix, bool flip_y, bool clear);
+// Single-pass: render both eyes in one call (multiview / instanced VR).
+void dm_noesis_renderer_render_stereo_both(
+    void* renderer, const float* left_eye_matrix, const float* right_eye_matrix,
+    bool flip_y, bool clear);
 
 // ── View input (Phase 5) ───────────────────────────────────────────────────
 //
@@ -482,6 +528,25 @@ uint32_t dm_noesis_view_get_flags(void* view);
 // quality). LowQuality is 0.7, MediumQuality 0.4, HighQuality 0.2.
 void dm_noesis_view_set_tessellation_max_pixel_error(void* view, float error);
 float dm_noesis_view_get_tessellation_max_pixel_error(void* view);
+
+// ── Gesture / touch thresholds (TODO §1) ───────────────────────────────────
+// Tune when interactions promote to Holding / Tapped / DoubleTapped /
+// Manipulation gestures, and whether the mouse emulates touch input. All are
+// pass-through setters; no-ops on a NULL view. Defaults (per the SDK): holding
+// time 500ms, holding distance 10px, manipulation distance 10px, double-tap
+// time 500ms, double-tap distance 10px.
+void dm_noesis_view_set_holding_time_threshold(void* view, uint32_t ms);
+void dm_noesis_view_set_holding_distance_threshold(void* view, uint32_t pixels);
+void dm_noesis_view_set_manipulation_distance_threshold(void* view, uint32_t pixels);
+void dm_noesis_view_set_double_tap_time_threshold(void* view, uint32_t ms);
+void dm_noesis_view_set_double_tap_distance_threshold(void* view, uint32_t pixels);
+void dm_noesis_view_set_emulate_touch(void* view, bool emulate);
+
+// ── Stereo / VR (TODO §1) ──────────────────────────────────────────────────
+// Scale applied to the offscreen phase to account for stereo eye matrices
+// differing from the view projection. Must be 1.0 (the default) for non-VR;
+// 2–3 is recommended for VR. No-op on a NULL view.
+void dm_noesis_view_set_stereo_offscreen_scale_factor(void* view, float factor);
 
 // Performance counters for the last rendered frame. Field order / types match
 // `Noesis::ViewStats` exactly (3 floats then 12 uint32_t); a static_assert in
@@ -544,6 +609,37 @@ void dm_noesis_view_restart_timer(void* token, uint32_t interval_ms);
 // deletes the RustTimer (invoking the donated free handler exactly once and
 // releasing the +1 view ref). Safe to call with NULL.
 void dm_noesis_view_cancel_timer(void* token);
+
+// ── Rendering event (TODO §1) ──────────────────────────────────────────────
+//
+// `IView::Rendering()` is a `Delegate<void(IView*)>` raised after animation and
+// layout are applied to the composition tree, just before it is rendered — a
+// per-frame hook on the view-driving thread. Lifetime mirrors the timer
+// donated-free-fn pattern: a heap handler holds the Rust callback + donated
+// userdata + free handler + a +1 ref on the IView, registers the delegate with
+// `+=`, and detaches it with `-=` when the token is removed. The returned token
+// is that handler pointer.
+
+// Callback fired on each Rendering event. `view` is the borrowed IView* raising
+// the event (do not release). Fires on the view-driving thread.
+typedef void (*dm_noesis_rendering_fn)(void* userdata, void* view);
+
+// Free callback invoked exactly once when the handler token is removed.
+// Receives the `userdata` passed to add; ownership transfers to the C++ side at
+// registration. Optional (may be NULL).
+typedef void (*dm_noesis_rendering_free_fn)(void* userdata);
+
+// Subscribe a Rust callback to the view's Rendering event. Returns an opaque
+// token or NULL on failure (`view`/`cb` null). Remove + free via
+// dm_noesis_view_remove_rendering_handler.
+void* dm_noesis_view_add_rendering_handler(
+    void* view, dm_noesis_rendering_fn cb, void* userdata,
+    dm_noesis_rendering_free_fn free_handler);
+
+// Detach the Rendering delegate and destroy the token (invoking the donated
+// free handler exactly once and releasing the +1 view ref). Safe to call with
+// NULL.
+void dm_noesis_view_remove_rendering_handler(void* token);
 
 // ── Element traversal + events (Phase 5.B) ─────────────────────────────────
 //

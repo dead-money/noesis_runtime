@@ -148,6 +148,29 @@ unsafe extern "C" {
 
     pub fn dm_noesis_texture_get_handle(texture: *const c_void) -> u64;
     pub fn dm_noesis_render_target_get_handle(surface: *const c_void) -> u64;
+
+    // ── Offscreen / glyph-cache tuning (TODO §1) ─────────────────────────────
+    // Resource sizing on the `Noesis::RenderDevice` base; set before the first
+    // frame. Offscreen 0 == automatic; glyph cache defaults to 1024×1024.
+    pub fn dm_noesis_render_device_set_offscreen_width(device: *mut c_void, width: u32);
+    pub fn dm_noesis_render_device_set_offscreen_height(device: *mut c_void, height: u32);
+    pub fn dm_noesis_render_device_set_offscreen_sample_count(device: *mut c_void, count: u32);
+    pub fn dm_noesis_render_device_set_offscreen_default_num_surfaces(
+        device: *mut c_void,
+        num: u32,
+    );
+    pub fn dm_noesis_render_device_set_offscreen_max_num_surfaces(device: *mut c_void, num: u32);
+    pub fn dm_noesis_render_device_set_glyph_cache_width(device: *mut c_void, width: u32);
+    pub fn dm_noesis_render_device_set_glyph_cache_height(device: *mut c_void, height: u32);
+
+    pub fn dm_noesis_render_device_get_offscreen_width(device: *const c_void) -> u32;
+    pub fn dm_noesis_render_device_get_offscreen_height(device: *const c_void) -> u32;
+    pub fn dm_noesis_render_device_get_offscreen_sample_count(device: *const c_void) -> u32;
+    pub fn dm_noesis_render_device_get_offscreen_default_num_surfaces(device: *const c_void)
+    -> u32;
+    pub fn dm_noesis_render_device_get_offscreen_max_num_surfaces(device: *const c_void) -> u32;
+    pub fn dm_noesis_render_device_get_glyph_cache_width(device: *const c_void) -> u32;
+    pub fn dm_noesis_render_device_get_glyph_cache_height(device: *const c_void) -> u32;
 }
 
 // ────────────────────────────────────────────────────────────────────────────

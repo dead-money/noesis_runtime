@@ -146,6 +146,7 @@ unsafe extern "C" {
 
     pub fn dm_noesis_view_create(framework_element: *mut c_void) -> *mut c_void;
     pub fn dm_noesis_view_destroy(view: *mut c_void);
+    pub fn dm_noesis_view_add_reference(view: *mut c_void) -> *mut c_void;
     pub fn dm_noesis_view_set_size(view: *mut c_void, width: u32, height: u32);
     pub fn dm_noesis_view_set_scale(view: *mut c_void, scale: f32);
     pub fn dm_noesis_view_set_projection_matrix(view: *mut c_void, matrix: *const f32);
@@ -159,6 +160,21 @@ unsafe extern "C" {
     pub fn dm_noesis_renderer_update_render_tree(renderer: *mut c_void) -> bool;
     pub fn dm_noesis_renderer_render_offscreen(renderer: *mut c_void) -> bool;
     pub fn dm_noesis_renderer_render(renderer: *mut c_void, flip_y: bool, clear: bool);
+
+    // ── Stereo / VR rendering (TODO §1) ──────────────────────────────────────
+    pub fn dm_noesis_renderer_render_stereo(
+        renderer: *mut c_void,
+        eye_matrix: *const f32,
+        flip_y: bool,
+        clear: bool,
+    );
+    pub fn dm_noesis_renderer_render_stereo_both(
+        renderer: *mut c_void,
+        left_eye_matrix: *const f32,
+        right_eye_matrix: *const f32,
+        flip_y: bool,
+        clear: bool,
+    );
 
     pub fn dm_noesis_view_mouse_move(view: *mut c_void, x: i32, y: i32) -> bool;
     pub fn dm_noesis_view_mouse_button_down(view: *mut c_void, x: i32, y: i32, button: i32)
@@ -192,6 +208,17 @@ unsafe extern "C" {
     pub fn dm_noesis_view_get_tessellation_max_pixel_error(view: *mut c_void) -> f32;
     pub fn dm_noesis_view_get_stats(view: *mut c_void, out: *mut crate::view::ViewStats);
 
+    // ── Gesture / touch thresholds (TODO §1) ─────────────────────────────────
+    pub fn dm_noesis_view_set_holding_time_threshold(view: *mut c_void, ms: u32);
+    pub fn dm_noesis_view_set_holding_distance_threshold(view: *mut c_void, pixels: u32);
+    pub fn dm_noesis_view_set_manipulation_distance_threshold(view: *mut c_void, pixels: u32);
+    pub fn dm_noesis_view_set_double_tap_time_threshold(view: *mut c_void, ms: u32);
+    pub fn dm_noesis_view_set_double_tap_distance_threshold(view: *mut c_void, pixels: u32);
+    pub fn dm_noesis_view_set_emulate_touch(view: *mut c_void, emulate: bool);
+
+    // ── Stereo / VR (TODO §1) ────────────────────────────────────────────────
+    pub fn dm_noesis_view_set_stereo_offscreen_scale_factor(view: *mut c_void, factor: f32);
+
     // ── View-driven timers (TODO §1) ─────────────────────────────────────────
     pub fn dm_noesis_view_create_timer(
         view: *mut c_void,
@@ -202,6 +229,15 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn dm_noesis_view_restart_timer(token: *mut c_void, interval_ms: u32);
     pub fn dm_noesis_view_cancel_timer(token: *mut c_void);
+
+    // ── Rendering event (TODO §1) ────────────────────────────────────────────
+    pub fn dm_noesis_view_add_rendering_handler(
+        view: *mut c_void,
+        cb: RenderingFn,
+        userdata: *mut c_void,
+        free_handler: RenderingFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_view_remove_rendering_handler(token: *mut c_void);
 
     pub fn dm_noesis_framework_element_find_name(
         element: *mut c_void,
@@ -951,6 +987,17 @@ pub type TimerFn = unsafe extern "C" fn(userdata: *mut c_void) -> u32;
 /// C++ `RustTimer` destroyed). Frees the donated `userdata`. Mirrors
 /// [`CommandFreeFn`].
 pub type TimerFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+/// C callback fired on each `IView::Rendering` event (the
+/// `dm_noesis_view_add_rendering_handler` path). `view` is the borrowed `IView*`
+/// raising the event (do not release). Fires on the view-driving thread — same
+/// threading contract as [`TimerFn`].
+pub type RenderingFn = unsafe extern "C" fn(userdata: *mut c_void, view: *mut c_void);
+
+/// C callback invoked exactly once when a Rendering handler token is removed
+/// (the C++ handler destroyed). Frees the donated `userdata`. Mirrors
+/// [`TimerFreeFn`].
+pub type RenderingFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Custom XAML class registration (Phase 5.C). See cpp/noesis_shim.h for the

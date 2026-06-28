@@ -192,6 +192,17 @@ extern "C" void dm_noesis_view_destroy(void* view) {
     static_cast<Noesis::IView*>(view)->Release();
 }
 
+// Add a +1 reference to an IView and return it. Lets an owned renderer handle
+// keep the view (and the IRenderer it owns) alive independently of the View
+// wrapper, so the two can drive different threads (Update on the UI thread;
+// UpdateRenderTree / Render on the render thread). Balance with
+// dm_noesis_view_destroy. No-op (returns NULL) on a NULL view.
+extern "C" void* dm_noesis_view_add_reference(void* view) {
+    if (!view) return nullptr;
+    static_cast<Noesis::IView*>(view)->AddReference();
+    return view;
+}
+
 // ── View setters ───────────────────────────────────────────────────────────
 
 extern "C" void dm_noesis_view_set_size(void* view, uint32_t width, uint32_t height) {
@@ -257,6 +268,33 @@ extern "C" bool dm_noesis_renderer_render_offscreen(void* renderer) {
 
 extern "C" void dm_noesis_renderer_render(void* renderer, bool flip_y, bool clear) {
     static_cast<Noesis::IRenderer*>(renderer)->Render(flip_y, clear);
+}
+
+// ── Stereo / VR rendering (TODO §1) ─────────────────────────────────────────
+// `RenderStereo` overloads (the non-deprecated VR path). Each eye matrix is a
+// row-major 4×4 read straight from 16 Rust floats, same layout convention as
+// dm_noesis_view_set_projection_matrix. Culling always uses the view's
+// projection matrix, so the eye matrices must be enclosed by it.
+
+// Multi-pass stereo: one eye per call (call twice, once per eye, into the
+// matching render target).
+extern "C" void dm_noesis_renderer_render_stereo(
+    void* renderer, const float* eye_matrix, bool flip_y, bool clear)
+{
+    if (!renderer || !eye_matrix) return;
+    Noesis::Matrix4 eye(eye_matrix);
+    static_cast<Noesis::IRenderer*>(renderer)->RenderStereo(eye, flip_y, clear);
+}
+
+// Single-pass stereo: both eyes in one call (e.g. multiview / instanced VR).
+extern "C" void dm_noesis_renderer_render_stereo_both(
+    void* renderer, const float* left_eye_matrix, const float* right_eye_matrix,
+    bool flip_y, bool clear)
+{
+    if (!renderer || !left_eye_matrix || !right_eye_matrix) return;
+    Noesis::Matrix4 left(left_eye_matrix);
+    Noesis::Matrix4 right(right_eye_matrix);
+    static_cast<Noesis::IRenderer*>(renderer)->RenderStereo(left, right, flip_y, clear);
 }
 
 // ── View input ─────────────────────────────────────────────────────────────
@@ -413,6 +451,48 @@ extern "C" float dm_noesis_view_get_tessellation_max_pixel_error(void* view) {
     return static_cast<Noesis::IView*>(view)->GetTessellationMaxPixelError().error;
 }
 
+// ── Gesture / touch thresholds (TODO §1) ───────────────────────────────────
+// Pure pass-through setters; all are no-ops on a null view.
+
+extern "C" void dm_noesis_view_set_holding_time_threshold(void* view, uint32_t ms) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetHoldingTimeThreshold(ms);
+}
+
+extern "C" void dm_noesis_view_set_holding_distance_threshold(void* view, uint32_t pixels) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetHoldingDistanceThreshold(pixels);
+}
+
+extern "C" void dm_noesis_view_set_manipulation_distance_threshold(void* view, uint32_t pixels) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetManipulationDistanceThreshold(pixels);
+}
+
+extern "C" void dm_noesis_view_set_double_tap_time_threshold(void* view, uint32_t ms) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetDoubleTapTimeThreshold(ms);
+}
+
+extern "C" void dm_noesis_view_set_double_tap_distance_threshold(void* view, uint32_t pixels) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetDoubleTapDistanceThreshold(pixels);
+}
+
+extern "C" void dm_noesis_view_set_emulate_touch(void* view, bool emulate) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetEmulateTouch(emulate);
+}
+
+// ── Stereo / VR (TODO §1) ──────────────────────────────────────────────────
+// Adjusts the offscreen-phase scale used when stereo eye matrices differ from
+// the view projection. Must be 1.0 for non-VR; 2–3 is recommended for VR.
+
+extern "C" void dm_noesis_view_set_stereo_offscreen_scale_factor(void* view, float factor) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetStereoOffscreenScaleFactor(factor);
+}
+
 // The C ABI struct mirrors `Noesis::ViewStats` field-for-field; guard the size
 // so a future SDK field addition can't silently desync the copy below.
 static_assert(sizeof(dm_noesis_view_stats) == sizeof(Noesis::ViewStats),
@@ -528,4 +608,69 @@ extern "C" void dm_noesis_view_cancel_timer(void* token) {
         v->CancelTimer(timer->id());
     }
     delete timer;  // dtor frees the donated userdata + releases the view ref.
+}
+
+// ── Rendering event (TODO §1) ──────────────────────────────────────────────
+
+namespace {
+
+// Trampoline for `IView::Rendering()` — a `Delegate<void(IView*)>` fired after
+// animation/layout, just before the composition tree is rendered. Lifetime
+// mirrors RustTimer: the donated Rust handler box is owned here and freed via
+// `mFree` in the destructor exactly once, and a +1 ref on the IView keeps the
+// handle safely usable until it is removed. The Delegate is registered with
+// `+=` on construction and detached with `-=` on destruction, so the bound
+// object must (and does, via the Rust RAII handle) outlive registration.
+class RustRenderingHandler {
+public:
+    RustRenderingHandler(Noesis::IView* view, dm_noesis_rendering_fn cb,
+                         void* userdata, dm_noesis_rendering_free_fn free_handler)
+        : mView(view), mCb(cb), mUserdata(userdata), mFree(free_handler)
+    {
+        mView->AddReference();
+        mView->Rendering() += Noesis::MakeDelegate(this, &RustRenderingHandler::OnRendering);
+    }
+
+    ~RustRenderingHandler() {
+        mView->Rendering() -= Noesis::MakeDelegate(this, &RustRenderingHandler::OnRendering);
+        // Donated ownership: drop the Rust handler box here, exactly once.
+        void* ud = mUserdata;
+        mUserdata = nullptr;
+        if (mFree && ud) {
+            mFree(ud);
+        }
+        mView->Release();
+    }
+
+    RustRenderingHandler(const RustRenderingHandler&) = delete;
+    RustRenderingHandler& operator=(const RustRenderingHandler&) = delete;
+
+private:
+    void OnRendering(Noesis::IView* view) {
+        if (mCb) {
+            mCb(mUserdata, view);
+        }
+    }
+
+    Noesis::IView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
+    dm_noesis_rendering_fn mCb;
+    void* mUserdata;
+    dm_noesis_rendering_free_fn mFree;
+};
+
+}  // namespace
+
+extern "C" void* dm_noesis_view_add_rendering_handler(
+    void* view, dm_noesis_rendering_fn cb, void* userdata,
+    dm_noesis_rendering_free_fn free_handler)
+{
+    if (!view || !cb) return nullptr;
+    auto* v = static_cast<Noesis::IView*>(view);
+    return new RustRenderingHandler(v, cb, userdata, free_handler);
+}
+
+extern "C" void dm_noesis_view_remove_rendering_handler(void* token) {
+    if (!token) return;
+    // dtor detaches the delegate, frees the donated userdata, releases the ref.
+    delete static_cast<RustRenderingHandler*>(token);
 }

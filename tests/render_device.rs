@@ -8,7 +8,7 @@
 //! Requires the `test-utils` Cargo feature:
 //!
 //! ```sh
-//! NOESIS_SDK_DIR=~/deadmoney/sdk/noesis-3.2.12 \
+//! NOESIS_SDK_DIR=~/deadmoney/sdk/noesis-3.2.13 \
 //!   cargo test --features test-utils --test render_device
 //! ```
 
