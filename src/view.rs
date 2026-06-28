@@ -22,8 +22,7 @@ use crate::ffi::{
     dm_noesis_base_component_release, dm_noesis_focus_element,
     dm_noesis_framework_element_find_name, dm_noesis_framework_element_get_name,
     dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_visibility,
-    dm_noesis_gui_load_xaml, dm_noesis_path_set_points,
-    dm_noesis_renderer_init,
+    dm_noesis_gui_load_xaml, dm_noesis_path_set_points, dm_noesis_renderer_init,
     dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
     dm_noesis_renderer_update_render_tree, dm_noesis_text_caret_to_end, dm_noesis_text_get,
     dm_noesis_text_set, dm_noesis_view_activate, dm_noesis_view_char, dm_noesis_view_create,
@@ -33,8 +32,7 @@ use crate::ffi::{
     dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_move, dm_noesis_view_mouse_wheel,
     dm_noesis_view_scroll, dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix,
     dm_noesis_view_set_scale, dm_noesis_view_set_size, dm_noesis_view_touch_down,
-    dm_noesis_view_touch_move,
-    dm_noesis_view_touch_up, dm_noesis_view_update,
+    dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
 };
 use crate::render_device::Registered as RegisteredDevice;
 
@@ -231,7 +229,9 @@ impl FrameworkElement {
         // call and is exactly `2*count` contiguous f32s; the C side null-checks,
         // DynamicCasts to Path, and copies the points into a Noesis-owned
         // StreamGeometry before returning.
-        unsafe { dm_noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count) }
+        unsafe {
+            dm_noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count)
+        }
     }
 }
 
