@@ -2,17 +2,13 @@
 
 Rust bindings for the [Noesis GUI Native SDK](https://www.noesisengine.com/), which brings XAML-driven UI to game engines. You load `.xaml` scenes, drive the View and renderer, implement a `RenderDevice` against your own GPU, and write Rust-backed custom controls and markup extensions that XAML can use by name.
 
-The crate is renderer-agnostic. Bevy 0.18 integration lives in the sibling crate [`dm_noesis_bevy`](https://github.com/dead-money/dm_noesis_bevy).
-
-> **Status.** This crate is built for Dead Money's own game projects and was mostly written by AI agents (Claude Code) under human direction. It's published for transparency and internal use, not as a polished third-party library. Interfaces will change and not everything is well-tested, so expect to read some source and file the occasional issue.
+The crate is renderer-agnostic; Bevy 0.18 integration lives in the sibling crate [`dm_noesis_bevy`](https://github.com/dead-money/dm_noesis_bevy). It's built for Dead Money's own game projects and was mostly written by AI agents under human direction, so expect interfaces to change.
 
 ## You need a Noesis license
 
-This crate links against the Noesis Native SDK, which is closed-source commercial software from Noesis Technologies S.L. We don't redistribute it. You buy it separately and point `NOESIS_SDK_DIR` at your install.
+This crate links against the [Noesis Native SDK](https://www.noesisengine.com/), closed-source commercial software from Noesis Technologies S.L. We don't redistribute it. Buy it separately and point `NOESIS_SDK_DIR` at your install; the build script reads it at compile time and links `libNoesis` from the matching `Bin/<platform>/` directory.
 
-- Every developer building this crate needs the [Noesis Native SDK](https://www.noesisengine.com/) (Indie tier or higher). The build script reads `NOESIS_SDK_DIR` at compile time and links `libNoesis` from the matching `Bin/<platform>/` directory.
-- What you can do with binaries you ship depends on your Noesis license. Indie, Pro, and Enterprise have different terms. See the [Noesis pricing page](https://www.noesisengine.com/pricing.php).
-- Set `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to suppress the trial watermark. Without them the runtime still works but draws a "trial" banner.
+Set `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to apply your license. Without them the runtime works for a while, then blanks the view with a "Trial expired" message.
 
 ## Quick start
 
@@ -120,7 +116,7 @@ export NOESIS_SDK_DIR=~/sdks/noesis-3.2.12
 cargo test
 ```
 
-Optionally apply your Indie credentials to suppress the trial watermark:
+Optionally apply your license credentials (see above):
 
 ```sh
 export NOESIS_LICENSE_NAME=...
