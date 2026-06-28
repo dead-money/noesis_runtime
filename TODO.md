@@ -133,8 +133,6 @@ From `IntegrationAPI.h`, none are wired:
 
 ## 15. XAML loading variants
 
-- **`ParseXaml`** (parse from an in-memory string, not just a URI). Cheap and broadly handy.
-- **`LoadComponent`** (load XAML into an existing component instance — code-behind pattern).
 - **`LoadXaml<T>`** typed variants and `GetXamlDependencies` (asset dependency discovery / preloading).
 - **Scheme / assembly-scoped providers.** `SetSchemeXamlProvider`, `SetAssemblyXamlProvider`, and the texture/font equivalents.
 
@@ -148,7 +146,6 @@ From `IntegrationAPI.h`, none are wired:
 
 ## 17. Diagnostics & tooling
 
-- **Inspector / hot-reload.** `DisableHotReload`, `DisableInspector`, `IsInspectorConnected`, `UpdateInspector`, `DisableSocketInit` — we likely want to *enable* the inspector for debugging. Cheap dev-experience win.
 - **Profiling.** `CpuProfiler`, `ViewStats` overlay (see §1), memory usage queries.
 - **Logging** has a handler; structured log levels / categories could be richer.
 
@@ -168,7 +165,7 @@ primitives first, big rocks once their prerequisites exist. Each phase is a natu
 **Phase A — finish the core + cheap wins.**
 1. §3 `RelativeSource FindAncestor` + `BindingExpression` `UpdateSource`/`UpdateTarget`, and §5 `Initialized`/`LayoutUpdated`/`Is*Changed` — all cheap, complementary; one small PR.
 2. §1 View timers (`CreateTimer`) + `RenderFlags`/`ViewStats`/quality. **Timers unlock §2 queued-invoke and §6 animation**, so do them before those.
-3. §15 `ParseXaml` (+ `LoadComponent`) and §17 inspector-enable — both cheap and broadly useful for dev/tests.
+3. ~~§15 `ParseXaml` (+ `LoadComponent`) and §17 inspector-enable — both cheap and broadly useful for dev/tests.~~
 
 **Phase B — presentation.**
 4. §7 Styles / resources / templates (`FindResource`, `DataTemplate`/`ControlTemplate` from code) — needed to theme and to render bound collections meaningfully.

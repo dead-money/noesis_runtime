@@ -4,6 +4,7 @@
 #include <NsCore/Init.h>
 #include <NsCore/Log.h>
 #include <NsCore/Version.h>
+#include <NsGui/IntegrationAPI.h>
 
 namespace {
 
@@ -33,6 +34,38 @@ extern "C" void dm_noesis_set_log_handler(dm_noesis_log_fn cb, void* userdata)
     g_log_cb       = cb;
     g_log_userdata = userdata;
     Noesis::SetLogHandler(cb ? log_trampoline : nullptr);
+}
+
+// ── Inspector / hot-reload toggles + queries (TODO §17) ─────────────────────
+//
+// All GUI:: free calls. The Disable* trio MUST run before GUI::Init (i.e.
+// before dm_noesis_init); the query + pump are runtime calls. On a Release
+// dylib the Inspector is compiled out, so these degrade to no-ops /
+// always-false — see the header for the full reality check.
+
+extern "C" void dm_noesis_disable_hot_reload(void)
+{
+    Noesis::GUI::DisableHotReload();
+}
+
+extern "C" void dm_noesis_disable_socket_init(void)
+{
+    Noesis::GUI::DisableSocketInit();
+}
+
+extern "C" void dm_noesis_disable_inspector(void)
+{
+    Noesis::GUI::DisableInspector();
+}
+
+extern "C" bool dm_noesis_is_inspector_connected(void)
+{
+    return Noesis::GUI::IsInspectorConnected();
+}
+
+extern "C" void dm_noesis_update_inspector(void)
+{
+    Noesis::GUI::UpdateInspector();
 }
 
 extern "C" void dm_noesis_init(void)

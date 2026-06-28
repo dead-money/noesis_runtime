@@ -32,7 +32,7 @@ use crate::ffi::{
     dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
     dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
     dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
-    dm_noesis_gui_load_xaml, dm_noesis_items_control_items_count,
+    dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml, dm_noesis_items_control_items_count,
     dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
     dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_path_set_points,
     dm_noesis_renderer_init, dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
@@ -87,6 +87,30 @@ impl FrameworkElement {
         // SAFETY: c.as_ptr() is valid for the duration of the call; the
         // C ABI just copies into Noesis::Uri.
         let ptr = unsafe { dm_noesis_gui_load_xaml(c.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Parse XAML directly from an in-memory string, without needing a
+    /// [`XamlProvider`] or a URI. Returns `None` when the XAML is malformed
+    /// or when the parsed root is not a `FrameworkElement` (e.g. a bare
+    /// `ResourceDictionary` — use the application-resources helpers for those).
+    ///
+    /// This is the in-memory sibling of [`FrameworkElement::load`]: it backs
+    /// `GUI::ParseXaml`. The returned element holds an independent `+1`
+    /// reference, released on drop like any other `FrameworkElement` wrapper.
+    ///
+    /// [`XamlProvider`]: crate::xaml_provider::XamlProvider
+    ///
+    /// # Panics
+    ///
+    /// Panics if `xaml` contains an interior NUL byte.
+    #[must_use]
+    pub fn parse(xaml: &str) -> Option<Self> {
+        let c = CString::new(xaml).expect("xaml contained interior NUL");
+        // SAFETY: c.as_ptr() is valid for the duration of the call; the C ABI
+        // only reads the bytes while parsing (synchronously). The result is a
+        // freshly-created FrameworkElement* at +1, which `Self`'s Drop releases.
+        let ptr = unsafe { dm_noesis_gui_parse_xaml(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 

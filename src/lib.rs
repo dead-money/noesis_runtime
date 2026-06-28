@@ -39,6 +39,68 @@ pub fn set_license(name: &str, key: &str) {
     unsafe { ffi::dm_noesis_set_license(n.as_ptr(), k.as_ptr()) }
 }
 
+/// Disable the Hot Reload feature before [`init`]. Hot Reload is on by default
+/// in Debug/Profile SDK builds and costs a little extra memory; disabling it is
+/// purely an optimization. No-op once [`init`] has run, and a no-op on a
+/// Release dylib where the feature is compiled out.
+///
+/// Part of the inspector / hot-reload control surface (see
+/// [`disable_inspector`], [`disable_socket_init`], [`is_inspector_connected`],
+/// [`update_inspector`]). There is intentionally no `enable_*` counterpart:
+/// these features default on in instrumented SDK builds, so we only expose the
+/// off switches plus the runtime queries.
+///
+/// Must be called **before** [`init`].
+pub fn disable_hot_reload() {
+    // SAFETY: a pre-init GUI:: free call with no arguments or preconditions
+    // beyond "call before Init", which is the caller's contract.
+    unsafe { ffi::dm_noesis_disable_hot_reload() }
+}
+
+/// Skip the Inspector's socket initialization (e.g. `WSAStartup` on Windows)
+/// before [`init`]. Use this only when the host process has already initialized
+/// sockets itself, to avoid a double init. No-op after [`init`] / on a Release
+/// dylib.
+///
+/// Must be called **before** [`init`].
+pub fn disable_socket_init() {
+    // SAFETY: pre-init GUI:: free call; see `disable_hot_reload`.
+    unsafe { ffi::dm_noesis_disable_socket_init() }
+}
+
+/// Disable all remote Inspector connections before [`init`]. The Inspector is
+/// enabled by default in Debug/Profile SDK builds (it opens a socket and waits
+/// for the remote tool); call this to keep it off. No-op after [`init`] / on a
+/// Release dylib where the Inspector is compiled out.
+///
+/// Must be called **before** [`init`].
+pub fn disable_inspector() {
+    // SAFETY: pre-init GUI:: free call; see `disable_hot_reload`.
+    unsafe { ffi::dm_noesis_disable_inspector() }
+}
+
+/// Returns whether a remote Inspector is currently connected.
+///
+/// Always `false` when nothing is attached, and always `false` on a Release
+/// dylib (the Inspector is compiled out of Release SDK builds). The value of
+/// exposing it is the query itself plus the [`update_inspector`] pump for hosts
+/// running an instrumented build.
+#[must_use]
+pub fn is_inspector_connected() -> bool {
+    // SAFETY: runtime GUI:: query; safe to call any time, returns false if the
+    // Inspector subsystem is absent.
+    unsafe { ffi::dm_noesis_is_inspector_connected() }
+}
+
+/// Keep the Inspector connection alive. [`crate::view::View`] updates call this
+/// internally, so it is only needed when the Inspector connects before any view
+/// exists. No-op on a Release dylib.
+pub fn update_inspector() {
+    // SAFETY: runtime GUI:: call; safe to call any time (no-op without an
+    // active Inspector connection).
+    unsafe { ffi::dm_noesis_update_inspector() }
+}
+
 /// Initialize Noesis subsystems. Call exactly once per process; Noesis does
 /// not support re-init after [`shutdown`].
 pub fn init() {

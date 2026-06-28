@@ -54,6 +54,30 @@ void dm_noesis_shutdown(void);
 // owned by the Noesis runtime; do not free.
 const char* dm_noesis_version(void);
 
+// ── Inspector / hot-reload toggles + queries (TODO §17) ─────────────────────
+//
+// The Disable* switches map to `GUI::Disable*` and MUST be called BEFORE
+// dm_noesis_init — they have no effect afterwards. There is no matching
+// "enable": the Inspector / Hot Reload are on by default in Debug/Profile SDK
+// builds; we only expose the off switches plus the runtime connection query
+// and keep-alive pump. On a Release dylib these features are compiled out, so
+// the Disable* calls are harmless no-ops and dm_noesis_is_inspector_connected
+// always returns false.
+
+// Disable the Hot Reload feature (saves a little memory). Call BEFORE init.
+void dm_noesis_disable_hot_reload(void);
+// Skip Inspector socket initialization (e.g. WSAStartup) when the host has
+// already initialized sockets. Call BEFORE init.
+void dm_noesis_disable_socket_init(void);
+// Disable all remote Inspector connections. Call BEFORE init.
+void dm_noesis_disable_inspector(void);
+// Returns whether a remote Inspector is currently connected. Always false on
+// a Release dylib (Inspector compiled out) or when nothing is attached.
+bool dm_noesis_is_inspector_connected(void);
+// Keep the Inspector connection alive. Views call this internally on update;
+// only needed if the Inspector connects before any view exists.
+void dm_noesis_update_inspector(void);
+
 // ── Render device (Phase 1) ────────────────────────────────────────────────
 //
 // The Rust side implements `Noesis::RenderDevice` by:
@@ -328,6 +352,20 @@ void dm_noesis_set_texture_provider(void* provider);
 // Load XAML by URI. Returns a FrameworkElement* (+1 ref), or NULL if the
 // resolved root isn't a FrameworkElement or the URI wasn't found.
 void* dm_noesis_gui_load_xaml(const char* uri);
+
+// Parse XAML from an in-memory NUL-terminated string (no XamlProvider URI
+// needed). Returns a FrameworkElement* (+1 ref), or NULL if `text` is NULL,
+// the XAML is malformed, or the parsed root isn't a FrameworkElement (e.g. a
+// bare ResourceDictionary). Release with dm_noesis_base_component_release.
+void* dm_noesis_gui_parse_xaml(const char* text);
+
+// Load the XAML at `uri` into an existing `component` instance — the
+// code-behind / x:Class pattern, where the root object already exists and
+// LoadComponent populates its children + named fields. `component` is an
+// opaque BaseComponent* (borrowed; ownership is not taken). Returns false if
+// either argument is NULL. Meaningful use requires the component's reflected
+// type to match the XAML root's x:Class.
+bool dm_noesis_gui_load_component(void* component, const char* uri);
 
 // Install an application-scope `ResourceDictionary` loaded from `uri`.
 // Replaces any previously-installed application resources. Styles and
