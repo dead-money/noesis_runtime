@@ -1,21 +1,25 @@
 [package]
 name = "noesis_runtime"
-version = "0.1.0"
+version = "0.9.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Brandon Reinhart <brandon@deadmoney.gg>"]
 description = "Rust bindings for the Noesis GUI Native SDK: load XAML UI, drive the view and renderer, and write custom controls in Rust. Renderer-agnostic; Bevy integration lives in noesis_bevy."
 repository = "https://github.com/dead-money/noesis_runtime"
+documentation = "https://docs.rs/noesis_runtime"
 license = "MIT"
 readme = "README.md"
 keywords = ["noesis", "xaml", "gui", "gamedev", "ui"]
 categories = ["external-ffi-bindings", "gui", "game-development", "graphics"]
 links = "Noesis"
-# Flip to true (or delete this line) to allow `cargo publish`. Kept false while
-# the API is still in flux.
-publish = false
 # Dev-only files that consumers of the published crate don't need.
-exclude = [".github/", ".claude/", "scripts/", "CLAUDE.md"]
+exclude = [".github/", ".claude/", "scripts/", "CLAUDE.md", "RELEASING.md", "release.toml"]
+
+# docs.rs has no Noesis SDK, so the native compile/link can't run there.
+# build.rs short-circuits on the DOCS_RS env var and rustdoc builds the API
+# without linking. all-features so the full surface is documented.
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
 default = []
@@ -24,7 +28,6 @@ default = []
 test-utils = []
 
 [dependencies]
-thiserror = "2"
 
 [build-dependencies]
 cc = "1"

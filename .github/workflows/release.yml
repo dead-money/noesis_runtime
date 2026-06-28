@@ -1,0 +1,34 @@
+name: Release
+
+# Publishes to crates.io when a version tag (vX.Y.Z) is pushed. cargo-release
+# creates and pushes that tag (see RELEASING.md). Runs on the self-hosted runner
+# that has the Noesis SDK, so `cargo publish` does a real verification build and
+# the full test suite gates the release.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write # required for crates.io Trusted Publishing (OIDC)
+
+jobs:
+  publish:
+    name: publish to crates.io
+    runs-on: [self-hosted, noesis-sdk]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: cargo test
+        run: cargo test --all-features
+
+      - name: Authenticate to crates.io (Trusted Publishing)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      - name: cargo publish
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
