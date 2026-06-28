@@ -73,15 +73,16 @@ the component-DP path, `FrameworkTemplate::FindName`) are wired (`src/resources.
 
 ## 8. Controls — programmatic access
 
-Only TextBox text is touched today. Best done incrementally, per control as a screen needs it.
+`Selector` selection (`SelectedIndex`/`SelectedItem`), `ItemsControl.Items` mutation, `RangeBase`
+values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `ScrollViewer` offsets +
+`ScrollTo*`, and `TextBox`/`PasswordBox` selection/caret are exposed (`src/view.rs` Controls §8 +
+`cpp/noesis_controls.cpp`). Remaining:
 
-- **Selection.** `Selector`/`ListBox`/`ComboBox`/`TabControl` `SelectedIndex`/`SelectedItem`/`SelectedValue`; `ListView`/`TreeView` selection.
-- **Items.** `ItemsControl::GetItems` add/remove/clear, `ItemsSource`, `ItemContainerGenerator`.
-- **Ranges.** `RangeBase` (`Slider`, `ProgressBar`, `ScrollBar`) `Value`/`Minimum`/`Maximum`.
-- **Toggles.** `ToggleButton`/`CheckBox`/`RadioButton` `IsChecked`.
-- **Text.** `PasswordBox`, `TextBox` selection/caret beyond end, `BaseTextBox` selection range, `FormattedText`.
-- **Popups/overlays.** `Popup` IsOpen, `ContextMenu`, `ToolTip`/`ToolTipService`, `Expander` IsExpanded.
-- **Scrolling.** `ScrollViewer` offsets / `IScrollInfo`, `ScrollToHorizontalOffset` etc.
+- **Selection.** `Selector::SelectedValue`/`SelectedValuePath`; `TreeView` selection; `ListView` columns.
+- **Items.** `ItemContainerGenerator` deep access (container ⇄ item ⇄ index mapping).
+- **Text.** `FormattedText` (its own large feature).
+- **Popups/overlays.** `ContextMenu`, `ToolTip`/`ToolTipService`.
+- **Scrolling.** Direct `IScrollInfo` and the line/page-scroll methods (`LineUp`/`PageDown`/…).
 - **`Image` / `MediaElement`-style** source assignment from code.
 
 ## 9. Custom types / reflection registration
