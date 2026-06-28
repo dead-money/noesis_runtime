@@ -130,7 +130,7 @@ export NOESIS_LICENSE_KEY=...
 
 ## Licensing
 
-Source in this repository is © 2026 Dead Money and is distributed under the [MIT License](./LICENSE). Everything under `cpp/`, `src/`, and `tests/` is original work. No Noesis SDK code is vendored or translated; it's only `#include`'d at compile time from `NOESIS_SDK_DIR`.
+Source in this repository is © 2026 Dead Money LLC and is distributed under the [MIT License](./LICENSE). Everything under `cpp/`, `src/`, and `tests/` is original work. No Noesis SDK code is vendored or translated; it's only `#include`'d at compile time from `NOESIS_SDK_DIR`.
 
 The Noesis Native SDK is not part of this repository and is not redistributed here. You obtain it from Noesis Technologies under their EULA. Use and distribution of any binary you build that links against the SDK is governed by that EULA, not by the MIT License above.
 

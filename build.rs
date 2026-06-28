@@ -35,6 +35,15 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_integration.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_diagnostics.cpp");
 
+    // docs.rs builds in a sandbox without the proprietary Noesis SDK, so there is
+    // no NOESIS_SDK_DIR and no libNoesis to link against. The crate's surface is
+    // all FFI declarations that type-check without linking, so skip the native
+    // compile and link directives and let rustdoc build the docs. docs.rs sets
+    // DOCS_RS in the build environment; set it locally to preview that build.
+    if env::var_os("DOCS_RS").is_some() {
+        return;
+    }
+
     let sdk_dir = env::var("NOESIS_SDK_DIR").unwrap_or_else(|_| {
         panic!(
             "\n\nNOESIS_SDK_DIR is not set.\n\
