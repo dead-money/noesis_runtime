@@ -550,6 +550,15 @@ bool dm_noesis_focus_element(void* element);
 // Returns `false` for null/short input or an element that is not a `Path`.
 bool dm_noesis_path_set_points(void* element, const float* xy, uint32_t count);
 
+// Transition a templated control to the visual state named `state` via
+// `VisualStateManager::GoToState`, optionally running the state's
+// VisualTransition (`use_transitions`). `element` is DynamicCast to
+// `FrameworkElement*`; GoToState only finds state groups on a control's
+// ControlTemplate, so a non-templated element or an unknown state name both
+// return `false`. Returns `false` for null input as well.
+bool dm_noesis_visual_state_go_to_state(
+    void* element, const char* state, bool use_transitions);
+
 // ── Custom XAML class registration (Phase 5.C) ─────────────────────────────
 //
 // Register Rust-backed types so XAML can instantiate them by name (`<aor:Foo>`)
