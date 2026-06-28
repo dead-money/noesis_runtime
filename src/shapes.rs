@@ -30,23 +30,23 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::brushes::Brush;
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_ellipse_create, dm_noesis_line_create,
-    dm_noesis_line_get, dm_noesis_line_set, dm_noesis_rectangle_create,
-    dm_noesis_rectangle_get_radius_x, dm_noesis_rectangle_get_radius_y,
-    dm_noesis_rectangle_set_radius_x, dm_noesis_rectangle_set_radius_y, dm_noesis_shape_get_fill,
-    dm_noesis_shape_get_height, dm_noesis_shape_get_stretch, dm_noesis_shape_get_stroke,
-    dm_noesis_shape_get_stroke_dash_array, dm_noesis_shape_get_stroke_dash_cap,
-    dm_noesis_shape_get_stroke_dash_offset, dm_noesis_shape_get_stroke_end_line_cap,
-    dm_noesis_shape_get_stroke_line_join, dm_noesis_shape_get_stroke_miter_limit,
-    dm_noesis_shape_get_stroke_start_line_cap, dm_noesis_shape_get_stroke_thickness,
-    dm_noesis_shape_get_trim_end, dm_noesis_shape_get_trim_offset, dm_noesis_shape_get_trim_start,
-    dm_noesis_shape_get_width, dm_noesis_shape_set_fill, dm_noesis_shape_set_height,
-    dm_noesis_shape_set_stretch, dm_noesis_shape_set_stroke, dm_noesis_shape_set_stroke_dash_array,
-    dm_noesis_shape_set_stroke_dash_cap, dm_noesis_shape_set_stroke_dash_offset,
-    dm_noesis_shape_set_stroke_end_line_cap, dm_noesis_shape_set_stroke_line_join,
-    dm_noesis_shape_set_stroke_miter_limit, dm_noesis_shape_set_stroke_start_line_cap,
-    dm_noesis_shape_set_stroke_thickness, dm_noesis_shape_set_trim_end,
-    dm_noesis_shape_set_trim_offset, dm_noesis_shape_set_trim_start, dm_noesis_shape_set_width,
+    noesis_base_component_release, noesis_ellipse_create, noesis_line_create,
+    noesis_line_get, noesis_line_set, noesis_rectangle_create,
+    noesis_rectangle_get_radius_x, noesis_rectangle_get_radius_y,
+    noesis_rectangle_set_radius_x, noesis_rectangle_set_radius_y, noesis_shape_get_fill,
+    noesis_shape_get_height, noesis_shape_get_stretch, noesis_shape_get_stroke,
+    noesis_shape_get_stroke_dash_array, noesis_shape_get_stroke_dash_cap,
+    noesis_shape_get_stroke_dash_offset, noesis_shape_get_stroke_end_line_cap,
+    noesis_shape_get_stroke_line_join, noesis_shape_get_stroke_miter_limit,
+    noesis_shape_get_stroke_start_line_cap, noesis_shape_get_stroke_thickness,
+    noesis_shape_get_trim_end, noesis_shape_get_trim_offset, noesis_shape_get_trim_start,
+    noesis_shape_get_width, noesis_shape_set_fill, noesis_shape_set_height,
+    noesis_shape_set_stretch, noesis_shape_set_stroke, noesis_shape_set_stroke_dash_array,
+    noesis_shape_set_stroke_dash_cap, noesis_shape_set_stroke_dash_offset,
+    noesis_shape_set_stroke_end_line_cap, noesis_shape_set_stroke_line_join,
+    noesis_shape_set_stroke_miter_limit, noesis_shape_set_stroke_start_line_cap,
+    noesis_shape_set_stroke_thickness, noesis_shape_set_trim_end,
+    noesis_shape_set_trim_offset, noesis_shape_set_trim_start, noesis_shape_set_width,
 };
 
 /// How the ends of a dash (or a line) are drawn. Ordinals mirror
@@ -123,7 +123,7 @@ pub trait Shape {
     /// "auto").
     fn set_width(&mut self, width: f32) {
         // SAFETY: shape_raw() is a live Shape*/FrameworkElement*.
-        unsafe { dm_noesis_shape_set_width(self.shape_raw(), width) };
+        unsafe { noesis_shape_set_width(self.shape_raw(), width) };
     }
 
     /// Read the element's explicit `Width` back from the live object.
@@ -131,14 +131,14 @@ pub trait Shape {
     fn width(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is a valid f32 slot.
-        unsafe { dm_noesis_shape_get_width(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_width(self.shape_raw(), &mut out) };
         out
     }
 
     /// Set the element's explicit `Height` (`NaN` == "auto").
     fn set_height(&mut self, height: f32) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_height(self.shape_raw(), height) };
+        unsafe { noesis_shape_set_height(self.shape_raw(), height) };
     }
 
     /// Read the element's explicit `Height` back from the live object.
@@ -146,7 +146,7 @@ pub trait Shape {
     fn height(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is a valid f32 slot.
-        unsafe { dm_noesis_shape_get_height(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_height(self.shape_raw(), &mut out) };
         out
     }
 
@@ -155,13 +155,13 @@ pub trait Shape {
     fn set_fill<B: Brush>(&mut self, brush: &B) {
         // SAFETY: shape_raw() is live; brush_raw() is a live Brush* borrowed for
         // the call; Noesis stores its own reference.
-        unsafe { dm_noesis_shape_set_fill(self.shape_raw(), brush.brush_raw()) };
+        unsafe { noesis_shape_set_fill(self.shape_raw(), brush.brush_raw()) };
     }
 
     /// Clear the shape's `Fill`.
     fn clear_fill(&mut self) {
         // SAFETY: shape_raw() is live; a null brush clears the property.
-        unsafe { dm_noesis_shape_set_fill(self.shape_raw(), core::ptr::null_mut()) };
+        unsafe { noesis_shape_set_fill(self.shape_raw(), core::ptr::null_mut()) };
     }
 
     /// Borrowed `Brush*` currently set as `Fill`, or null if unset. Returned
@@ -170,32 +170,32 @@ pub trait Shape {
     #[must_use]
     fn fill_raw(&self) -> *mut c_void {
         // SAFETY: shape_raw() is live; the returned pointer is borrowed.
-        unsafe { dm_noesis_shape_get_fill(self.shape_raw()) }
+        unsafe { noesis_shape_get_fill(self.shape_raw()) }
     }
 
     /// Paint the shape's outline with `brush`.
     fn set_stroke<B: Brush>(&mut self, brush: &B) {
         // SAFETY: shape_raw() is live; brush_raw() is a live Brush* for the call.
-        unsafe { dm_noesis_shape_set_stroke(self.shape_raw(), brush.brush_raw()) };
+        unsafe { noesis_shape_set_stroke(self.shape_raw(), brush.brush_raw()) };
     }
 
     /// Clear the shape's `Stroke`.
     fn clear_stroke(&mut self) {
         // SAFETY: shape_raw() is live; a null brush clears the property.
-        unsafe { dm_noesis_shape_set_stroke(self.shape_raw(), core::ptr::null_mut()) };
+        unsafe { noesis_shape_set_stroke(self.shape_raw(), core::ptr::null_mut()) };
     }
 
     /// Borrowed `Brush*` currently set as `Stroke`, or null if unset.
     #[must_use]
     fn stroke_raw(&self) -> *mut c_void {
         // SAFETY: shape_raw() is live; the returned pointer is borrowed.
-        unsafe { dm_noesis_shape_get_stroke(self.shape_raw()) }
+        unsafe { noesis_shape_get_stroke(self.shape_raw()) }
     }
 
     /// Set the outline width.
     fn set_stroke_thickness(&mut self, value: f32) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stroke_thickness(self.shape_raw(), value) };
+        unsafe { noesis_shape_set_stroke_thickness(self.shape_raw(), value) };
     }
 
     /// Read the outline width back from the live object.
@@ -203,14 +203,14 @@ pub trait Shape {
     fn stroke_thickness(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is valid.
-        unsafe { dm_noesis_shape_get_stroke_thickness(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_stroke_thickness(self.shape_raw(), &mut out) };
         out
     }
 
     /// Set the miter-length limit (ratio to half the `StrokeThickness`).
     fn set_stroke_miter_limit(&mut self, value: f32) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stroke_miter_limit(self.shape_raw(), value) };
+        unsafe { noesis_shape_set_stroke_miter_limit(self.shape_raw(), value) };
     }
 
     /// Read the miter limit back from the live object.
@@ -218,14 +218,14 @@ pub trait Shape {
     fn stroke_miter_limit(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is valid.
-        unsafe { dm_noesis_shape_get_stroke_miter_limit(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_stroke_miter_limit(self.shape_raw(), &mut out) };
         out
     }
 
     /// Set the distance into the dash pattern at which a dash begins.
     fn set_stroke_dash_offset(&mut self, value: f32) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stroke_dash_offset(self.shape_raw(), value) };
+        unsafe { noesis_shape_set_stroke_dash_offset(self.shape_raw(), value) };
     }
 
     /// Read the dash offset back from the live object.
@@ -233,14 +233,14 @@ pub trait Shape {
     fn stroke_dash_offset(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is valid.
-        unsafe { dm_noesis_shape_get_stroke_dash_offset(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_stroke_dash_offset(self.shape_raw(), &mut out) };
         out
     }
 
     /// Set the amount to trim from the start of the geometry path (`0..=1`).
     fn set_trim_start(&mut self, value: f32) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_trim_start(self.shape_raw(), value) };
+        unsafe { noesis_shape_set_trim_start(self.shape_raw(), value) };
     }
 
     /// Read the trim-start back from the live object.
@@ -248,14 +248,14 @@ pub trait Shape {
     fn trim_start(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is valid.
-        unsafe { dm_noesis_shape_get_trim_start(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_trim_start(self.shape_raw(), &mut out) };
         out
     }
 
     /// Set the amount to trim from the end of the geometry path (`0..=1`).
     fn set_trim_end(&mut self, value: f32) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_trim_end(self.shape_raw(), value) };
+        unsafe { noesis_shape_set_trim_end(self.shape_raw(), value) };
     }
 
     /// Read the trim-end back from the live object.
@@ -263,14 +263,14 @@ pub trait Shape {
     fn trim_end(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is valid.
-        unsafe { dm_noesis_shape_get_trim_end(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_trim_end(self.shape_raw(), &mut out) };
         out
     }
 
     /// Set the amount to offset trimming the geometry path.
     fn set_trim_offset(&mut self, value: f32) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_trim_offset(self.shape_raw(), value) };
+        unsafe { noesis_shape_set_trim_offset(self.shape_raw(), value) };
     }
 
     /// Read the trim-offset back from the live object.
@@ -278,27 +278,27 @@ pub trait Shape {
     fn trim_offset(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: shape_raw() is live; `out` is valid.
-        unsafe { dm_noesis_shape_get_trim_offset(self.shape_raw(), &mut out) };
+        unsafe { noesis_shape_get_trim_offset(self.shape_raw(), &mut out) };
         out
     }
 
     /// Set the cap drawn at the ends of each dash.
     fn set_stroke_dash_cap(&mut self, cap: PenLineCap) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stroke_dash_cap(self.shape_raw(), cap as i32) };
+        unsafe { noesis_shape_set_stroke_dash_cap(self.shape_raw(), cap as i32) };
     }
 
     /// Read the dash cap back from the live object (`None` if not a shape).
     #[must_use]
     fn stroke_dash_cap(&self) -> Option<PenLineCap> {
         // SAFETY: shape_raw() is live.
-        PenLineCap::from_ordinal(unsafe { dm_noesis_shape_get_stroke_dash_cap(self.shape_raw()) })
+        PenLineCap::from_ordinal(unsafe { noesis_shape_get_stroke_dash_cap(self.shape_raw()) })
     }
 
     /// Set the cap drawn at the start of the stroke.
     fn set_stroke_start_line_cap(&mut self, cap: PenLineCap) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stroke_start_line_cap(self.shape_raw(), cap as i32) };
+        unsafe { noesis_shape_set_stroke_start_line_cap(self.shape_raw(), cap as i32) };
     }
 
     /// Read the start line cap back from the live object.
@@ -306,14 +306,14 @@ pub trait Shape {
     fn stroke_start_line_cap(&self) -> Option<PenLineCap> {
         // SAFETY: shape_raw() is live.
         PenLineCap::from_ordinal(unsafe {
-            dm_noesis_shape_get_stroke_start_line_cap(self.shape_raw())
+            noesis_shape_get_stroke_start_line_cap(self.shape_raw())
         })
     }
 
     /// Set the cap drawn at the end of the stroke.
     fn set_stroke_end_line_cap(&mut self, cap: PenLineCap) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stroke_end_line_cap(self.shape_raw(), cap as i32) };
+        unsafe { noesis_shape_set_stroke_end_line_cap(self.shape_raw(), cap as i32) };
     }
 
     /// Read the end line cap back from the live object.
@@ -321,34 +321,34 @@ pub trait Shape {
     fn stroke_end_line_cap(&self) -> Option<PenLineCap> {
         // SAFETY: shape_raw() is live.
         PenLineCap::from_ordinal(unsafe {
-            dm_noesis_shape_get_stroke_end_line_cap(self.shape_raw())
+            noesis_shape_get_stroke_end_line_cap(self.shape_raw())
         })
     }
 
     /// Set the join used at the vertices of the stroke.
     fn set_stroke_line_join(&mut self, join: PenLineJoin) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stroke_line_join(self.shape_raw(), join as i32) };
+        unsafe { noesis_shape_set_stroke_line_join(self.shape_raw(), join as i32) };
     }
 
     /// Read the line join back from the live object.
     #[must_use]
     fn stroke_line_join(&self) -> Option<PenLineJoin> {
         // SAFETY: shape_raw() is live.
-        PenLineJoin::from_ordinal(unsafe { dm_noesis_shape_get_stroke_line_join(self.shape_raw()) })
+        PenLineJoin::from_ordinal(unsafe { noesis_shape_get_stroke_line_join(self.shape_raw()) })
     }
 
     /// Set how the shape stretches to fill its allocated space.
     fn set_stretch(&mut self, stretch: Stretch) {
         // SAFETY: shape_raw() is live.
-        unsafe { dm_noesis_shape_set_stretch(self.shape_raw(), stretch as i32) };
+        unsafe { noesis_shape_set_stretch(self.shape_raw(), stretch as i32) };
     }
 
     /// Read the stretch mode back from the live object.
     #[must_use]
     fn stretch(&self) -> Option<Stretch> {
         // SAFETY: shape_raw() is live.
-        Stretch::from_ordinal(unsafe { dm_noesis_shape_get_stretch(self.shape_raw()) })
+        Stretch::from_ordinal(unsafe { noesis_shape_get_stretch(self.shape_raw()) })
     }
 
     /// Set the dash pattern. Noesis exposes this as a space-separated string of
@@ -361,7 +361,7 @@ pub trait Shape {
         let c = CString::new(dashes).expect("dash array contained NUL");
         // SAFETY: shape_raw() is live; `c` outlives the call and the C side
         // copies it into the Noesis object.
-        unsafe { dm_noesis_shape_set_stroke_dash_array(self.shape_raw(), c.as_ptr()) };
+        unsafe { noesis_shape_set_stroke_dash_array(self.shape_raw(), c.as_ptr()) };
     }
 
     /// Read the dash pattern back from the live object as an owned `String`
@@ -370,7 +370,7 @@ pub trait Shape {
     fn stroke_dash_array(&self) -> String {
         // SAFETY: shape_raw() is live; the returned pointer is owned by the
         // Noesis object and valid until the next mutation — we copy immediately.
-        let p = unsafe { dm_noesis_shape_get_stroke_dash_array(self.shape_raw()) };
+        let p = unsafe { noesis_shape_get_stroke_dash_array(self.shape_raw()) };
         if p.is_null() {
             String::new()
         } else {
@@ -431,7 +431,7 @@ macro_rules! shape_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref we
                 // own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -439,20 +439,20 @@ macro_rules! shape_handle {
 
 shape_handle!(
     Rectangle,
-    dm_noesis_rectangle_create,
+    noesis_rectangle_create,
     "A `Rectangle` shape. Adds rounded-corner radii on top of the shared\n\
      [`Shape`] surface; its size comes from the inherited\n\
      [`Shape::set_width`]/[`Shape::set_height`]."
 );
 shape_handle!(
     Ellipse,
-    dm_noesis_ellipse_create,
+    noesis_ellipse_create,
     "An `Ellipse` shape. Carries only the shared [`Shape`] surface; its size\n\
      comes from the inherited [`Shape::set_width`]/[`Shape::set_height`]."
 );
 shape_handle!(
     Line,
-    dm_noesis_line_create,
+    noesis_line_create,
     "A `Line` shape defined by its two endpoints `(X1, Y1)`–`(X2, Y2)` in\n\
      addition to the shared [`Shape`] surface."
 );
@@ -461,7 +461,7 @@ impl Rectangle {
     /// Set the x-axis corner radius.
     pub fn set_radius_x(&mut self, value: f32) {
         // SAFETY: self.ptr is a live Rectangle*.
-        unsafe { dm_noesis_rectangle_set_radius_x(self.ptr.as_ptr(), value) };
+        unsafe { noesis_rectangle_set_radius_x(self.ptr.as_ptr(), value) };
     }
 
     /// Read the x-axis corner radius back from the live object.
@@ -469,14 +469,14 @@ impl Rectangle {
     pub fn radius_x(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: self.ptr is live; `out` is valid.
-        unsafe { dm_noesis_rectangle_get_radius_x(self.ptr.as_ptr(), &mut out) };
+        unsafe { noesis_rectangle_get_radius_x(self.ptr.as_ptr(), &mut out) };
         out
     }
 
     /// Set the y-axis corner radius.
     pub fn set_radius_y(&mut self, value: f32) {
         // SAFETY: self.ptr is a live Rectangle*.
-        unsafe { dm_noesis_rectangle_set_radius_y(self.ptr.as_ptr(), value) };
+        unsafe { noesis_rectangle_set_radius_y(self.ptr.as_ptr(), value) };
     }
 
     /// Read the y-axis corner radius back from the live object.
@@ -484,7 +484,7 @@ impl Rectangle {
     pub fn radius_y(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: self.ptr is live; `out` is valid.
-        unsafe { dm_noesis_rectangle_get_radius_y(self.ptr.as_ptr(), &mut out) };
+        unsafe { noesis_rectangle_get_radius_y(self.ptr.as_ptr(), &mut out) };
         out
     }
 }
@@ -493,7 +493,7 @@ impl Line {
     /// Set both endpoints at once: `(x1, y1)` start and `(x2, y2)` end.
     pub fn set_points(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
         // SAFETY: self.ptr is a live Line*.
-        unsafe { dm_noesis_line_set(self.ptr.as_ptr(), x1, y1, x2, y2) };
+        unsafe { noesis_line_set(self.ptr.as_ptr(), x1, y1, x2, y2) };
     }
 
     /// Read both endpoints back from the live object as `[x1, y1, x2, y2]`.
@@ -501,7 +501,7 @@ impl Line {
     pub fn points(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is live; `out` is a 4-float buffer.
-        unsafe { dm_noesis_line_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_line_get(self.ptr.as_ptr(), out.as_mut_ptr()) };
         out
     }
 }

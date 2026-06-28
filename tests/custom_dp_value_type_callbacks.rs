@@ -12,13 +12,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyOptions, PropertyValue,
 };
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::reflection::register_enum;
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::reflection::register_enum;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -74,9 +74,9 @@ fn custom_dp_value_type_callbacks() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let recorder = Recorder::default();
     {
@@ -98,7 +98,7 @@ fn custom_dp_value_type_callbacks() {
 
         let mut bytes = HashMap::new();
         bytes.insert("cb.xaml".to_string(), XAML.as_bytes().to_vec());
-        let _guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let element = FrameworkElement::load("cb.xaml").expect("load_xaml returned None");
         let mut view = View::create(element);
@@ -143,5 +143,5 @@ fn custom_dp_value_type_callbacks() {
         drop(view);
         drop(reg);
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

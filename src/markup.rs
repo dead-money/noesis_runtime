@@ -33,7 +33,7 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_char, c_void};
 use std::sync::Mutex;
 
-use crate::ffi::{dm_noesis_markup_extension_register, dm_noesis_markup_extension_unregister};
+use crate::ffi::{noesis_markup_extension_register, noesis_markup_extension_unregister};
 
 /// Value returned from a [`MarkupExtensionHandler::provide_value`] callback.
 /// `String` is the common case; `Component` covers handlers that resolve
@@ -123,7 +123,7 @@ impl MarkupExtensionRegistration {
         let userdata = Box::into_raw(boxed);
 
         let token = unsafe {
-            dm_noesis_markup_extension_register(
+            noesis_markup_extension_register(
                 cname.as_ptr(),
                 provide_trampoline,
                 userdata.cast(),
@@ -164,7 +164,7 @@ impl MarkupExtensionRegistration {
 
 impl Drop for MarkupExtensionRegistration {
     fn drop(&mut self) {
-        // The C++ side owns the boxed handler. `dm_noesis_markup_extension_unregister`
+        // The C++ side owns the boxed handler. `noesis_markup_extension_unregister`
         // releases the Rust caller's MarkupClassData ref — if no extension
         // instances are alive, ClassData self-destructs immediately and
         // `markup_handler_free_trampoline` runs to drop the handler box;
@@ -172,7 +172,7 @@ impl Drop for MarkupExtensionRegistration {
         //
         // SAFETY: `self.token` was produced by `new` and is freed exactly
         // once here.
-        unsafe { dm_noesis_markup_extension_unregister(self.token.as_ptr()) };
+        unsafe { noesis_markup_extension_unregister(self.token.as_ptr()) };
     }
 }
 

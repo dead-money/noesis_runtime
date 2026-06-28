@@ -17,13 +17,13 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
-use dm_noesis_runtime::render_device::{
+use noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
+use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
     TextureDesc, TextureHandle, TextureRect, register,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // A TextBlock so a render pass produces real glyph geometry (proving the view
 // is alive and rendering after the threshold/stereo setters run).
@@ -161,9 +161,9 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let render_ticks = Arc::new(AtomicU32::new(0));
     let draws = Arc::new(AtomicU32::new(0));
@@ -173,7 +173,7 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         let mut bytes = HashMap::new();
         bytes.insert("ui.xaml".to_string(), XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
         // ── (D) RenderDevice offscreen / glyph-cache tuning: set→get round-trip.
         //        Print the build's defaults (they are config/version dependent —
@@ -266,8 +266,8 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         // confirm the view stays responsive (no crash, processes the event).
         let _ = view.mouse_move(100, 100);
         view.update(0.05);
-        let _ = view.mouse_button_down(100, 100, dm_noesis_runtime::view::MouseButton::Left);
-        let _ = view.mouse_button_up(100, 100, dm_noesis_runtime::view::MouseButton::Left);
+        let _ = view.mouse_button_down(100, 100, noesis_runtime::view::MouseButton::Left);
+        let _ = view.mouse_button_up(100, 100, noesis_runtime::view::MouseButton::Left);
         view.set_emulate_touch(false);
 
         // ── (C) Stereo offscreen scale factor. Also getter-less; 1.0 is the
@@ -381,5 +381,5 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         drop(device);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

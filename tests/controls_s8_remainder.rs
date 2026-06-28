@@ -18,14 +18,14 @@
 //!     `VerticalOffset` is read back from the live object.
 //!   * an `Image`'s `Source` round-trips a `BitmapImage` handle pointer.
 //!
-//!   `cargo test -p dm_noesis_runtime --test controls_s8_remainder -- --nocapture`
+//!   `cargo test -p noesis_runtime --test controls_s8_remainder -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::binding::box_string;
-use dm_noesis_runtime::imaging::BitmapImage;
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::binding::box_string;
+use noesis_runtime::imaging::BitmapImage;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid x:Name="Root"
@@ -119,14 +119,14 @@ fn controls_s8_remainder_round_trips() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element = FrameworkElement::load("scene.xaml").expect("load scene.xaml");
         let mut view = View::create(element);

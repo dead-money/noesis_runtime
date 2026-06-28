@@ -18,13 +18,13 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
-use dm_noesis_runtime::render_device::{
+use noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
+use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
     TextureDesc, TextureHandle, TextureRect, register,
 };
-use dm_noesis_runtime::view::{FrameworkElement, RendererHandle, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, RendererHandle, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -153,9 +153,9 @@ fn renderer_handle_outlives_view_and_renders_cross_thread() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let draws = Arc::new(AtomicU32::new(0));
 
@@ -163,7 +163,7 @@ fn renderer_handle_outlives_view_and_renders_cross_thread() {
         let mut bytes = HashMap::new();
         bytes.insert("ui.xaml".to_string(), XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
         let device = register(NullDevice::new(Arc::clone(&draws)));
 
@@ -246,5 +246,5 @@ fn renderer_handle_outlives_view_and_renders_cross_thread() {
         drop(device);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

@@ -34,12 +34,12 @@ use core::ptr::{self, NonNull};
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    EnumValue, dm_noesis_base_component_release, dm_noesis_enum_name_from_value,
-    dm_noesis_enum_value_from_name, dm_noesis_factory_is_registered, dm_noesis_raise_routed_event,
-    dm_noesis_register_enum, dm_noesis_register_routed_event, dm_noesis_type_add_depends_on,
-    dm_noesis_type_converter_from_string, dm_noesis_type_get_content_property,
-    dm_noesis_type_get_depends_on, dm_noesis_type_set_content_property, dm_noesis_unbox_bool,
-    dm_noesis_unbox_double, dm_noesis_unbox_int32, dm_noesis_unbox_string,
+    EnumValue, noesis_base_component_release, noesis_enum_name_from_value,
+    noesis_enum_value_from_name, noesis_factory_is_registered, noesis_raise_routed_event,
+    noesis_register_enum, noesis_register_routed_event, noesis_type_add_depends_on,
+    noesis_type_converter_from_string, noesis_type_get_content_property,
+    noesis_type_get_depends_on, noesis_type_set_content_property, noesis_unbox_bool,
+    noesis_unbox_double, noesis_unbox_int32, noesis_unbox_string,
 };
 use crate::view::FrameworkElement;
 
@@ -85,7 +85,7 @@ pub fn register_enum(name: &str, variants: &[(&str, i32)]) -> Option<EnumType> {
     // copies every name into an interned Symbol and the values into the
     // TypeEnum. The returned Type* is borrowed (owned by reflection).
     let ty = unsafe {
-        dm_noesis_register_enum(cname.as_ptr(), ffi_values.as_ptr(), ffi_values.len() as u32)
+        noesis_register_enum(cname.as_ptr(), ffi_values.as_ptr(), ffi_values.len() as u32)
     };
     if ty.is_null() {
         return None;
@@ -108,7 +108,7 @@ impl EnumType {
         let mut out = 0i32;
         // SAFETY: both pointers are valid for the call; out is written only on success.
         let ok =
-            unsafe { dm_noesis_enum_value_from_name(self.name.as_ptr(), cn.as_ptr(), &mut out) };
+            unsafe { noesis_enum_value_from_name(self.name.as_ptr(), cn.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -119,7 +119,7 @@ impl EnumType {
         let mut out: *const core::ffi::c_char = ptr::null();
         // SAFETY: name ptr valid for the call; out receives a borrowed
         // interned Symbol string (valid while Noesis lives) which we copy.
-        let ok = unsafe { dm_noesis_enum_name_from_value(self.name.as_ptr(), value, &mut out) };
+        let ok = unsafe { noesis_enum_name_from_value(self.name.as_ptr(), value, &mut out) };
         if !ok || out.is_null() {
             return None;
         }
@@ -165,7 +165,7 @@ pub fn register_routed_event(type_name: &str, event_name: &str, strategy: Routin
     let ce = CString::new(event_name).expect("event name contained NUL");
     // SAFETY: both pointers are valid for the call; the C++ side registers the
     // event on the type's UIElementData metadata.
-    unsafe { dm_noesis_register_routed_event(ct.as_ptr(), ce.as_ptr(), strategy as i32) }
+    unsafe { noesis_register_routed_event(ct.as_ptr(), ce.as_ptr(), strategy as i32) }
 }
 
 /// Raise the routed event `event_name` from `element`, dispatched per the
@@ -183,7 +183,7 @@ pub fn raise_event(element: &FrameworkElement, event_name: &str) -> bool {
     let ce = CString::new(event_name).expect("event name contained NUL");
     // SAFETY: element.raw() is a live UIElement* for the borrow; the name ptr
     // is valid for the call.
-    unsafe { dm_noesis_raise_routed_event(element.raw(), ce.as_ptr()) }
+    unsafe { noesis_raise_routed_event(element.raw(), ce.as_ptr()) }
 }
 
 // ── (C) Factory / component metadata ──────────────────────────────────────────
@@ -197,7 +197,7 @@ pub fn is_component_registered(name: &str) -> bool {
         return false;
     };
     // SAFETY: c.as_ptr() valid for the call; queries Factory::IsComponentRegistered.
-    unsafe { dm_noesis_factory_is_registered(c.as_ptr()) }
+    unsafe { noesis_factory_is_registered(c.as_ptr()) }
 }
 
 /// Attach a `ContentProperty` to the registered type `type_name`, so XAML child
@@ -212,7 +212,7 @@ pub fn set_content_property(type_name: &str, prop_name: &str) -> bool {
     let ct = CString::new(type_name).expect("type name contained NUL");
     let cp = CString::new(prop_name).expect("prop name contained NUL");
     // SAFETY: both pointers valid for the call; appends ContentPropertyMetaData.
-    unsafe { dm_noesis_type_set_content_property(ct.as_ptr(), cp.as_ptr()) }
+    unsafe { noesis_type_set_content_property(ct.as_ptr(), cp.as_ptr()) }
 }
 
 /// Read the property name recorded by [`set_content_property`] on `type_name`,
@@ -233,7 +233,7 @@ pub fn get_content_property(type_name: &str) -> Option<String> {
     let mut out: *const core::ffi::c_char = ptr::null();
     // SAFETY: type_name ptr valid for the call; out receives a borrowed interned
     // Symbol string (valid while Noesis lives) which we copy on success.
-    let ok = unsafe { dm_noesis_type_get_content_property(ct.as_ptr(), &mut out) };
+    let ok = unsafe { noesis_type_get_content_property(ct.as_ptr(), &mut out) };
     if !ok || out.is_null() {
         return None;
     }
@@ -267,7 +267,7 @@ pub fn add_depends_on(type_name: &str, prop_name: &str) -> bool {
     let ct = CString::new(type_name).expect("type name contained NUL");
     let cp = CString::new(prop_name).expect("prop name contained NUL");
     // SAFETY: both pointers valid for the call; appends DependsOnMetaData.
-    unsafe { dm_noesis_type_add_depends_on(ct.as_ptr(), cp.as_ptr()) }
+    unsafe { noesis_type_add_depends_on(ct.as_ptr(), cp.as_ptr()) }
 }
 
 /// Read the property name recorded by [`add_depends_on`] on `type_name`, read
@@ -284,7 +284,7 @@ pub fn get_depends_on(type_name: &str) -> Option<String> {
     let mut out: *const core::ffi::c_char = ptr::null();
     // SAFETY: type_name ptr valid for the call; out receives a borrowed interned
     // Symbol string (valid while Noesis lives) which we copy on success.
-    let ok = unsafe { dm_noesis_type_get_depends_on(ct.as_ptr(), &mut out) };
+    let ok = unsafe { noesis_type_get_depends_on(ct.as_ptr(), &mut out) };
     if !ok || out.is_null() {
         return None;
     }
@@ -328,7 +328,7 @@ impl BoxedValue {
     #[must_use]
     pub fn as_i32(&self) -> Option<i32> {
         let mut out = 0i32;
-        let ok = unsafe { dm_noesis_unbox_int32(self.ptr.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_int32(self.ptr.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -336,7 +336,7 @@ impl BoxedValue {
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
         let mut out = false;
-        let ok = unsafe { dm_noesis_unbox_bool(self.ptr.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_bool(self.ptr.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -344,7 +344,7 @@ impl BoxedValue {
     #[must_use]
     pub fn as_f64(&self) -> Option<f64> {
         let mut out = 0.0f64;
-        let ok = unsafe { dm_noesis_unbox_double(self.ptr.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_double(self.ptr.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -352,7 +352,7 @@ impl BoxedValue {
     /// type mismatch / non-UTF-8.
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
-        let s = unsafe { dm_noesis_unbox_string(self.ptr.as_ptr()) };
+        let s = unsafe { noesis_unbox_string(self.ptr.as_ptr()) };
         if s.is_null() {
             return None;
         }
@@ -362,8 +362,8 @@ impl BoxedValue {
 
 impl Drop for BoxedValue {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_type_converter_from_string with +1 ref.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        // SAFETY: produced by noesis_type_converter_from_string with +1 ref.
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -388,7 +388,7 @@ pub fn convert_from_string(type_name: &str, s: &str) -> Option<BoxedValue> {
     let mut out: *mut c_void = ptr::null_mut();
     // SAFETY: pointers valid for the call; out receives a +1-owned boxed
     // component (BoxedValue::drop releases it) or stays null on failure.
-    let ok = unsafe { dm_noesis_type_converter_from_string(ct.as_ptr(), cs.as_ptr(), &mut out) };
+    let ok = unsafe { noesis_type_converter_from_string(ct.as_ptr(), cs.as_ptr(), &mut out) };
     if !ok {
         return None;
     }

@@ -7,19 +7,19 @@
 //! before `shutdown()`. Routed commands need a laid-out view (they route
 //! through the element tree to a matching `CommandBinding`).
 //!
-//!   `cargo test -p dm_noesis_runtime --test routed_commands -- --nocapture`
+//!   `cargo test -p noesis_runtime --test routed_commands -- --nocapture`
 
 use std::collections::HashMap;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-use dm_noesis_runtime::commands::{
+use noesis_runtime::commands::{
     ApplicationCommand, CommandBinding, CommandBindingHandler, CommandParameter, ComponentCommand,
     RoutedCommand, RoutedUICommand,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid x:Name="Root"
@@ -64,14 +64,14 @@ fn routed_commands_bindings_and_builtin_libraries() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -241,5 +241,5 @@ fn routed_commands_bindings_and_builtin_libraries() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

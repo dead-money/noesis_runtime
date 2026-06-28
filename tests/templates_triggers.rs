@@ -9,17 +9,17 @@
 //! collection (`Style::get_trigger`) so the read crosses the FFI a second time.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test templates_triggers -- --nocapture`
+//!   `cargo test -p noesis_runtime --test templates_triggers -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::binding::{Binding, box_bool, box_f32, box_string};
-use dm_noesis_runtime::styles::DataTemplate;
-use dm_noesis_runtime::styles::{
+use noesis_runtime::binding::{Binding, box_bool, box_f32, box_string};
+use noesis_runtime::styles::DataTemplate;
+use noesis_runtime::styles::{
     DataTrigger, EventTrigger, MultiTrigger, Style, TemplateSelector, Trigger,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // A scene that references every control type the trigger tests resolve by name,
 // so Noesis's reflection registry knows them (the built-ins register on use).
@@ -52,16 +52,16 @@ fn boot() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 }
 
 // Force the built-in controls to register so type names resolve.
 fn register_types() -> View {
     let mut bytes = HashMap::new();
     bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
-    let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+    let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
     let root = FrameworkElement::load("scene.xaml").expect("scene load");
     let mut view = View::create(root);
     view.set_size(200, 200);
@@ -231,5 +231,5 @@ fn templates_and_triggers_roundtrip() {
             "null item selects no template (callback round-trip both ways)"
         );
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

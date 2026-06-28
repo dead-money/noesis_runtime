@@ -13,8 +13,8 @@
 //   * Negatives: a non-`Selector` reports `selected_index()==None`; a
 //     non-`ItemsControl` reports `items_count()==None`.
 
-use dm_noesis_runtime::binding::ObservableCollection;
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::binding::ObservableCollection;
+use noesis_runtime::view::{FrameworkElement, View};
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -33,9 +33,9 @@ fn selector_and_items_mutation() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // The source must outlive the ItemsControl that reads it.
@@ -143,7 +143,7 @@ fn selector_and_items_mutation() {
         // identity (a non-Selector ItemsControl can't prove WHERE the item went).
         assert_eq!(lbd.items_add_string("X"), Some(0));
         assert_eq!(lbd.items_add_string("Y"), Some(1));
-        let z = dm_noesis_runtime::binding::box_string("Z");
+        let z = noesis_runtime::binding::box_string("Z");
         // SAFETY: `z` outlives every read below; the ItemCollection takes its own
         // ref so dropping `z` afterwards is sound.
         assert!(
@@ -152,7 +152,7 @@ fn selector_and_items_mutation() {
         );
         assert_eq!(lbd.items_count(), Some(3), "three items after insert");
         // Out-of-range insert is rejected and leaves the collection untouched.
-        let w = dm_noesis_runtime::binding::box_string("W");
+        let w = noesis_runtime::binding::box_string("W");
         // SAFETY: `w` is a live boxed value for the duration of the call.
         assert!(
             !unsafe { lbd.items_insert(99, w.raw()) },
@@ -196,5 +196,5 @@ fn selector_and_items_mutation() {
         drop(coll);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

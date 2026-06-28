@@ -7,7 +7,7 @@
 //!
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 
-use dm_noesis_runtime::brushes::{
+use noesis_runtime::brushes::{
     BrushMappingMode, DropShadowEffect, DropShadowParams, GradientSpreadMethod, GradientStop,
     LinearGradientBrush, RadialGradientBrush,
 };
@@ -26,9 +26,9 @@ fn builder_brushes_effects_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── LinearGradientBrush builder ─────────────────────────────────────
@@ -153,5 +153,5 @@ fn builder_brushes_effects_round_trip() {
         assert_eq!(s2.params(), params, "set_params round-trip");
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

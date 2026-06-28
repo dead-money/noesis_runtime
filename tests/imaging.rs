@@ -20,11 +20,11 @@
 //! all owning wrappers drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test imaging -- --nocapture`
+//!   `cargo test -p noesis_runtime --test imaging -- --nocapture`
 
 use std::ffi::c_void;
 
-use dm_noesis_runtime::imaging::{
+use noesis_runtime::imaging::{
     BitmapImage, BitmapSource, CroppedBitmap, DynamicTextureSource, Int32Rect, TextureSource,
 };
 
@@ -44,9 +44,9 @@ fn imaging_family_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── TextureSource (default ctor; no GPU) ────────────────────────────
@@ -171,5 +171,5 @@ fn imaging_family_round_trip() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

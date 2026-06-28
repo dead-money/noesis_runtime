@@ -3,10 +3,10 @@
 //! back THROUGH Noesis on a freshly-created instance (previously the borrow
 //! path computed the pointer then discarded it, so the C++ "" default applied).
 
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyDefault, PropertyValue,
 };
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::ffi::{ClassBase, PropType};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
@@ -19,9 +19,9 @@ fn custom_dp_string_default() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut b = ClassBuilder::new(
@@ -59,5 +59,5 @@ fn custom_dp_string_default() {
         drop(reg);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

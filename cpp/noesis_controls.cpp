@@ -61,7 +61,7 @@ T* as(void* element) {
 
 // Reads the selected index into *out (>= 0, or -1 when the selection is empty).
 // Returns false (leaving *out untouched) if `element` is not a Selector.
-extern "C" bool dm_noesis_selector_get_selected_index(void* element, int32_t* out) {
+extern "C" bool noesis_selector_get_selected_index(void* element, int32_t* out) {
     if (!element || !out) return false;
     auto* s = as<Noesis::Selector>(element);
     if (!s) return false;
@@ -71,7 +71,7 @@ extern "C" bool dm_noesis_selector_get_selected_index(void* element, int32_t* ou
 
 // Sets the selected index (-1 clears; an out-of-range index is coerced by
 // Noesis to -1). Returns false if `element` is not a Selector.
-extern "C" bool dm_noesis_selector_set_selected_index(void* element, int32_t index) {
+extern "C" bool noesis_selector_set_selected_index(void* element, int32_t index) {
     if (!element) return false;
     auto* s = as<Noesis::Selector>(element);
     if (!s) return false;
@@ -82,7 +82,7 @@ extern "C" bool dm_noesis_selector_set_selected_index(void* element, int32_t ind
 // Borrowed (no +1) pointer to the selected item, or null if `element` is not a
 // Selector or the selection is empty. For an ItemsSource-bound Selector this is
 // the data item; for direct items it is the container.
-extern "C" void* dm_noesis_selector_get_selected_item(void* element) {
+extern "C" void* noesis_selector_get_selected_item(void* element) {
     if (!element) return nullptr;
     auto* s = as<Noesis::Selector>(element);
     return s ? s->GetSelectedItem() : nullptr;
@@ -90,7 +90,7 @@ extern "C" void* dm_noesis_selector_get_selected_item(void* element) {
 
 // Sets the selected item (borrowed; Noesis takes its own reference). Pass null
 // to clear. Returns false if `element` is not a Selector.
-extern "C" bool dm_noesis_selector_set_selected_item(void* element, void* item) {
+extern "C" bool noesis_selector_set_selected_item(void* element, void* item) {
     if (!element) return false;
     auto* s = as<Noesis::Selector>(element);
     if (!s) return false;
@@ -107,7 +107,7 @@ extern "C" bool dm_noesis_selector_set_selected_item(void* element, void* item) 
 
 // Appends `item`; returns the new index, or -1 if `element` is not an
 // ItemsControl (or the add was rejected, e.g. Items is read-only).
-extern "C" int32_t dm_noesis_items_control_items_add(void* element, void* item) {
+extern "C" int32_t noesis_items_control_items_add(void* element, void* item) {
     if (!element) return -1;
     auto* ic = as<Noesis::ItemsControl>(element);
     if (!ic) return -1;
@@ -118,7 +118,7 @@ extern "C" int32_t dm_noesis_items_control_items_add(void* element, void* item) 
 
 // Inserts `item` at `index` (allows index == Count). Returns false if `element`
 // is not an ItemsControl or `index` is out of range.
-extern "C" bool dm_noesis_items_control_items_insert(void* element, uint32_t index, void* item) {
+extern "C" bool noesis_items_control_items_insert(void* element, uint32_t index, void* item) {
     if (!element) return false;
     auto* ic = as<Noesis::ItemsControl>(element);
     if (!ic) return false;
@@ -130,7 +130,7 @@ extern "C" bool dm_noesis_items_control_items_insert(void* element, uint32_t ind
 
 // Removes the item at `index`. Returns false if `element` is not an
 // ItemsControl or `index` is out of range.
-extern "C" bool dm_noesis_items_control_items_remove_at(void* element, uint32_t index) {
+extern "C" bool noesis_items_control_items_remove_at(void* element, uint32_t index) {
     if (!element) return false;
     auto* ic = as<Noesis::ItemsControl>(element);
     if (!ic) return false;
@@ -141,7 +141,7 @@ extern "C" bool dm_noesis_items_control_items_remove_at(void* element, uint32_t 
 }
 
 // Removes every item. Returns false if `element` is not an ItemsControl.
-extern "C" bool dm_noesis_items_control_items_clear(void* element) {
+extern "C" bool noesis_items_control_items_clear(void* element) {
     if (!element) return false;
     auto* ic = as<Noesis::ItemsControl>(element);
     if (!ic) return false;
@@ -158,7 +158,7 @@ extern "C" bool dm_noesis_items_control_items_clear(void* element) {
 // goes through RangeBase::SetValue/SetMinimum/SetMaximum so Noesis's coercion
 // (Value clamped to [Minimum, Maximum]) runs.
 
-extern "C" bool dm_noesis_rangebase_get(void* element, int32_t which, float* out) {
+extern "C" bool noesis_rangebase_get(void* element, int32_t which, float* out) {
     if (!element || !out) return false;
     auto* r = as<Noesis::RangeBase>(element);
     if (!r) return false;
@@ -170,7 +170,7 @@ extern "C" bool dm_noesis_rangebase_get(void* element, int32_t which, float* out
     }
 }
 
-extern "C" bool dm_noesis_rangebase_set(void* element, int32_t which, float value) {
+extern "C" bool noesis_rangebase_set(void* element, int32_t which, float value) {
     if (!element) return false;
     auto* r = as<Noesis::RangeBase>(element);
     if (!r) return false;
@@ -187,7 +187,7 @@ extern "C" bool dm_noesis_rangebase_set(void* element, int32_t which, float valu
 // `state`: 0 = unchecked, 1 = checked, 2 = indeterminate (null). The getter
 // writes *out_state and returns false (leaving it untouched) on a non-toggle.
 
-extern "C" bool dm_noesis_toggle_get_is_checked(void* element, int8_t* out_state) {
+extern "C" bool noesis_toggle_get_is_checked(void* element, int8_t* out_state) {
     if (!element || !out_state) return false;
     auto* tb = as<Noesis::ToggleButton>(element);
     if (!tb) return false;
@@ -196,7 +196,7 @@ extern "C" bool dm_noesis_toggle_get_is_checked(void* element, int8_t* out_state
     return true;
 }
 
-extern "C" bool dm_noesis_toggle_set_is_checked(void* element, int8_t state) {
+extern "C" bool noesis_toggle_set_is_checked(void* element, int8_t state) {
     if (!element) return false;
     auto* tb = as<Noesis::ToggleButton>(element);
     if (!tb) return false;
@@ -210,7 +210,7 @@ extern "C" bool dm_noesis_toggle_set_is_checked(void* element, int8_t state) {
 
 // ── Popup.IsOpen / Expander.IsExpanded ──────────────────────────────────────
 
-extern "C" bool dm_noesis_popup_get_is_open(void* element, bool* out) {
+extern "C" bool noesis_popup_get_is_open(void* element, bool* out) {
     if (!element || !out) return false;
     auto* p = as<Noesis::Popup>(element);
     if (!p) return false;
@@ -218,7 +218,7 @@ extern "C" bool dm_noesis_popup_get_is_open(void* element, bool* out) {
     return true;
 }
 
-extern "C" bool dm_noesis_popup_set_is_open(void* element, bool open) {
+extern "C" bool noesis_popup_set_is_open(void* element, bool open) {
     if (!element) return false;
     auto* p = as<Noesis::Popup>(element);
     if (!p) return false;
@@ -226,7 +226,7 @@ extern "C" bool dm_noesis_popup_set_is_open(void* element, bool open) {
     return true;
 }
 
-extern "C" bool dm_noesis_expander_get_is_expanded(void* element, bool* out) {
+extern "C" bool noesis_expander_get_is_expanded(void* element, bool* out) {
     if (!element || !out) return false;
     auto* e = as<Noesis::Expander>(element);
     if (!e) return false;
@@ -234,7 +234,7 @@ extern "C" bool dm_noesis_expander_get_is_expanded(void* element, bool* out) {
     return true;
 }
 
-extern "C" bool dm_noesis_expander_set_is_expanded(void* element, bool expanded) {
+extern "C" bool noesis_expander_set_is_expanded(void* element, bool expanded) {
     if (!element) return false;
     auto* e = as<Noesis::Expander>(element);
     if (!e) return false;
@@ -250,7 +250,7 @@ extern "C" bool dm_noesis_expander_set_is_expanded(void* element, bool expanded)
 // ScrollTo* methods. Getter returns false (leaving *out untouched) on a
 // non-ScrollViewer or bad selector.
 
-extern "C" bool dm_noesis_scrollviewer_get(void* element, int32_t which, float* out) {
+extern "C" bool noesis_scrollviewer_get(void* element, int32_t which, float* out) {
     if (!element || !out) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -265,7 +265,7 @@ extern "C" bool dm_noesis_scrollviewer_get(void* element, int32_t which, float* 
     }
 }
 
-extern "C" bool dm_noesis_scrollviewer_scroll_to_horizontal(void* element, float offset) {
+extern "C" bool noesis_scrollviewer_scroll_to_horizontal(void* element, float offset) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -273,7 +273,7 @@ extern "C" bool dm_noesis_scrollviewer_scroll_to_horizontal(void* element, float
     return true;
 }
 
-extern "C" bool dm_noesis_scrollviewer_scroll_to_vertical(void* element, float offset) {
+extern "C" bool noesis_scrollviewer_scroll_to_vertical(void* element, float offset) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -283,7 +283,7 @@ extern "C" bool dm_noesis_scrollviewer_scroll_to_vertical(void* element, float o
 
 // ScrollToHome scrolls to the top-left origin; ScrollToEnd scrolls to the
 // bottom. Both are axis-agnostic ScrollViewer helpers.
-extern "C" bool dm_noesis_scrollviewer_scroll_to_home(void* element) {
+extern "C" bool noesis_scrollviewer_scroll_to_home(void* element) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -291,7 +291,7 @@ extern "C" bool dm_noesis_scrollviewer_scroll_to_home(void* element) {
     return true;
 }
 
-extern "C" bool dm_noesis_scrollviewer_scroll_to_end(void* element) {
+extern "C" bool noesis_scrollviewer_scroll_to_end(void* element) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -304,7 +304,7 @@ extern "C" bool dm_noesis_scrollviewer_scroll_to_end(void* element) {
 // `which` for the int getters/setters: 0 = SelectionStart, 1 = SelectionLength,
 // 2 = CaretIndex. Getter writes *out, returns false on a non-TextBox.
 
-extern "C" bool dm_noesis_textbox_get_int(void* element, int32_t which, int32_t* out) {
+extern "C" bool noesis_textbox_get_int(void* element, int32_t which, int32_t* out) {
     if (!element || !out) return false;
     auto* tb = as<Noesis::TextBox>(element);
     if (!tb) return false;
@@ -316,7 +316,7 @@ extern "C" bool dm_noesis_textbox_get_int(void* element, int32_t which, int32_t*
     }
 }
 
-extern "C" bool dm_noesis_textbox_set_int(void* element, int32_t which, int32_t value) {
+extern "C" bool noesis_textbox_set_int(void* element, int32_t which, int32_t value) {
     if (!element) return false;
     auto* tb = as<Noesis::TextBox>(element);
     if (!tb) return false;
@@ -330,7 +330,7 @@ extern "C" bool dm_noesis_textbox_set_int(void* element, int32_t which, int32_t 
 
 // Selects `length` characters starting at `start`. Returns false on a
 // non-TextBox.
-extern "C" bool dm_noesis_textbox_select(void* element, int32_t start, int32_t length) {
+extern "C" bool noesis_textbox_select(void* element, int32_t start, int32_t length) {
     if (!element) return false;
     auto* tb = as<Noesis::TextBox>(element);
     if (!tb) return false;
@@ -338,7 +338,7 @@ extern "C" bool dm_noesis_textbox_select(void* element, int32_t start, int32_t l
     return true;
 }
 
-extern "C" bool dm_noesis_textbox_select_all(void* element) {
+extern "C" bool noesis_textbox_select_all(void* element) {
     if (!element) return false;
     auto* tb = as<Noesis::TextBox>(element);
     if (!tb) return false;
@@ -348,7 +348,7 @@ extern "C" bool dm_noesis_textbox_select_all(void* element) {
 
 // Borrowed (no copy on our side) pointer to the currently-selected text, or
 // null if `element` is not a TextBox. Copy immediately on the Rust side.
-extern "C" const char* dm_noesis_textbox_get_selected_text(void* element) {
+extern "C" const char* noesis_textbox_get_selected_text(void* element) {
     if (!element) return nullptr;
     auto* tb = as<Noesis::TextBox>(element);
     return tb ? tb->GetSelectedText() : nullptr;
@@ -358,13 +358,13 @@ extern "C" const char* dm_noesis_textbox_get_selected_text(void* element) {
 
 // Borrowed pointer to the password plaintext, or null if not a PasswordBox.
 // Copy immediately on the Rust side.
-extern "C" const char* dm_noesis_passwordbox_get_password(void* element) {
+extern "C" const char* noesis_passwordbox_get_password(void* element) {
     if (!element) return nullptr;
     auto* pb = as<Noesis::PasswordBox>(element);
     return pb ? pb->GetPassword() : nullptr;
 }
 
-extern "C" bool dm_noesis_passwordbox_set_password(void* element, const char* password) {
+extern "C" bool noesis_passwordbox_set_password(void* element, const char* password) {
     if (!element) return false;
     auto* pb = as<Noesis::PasswordBox>(element);
     if (!pb) return false;
@@ -373,7 +373,7 @@ extern "C" bool dm_noesis_passwordbox_set_password(void* element, const char* pa
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// §8 remainder (prefix dm_noesis_controls_): SelectedValue/Path, TreeView
+// §8 remainder (prefix noesis_controls_): SelectedValue/Path, TreeView
 // selection, ItemContainerGenerator mapping, GridView columns, ToolTip /
 // ContextMenu, line/page scrolling + IScrollInfo, Image source.
 // ════════════════════════════════════════════════════════════════════════════
@@ -386,7 +386,7 @@ extern "C" bool dm_noesis_passwordbox_set_password(void* element, const char* pa
 
 // Borrowed (no +1) canonical BaseComponent* of the current SelectedValue, or
 // null when there is no selection or `element` is not a Selector.
-extern "C" void* dm_noesis_controls_selector_get_selected_value(void* element) {
+extern "C" void* noesis_controls_selector_get_selected_value(void* element) {
     if (!element) return nullptr;
     auto* s = as<Noesis::Selector>(element);
     return s ? static_cast<Noesis::BaseComponent*>(s->GetSelectedValue()) : nullptr;
@@ -394,7 +394,7 @@ extern "C" void* dm_noesis_controls_selector_get_selected_value(void* element) {
 
 // Selects the item whose projected value equals `value` (borrowed; Noesis takes
 // its own reference). Pass null to clear. Returns false on a non-Selector.
-extern "C" bool dm_noesis_controls_selector_set_selected_value(void* element, void* value) {
+extern "C" bool noesis_controls_selector_set_selected_value(void* element, void* value) {
     if (!element) return false;
     auto* s = as<Noesis::Selector>(element);
     if (!s) return false;
@@ -404,13 +404,13 @@ extern "C" bool dm_noesis_controls_selector_set_selected_value(void* element, vo
 
 // Borrowed pointer to the SelectedValuePath string (never null for a Selector —
 // the default is ""). Null only when `element` is not a Selector. Copy now.
-extern "C" const char* dm_noesis_controls_selector_get_selected_value_path(void* element) {
+extern "C" const char* noesis_controls_selector_get_selected_value_path(void* element) {
     if (!element) return nullptr;
     auto* s = as<Noesis::Selector>(element);
     return s ? s->GetSelectedValuePath() : nullptr;
 }
 
-extern "C" bool dm_noesis_controls_selector_set_selected_value_path(void* element,
+extern "C" bool noesis_controls_selector_set_selected_value_path(void* element,
                                                                     const char* path) {
     if (!element) return false;
     auto* s = as<Noesis::Selector>(element);
@@ -424,7 +424,7 @@ extern "C" bool dm_noesis_controls_selector_set_selected_value_path(void* elemen
 // Borrowed canonical BaseComponent* of the TreeView's selected item (the data
 // item, or the TreeViewItem container for direct items), or null when nothing
 // is selected / `element` is not a TreeView.
-extern "C" void* dm_noesis_controls_treeview_get_selected_item(void* element) {
+extern "C" void* noesis_controls_treeview_get_selected_item(void* element) {
     if (!element) return nullptr;
     auto* tv = as<Noesis::TreeView>(element);
     return tv ? static_cast<Noesis::BaseComponent*>(tv->GetSelectedItem()) : nullptr;
@@ -432,7 +432,7 @@ extern "C" void* dm_noesis_controls_treeview_get_selected_item(void* element) {
 
 // TreeViewItem.IsSelected / IsExpanded — selection is driven per-item in a
 // TreeView (there is no public TreeView::SetSelectedItem).
-extern "C" bool dm_noesis_controls_treeviewitem_get_is_selected(void* element, bool* out) {
+extern "C" bool noesis_controls_treeviewitem_get_is_selected(void* element, bool* out) {
     if (!element || !out) return false;
     auto* item = as<Noesis::TreeViewItem>(element);
     if (!item) return false;
@@ -440,7 +440,7 @@ extern "C" bool dm_noesis_controls_treeviewitem_get_is_selected(void* element, b
     return true;
 }
 
-extern "C" bool dm_noesis_controls_treeviewitem_set_is_selected(void* element, bool selected) {
+extern "C" bool noesis_controls_treeviewitem_set_is_selected(void* element, bool selected) {
     if (!element) return false;
     auto* item = as<Noesis::TreeViewItem>(element);
     if (!item) return false;
@@ -448,7 +448,7 @@ extern "C" bool dm_noesis_controls_treeviewitem_set_is_selected(void* element, b
     return true;
 }
 
-extern "C" bool dm_noesis_controls_treeviewitem_get_is_expanded(void* element, bool* out) {
+extern "C" bool noesis_controls_treeviewitem_get_is_expanded(void* element, bool* out) {
     if (!element || !out) return false;
     auto* item = as<Noesis::TreeViewItem>(element);
     if (!item) return false;
@@ -456,7 +456,7 @@ extern "C" bool dm_noesis_controls_treeviewitem_get_is_expanded(void* element, b
     return true;
 }
 
-extern "C" bool dm_noesis_controls_treeviewitem_set_is_expanded(void* element, bool expanded) {
+extern "C" bool noesis_controls_treeviewitem_set_is_expanded(void* element, bool expanded) {
     if (!element) return false;
     auto* item = as<Noesis::TreeViewItem>(element);
     if (!item) return false;
@@ -471,7 +471,7 @@ extern "C" bool dm_noesis_controls_treeviewitem_set_is_expanded(void* element, b
 // been laid out in a live View. Returned containers/items are borrowed canonical
 // BaseComponent* (a DependencyObject is-a BaseComponent).
 
-extern "C" void* dm_noesis_controls_generator_container_from_index(void* element, int32_t index) {
+extern "C" void* noesis_controls_generator_container_from_index(void* element, int32_t index) {
     if (!element) return nullptr;
     auto* ic = as<Noesis::ItemsControl>(element);
     if (!ic) return nullptr;
@@ -480,7 +480,7 @@ extern "C" void* dm_noesis_controls_generator_container_from_index(void* element
     return static_cast<Noesis::BaseComponent*>(g->ContainerFromIndex(index));
 }
 
-extern "C" void* dm_noesis_controls_generator_container_from_item(void* element, void* item) {
+extern "C" void* noesis_controls_generator_container_from_item(void* element, void* item) {
     if (!element) return nullptr;
     auto* ic = as<Noesis::ItemsControl>(element);
     if (!ic) return nullptr;
@@ -492,7 +492,7 @@ extern "C" void* dm_noesis_controls_generator_container_from_item(void* element,
 
 // Index of `container` in the items, or -1 when it is not a realized container /
 // `element` is not an ItemsControl.
-extern "C" int32_t dm_noesis_controls_generator_index_from_container(void* element,
+extern "C" int32_t noesis_controls_generator_index_from_container(void* element,
                                                                      void* container) {
     if (!element || !container) return -1;
     auto* ic = as<Noesis::ItemsControl>(element);
@@ -505,7 +505,7 @@ extern "C" int32_t dm_noesis_controls_generator_index_from_container(void* eleme
     return g->IndexFromContainer(dobj);
 }
 
-extern "C" void* dm_noesis_controls_generator_item_from_container(void* element, void* container) {
+extern "C" void* noesis_controls_generator_item_from_container(void* element, void* container) {
     if (!element || !container) return nullptr;
     auto* ic = as<Noesis::ItemsControl>(element);
     if (!ic) return nullptr;
@@ -521,7 +521,7 @@ extern "C" void* dm_noesis_controls_generator_item_from_container(void* element,
 
 // Borrowed canonical pointer to the GridView set as a ListView's View, or null
 // when `element` is not a ListView or its View is not a GridView.
-extern "C" void* dm_noesis_controls_listview_get_view(void* element) {
+extern "C" void* noesis_controls_listview_get_view(void* element) {
     if (!element) return nullptr;
     auto* lv = as<Noesis::ListView>(element);
     if (!lv) return nullptr;
@@ -530,7 +530,7 @@ extern "C" void* dm_noesis_controls_listview_get_view(void* element) {
 }
 
 // Number of columns, or -1 when `gridview` is not a GridView.
-extern "C" int32_t dm_noesis_controls_gridview_column_count(void* gridview) {
+extern "C" int32_t noesis_controls_gridview_column_count(void* gridview) {
     if (!gridview) return -1;
     auto* gv = as<Noesis::GridView>(gridview);
     if (!gv) return -1;
@@ -549,7 +549,7 @@ Noesis::GridViewColumn* column_at(void* gridview, uint32_t index) {
 }
 } // namespace
 
-extern "C" bool dm_noesis_controls_gridview_column_get_width(void* gridview, uint32_t index,
+extern "C" bool noesis_controls_gridview_column_get_width(void* gridview, uint32_t index,
                                                              float* out) {
     if (!gridview || !out) return false;
     Noesis::GridViewColumn* col = column_at(gridview, index);
@@ -558,7 +558,7 @@ extern "C" bool dm_noesis_controls_gridview_column_get_width(void* gridview, uin
     return true;
 }
 
-extern "C" bool dm_noesis_controls_gridview_column_set_width(void* gridview, uint32_t index,
+extern "C" bool noesis_controls_gridview_column_set_width(void* gridview, uint32_t index,
                                                              float width) {
     if (!gridview) return false;
     Noesis::GridViewColumn* col = column_at(gridview, index);
@@ -567,7 +567,7 @@ extern "C" bool dm_noesis_controls_gridview_column_set_width(void* gridview, uin
     return true;
 }
 
-extern "C" bool dm_noesis_controls_gridview_column_get_actual_width(void* gridview, uint32_t index,
+extern "C" bool noesis_controls_gridview_column_get_actual_width(void* gridview, uint32_t index,
                                                                     float* out) {
     if (!gridview || !out) return false;
     Noesis::GridViewColumn* col = column_at(gridview, index);
@@ -578,7 +578,7 @@ extern "C" bool dm_noesis_controls_gridview_column_get_actual_width(void* gridvi
 
 // Borrowed canonical pointer to a column's Header (typically a boxed string),
 // or null on a bad index / non-GridView / null header.
-extern "C" void* dm_noesis_controls_gridview_column_get_header(void* gridview, uint32_t index) {
+extern "C" void* noesis_controls_gridview_column_get_header(void* gridview, uint32_t index) {
     if (!gridview) return nullptr;
     Noesis::GridViewColumn* col = column_at(gridview, index);
     if (!col) return nullptr;
@@ -588,13 +588,13 @@ extern "C" void* dm_noesis_controls_gridview_column_get_header(void* gridview, u
 // ── ToolTip / ToolTipService ────────────────────────────────────────────────
 
 // FrameworkElement.ToolTip (the inline DP). Borrowed canonical content pointer.
-extern "C" void* dm_noesis_controls_fe_get_tooltip(void* element) {
+extern "C" void* noesis_controls_fe_get_tooltip(void* element) {
     if (!element) return nullptr;
     auto* fe = as<Noesis::FrameworkElement>(element);
     return fe ? static_cast<Noesis::BaseComponent*>(fe->GetToolTip()) : nullptr;
 }
 
-extern "C" bool dm_noesis_controls_fe_set_tooltip(void* element, void* tooltip) {
+extern "C" bool noesis_controls_fe_set_tooltip(void* element, void* tooltip) {
     if (!element) return false;
     auto* fe = as<Noesis::FrameworkElement>(element);
     if (!fe) return false;
@@ -602,7 +602,7 @@ extern "C" bool dm_noesis_controls_fe_set_tooltip(void* element, void* tooltip) 
     return true;
 }
 
-extern "C" bool dm_noesis_controls_fe_set_tooltip_string(void* element, const char* text) {
+extern "C" bool noesis_controls_fe_set_tooltip_string(void* element, const char* text) {
     if (!element) return false;
     auto* fe = as<Noesis::FrameworkElement>(element);
     if (!fe) return false;
@@ -613,13 +613,13 @@ extern "C" bool dm_noesis_controls_fe_set_tooltip_string(void* element, const ch
 // ToolTipService attached ToolTip — readable on ANY DependencyObject (it is what
 // FrameworkElement.ToolTip ultimately writes; exposing the service lets a caller
 // read/write it on non-FrameworkElement targets too).
-extern "C" void* dm_noesis_controls_tooltipservice_get_tooltip(void* obj) {
+extern "C" void* noesis_controls_tooltipservice_get_tooltip(void* obj) {
     if (!obj) return nullptr;
     auto* d = as<Noesis::DependencyObject>(obj);
     return d ? static_cast<Noesis::BaseComponent*>(Noesis::ToolTipService::GetToolTip(d)) : nullptr;
 }
 
-extern "C" bool dm_noesis_controls_tooltipservice_set_tooltip(void* obj, void* tooltip) {
+extern "C" bool noesis_controls_tooltipservice_set_tooltip(void* obj, void* tooltip) {
     if (!obj) return false;
     auto* d = as<Noesis::DependencyObject>(obj);
     if (!d) return false;
@@ -628,7 +628,7 @@ extern "C" bool dm_noesis_controls_tooltipservice_set_tooltip(void* obj, void* t
 }
 
 // ToolTip control IsOpen.
-extern "C" bool dm_noesis_controls_tooltip_get_is_open(void* element, bool* out) {
+extern "C" bool noesis_controls_tooltip_get_is_open(void* element, bool* out) {
     if (!element || !out) return false;
     auto* t = as<Noesis::ToolTip>(element);
     if (!t) return false;
@@ -636,7 +636,7 @@ extern "C" bool dm_noesis_controls_tooltip_get_is_open(void* element, bool* out)
     return true;
 }
 
-extern "C" bool dm_noesis_controls_tooltip_set_is_open(void* element, bool open) {
+extern "C" bool noesis_controls_tooltip_set_is_open(void* element, bool open) {
     if (!element) return false;
     auto* t = as<Noesis::ToolTip>(element);
     if (!t) return false;
@@ -646,7 +646,7 @@ extern "C" bool dm_noesis_controls_tooltip_set_is_open(void* element, bool open)
 
 // ── ContextMenu / ContextMenuService ────────────────────────────────────────
 
-extern "C" void* dm_noesis_controls_fe_get_context_menu(void* element) {
+extern "C" void* noesis_controls_fe_get_context_menu(void* element) {
     if (!element) return nullptr;
     auto* fe = as<Noesis::FrameworkElement>(element);
     return fe ? static_cast<Noesis::BaseComponent*>(fe->GetContextMenu()) : nullptr;
@@ -655,7 +655,7 @@ extern "C" void* dm_noesis_controls_fe_get_context_menu(void* element) {
 // `menu` must be a ContextMenu* (borrowed; Noesis takes its own reference) or
 // null to clear. Returns false on a non-FrameworkElement or a non-ContextMenu
 // `menu`.
-extern "C" bool dm_noesis_controls_fe_set_context_menu(void* element, void* menu) {
+extern "C" bool noesis_controls_fe_set_context_menu(void* element, void* menu) {
     if (!element) return false;
     auto* fe = as<Noesis::FrameworkElement>(element);
     if (!fe) return false;
@@ -667,14 +667,14 @@ extern "C" bool dm_noesis_controls_fe_set_context_menu(void* element, void* menu
 
 // ContextMenuService attached ContextMenu — readable/writable on any
 // DependencyObject.
-extern "C" void* dm_noesis_controls_contextmenuservice_get_context_menu(void* obj) {
+extern "C" void* noesis_controls_contextmenuservice_get_context_menu(void* obj) {
     if (!obj) return nullptr;
     auto* d = as<Noesis::DependencyObject>(obj);
     return d ? static_cast<Noesis::BaseComponent*>(Noesis::ContextMenuService::GetContextMenu(d))
              : nullptr;
 }
 
-extern "C" bool dm_noesis_controls_contextmenuservice_set_context_menu(void* obj, void* menu) {
+extern "C" bool noesis_controls_contextmenuservice_set_context_menu(void* obj, void* menu) {
     if (!obj) return false;
     auto* d = as<Noesis::DependencyObject>(obj);
     if (!d) return false;
@@ -685,7 +685,7 @@ extern "C" bool dm_noesis_controls_contextmenuservice_set_context_menu(void* obj
 }
 
 // ContextMenu control IsOpen.
-extern "C" bool dm_noesis_controls_contextmenu_get_is_open(void* element, bool* out) {
+extern "C" bool noesis_controls_contextmenu_get_is_open(void* element, bool* out) {
     if (!element || !out) return false;
     auto* cm = as<Noesis::ContextMenu>(element);
     if (!cm) return false;
@@ -693,7 +693,7 @@ extern "C" bool dm_noesis_controls_contextmenu_get_is_open(void* element, bool* 
     return true;
 }
 
-extern "C" bool dm_noesis_controls_contextmenu_set_is_open(void* element, bool open) {
+extern "C" bool noesis_controls_contextmenu_set_is_open(void* element, bool open) {
     if (!element) return false;
     auto* cm = as<Noesis::ContextMenu>(element);
     if (!cm) return false;
@@ -708,7 +708,7 @@ extern "C" bool dm_noesis_controls_contextmenu_set_is_open(void* element, bool o
 //        for edge: 0=Top 1=Bottom 2=LeftEnd 3=RightEnd
 // All are deferred by Noesis to the next layout pass (like ScrollToOffset).
 
-extern "C" bool dm_noesis_controls_scrollviewer_line(void* element, int32_t which) {
+extern "C" bool noesis_controls_scrollviewer_line(void* element, int32_t which) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -721,7 +721,7 @@ extern "C" bool dm_noesis_controls_scrollviewer_line(void* element, int32_t whic
     }
 }
 
-extern "C" bool dm_noesis_controls_scrollviewer_page(void* element, int32_t which) {
+extern "C" bool noesis_controls_scrollviewer_page(void* element, int32_t which) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -734,7 +734,7 @@ extern "C" bool dm_noesis_controls_scrollviewer_page(void* element, int32_t whic
     }
 }
 
-extern "C" bool dm_noesis_controls_scrollviewer_edge(void* element, int32_t which) {
+extern "C" bool noesis_controls_scrollviewer_edge(void* element, int32_t which) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -747,12 +747,12 @@ extern "C" bool dm_noesis_controls_scrollviewer_edge(void* element, int32_t whic
     }
 }
 
-// Extra ScrollViewer width metrics (the existing dm_noesis_scrollviewer_get
+// Extra ScrollViewer width metrics (the existing noesis_scrollviewer_get
 // exposes 0..5; 6=ExtentWidth, 7=ViewportWidth). Noesis 3.2.13 keeps
 // ScrollViewer::GetScrollInfo() protected, so the raw IScrollInfo backend is
 // not publicly reachable; the public line/page/edge methods above are the
 // IScrollInfo surface as exposed by ScrollViewer.
-extern "C" bool dm_noesis_controls_scrollviewer_metric(void* element, int32_t which, float* out) {
+extern "C" bool noesis_controls_scrollviewer_metric(void* element, int32_t which, float* out) {
     if (!element || !out) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
     if (!sv) return false;
@@ -767,7 +767,7 @@ extern "C" bool dm_noesis_controls_scrollviewer_metric(void* element, int32_t wh
 
 // Borrowed canonical pointer to the Image's Source (an ImageSource), or null
 // when unset / `element` is not an Image.
-extern "C" void* dm_noesis_controls_image_get_source(void* element) {
+extern "C" void* noesis_controls_image_get_source(void* element) {
     if (!element) return nullptr;
     auto* img = as<Noesis::Image>(element);
     return img ? static_cast<Noesis::BaseComponent*>(img->GetSource()) : nullptr;
@@ -776,7 +776,7 @@ extern "C" void* dm_noesis_controls_image_get_source(void* element) {
 // `source` must be an ImageSource* (e.g. a BitmapImage / TextureSource handle's
 // raw pointer; borrowed, Noesis takes its own reference) or null to clear.
 // Returns false on a non-Image or a `source` that is not an ImageSource.
-extern "C" bool dm_noesis_controls_image_set_source(void* element, void* source) {
+extern "C" bool noesis_controls_image_set_source(void* element, void* source) {
     if (!element) return false;
     auto* img = as<Noesis::Image>(element);
     if (!img) return false;

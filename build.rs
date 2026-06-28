@@ -51,7 +51,7 @@ fn main() {
             "\n\nNOESIS_SDK_DIR is not set.\n\
              Extract the Noesis Native SDK and point NOESIS_SDK_DIR at the directory \
              containing Include/ and Bin/.\n\
-             See dm_noesis_runtime/README.md for setup.\n"
+             See noesis_runtime/README.md for setup.\n"
         )
     });
     let sdk = PathBuf::from(&sdk_dir);
@@ -84,12 +84,12 @@ fn main() {
 
     // Publish the resolved Bin/<platform> path to downstream crates as
     // DEP_NOESIS_LIB_DIR (per cargo's `links = "Noesis"` metadata mechanism).
-    // dm_noesis_bevy reads this in its own build.rs to bake the same rpath into
+    // noesis_bevy reads this in its own build.rs to bake the same rpath into
     // example/test binaries; rustc-link-arg below only applies to OUR own bins.
     println!("cargo:lib_dir={}", bin.display());
 
     if target_os == "linux" {
-        // Bake the SDK Bin/ path into rpath so dm_noesis_runtime's own integration tests
+        // Bake the SDK Bin/ path into rpath so noesis_runtime's own integration tests
         // find libNoesis.so without LD_LIBRARY_PATH. Downstream consumers do the
         // same in their build.rs via DEP_NOESIS_LIB_DIR.
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", bin.display());
@@ -134,11 +134,11 @@ fn main() {
         .include(&include)
         .flag_if_supported("-Wno-unused-parameter");
 
-    // The `test-utils` Cargo feature gates the dm_noesis_test_* C entrypoints
-    // (defined in noesis_render_device.cpp under #ifdef DM_NOESIS_TEST_UTILS).
+    // The `test-utils` Cargo feature gates the noesis_test_* C entrypoints
+    // (defined in noesis_render_device.cpp under #ifdef NOESIS_TEST_UTILS).
     if env::var_os("CARGO_FEATURE_TEST_UTILS").is_some() {
-        build.define("DM_NOESIS_TEST_UTILS", None);
+        build.define("NOESIS_TEST_UTILS", None);
     }
 
-    build.compile("dm_noesis_shim");
+    build.compile("noesis_shim");
 }

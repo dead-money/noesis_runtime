@@ -9,13 +9,13 @@
 //! leave `find_resource` empty.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test element_resources -- --nocapture`
+//!   `cargo test -p noesis_runtime --test element_resources -- --nocapture`
 
 use std::ffi::CStr;
 
-use dm_noesis_runtime::ffi::dm_noesis_unbox_string;
-use dm_noesis_runtime::resources::ResourceDictionary;
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::ffi::noesis_unbox_string;
+use noesis_runtime::resources::ResourceDictionary;
+use noesis_runtime::view::FrameworkElement;
 
 const SCENE: &str = r##"<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -24,7 +24,7 @@ const SCENE: &str = r##"<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xam
 
 fn unbox(ptr: *mut std::ffi::c_void) -> Option<String> {
     // SAFETY: `ptr` is a live boxed value borrowed from a dictionary entry.
-    let s = unsafe { dm_noesis_unbox_string(ptr) };
+    let s = unsafe { noesis_unbox_string(ptr) };
     if s.is_null() {
         return None;
     }
@@ -37,9 +37,9 @@ fn element_resources_set_and_find() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut root = FrameworkElement::parse(SCENE).expect("parse scene");
@@ -86,5 +86,5 @@ fn element_resources_set_and_find() {
         assert_eq!(read_back.len(), 1, "exactly the one entry we added");
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

@@ -11,14 +11,14 @@
 //! `style` read-back.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test style_from_code -- --nocapture`
+//!   `cargo test -p noesis_runtime --test style_from_code -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::binding::box_f32;
-use dm_noesis_runtime::styles::Style;
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::binding::box_f32;
+use noesis_runtime::styles::Style;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SCENE: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -53,15 +53,15 @@ fn style_setter_applies_to_assigned_element() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
         let provider = InMem { bytes };
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
         let root = FrameworkElement::load("scene.xaml").expect("scene load");
         let mut view = View::create(root);
@@ -141,5 +141,5 @@ fn style_setter_applies_to_assigned_element() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

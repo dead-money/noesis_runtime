@@ -15,9 +15,9 @@
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::ffi::PropType;
-use dm_noesis_runtime::view::{DynValue, FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::{XamlProvider, set_xaml_provider};
+use noesis_runtime::ffi::PropType;
+use noesis_runtime::view::{DynValue, FrameworkElement, View};
+use noesis_runtime::xaml_provider::{XamlProvider, set_xaml_provider};
 
 struct InMem {
     bytes: HashMap<String, Vec<u8>>,
@@ -69,9 +69,9 @@ fn dependency_extras() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
@@ -368,5 +368,5 @@ fn dependency_extras() {
         drop(_registered);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

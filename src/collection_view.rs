@@ -8,8 +8,8 @@
 //! resolve against.
 //!
 //! ```no_run
-//! # use dm_noesis_runtime::binding::ObservableCollection;
-//! # use dm_noesis_runtime::collection_view::CollectionViewSource;
+//! # use noesis_runtime::binding::ObservableCollection;
+//! # use noesis_runtime::collection_view::CollectionViewSource;
 //! let mut list = ObservableCollection::new();
 //! list.push_string("a");
 //! list.push_string("b");
@@ -32,18 +32,18 @@ use std::ffi::{CStr, c_void};
 
 use crate::binding::ObservableCollection;
 use crate::ffi::{
-    ClickFn, dm_noesis_base_component_release, dm_noesis_collection_view_count,
-    dm_noesis_collection_view_current_item, dm_noesis_collection_view_current_position,
-    dm_noesis_collection_view_is_current_after_last,
-    dm_noesis_collection_view_is_current_before_first,
-    dm_noesis_collection_view_move_current_to_first,
-    dm_noesis_collection_view_move_current_to_last, dm_noesis_collection_view_move_current_to_next,
-    dm_noesis_collection_view_move_current_to_position,
-    dm_noesis_collection_view_move_current_to_previous, dm_noesis_collection_view_refresh,
-    dm_noesis_collection_view_source_create, dm_noesis_collection_view_source_get_view,
-    dm_noesis_collection_view_source_set_source,
-    dm_noesis_collection_view_subscribe_current_changed,
-    dm_noesis_collection_view_unsubscribe_current_changed, dm_noesis_unbox_string,
+    ClickFn, noesis_base_component_release, noesis_collection_view_count,
+    noesis_collection_view_current_item, noesis_collection_view_current_position,
+    noesis_collection_view_is_current_after_last,
+    noesis_collection_view_is_current_before_first,
+    noesis_collection_view_move_current_to_first,
+    noesis_collection_view_move_current_to_last, noesis_collection_view_move_current_to_next,
+    noesis_collection_view_move_current_to_position,
+    noesis_collection_view_move_current_to_previous, noesis_collection_view_refresh,
+    noesis_collection_view_source_create, noesis_collection_view_source_get_view,
+    noesis_collection_view_source_set_source,
+    noesis_collection_view_subscribe_current_changed,
+    noesis_collection_view_unsubscribe_current_changed, noesis_unbox_string,
 };
 
 /// A code-built `Noesis::CollectionViewSource` — the proxy that produces a
@@ -71,9 +71,9 @@ impl CollectionViewSource {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: no preconditions beyond a live Noesis runtime.
-        let ptr = unsafe { dm_noesis_collection_view_source_create() };
+        let ptr = unsafe { noesis_collection_view_source_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_collection_view_source_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_collection_view_source_create returned null"),
         }
     }
 
@@ -90,7 +90,7 @@ impl CollectionViewSource {
     /// is otherwise independent.
     pub fn set_source(&mut self, source: &ObservableCollection) -> bool {
         // SAFETY: both pointers are live for the call; Noesis takes its own ref.
-        unsafe { dm_noesis_collection_view_source_set_source(self.ptr.as_ptr(), source.raw()) }
+        unsafe { noesis_collection_view_source_set_source(self.ptr.as_ptr(), source.raw()) }
     }
 
     /// Point this source at an arbitrary list `BaseComponent*`. Pass
@@ -102,7 +102,7 @@ impl CollectionViewSource {
     /// `IList` that outlives the call; Noesis takes its own reference.
     pub unsafe fn set_source_raw(&mut self, source: *mut c_void) -> bool {
         // SAFETY: self.ptr live; source per # Safety.
-        unsafe { dm_noesis_collection_view_source_set_source(self.ptr.as_ptr(), source) }
+        unsafe { noesis_collection_view_source_set_source(self.ptr.as_ptr(), source) }
     }
 
     /// The [`CollectionView`] currently associated with this source
@@ -112,7 +112,7 @@ impl CollectionViewSource {
     #[must_use]
     pub fn view(&self) -> Option<CollectionView> {
         // SAFETY: self.ptr is a live CollectionViewSource*; result is +1-owned.
-        let p = unsafe { dm_noesis_collection_view_source_get_view(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_collection_view_source_get_view(self.ptr.as_ptr()) };
         NonNull::new(p).map(|ptr| CollectionView { ptr })
     }
 }
@@ -120,7 +120,7 @@ impl CollectionViewSource {
 impl Drop for CollectionViewSource {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref (create).
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -155,7 +155,7 @@ impl CollectionView {
     #[must_use]
     pub fn count(&self) -> u32 {
         // SAFETY: self.ptr is a live CollectionView*.
-        let n = unsafe { dm_noesis_collection_view_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_collection_view_count(self.ptr.as_ptr()) };
         u32::try_from(n.max(0)).unwrap_or(0)
     }
 
@@ -165,7 +165,7 @@ impl CollectionView {
     #[must_use]
     pub fn current_position(&self) -> i32 {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_current_position(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_current_position(self.ptr.as_ptr()) }
     }
 
     /// The current item, `AddRef`'d back out of the live view, or `None` if the
@@ -173,7 +173,7 @@ impl CollectionView {
     #[must_use]
     pub fn current_item(&self) -> Option<CurrentItem> {
         // SAFETY: self.ptr is a live CollectionView*; result is +1-owned or null.
-        let p = unsafe { dm_noesis_collection_view_current_item(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_collection_view_current_item(self.ptr.as_ptr()) };
         NonNull::new(p).map(|ptr| CurrentItem { ptr })
     }
 
@@ -181,34 +181,34 @@ impl CollectionView {
     #[must_use]
     pub fn is_current_before_first(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_is_current_before_first(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_is_current_before_first(self.ptr.as_ptr()) }
     }
 
     /// Whether the cursor is positioned after the last record.
     #[must_use]
     pub fn is_current_after_last(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_is_current_after_last(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_is_current_after_last(self.ptr.as_ptr()) }
     }
 
     /// Move the cursor to the first record. See the type docs for the return
     /// value; query [`current_position`](Self::current_position) for the result.
     pub fn move_current_to_first(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_move_current_to_first(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_move_current_to_first(self.ptr.as_ptr()) }
     }
 
     /// Move the cursor to the last record. See the type docs for the return value.
     pub fn move_current_to_last(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_move_current_to_last(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_move_current_to_last(self.ptr.as_ptr()) }
     }
 
     /// Move the cursor to the next record (lands *after the last* when called at
     /// the end — check [`is_current_after_last`](Self::is_current_after_last)).
     pub fn move_current_to_next(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_move_current_to_next(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_move_current_to_next(self.ptr.as_ptr()) }
     }
 
     /// Move the cursor to the previous record (lands *before the first* when
@@ -216,20 +216,20 @@ impl CollectionView {
     /// [`is_current_before_first`](Self::is_current_before_first)).
     pub fn move_current_to_previous(&self) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_move_current_to_previous(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_move_current_to_previous(self.ptr.as_ptr()) }
     }
 
     /// Move the cursor to the record at `position` (`-1` = before first,
     /// `count()` = after last). See the type docs for the return value.
     pub fn move_current_to_position(&self, position: i32) -> bool {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_move_current_to_position(self.ptr.as_ptr(), position) }
+        unsafe { noesis_collection_view_move_current_to_position(self.ptr.as_ptr(), position) }
     }
 
     /// Recreate the view (`ICollectionView::Refresh`).
     pub fn refresh(&self) {
         // SAFETY: self.ptr is a live CollectionView*.
-        unsafe { dm_noesis_collection_view_refresh(self.ptr.as_ptr()) }
+        unsafe { noesis_collection_view_refresh(self.ptr.as_ptr()) }
     }
 
     /// Subscribe `handler` to the view's `CurrentChanged` event, fired after the
@@ -250,7 +250,7 @@ impl CollectionView {
         let userdata = Box::into_raw(outer);
         // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked.
         let token = unsafe {
-            dm_noesis_collection_view_subscribe_current_changed(
+            noesis_collection_view_subscribe_current_changed(
                 self.ptr.as_ptr(),
                 current_changed_trampoline,
                 userdata.cast(),
@@ -273,7 +273,7 @@ impl CollectionView {
 impl Drop for CollectionView {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref (get_view).
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -302,7 +302,7 @@ impl CurrentItem {
     #[must_use]
     pub fn as_string(&self) -> Option<String> {
         // SAFETY: self.ptr is a live boxed BaseComponent*.
-        let p = unsafe { dm_noesis_unbox_string(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_unbox_string(self.ptr.as_ptr()) };
         if p.is_null() {
             return None;
         }
@@ -314,7 +314,7 @@ impl CurrentItem {
 impl Drop for CurrentItem {
     fn drop(&mut self) {
         // SAFETY: produced with a +1 ref by current_item.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -348,7 +348,7 @@ impl Drop for CurrentChangedSubscription {
         // SAFETY: token + userdata produced together by subscribe; unsubscribe
         // detaches the delegate before we reclaim the handler box.
         unsafe {
-            dm_noesis_collection_view_unsubscribe_current_changed(self.token.as_ptr());
+            noesis_collection_view_unsubscribe_current_changed(self.token.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }

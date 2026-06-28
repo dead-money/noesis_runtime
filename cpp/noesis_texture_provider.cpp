@@ -37,7 +37,7 @@ namespace {
 
 class RustTextureProvider final : public Noesis::TextureProvider {
 public:
-    RustTextureProvider(const dm_noesis_texture_provider_vtable* vtable, void* userdata)
+    RustTextureProvider(const noesis_texture_provider_vtable* vtable, void* userdata)
         : mVtable(*vtable), mUserdata(userdata)
     {}
 
@@ -45,7 +45,7 @@ public:
         Noesis::TextureInfo info;
         if (!mVtable.get_info) return info;
         const char* uriStr = uri.Str();
-        dm_noesis_texture_info raw{};
+        noesis_texture_info raw{};
         bool ok = mVtable.get_info(mUserdata, uriStr ? uriStr : "", &raw);
         if (!ok) return info;
         info.width = raw.width;
@@ -90,7 +90,7 @@ public:
     }
 
 private:
-    dm_noesis_texture_provider_vtable mVtable;
+    noesis_texture_provider_vtable mVtable;
     void* mUserdata;
 };
 
@@ -98,8 +98,8 @@ private:
 
 // ── TextureProvider C ABI ──────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_texture_provider_create(
-    const dm_noesis_texture_provider_vtable* vtable, void* userdata)
+extern "C" void* noesis_texture_provider_create(
+    const noesis_texture_provider_vtable* vtable, void* userdata)
 {
     if (!vtable) return nullptr;
     Noesis::Ptr<RustTextureProvider> p =
@@ -107,11 +107,11 @@ extern "C" void* dm_noesis_texture_provider_create(
     return p.GiveOwnership();
 }
 
-extern "C" void dm_noesis_texture_provider_destroy(void* provider) {
+extern "C" void noesis_texture_provider_destroy(void* provider) {
     if (!provider) return;
     static_cast<Noesis::TextureProvider*>(provider)->Release();
 }
 
-extern "C" void dm_noesis_set_texture_provider(void* provider) {
+extern "C" void noesis_set_texture_provider(void* provider) {
     Noesis::GUI::SetTextureProvider(static_cast<Noesis::TextureProvider*>(provider));
 }

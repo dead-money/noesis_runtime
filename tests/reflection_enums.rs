@@ -5,7 +5,7 @@
 //! string path the XAML parser uses). A no-op / stubbed registration makes the
 //! type unresolvable or the names unknown, so every assertion below fails.
 
-use dm_noesis_runtime::reflection::register_enum;
+use noesis_runtime::reflection::register_enum;
 
 #[test]
 fn custom_enum_round_trips_through_noesis() {
@@ -13,9 +13,9 @@ fn custom_enum_round_trips_through_noesis() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let e = register_enum(
@@ -49,5 +49,5 @@ fn custom_enum_round_trips_through_noesis() {
         assert!(bogus.is_none(), "empty enum name should be rejected");
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

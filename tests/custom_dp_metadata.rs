@@ -12,11 +12,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, CoerceHandler, Coerced, Instance, PropertyChangeHandler, PropertyDefault,
     PropertyOptions, PropertyValue, fpm_options,
 };
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::ffi::{ClassBase, PropType};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
@@ -49,9 +49,9 @@ fn custom_dp_metadata() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let log = CoerceLog::default();
@@ -127,5 +127,5 @@ fn custom_dp_metadata() {
         drop(reg);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

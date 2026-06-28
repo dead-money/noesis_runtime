@@ -12,12 +12,12 @@
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test element_props -- --nocapture`
+//!   `cargo test -p noesis_runtime --test element_props -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::view::{FrameworkElement, HAlign, VAlign, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, HAlign, VAlign, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid x:Name="Root"
@@ -58,14 +58,14 @@ fn element_props_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -298,5 +298,5 @@ fn element_props_round_trip() {
         drop(_registered);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

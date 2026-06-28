@@ -10,16 +10,16 @@
 //! wrappers drop before `shutdown()`. Hit testing needs a laid-out view; the
 //! `NameScope` / transform parts work on detached elements.
 //!
-//!   `cargo test -p dm_noesis_runtime --test element_tree_access -- --nocapture`
+//!   `cargo test -p noesis_runtime --test element_tree_access -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::name_scope::NameScope;
-use dm_noesis_runtime::transforms::ScaleTransform;
-use dm_noesis_runtime::view::{
+use noesis_runtime::name_scope::NameScope;
+use noesis_runtime::transforms::ScaleTransform;
+use noesis_runtime::view::{
     FrameworkElement, HitTestFilterBehavior, HitTestResultBehavior, View,
 };
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // Two concentric, both-hit-testable Borders so a point at the centre is hit by
 // BOTH (multi-hit), with distinct x:Names for identity. The inner Border is the
@@ -58,14 +58,14 @@ fn filtered_hit_test_namescope_and_render_transform() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -310,5 +310,5 @@ fn filtered_hit_test_namescope_and_render_transform() {
         drop(view);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

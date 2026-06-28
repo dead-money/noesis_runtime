@@ -21,9 +21,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::events::{EventArgs, RoutedEvent, subscribe_event, subscribe_event_by_name};
-use dm_noesis_runtime::view::{FrameworkElement, Key, MouseButton, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::events::{EventArgs, RoutedEvent, subscribe_event, subscribe_event_by_name};
+use noesis_runtime::view::{FrameworkElement, Key, MouseButton, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // Root Grid intentionally has NO explicit Width/Height so it stretches to the
 // View — that lets `SizeChanged` track `set_size`. Background makes it
@@ -55,9 +55,9 @@ fn routed_events_dispatch_typed_args() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // Captured across the FFI boundary, asserted after shutdown.
     let mouse_state: Arc<Mutex<Option<((f32, f32), MouseButton)>>> = Arc::new(Mutex::new(None));
@@ -70,7 +70,7 @@ fn routed_events_dispatch_typed_args() {
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -260,5 +260,5 @@ fn routed_events_dispatch_typed_args() {
         drop(_registered);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

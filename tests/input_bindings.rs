@@ -14,10 +14,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use dm_noesis_runtime::commands::Command;
-use dm_noesis_runtime::input::{InputBinding, KeyBinding, KeyGesture, ModifierKeys};
-use dm_noesis_runtime::view::{FrameworkElement, Key, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::commands::Command;
+use noesis_runtime::input::{InputBinding, KeyBinding, KeyGesture, ModifierKeys};
+use noesis_runtime::view::{FrameworkElement, Key, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SCENE: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -48,15 +48,15 @@ fn input_bindings_fire_bound_commands() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // ── Case 1: Ctrl+Enter KeyBinding ───────────────────────────────────────
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let root = FrameworkElement::load("scene.xaml").expect("load scene");
         let mut target = root.find_name("Target").expect("find Target");
@@ -117,7 +117,7 @@ fn input_bindings_fire_bound_commands() {
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let root = FrameworkElement::load("scene.xaml").expect("load scene");
         let mut target = root.find_name("Target").expect("find Target");
@@ -161,5 +161,5 @@ fn input_bindings_fire_bound_commands() {
         drop(command);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

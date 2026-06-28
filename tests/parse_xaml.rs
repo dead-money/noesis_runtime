@@ -1,7 +1,7 @@
 //! TODO §15 — `GUI::ParseXaml` + `GUI::LoadComponent` integration test.
 //!
 //! Exercises [`FrameworkElement::parse`] (in-memory XAML, no `XamlProvider` URI)
-//! and [`dm_noesis_runtime::gui::load_component`]. Noesis can't be re-init'd
+//! and [`noesis_runtime::gui::load_component`]. Noesis can't be re-init'd
 //! per process, so both surfaces share one `#[test]` inside a single
 //! init/shutdown, with every owning wrapper dropped before `shutdown`.
 //!
@@ -14,20 +14,20 @@
 //! never pass a null URI).
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test parse_xaml -- --nocapture`
+//!   `cargo test -p noesis_runtime --test parse_xaml -- --nocapture`
 
 use std::collections::HashMap;
 use std::ffi::{CString, c_void};
 use std::ptr;
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{
-    ClassBase, dm_noesis_base_component_release, dm_noesis_framework_element_find_name,
-    dm_noesis_gui_load_component,
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{
+    ClassBase, noesis_base_component_release, noesis_framework_element_find_name,
+    noesis_gui_load_component,
 };
-use dm_noesis_runtime::gui::load_component;
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::gui::load_component;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // A Grid hosting a single named Button — a real FrameworkElement tree.
 const GRID_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
@@ -87,13 +87,13 @@ fn instance_has_named_child(raw: *mut c_void, name: &str) -> bool {
     let c = CString::new(name).expect("name contained NUL");
     // SAFETY: `raw` is a live BaseComponent* (a FrameworkElement subclass) for
     // the duration of the call; find_name returns NULL or a +1 ref we release.
-    let found = unsafe { dm_noesis_framework_element_find_name(raw, c.as_ptr()) };
+    let found = unsafe { noesis_framework_element_find_name(raw, c.as_ptr()) };
     if found.is_null() {
         false
     } else {
         // SAFETY: `found` is a freshly-AddRef'd BaseComponent* we now own and
         // must release exactly once.
-        unsafe { dm_noesis_base_component_release(found) };
+        unsafe { noesis_base_component_release(found) };
         true
     }
 }
@@ -104,9 +104,9 @@ fn parse_xaml_and_load_component() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── ParseXaml: well-formed FrameworkElement tree ───────────────────
@@ -176,8 +176,8 @@ fn parse_xaml_and_load_component() {
         // SAFETY: instance.raw() is live; uri is intentionally null to hit the
         // C-side guard, which must return false without dereferencing it.
         assert!(
-            !unsafe { dm_noesis_gui_load_component(instance.raw(), ptr::null()) },
-            "dm_noesis_gui_load_component(instance, null uri) must be false"
+            !unsafe { noesis_gui_load_component(instance.raw(), ptr::null()) },
+            "noesis_gui_load_component(instance, null uri) must be false"
         );
 
         // The real grafting effect: with `x:Class=\"DM.LoadTarget\"` matching the
@@ -191,7 +191,7 @@ fn parse_xaml_and_load_component() {
             COMPONENT_XAML.as_bytes().to_vec(),
         );
         let _registered_provider =
-            dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(provider));
+            noesis_runtime::xaml_provider::set_xaml_provider(InMem(provider));
 
         // Before loading, the instance is empty — the named child does not exist.
         assert!(
@@ -218,5 +218,5 @@ fn parse_xaml_and_load_component() {
         drop(registration);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

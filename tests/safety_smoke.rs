@@ -1,4 +1,4 @@
-//! Safety smoke test — exercises the `dm_noesis_runtime` FFI surface against a
+//! Safety smoke test — exercises the `noesis_runtime` FFI surface against a
 //! catalogue of valid-but-edge-case inputs and asserts no crashes.
 //!
 //! The whole file is a single `#[test]` because Noesis's `Init` /
@@ -8,15 +8,15 @@
 //! it died.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test safety_smoke -- --nocapture`
+//!   `cargo test -p noesis_runtime --test safety_smoke -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::markup::MarkupExtensionRegistration;
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::markup::MarkupExtensionRegistration;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // Quiet handler that records nothing; we just want to make sure the FFI
 // doesn't crash when callbacks fire.
@@ -42,7 +42,7 @@ fn build_view(xaml: &str) -> (View, FrameworkElement) {
     let mut bytes = HashMap::new();
     bytes.insert("scene.xaml".to_string(), xaml.as_bytes().to_vec());
     let provider = Provider(bytes);
-    let _guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(provider);
+    let _guard = noesis_runtime::xaml_provider::set_xaml_provider(provider);
     // _guard immediately drops at end of scope — but we need it alive for
     // the load. Hold it across the load by leaking; the next call to
     // set_xaml_provider replaces it.
@@ -64,9 +64,9 @@ fn safety_smoke() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // ── Block 1: every PropType, registered and round-tripped ──────────────
     eprintln!("=== Block 1: PropType registration matrix ===");
@@ -154,11 +154,11 @@ fn safety_smoke() {
         let mut bytes = HashMap::new();
         bytes.insert("theme.xaml".into(), theme_xaml.as_bytes().to_vec());
         bytes.insert("scene.xaml".into(), scene_xaml.as_bytes().to_vec());
-        let _g = dm_noesis_runtime::xaml_provider::set_xaml_provider(Provider(bytes));
+        let _g = noesis_runtime::xaml_provider::set_xaml_provider(Provider(bytes));
         std::mem::forget(_g);
 
         assert!(
-            dm_noesis_runtime::gui::load_application_resources("theme.xaml"),
+            noesis_runtime::gui::load_application_resources("theme.xaml"),
             "load_application_resources(theme.xaml) returned false"
         );
 
@@ -359,10 +359,10 @@ fn safety_smoke() {
         let mut bytes = HashMap::new();
         bytes.insert("theme.xaml".to_string(), theme_xaml.as_bytes().to_vec());
         bytes.insert("scene.xaml".to_string(), scene_xaml.as_bytes().to_vec());
-        let _g = dm_noesis_runtime::xaml_provider::set_xaml_provider(Provider(bytes));
+        let _g = noesis_runtime::xaml_provider::set_xaml_provider(Provider(bytes));
         std::mem::forget(_g);
         // Application resources install BEFORE the View ever exists.
-        let installed = dm_noesis_runtime::gui::load_application_resources("theme.xaml");
+        let installed = noesis_runtime::gui::load_application_resources("theme.xaml");
         assert!(installed, "load_application_resources returned false");
 
         let element = FrameworkElement::load("scene.xaml")
@@ -438,10 +438,10 @@ fn safety_smoke() {
         bytes.insert("inner.xaml".into(), inner_xaml.as_bytes().to_vec());
         bytes.insert("theme.xaml".into(), theme_xaml.as_bytes().to_vec());
         bytes.insert("scene.xaml".into(), scene_xaml.as_bytes().to_vec());
-        let _g = dm_noesis_runtime::xaml_provider::set_xaml_provider(Provider(bytes));
+        let _g = noesis_runtime::xaml_provider::set_xaml_provider(Provider(bytes));
         std::mem::forget(_g);
 
-        let installed = dm_noesis_runtime::gui::load_application_resources("theme.xaml");
+        let installed = noesis_runtime::gui::load_application_resources("theme.xaml");
         assert!(
             installed,
             "load_application_resources(theme.xaml) returned false"
@@ -539,5 +539,5 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

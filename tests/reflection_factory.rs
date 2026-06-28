@@ -9,10 +9,10 @@
 //! `Caption` stays empty and the assertion fails. A type with no factory is not
 //! instantiated, so its named element is absent from the parsed tree.
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::reflection::{is_component_registered, set_content_property};
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::reflection::{is_component_registered, set_content_property};
+use noesis_runtime::view::FrameworkElement;
 
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
@@ -41,9 +41,9 @@ fn factory_and_content_property() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut builder = ClassBuilder::new("DmTest.Card", ClassBase::ContentControl, NoopHandler);
@@ -93,5 +93,5 @@ fn factory_and_content_property() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

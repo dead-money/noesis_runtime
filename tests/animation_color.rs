@@ -5,9 +5,9 @@
 //! crossing the FFI. From red to blue over 0.5s: midway the color is partway,
 //! at the end it is ~blue. A stubbed animation leaves the brush red.
 
-use dm_noesis_runtime::animation::{Animation, ColorAnimation, Storyboard, Timeline};
-use dm_noesis_runtime::brushes::SolidColorBrush;
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::animation::{Animation, ColorAnimation, Storyboard, Timeline};
+use noesis_runtime::brushes::SolidColorBrush;
+use noesis_runtime::view::{FrameworkElement, View};
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -22,9 +22,9 @@ fn color_animation_drives_brush_color() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let element = FrameworkElement::parse(XAML).expect("parse");
@@ -86,5 +86,5 @@ fn color_animation_drives_brush_color() {
         drop(content);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

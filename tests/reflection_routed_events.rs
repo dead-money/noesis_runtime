@@ -10,11 +10,11 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::events::subscribe_event_by_name;
-use dm_noesis_runtime::ffi::ClassBase;
-use dm_noesis_runtime::reflection::{RoutingStrategy, raise_event, register_routed_event};
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::events::subscribe_event_by_name;
+use noesis_runtime::ffi::ClassBase;
+use noesis_runtime::reflection::{RoutingStrategy, raise_event, register_routed_event};
+use noesis_runtime::view::FrameworkElement;
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -34,9 +34,9 @@ fn custom_routed_event_fires() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let counter = Arc::new(AtomicU32::new(0));
 
@@ -111,5 +111,5 @@ fn custom_routed_event_fires() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

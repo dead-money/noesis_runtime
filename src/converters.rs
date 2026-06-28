@@ -47,9 +47,9 @@ use core::ptr::{self, NonNull};
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    ValueConverterVTable, dm_noesis_box_bool, dm_noesis_box_double, dm_noesis_box_int32,
-    dm_noesis_box_string, dm_noesis_unbox_bool, dm_noesis_unbox_double, dm_noesis_unbox_int32,
-    dm_noesis_unbox_string, dm_noesis_value_converter_create, dm_noesis_value_converter_destroy,
+    ValueConverterVTable, noesis_box_bool, noesis_box_double, noesis_box_int32,
+    noesis_box_string, noesis_unbox_bool, noesis_unbox_double, noesis_unbox_int32,
+    noesis_unbox_string, noesis_value_converter_create, noesis_value_converter_destroy,
 };
 
 /// A borrowed, boxed binding value handed to a [`ValueConverter`]. `None`-valued
@@ -80,7 +80,7 @@ impl ConvertArg {
     pub fn as_bool(&self) -> Option<bool> {
         let p = self.0?;
         let mut out = false;
-        let ok = unsafe { dm_noesis_unbox_bool(p.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_bool(p.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -89,7 +89,7 @@ impl ConvertArg {
     pub fn as_i32(&self) -> Option<i32> {
         let p = self.0?;
         let mut out = 0i32;
-        let ok = unsafe { dm_noesis_unbox_int32(p.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_int32(p.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -98,7 +98,7 @@ impl ConvertArg {
     pub fn as_f64(&self) -> Option<f64> {
         let p = self.0?;
         let mut out = 0.0f64;
-        let ok = unsafe { dm_noesis_unbox_double(p.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_double(p.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -107,7 +107,7 @@ impl ConvertArg {
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         let p = self.0?;
-        let s = unsafe { dm_noesis_unbox_string(p.as_ptr()) };
+        let s = unsafe { noesis_unbox_string(p.as_ptr()) };
         if s.is_null() {
             return None;
         }
@@ -136,12 +136,12 @@ impl Converted {
     /// null for [`Converted::Null`].
     pub(crate) fn into_boxed(self) -> *mut c_void {
         match self {
-            Converted::Bool(b) => unsafe { dm_noesis_box_bool(b) },
-            Converted::Int32(i) => unsafe { dm_noesis_box_int32(i) },
-            Converted::Double(d) => unsafe { dm_noesis_box_double(d) },
+            Converted::Bool(b) => unsafe { noesis_box_bool(b) },
+            Converted::Int32(i) => unsafe { noesis_box_int32(i) },
+            Converted::Double(d) => unsafe { noesis_box_double(d) },
             Converted::String(s) => {
                 let cs = CString::new(s).unwrap_or_default();
-                unsafe { dm_noesis_box_string(cs.as_ptr()) }
+                unsafe { noesis_box_string(cs.as_ptr()) }
             }
             Converted::Null => ptr::null_mut(),
         }
@@ -270,7 +270,7 @@ impl Converter {
         // SAFETY: vtable is 'static + valid; userdata ownership transfers to
         // C++; the free trampoline is extern "C".
         let ptr = unsafe {
-            dm_noesis_value_converter_create(
+            noesis_value_converter_create(
                 &CONVERTER_VTABLE,
                 userdata.cast(),
                 converter_free_trampoline,
@@ -286,7 +286,7 @@ impl Converter {
                 // stored it (null return = nothing took ownership).
                 unsafe { drop(Box::from_raw(userdata)) };
                 unreachable!(
-                    "dm_noesis_value_converter_create returned null for a non-null vtable"
+                    "noesis_value_converter_create returned null for a non-null vtable"
                 );
             }
         }
@@ -302,9 +302,9 @@ impl Converter {
 
 impl Drop for Converter {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_value_converter_create with +1 ref; this
+        // SAFETY: produced by noesis_value_converter_create with +1 ref; this
         // releases exactly that ref. The handler box is freed by the C++
         // destructor once the last reference (possibly a binding) drops.
-        unsafe { dm_noesis_value_converter_destroy(self.ptr.as_ptr()) }
+        unsafe { noesis_value_converter_destroy(self.ptr.as_ptr()) }
     }
 }

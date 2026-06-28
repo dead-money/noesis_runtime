@@ -1,7 +1,7 @@
 //! FFI to the Noesis GUI Native SDK.
 //!
 //! Renderer-agnostic — Bevy/wgpu integration lives in the sibling crate
-//! `dm_noesis_bevy`. See `../dm_noesis_bevy/CLAUDE.md` for the phase plan.
+//! `noesis_bevy`. See `../noesis_bevy/CLAUDE.md` for the phase plan.
 //!
 //! Currently at Phase 0: lifecycle only.
 //!
@@ -87,7 +87,7 @@ pub fn set_license(name: &str, key: &str) {
     let n = CString::new(name).expect("license name contained NUL");
     let k = CString::new(key).expect("license key contained NUL");
     // SAFETY: pointers live for the duration of the call; the shim copies into Noesis.
-    unsafe { ffi::dm_noesis_set_license(n.as_ptr(), k.as_ptr()) }
+    unsafe { ffi::noesis_set_license(n.as_ptr(), k.as_ptr()) }
 }
 
 /// Disable the Hot Reload feature before [`init`]. Hot Reload is on by default
@@ -105,7 +105,7 @@ pub fn set_license(name: &str, key: &str) {
 pub fn disable_hot_reload() {
     // SAFETY: a pre-init GUI:: free call with no arguments or preconditions
     // beyond "call before Init", which is the caller's contract.
-    unsafe { ffi::dm_noesis_disable_hot_reload() }
+    unsafe { ffi::noesis_disable_hot_reload() }
 }
 
 /// Skip the Inspector's socket initialization (e.g. `WSAStartup` on Windows)
@@ -116,7 +116,7 @@ pub fn disable_hot_reload() {
 /// Must be called **before** [`init`].
 pub fn disable_socket_init() {
     // SAFETY: pre-init GUI:: free call; see `disable_hot_reload`.
-    unsafe { ffi::dm_noesis_disable_socket_init() }
+    unsafe { ffi::noesis_disable_socket_init() }
 }
 
 /// Disable all remote Inspector connections before [`init`]. The Inspector is
@@ -127,7 +127,7 @@ pub fn disable_socket_init() {
 /// Must be called **before** [`init`].
 pub fn disable_inspector() {
     // SAFETY: pre-init GUI:: free call; see `disable_hot_reload`.
-    unsafe { ffi::dm_noesis_disable_inspector() }
+    unsafe { ffi::noesis_disable_inspector() }
 }
 
 /// Returns whether a remote Inspector is currently connected.
@@ -140,7 +140,7 @@ pub fn disable_inspector() {
 pub fn is_inspector_connected() -> bool {
     // SAFETY: runtime GUI:: query; safe to call any time, returns false if the
     // Inspector subsystem is absent.
-    unsafe { ffi::dm_noesis_is_inspector_connected() }
+    unsafe { ffi::noesis_is_inspector_connected() }
 }
 
 /// Keep the Inspector connection alive. [`crate::view::View`] updates call this
@@ -149,25 +149,25 @@ pub fn is_inspector_connected() -> bool {
 pub fn update_inspector() {
     // SAFETY: runtime GUI:: call; safe to call any time (no-op without an
     // active Inspector connection).
-    unsafe { ffi::dm_noesis_update_inspector() }
+    unsafe { ffi::noesis_update_inspector() }
 }
 
 /// Initialize Noesis subsystems. Call exactly once per process; Noesis does
 /// not support re-init after [`shutdown`].
 pub fn init() {
     // SAFETY: no preconditions other than "call once" — documented by Noesis.
-    unsafe { ffi::dm_noesis_init() }
+    unsafe { ffi::noesis_init() }
 }
 
 /// Shut Noesis down. Call once at process exit, after all Noesis-owned objects
 /// have been released.
 pub fn shutdown() {
     // SAFETY: caller responsibility per docs.
-    unsafe { ffi::dm_noesis_shutdown() }
+    unsafe { ffi::noesis_shutdown() }
 }
 
 /// Curated re-exports of the items most code reaches for. Glob-import it
-/// (`use dm_noesis_runtime::prelude::*;`) to pull in the core view/element
+/// (`use noesis_runtime::prelude::*;`) to pull in the core view/element
 /// handles, the brush/transform/geometry traits and their common concrete
 /// types, data-binding and collection types, the custom-control and
 /// markup-extension surface, the provider traits, the lifecycle free functions,
@@ -181,9 +181,9 @@ pub fn shutdown() {
 /// once per process, and `cargo test` merges all doctests into one binary.
 ///
 /// ```no_run
-/// use dm_noesis_runtime::prelude::*;
+/// use noesis_runtime::prelude::*;
 ///
-/// dm_noesis_runtime::init();
+/// noesis_runtime::init();
 /// // Freestanding objects round-trip through the FFI without a live view.
 /// let mut items = ObservableCollection::new();
 /// assert!(items.is_empty());
@@ -195,7 +195,7 @@ pub fn shutdown() {
 /// let mut brush = SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]);
 /// brush.set_color([0.0, 1.0, 0.0, 1.0]);
 /// assert_eq!(brush.color(), [0.0, 1.0, 0.0, 1.0]);
-/// dm_noesis_runtime::shutdown();
+/// noesis_runtime::shutdown();
 /// ```
 pub mod prelude {
     // Lifecycle & runtime free functions.
@@ -248,7 +248,7 @@ pub mod prelude {
 pub fn version() -> String {
     // SAFETY: version string is owned by the Noesis runtime and stays valid for
     // the lifetime of the process; we copy it into an owned String.
-    let p = unsafe { ffi::dm_noesis_version() };
+    let p = unsafe { ffi::noesis_version() };
     if p.is_null() {
         String::new()
     } else {

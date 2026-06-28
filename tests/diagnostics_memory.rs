@@ -6,8 +6,8 @@
 //! the live-allocation count must rise; the cumulative `accum` counter must
 //! never decrease across reads.
 
-use dm_noesis_runtime::diagnostics as diag;
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::diagnostics as diag;
+use noesis_runtime::view::FrameworkElement;
 
 // A small but non-trivial element tree — each parse allocates many Noesis
 // objects (the Grid, the Button, their DPs / visual children).
@@ -22,9 +22,9 @@ fn allocator_counters_track_real_objects() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // Warm up the parser once so first-use lazy allocations (caches, type
@@ -84,5 +84,5 @@ fn allocator_counters_track_real_objects() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

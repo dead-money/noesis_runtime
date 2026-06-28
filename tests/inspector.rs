@@ -22,7 +22,7 @@
 //! because the pre-init toggles only have meaning before the single `init`.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test inspector -- --nocapture`
+//!   `cargo test -p noesis_runtime --test inspector -- --nocapture`
 
 #[test]
 fn inspector_toggles_and_queries() {
@@ -30,16 +30,16 @@ fn inspector_toggles_and_queries() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
 
     // Pre-init configuration: these must not panic and must not prevent a
     // successful init below.
-    dm_noesis_runtime::disable_hot_reload();
-    dm_noesis_runtime::disable_socket_init();
-    dm_noesis_runtime::disable_inspector();
+    noesis_runtime::disable_hot_reload();
+    noesis_runtime::disable_socket_init();
+    noesis_runtime::disable_inspector();
 
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // NOTE: on a Release dylib (Inspector compiled out) this is always
@@ -47,20 +47,20 @@ fn inspector_toggles_and_queries() {
         // binding works, only that the query links and returns the expected
         // Release value with no remote attached.
         assert!(
-            !dm_noesis_runtime::is_inspector_connected(),
+            !noesis_runtime::is_inspector_connected(),
             "is_inspector_connected() must be false with no Inspector attached"
         );
 
         // The keep-alive pump must link and not crash without a connection.
         // On a Release dylib it is a no-op; this only proves it doesn't panic.
-        dm_noesis_runtime::update_inspector();
+        noesis_runtime::update_inspector();
 
         // Still false after pumping (again, unconditional on a Release dylib).
         assert!(
-            !dm_noesis_runtime::is_inspector_connected(),
+            !noesis_runtime::is_inspector_connected(),
             "is_inspector_connected() must remain false after update_inspector()"
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

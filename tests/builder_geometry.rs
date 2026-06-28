@@ -8,7 +8,7 @@
 //!
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 
-use dm_noesis_runtime::geometry::{ArcFields, ArcSegment, Rect, RectangleGeometry, SweepDirection};
+use noesis_runtime::geometry::{ArcFields, ArcSegment, Rect, RectangleGeometry, SweepDirection};
 
 fn approx(a: f32, b: f32) -> bool {
     (a - b).abs() < 1.0e-4
@@ -20,9 +20,9 @@ fn builder_geometry_struct_args_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── ArcSegment::from_fields ──────────────────────────────────────────
@@ -93,5 +93,5 @@ fn builder_geometry_struct_args_round_trip() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

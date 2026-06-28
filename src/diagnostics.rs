@@ -53,10 +53,10 @@ use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    AssertFn, Error2Fn, ErrorContext as FfiErrorContext, ErrorFn, dm_noesis_get_allocated_memory,
-    dm_noesis_get_allocated_memory_accum, dm_noesis_get_allocations_count,
-    dm_noesis_invoke_assert_handler, dm_noesis_invoke_error_handler, dm_noesis_set_assert_handler,
-    dm_noesis_set_error_handler, dm_noesis_set_thread_error_handler,
+    AssertFn, Error2Fn, ErrorContext as FfiErrorContext, ErrorFn, noesis_get_allocated_memory,
+    noesis_get_allocated_memory_accum, noesis_get_allocations_count,
+    noesis_invoke_assert_handler, noesis_invoke_error_handler, noesis_set_assert_handler,
+    noesis_set_error_handler, noesis_set_thread_error_handler,
 };
 
 /// A borrowed C string → owned `String`, empty on null.
@@ -130,7 +130,7 @@ impl Drop for ErrorHandlerGuard {
         // SAFETY: restore the predecessor (which the C shim re-points its global
         // slot at), then reclaim our leaked closure box exactly once.
         unsafe {
-            dm_noesis_set_error_handler(
+            noesis_set_error_handler(
                 self.prev_cb,
                 self.prev_user,
                 std::ptr::null_mut(),
@@ -158,7 +158,7 @@ where
     // SAFETY: trampoline is extern "C"; `boxed` is freshly leaked and kept alive
     // by the guard; the out-params receive the previous (cb, user).
     unsafe {
-        dm_noesis_set_error_handler(
+        noesis_set_error_handler(
             Some(error_trampoline),
             boxed.cast(),
             &mut prev_cb,
@@ -206,7 +206,7 @@ impl Drop for AssertHandlerGuard {
     fn drop(&mut self) {
         // SAFETY: see `ErrorHandlerGuard::drop`.
         unsafe {
-            dm_noesis_set_assert_handler(
+            noesis_set_assert_handler(
                 self.prev_cb,
                 self.prev_user,
                 std::ptr::null_mut(),
@@ -232,7 +232,7 @@ where
     let mut prev_user: *mut c_void = std::ptr::null_mut();
     // SAFETY: as `set_error_handler`.
     unsafe {
-        dm_noesis_set_assert_handler(
+        noesis_set_assert_handler(
             Some(assert_trampoline),
             boxed.cast(),
             &mut prev_cb,
@@ -295,7 +295,7 @@ impl Drop for ThreadErrorHandlerGuard {
     fn drop(&mut self) {
         // SAFETY: restore the predecessor handler+user, then reclaim our box.
         unsafe {
-            dm_noesis_set_thread_error_handler(
+            noesis_set_thread_error_handler(
                 self.prev_handler,
                 self.prev_user,
                 std::ptr::null_mut(),
@@ -324,7 +324,7 @@ where
     // SAFETY: trampoline is extern "C"; `boxed` is the threaded userdata kept
     // alive by the guard; the out-params receive the previous (handler, user).
     unsafe {
-        dm_noesis_set_thread_error_handler(
+        noesis_set_thread_error_handler(
             Some(error2_trampoline),
             boxed.cast(),
             &mut prev_handler,
@@ -356,7 +356,7 @@ pub fn invoke_error(file: &str, line: u32, fatal: bool, message: &str) {
     // SAFETY: both C strings live for the call; has_context=false so the uri
     // pointer is ignored.
     unsafe {
-        dm_noesis_invoke_error_handler(
+        noesis_invoke_error_handler(
             cf.as_ptr(),
             line,
             fatal,
@@ -393,7 +393,7 @@ pub fn invoke_error_with_context(
     let cm = CString::new(message).expect("message contained interior NUL");
     // SAFETY: all three C strings live for the call; has_context=true.
     unsafe {
-        dm_noesis_invoke_error_handler(
+        noesis_invoke_error_handler(
             cf.as_ptr(),
             line,
             fatal,
@@ -418,7 +418,7 @@ pub fn invoke_assert(file: &str, line: u32, expr: &str) -> bool {
     let cf = CString::new(file).expect("file contained interior NUL");
     let ce = CString::new(expr).expect("expr contained interior NUL");
     // SAFETY: both C strings live for the call.
-    unsafe { dm_noesis_invoke_assert_handler(cf.as_ptr(), line, ce.as_ptr()) }
+    unsafe { noesis_invoke_assert_handler(cf.as_ptr(), line, ce.as_ptr()) }
 }
 
 // ── Memory queries (TODO §17) ─────────────────────────────────────────────────
@@ -429,7 +429,7 @@ pub fn invoke_assert(file: &str, line: u32, expr: &str) -> bool {
 #[must_use]
 pub fn allocated_memory() -> u32 {
     // SAFETY: a process-global counter read; safe any time after init.
-    unsafe { dm_noesis_get_allocated_memory() }
+    unsafe { noesis_get_allocated_memory() }
 }
 
 /// Cumulative bytes ever allocated through Noesis's allocator
@@ -437,7 +437,7 @@ pub fn allocated_memory() -> u32 {
 #[must_use]
 pub fn allocated_memory_accum() -> u32 {
     // SAFETY: as `allocated_memory`.
-    unsafe { dm_noesis_get_allocated_memory_accum() }
+    unsafe { noesis_get_allocated_memory_accum() }
 }
 
 /// Number of live allocations through Noesis's allocator
@@ -445,5 +445,5 @@ pub fn allocated_memory_accum() -> u32 {
 #[must_use]
 pub fn allocations_count() -> u32 {
     // SAFETY: as `allocated_memory`.
-    unsafe { dm_noesis_get_allocations_count() }
+    unsafe { noesis_get_allocations_count() }
 }

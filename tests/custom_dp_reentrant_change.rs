@@ -17,10 +17,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -68,9 +68,9 @@ fn custom_dp_reentrant_change() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let log = Arc::new(Mutex::new(Vec::<(u32, f32)>::new()));
     {
@@ -90,7 +90,7 @@ fn custom_dp_reentrant_change() {
 
         let mut bytes = HashMap::new();
         bytes.insert("re.xaml".to_string(), XAML.as_bytes().to_vec());
-        let _guard = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _guard = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         let element = FrameworkElement::load("re.xaml").expect("load_xaml returned None");
         let mut view = View::create(element);
@@ -135,5 +135,5 @@ fn custom_dp_reentrant_change() {
         drop(view);
         drop(reg);
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

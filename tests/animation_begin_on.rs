@@ -5,8 +5,8 @@
 //! its target, plus the two failure modes: an unknown property and a target not
 //! connected to a live view (no `TimeManager`).
 
-use dm_noesis_runtime::animation::{Animation, DoubleAnimation, HandoffBehavior, Timeline};
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::animation::{Animation, DoubleAnimation, HandoffBehavior, Timeline};
+use noesis_runtime::view::{FrameworkElement, View};
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -21,9 +21,9 @@ fn begin_on_drives_property_directly() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let element = FrameworkElement::parse(XAML).expect("parse");
@@ -74,5 +74,5 @@ fn begin_on_drives_property_directly() {
         drop(content);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

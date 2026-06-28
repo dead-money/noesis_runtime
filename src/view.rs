@@ -20,104 +20,104 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::brushes::{Brush, Effect};
 use crate::ffi::{
-    PropType, dm_noesis_base_component_add_reference, dm_noesis_base_component_get_num_references,
-    dm_noesis_base_component_release, dm_noesis_binding_expression_update_source,
-    dm_noesis_binding_expression_update_target, dm_noesis_control_get_template,
-    dm_noesis_control_set_template, dm_noesis_controls_contextmenu_get_is_open,
-    dm_noesis_controls_contextmenu_set_is_open,
-    dm_noesis_controls_contextmenuservice_get_context_menu,
-    dm_noesis_controls_contextmenuservice_set_context_menu, dm_noesis_controls_fe_get_context_menu,
-    dm_noesis_controls_fe_get_tooltip, dm_noesis_controls_fe_set_context_menu,
-    dm_noesis_controls_fe_set_tooltip, dm_noesis_controls_fe_set_tooltip_string,
-    dm_noesis_controls_generator_container_from_index,
-    dm_noesis_controls_generator_container_from_item,
-    dm_noesis_controls_generator_index_from_container,
-    dm_noesis_controls_generator_item_from_container, dm_noesis_controls_gridview_column_count,
-    dm_noesis_controls_gridview_column_get_actual_width,
-    dm_noesis_controls_gridview_column_get_header, dm_noesis_controls_gridview_column_get_width,
-    dm_noesis_controls_gridview_column_set_width, dm_noesis_controls_image_get_source,
-    dm_noesis_controls_image_set_source, dm_noesis_controls_listview_get_view,
-    dm_noesis_controls_scrollviewer_edge, dm_noesis_controls_scrollviewer_line,
-    dm_noesis_controls_scrollviewer_metric, dm_noesis_controls_scrollviewer_page,
-    dm_noesis_controls_selector_get_selected_value,
-    dm_noesis_controls_selector_get_selected_value_path,
-    dm_noesis_controls_selector_set_selected_value,
-    dm_noesis_controls_selector_set_selected_value_path, dm_noesis_controls_tooltip_get_is_open,
-    dm_noesis_controls_tooltip_set_is_open, dm_noesis_controls_tooltipservice_get_tooltip,
-    dm_noesis_controls_tooltipservice_set_tooltip, dm_noesis_controls_treeview_get_selected_item,
-    dm_noesis_controls_treeviewitem_get_is_expanded,
-    dm_noesis_controls_treeviewitem_get_is_selected,
-    dm_noesis_controls_treeviewitem_set_is_expanded,
-    dm_noesis_controls_treeviewitem_set_is_selected, dm_noesis_decorator_get_child,
-    dm_noesis_decorator_set_child, dm_noesis_dependency_object_check_access,
-    dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
-    dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
-    dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
-    dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
-    dm_noesis_dependency_object_thread_id, dm_noesis_element_get_transform3d,
-    dm_noesis_element_set_transform3d, dm_noesis_expander_get_is_expanded,
-    dm_noesis_expander_set_is_expanded, dm_noesis_focus_element,
-    dm_noesis_framework_element_find_name, dm_noesis_framework_element_find_resource,
-    dm_noesis_framework_element_get_data_context, dm_noesis_framework_element_get_halign,
-    dm_noesis_framework_element_get_name, dm_noesis_framework_element_get_resources,
-    dm_noesis_framework_element_get_style, dm_noesis_framework_element_get_valign,
-    dm_noesis_framework_element_logical_parent, dm_noesis_framework_element_register_name,
-    dm_noesis_framework_element_set_data_context, dm_noesis_framework_element_set_halign,
-    dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_resources,
-    dm_noesis_framework_element_set_style, dm_noesis_framework_element_set_valign,
-    dm_noesis_framework_element_set_visibility, dm_noesis_framework_element_template_child,
-    dm_noesis_framework_element_unregister_name, dm_noesis_get_binding_expression,
-    dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml, dm_noesis_items_control_items_add,
-    dm_noesis_items_control_items_clear, dm_noesis_items_control_items_count,
-    dm_noesis_items_control_items_insert, dm_noesis_items_control_items_remove_at,
-    dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
-    dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_passwordbox_get_password,
-    dm_noesis_passwordbox_set_password, dm_noesis_path_set_points, dm_noesis_popup_get_is_open,
-    dm_noesis_popup_set_is_open, dm_noesis_rangebase_get, dm_noesis_rangebase_set,
-    dm_noesis_render_options_get_bitmap_scaling_mode,
-    dm_noesis_render_options_set_bitmap_scaling_mode, dm_noesis_renderer_init,
-    dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
-    dm_noesis_renderer_render_stereo, dm_noesis_renderer_render_stereo_both,
-    dm_noesis_renderer_shutdown, dm_noesis_renderer_update_render_tree, dm_noesis_scrollviewer_get,
-    dm_noesis_scrollviewer_scroll_to_end, dm_noesis_scrollviewer_scroll_to_home,
-    dm_noesis_scrollviewer_scroll_to_horizontal, dm_noesis_scrollviewer_scroll_to_vertical,
-    dm_noesis_selector_get_selected_index, dm_noesis_selector_get_selected_item,
-    dm_noesis_selector_set_selected_index, dm_noesis_selector_set_selected_item,
-    dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_textbox_get_int,
-    dm_noesis_textbox_get_selected_text, dm_noesis_textbox_select, dm_noesis_textbox_select_all,
-    dm_noesis_textbox_set_int, dm_noesis_toggle_get_is_checked, dm_noesis_toggle_set_is_checked,
-    dm_noesis_ui_element_capture_mouse, dm_noesis_ui_element_capture_mouse_mode,
-    dm_noesis_ui_element_capture_touch, dm_noesis_ui_element_focus_engage,
-    dm_noesis_ui_element_get_is_focused, dm_noesis_ui_element_get_is_keyboard_focus_within,
-    dm_noesis_ui_element_get_is_keyboard_focused, dm_noesis_ui_element_get_is_mouse_captured,
-    dm_noesis_ui_element_get_key_states, dm_noesis_ui_element_get_keyboard_focused,
-    dm_noesis_ui_element_get_modifiers, dm_noesis_ui_element_get_mouse_captured,
-    dm_noesis_ui_element_get_mouse_position, dm_noesis_ui_element_get_render_transform_origin,
-    dm_noesis_ui_element_is_key_down, dm_noesis_ui_element_is_key_toggled,
-    dm_noesis_ui_element_is_key_up, dm_noesis_ui_element_move_focus,
-    dm_noesis_ui_element_predict_focus, dm_noesis_ui_element_release_mouse_capture,
-    dm_noesis_ui_element_set_render_transform_origin, dm_noesis_view_activate,
-    dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
-    dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
-    dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
-    dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
-    dm_noesis_view_get_stats, dm_noesis_view_get_tessellation_max_pixel_error,
-    dm_noesis_view_hscroll, dm_noesis_view_key_down, dm_noesis_view_key_up,
-    dm_noesis_view_mouse_button_down, dm_noesis_view_mouse_button_up,
-    dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel, dm_noesis_view_mouse_move,
-    dm_noesis_view_mouse_wheel, dm_noesis_view_remove_rendering_handler,
-    dm_noesis_view_restart_timer, dm_noesis_view_scroll,
-    dm_noesis_view_set_double_tap_distance_threshold, dm_noesis_view_set_double_tap_time_threshold,
-    dm_noesis_view_set_emulate_touch, dm_noesis_view_set_flags,
-    dm_noesis_view_set_holding_distance_threshold, dm_noesis_view_set_holding_time_threshold,
-    dm_noesis_view_set_manipulation_distance_threshold, dm_noesis_view_set_projection_matrix,
-    dm_noesis_view_set_scale, dm_noesis_view_set_size,
-    dm_noesis_view_set_stereo_offscreen_scale_factor,
-    dm_noesis_view_set_tessellation_max_pixel_error, dm_noesis_view_touch_down,
-    dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
-    dm_noesis_visual_child, dm_noesis_visual_children_count, dm_noesis_visual_hit_test,
-    dm_noesis_visual_hit_test_filtered, dm_noesis_visual_parent,
-    dm_noesis_visual_state_go_to_state,
+    PropType, noesis_base_component_add_reference, noesis_base_component_get_num_references,
+    noesis_base_component_release, noesis_binding_expression_update_source,
+    noesis_binding_expression_update_target, noesis_control_get_template,
+    noesis_control_set_template, noesis_controls_contextmenu_get_is_open,
+    noesis_controls_contextmenu_set_is_open,
+    noesis_controls_contextmenuservice_get_context_menu,
+    noesis_controls_contextmenuservice_set_context_menu, noesis_controls_fe_get_context_menu,
+    noesis_controls_fe_get_tooltip, noesis_controls_fe_set_context_menu,
+    noesis_controls_fe_set_tooltip, noesis_controls_fe_set_tooltip_string,
+    noesis_controls_generator_container_from_index,
+    noesis_controls_generator_container_from_item,
+    noesis_controls_generator_index_from_container,
+    noesis_controls_generator_item_from_container, noesis_controls_gridview_column_count,
+    noesis_controls_gridview_column_get_actual_width,
+    noesis_controls_gridview_column_get_header, noesis_controls_gridview_column_get_width,
+    noesis_controls_gridview_column_set_width, noesis_controls_image_get_source,
+    noesis_controls_image_set_source, noesis_controls_listview_get_view,
+    noesis_controls_scrollviewer_edge, noesis_controls_scrollviewer_line,
+    noesis_controls_scrollviewer_metric, noesis_controls_scrollviewer_page,
+    noesis_controls_selector_get_selected_value,
+    noesis_controls_selector_get_selected_value_path,
+    noesis_controls_selector_set_selected_value,
+    noesis_controls_selector_set_selected_value_path, noesis_controls_tooltip_get_is_open,
+    noesis_controls_tooltip_set_is_open, noesis_controls_tooltipservice_get_tooltip,
+    noesis_controls_tooltipservice_set_tooltip, noesis_controls_treeview_get_selected_item,
+    noesis_controls_treeviewitem_get_is_expanded,
+    noesis_controls_treeviewitem_get_is_selected,
+    noesis_controls_treeviewitem_set_is_expanded,
+    noesis_controls_treeviewitem_set_is_selected, noesis_decorator_get_child,
+    noesis_decorator_set_child, noesis_dependency_object_check_access,
+    noesis_dependency_object_clear_value, noesis_dependency_object_get_attached,
+    noesis_dependency_object_get_base_value, noesis_dependency_object_get_property,
+    noesis_dependency_object_property_tag, noesis_dependency_object_set_attached,
+    noesis_dependency_object_set_current_value, noesis_dependency_object_set_property,
+    noesis_dependency_object_thread_id, noesis_element_get_transform3d,
+    noesis_element_set_transform3d, noesis_expander_get_is_expanded,
+    noesis_expander_set_is_expanded, noesis_focus_element,
+    noesis_framework_element_find_name, noesis_framework_element_find_resource,
+    noesis_framework_element_get_data_context, noesis_framework_element_get_halign,
+    noesis_framework_element_get_name, noesis_framework_element_get_resources,
+    noesis_framework_element_get_style, noesis_framework_element_get_valign,
+    noesis_framework_element_logical_parent, noesis_framework_element_register_name,
+    noesis_framework_element_set_data_context, noesis_framework_element_set_halign,
+    noesis_framework_element_set_margin, noesis_framework_element_set_resources,
+    noesis_framework_element_set_style, noesis_framework_element_set_valign,
+    noesis_framework_element_set_visibility, noesis_framework_element_template_child,
+    noesis_framework_element_unregister_name, noesis_get_binding_expression,
+    noesis_gui_load_xaml, noesis_gui_parse_xaml, noesis_items_control_items_add,
+    noesis_items_control_items_clear, noesis_items_control_items_count,
+    noesis_items_control_items_insert, noesis_items_control_items_remove_at,
+    noesis_items_control_realized_count, noesis_items_control_set_items_source,
+    noesis_logical_child, noesis_logical_children_count, noesis_passwordbox_get_password,
+    noesis_passwordbox_set_password, noesis_path_set_points, noesis_popup_get_is_open,
+    noesis_popup_set_is_open, noesis_rangebase_get, noesis_rangebase_set,
+    noesis_render_options_get_bitmap_scaling_mode,
+    noesis_render_options_set_bitmap_scaling_mode, noesis_renderer_init,
+    noesis_renderer_render, noesis_renderer_render_offscreen,
+    noesis_renderer_render_stereo, noesis_renderer_render_stereo_both,
+    noesis_renderer_shutdown, noesis_renderer_update_render_tree, noesis_scrollviewer_get,
+    noesis_scrollviewer_scroll_to_end, noesis_scrollviewer_scroll_to_home,
+    noesis_scrollviewer_scroll_to_horizontal, noesis_scrollviewer_scroll_to_vertical,
+    noesis_selector_get_selected_index, noesis_selector_get_selected_item,
+    noesis_selector_set_selected_index, noesis_selector_set_selected_item,
+    noesis_text_caret_to_end, noesis_text_get, noesis_text_set, noesis_textbox_get_int,
+    noesis_textbox_get_selected_text, noesis_textbox_select, noesis_textbox_select_all,
+    noesis_textbox_set_int, noesis_toggle_get_is_checked, noesis_toggle_set_is_checked,
+    noesis_ui_element_capture_mouse, noesis_ui_element_capture_mouse_mode,
+    noesis_ui_element_capture_touch, noesis_ui_element_focus_engage,
+    noesis_ui_element_get_is_focused, noesis_ui_element_get_is_keyboard_focus_within,
+    noesis_ui_element_get_is_keyboard_focused, noesis_ui_element_get_is_mouse_captured,
+    noesis_ui_element_get_key_states, noesis_ui_element_get_keyboard_focused,
+    noesis_ui_element_get_modifiers, noesis_ui_element_get_mouse_captured,
+    noesis_ui_element_get_mouse_position, noesis_ui_element_get_render_transform_origin,
+    noesis_ui_element_is_key_down, noesis_ui_element_is_key_toggled,
+    noesis_ui_element_is_key_up, noesis_ui_element_move_focus,
+    noesis_ui_element_predict_focus, noesis_ui_element_release_mouse_capture,
+    noesis_ui_element_set_render_transform_origin, noesis_view_activate,
+    noesis_view_add_reference, noesis_view_add_rendering_handler,
+    noesis_view_cancel_timer, noesis_view_char, noesis_view_create,
+    noesis_view_create_timer, noesis_view_deactivate, noesis_view_destroy,
+    noesis_view_get_content, noesis_view_get_flags, noesis_view_get_renderer,
+    noesis_view_get_stats, noesis_view_get_tessellation_max_pixel_error,
+    noesis_view_hscroll, noesis_view_key_down, noesis_view_key_up,
+    noesis_view_mouse_button_down, noesis_view_mouse_button_up,
+    noesis_view_mouse_double_click, noesis_view_mouse_hwheel, noesis_view_mouse_move,
+    noesis_view_mouse_wheel, noesis_view_remove_rendering_handler,
+    noesis_view_restart_timer, noesis_view_scroll,
+    noesis_view_set_double_tap_distance_threshold, noesis_view_set_double_tap_time_threshold,
+    noesis_view_set_emulate_touch, noesis_view_set_flags,
+    noesis_view_set_holding_distance_threshold, noesis_view_set_holding_time_threshold,
+    noesis_view_set_manipulation_distance_threshold, noesis_view_set_projection_matrix,
+    noesis_view_set_scale, noesis_view_set_size,
+    noesis_view_set_stereo_offscreen_scale_factor,
+    noesis_view_set_tessellation_max_pixel_error, noesis_view_touch_down,
+    noesis_view_touch_move, noesis_view_touch_up, noesis_view_update,
+    noesis_visual_child, noesis_visual_children_count, noesis_visual_hit_test,
+    noesis_visual_hit_test_filtered, noesis_visual_parent,
+    noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
 use crate::transforms::{Transform, Transform3D};
@@ -157,7 +157,7 @@ impl BindingExpressionRef<'_> {
     pub fn update_target(&self) {
         // SAFETY: self.ptr is the borrowed BindingExpression* owned by the
         // target element, valid for the `'a` borrow this handle carries.
-        unsafe { dm_noesis_binding_expression_update_target(self.ptr.as_ptr()) }
+        unsafe { noesis_binding_expression_update_target(self.ptr.as_ptr()) }
     }
 
     /// Push the current target value back to the source, via
@@ -167,7 +167,7 @@ impl BindingExpressionRef<'_> {
     /// `Explicit`; Noesis no-ops it for other binding modes.
     pub fn update_source(&self) {
         // SAFETY: as above — borrowed BindingExpression* valid for `'a`.
-        unsafe { dm_noesis_binding_expression_update_source(self.ptr.as_ptr()) }
+        unsafe { noesis_binding_expression_update_source(self.ptr.as_ptr()) }
     }
 }
 
@@ -185,7 +185,7 @@ impl FrameworkElement {
         let c = CString::new(uri).expect("uri contained interior NUL");
         // SAFETY: c.as_ptr() is valid for the duration of the call; the
         // C ABI just copies into Noesis::Uri.
-        let ptr = unsafe { dm_noesis_gui_load_xaml(c.as_ptr()) };
+        let ptr = unsafe { noesis_gui_load_xaml(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -209,7 +209,7 @@ impl FrameworkElement {
         // SAFETY: c.as_ptr() is valid for the duration of the call; the C ABI
         // only reads the bytes while parsing (synchronously). The result is a
         // freshly-created FrameworkElement* at +1, which `Self`'s Drop releases.
-        let ptr = unsafe { dm_noesis_gui_parse_xaml(c.as_ptr()) };
+        let ptr = unsafe { noesis_gui_parse_xaml(c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -243,7 +243,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn num_references(&self) -> i32 {
         // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
-        unsafe { dm_noesis_base_component_get_num_references(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_get_num_references(self.ptr.as_ptr()) }
     }
 
     /// Take a new owning handle to the same underlying component, bumping its
@@ -253,7 +253,7 @@ impl FrameworkElement {
     pub fn clone_ref(&self) -> Self {
         // SAFETY: self.ptr is a live BaseComponent*; the C side AddRef's and
         // returns it, and `Self`'s Drop releases the new reference.
-        let p = unsafe { dm_noesis_base_component_add_reference(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_base_component_add_reference(self.ptr.as_ptr()) };
         Self {
             ptr: NonNull::new(p).expect("add_reference returned null on a live component"),
         }
@@ -274,7 +274,7 @@ impl FrameworkElement {
     pub fn find_name(&self, name: &str) -> Option<Self> {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call.
-        let ptr = unsafe { dm_noesis_framework_element_find_name(self.ptr.as_ptr(), c.as_ptr()) };
+        let ptr = unsafe { noesis_framework_element_find_name(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -300,7 +300,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call.
         // The returned pointer is borrowed (owned by the target) — never
         // released; its validity is bounded by the `'_` borrow of `self`.
-        let ptr = unsafe { dm_noesis_get_binding_expression(self.ptr.as_ptr(), c.as_ptr()) };
+        let ptr = unsafe { noesis_get_binding_expression(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| BindingExpressionRef {
             ptr,
             _marker: PhantomData,
@@ -314,7 +314,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; the C entrypoint
         // returns either NULL or a Noesis-owned static-ish string we copy
         // immediately.
-        let p = unsafe { dm_noesis_framework_element_get_name(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_framework_element_get_name(self.ptr.as_ptr()) };
         if p.is_null() {
             None
         } else {
@@ -334,7 +334,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
         // null check + a typed `SetValue` on the `Visibility` DP. No
         // userdata or callbacks pass through.
-        unsafe { dm_noesis_framework_element_set_visibility(self.ptr.as_ptr(), visible) }
+        unsafe { noesis_framework_element_set_visibility(self.ptr.as_ptr(), visible) }
     }
 
     /// Set this element's `Margin` (layout offsets in DIPs: left, top, right,
@@ -348,7 +348,7 @@ impl FrameworkElement {
         // and does a typed `SetMargin(Thickness)`. No userdata or callbacks pass
         // through.
         unsafe {
-            dm_noesis_framework_element_set_margin(self.ptr.as_ptr(), left, top, right, bottom);
+            noesis_framework_element_set_margin(self.ptr.as_ptr(), left, top, right, bottom);
         }
     }
 
@@ -366,7 +366,7 @@ impl FrameworkElement {
         // DynamicCasts to TextBox/TextBlock and reads `GetText()`. The
         // returned pointer is null on type mismatch, otherwise a borrowed
         // NUL-terminated UTF-8 string from Noesis-owned storage.
-        let p = unsafe { dm_noesis_text_get(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_text_get(self.ptr.as_ptr()) };
         if p.is_null() {
             None
         } else {
@@ -390,7 +390,7 @@ impl FrameworkElement {
         // for the call duration; the C side either copies into Noesis-
         // owned storage (TextBox::SetText / TextBlock::SetText) or returns
         // false on a type mismatch.
-        unsafe { dm_noesis_text_set(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_text_set(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Set the caret of a `TextBox` to the end of its current text. No-op
@@ -401,7 +401,7 @@ impl FrameworkElement {
     pub fn set_caret_to_end(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
         // null check + DynamicCast + SetCaretIndex.
-        unsafe { dm_noesis_text_caret_to_end(self.ptr.as_ptr()) }
+        unsafe { noesis_text_caret_to_end(self.ptr.as_ptr()) }
     }
 
     /// Move keyboard focus to this element. Returns the value Noesis
@@ -410,7 +410,7 @@ impl FrameworkElement {
     pub fn focus(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
         // DynamicCast<UIElement*> + Focus().
-        unsafe { dm_noesis_focus_element(self.ptr.as_ptr()) }
+        unsafe { noesis_focus_element(self.ptr.as_ptr()) }
     }
 
     // ── Input — finer control (TODO §16) ────────────────────────────────────
@@ -429,7 +429,7 @@ impl FrameworkElement {
     /// this is not a `UIElement` or capture is refused.
     pub fn capture_mouse(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; C narrows to UIElement.
-        unsafe { dm_noesis_ui_element_capture_mouse(self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_capture_mouse(self.ptr.as_ptr()) }
     }
 
     /// Capture the mouse to this element with an explicit
@@ -438,14 +438,14 @@ impl FrameworkElement {
     /// no live `View`.
     pub fn capture_mouse_mode(&mut self, mode: crate::input::CaptureMode) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; mode is a valid ordinal.
-        unsafe { dm_noesis_ui_element_capture_mouse_mode(self.ptr.as_ptr(), mode as i32) }
+        unsafe { noesis_ui_element_capture_mouse_mode(self.ptr.as_ptr(), mode as i32) }
     }
 
     /// Release any mouse capture held by this element
     /// (`UIElement::ReleaseMouseCapture`). No-op if not captured.
     pub fn release_mouse_capture(&mut self) {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_release_mouse_capture(self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_release_mouse_capture(self.ptr.as_ptr()) }
     }
 
     /// Whether this element currently holds mouse capture
@@ -453,14 +453,14 @@ impl FrameworkElement {
     #[must_use]
     pub fn is_mouse_captured(&self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_get_is_mouse_captured(self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_get_is_mouse_captured(self.ptr.as_ptr()) }
     }
 
     /// Capture the touch device `touch_device` to this element
     /// (`UIElement::CaptureTouch`). `false` if not a `UIElement` or refused.
     pub fn capture_touch(&mut self, touch_device: u64) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_capture_touch(self.ptr.as_ptr(), touch_device) }
+        unsafe { noesis_ui_element_capture_touch(self.ptr.as_ptr(), touch_device) }
     }
 
     /// The element currently holding mouse capture in this element's `View`
@@ -470,7 +470,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn mouse_captured(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
-        let p = unsafe { dm_noesis_ui_element_get_mouse_captured(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_ui_element_get_mouse_captured(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -487,7 +487,7 @@ impl FrameworkElement {
     pub fn mouse_position(&self) -> Option<(f32, f32)> {
         let (mut x, mut y) = (0.0f32, 0.0f32);
         // SAFETY: self.ptr is a live FrameworkElement*; both out params valid.
-        unsafe { dm_noesis_ui_element_get_mouse_position(self.ptr.as_ptr(), &mut x, &mut y) }
+        unsafe { noesis_ui_element_get_mouse_position(self.ptr.as_ptr(), &mut x, &mut y) }
             .then_some((x, y))
     }
 
@@ -498,7 +498,7 @@ impl FrameworkElement {
     pub fn modifiers(&self) -> Option<crate::input::ModifierKeys> {
         let mut out = 0;
         // SAFETY: self.ptr is a live FrameworkElement*; out is a valid i32.
-        unsafe { dm_noesis_ui_element_get_modifiers(self.ptr.as_ptr(), &mut out) }
+        unsafe { noesis_ui_element_get_modifiers(self.ptr.as_ptr(), &mut out) }
             .then(|| crate::input::ModifierKeys::from_bits(out))
     }
 
@@ -508,7 +508,7 @@ impl FrameworkElement {
     pub fn key_states(&self, key: Key) -> Option<crate::input::KeyStates> {
         let mut out = 0;
         // SAFETY: self.ptr is a live FrameworkElement*; out is a valid i32.
-        unsafe { dm_noesis_ui_element_get_key_states(self.ptr.as_ptr(), key as i32, &mut out) }
+        unsafe { noesis_ui_element_get_key_states(self.ptr.as_ptr(), key as i32, &mut out) }
             .then(|| crate::input::KeyStates::from_bits(out))
     }
 
@@ -517,7 +517,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn is_key_down(&self, key: Key) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_is_key_down(self.ptr.as_ptr(), key as i32) }
+        unsafe { noesis_ui_element_is_key_down(self.ptr.as_ptr(), key as i32) }
     }
 
     /// Whether `key` is currently up (`Keyboard::IsKeyUp`). An un-attached
@@ -525,14 +525,14 @@ impl FrameworkElement {
     #[must_use]
     pub fn is_key_up(&self, key: Key) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_is_key_up(self.ptr.as_ptr(), key as i32) }
+        unsafe { noesis_ui_element_is_key_up(self.ptr.as_ptr(), key as i32) }
     }
 
     /// Whether `key`'s toggle is on (`Keyboard::IsKeyToggled`, e.g. `CapsLock`).
     #[must_use]
     pub fn is_key_toggled(&self, key: Key) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_is_key_toggled(self.ptr.as_ptr(), key as i32) }
+        unsafe { noesis_ui_element_is_key_toggled(self.ptr.as_ptr(), key as i32) }
     }
 
     /// The element with keyboard focus in this element's `View`
@@ -541,7 +541,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn keyboard_focused(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
-        let p = unsafe { dm_noesis_ui_element_get_keyboard_focused(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_ui_element_get_keyboard_focused(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -549,7 +549,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn is_focused(&self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_get_is_focused(self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_get_is_focused(self.ptr.as_ptr()) }
     }
 
     /// Whether this element has keyboard focus
@@ -557,7 +557,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn is_keyboard_focused(&self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_get_is_keyboard_focused(self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_get_is_keyboard_focused(self.ptr.as_ptr()) }
     }
 
     /// Whether keyboard focus is on this element or a descendant
@@ -565,7 +565,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn is_keyboard_focus_within(&self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        unsafe { dm_noesis_ui_element_get_is_keyboard_focus_within(self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_get_is_keyboard_focus_within(self.ptr.as_ptr()) }
     }
 
     /// Move keyboard focus to this element, optionally **engaging** it
@@ -574,7 +574,7 @@ impl FrameworkElement {
     /// input drives it rather than moving focus. Returns the focusable result.
     pub fn focus_engage(&mut self, engage: bool) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; C narrows to UIElement.
-        unsafe { dm_noesis_ui_element_focus_engage(self.ptr.as_ptr(), engage) }
+        unsafe { noesis_ui_element_focus_engage(self.ptr.as_ptr(), engage) }
     }
 
     /// Move focus away from this element in the given
@@ -587,7 +587,7 @@ impl FrameworkElement {
         wrapped: bool,
     ) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; direction a valid ordinal.
-        unsafe { dm_noesis_ui_element_move_focus(self.ptr.as_ptr(), direction as i32, wrapped) }
+        unsafe { noesis_ui_element_move_focus(self.ptr.as_ptr(), direction as i32, wrapped) }
     }
 
     /// Predict the element focus would land on in `direction` without moving it
@@ -600,7 +600,7 @@ impl FrameworkElement {
         direction: crate::input::FocusNavigationDirection,
     ) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
-        let p = unsafe { dm_noesis_ui_element_predict_focus(self.ptr.as_ptr(), direction as i32) };
+        let p = unsafe { noesis_ui_element_predict_focus(self.ptr.as_ptr(), direction as i32) };
         NonNull::new(p)
     }
 
@@ -622,7 +622,7 @@ impl FrameworkElement {
         // DynamicCasts to Path, and copies the points into a Noesis-owned
         // StreamGeometry before returning.
         unsafe {
-            dm_noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count)
+            noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count)
         }
     }
 
@@ -650,7 +650,7 @@ impl FrameworkElement {
         // calls VisualStateManager::GoToState, returning false on null / wrong
         // type / unknown state.
         unsafe {
-            dm_noesis_visual_state_go_to_state(self.ptr.as_ptr(), c.as_ptr(), use_transitions)
+            noesis_visual_state_go_to_state(self.ptr.as_ptr(), c.as_ptr(), use_transitions)
         }
     }
 
@@ -678,7 +678,7 @@ impl FrameworkElement {
         // `value_ptr` points at a stack value in the per-type FFI layout that
         // the C++ side reads synchronously (or null for "type default").
         unsafe {
-            dm_noesis_dependency_object_set_property(self.ptr.as_ptr(), c.as_ptr(), kind, value_ptr)
+            noesis_dependency_object_set_property(self.ptr.as_ptr(), c.as_ptr(), kind, value_ptr)
         }
     }
 
@@ -689,7 +689,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
         // `out` points at a buffer matching the per-type FFI layout.
         unsafe {
-            dm_noesis_dependency_object_get_property(self.ptr.as_ptr(), c.as_ptr(), kind, out)
+            noesis_dependency_object_get_property(self.ptr.as_ptr(), c.as_ptr(), kind, out)
         }
     }
 
@@ -1051,7 +1051,7 @@ impl FrameworkElement {
     /// long as the binding is live.
     ///
     /// This is the safe entry point preferred by `unsafe`-free consumers (e.g.
-    /// `dm_noesis_bevy`, which is `unsafe_code = forbid`): the `&ClassInstance`
+    /// `noesis_bevy`, which is `unsafe_code = forbid`): the `&ClassInstance`
     /// borrow encodes the "live `BaseComponent`" invariant the raw setter
     /// demands. For an arbitrary `BaseComponent*` use [`Self::set_data_context_raw`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
@@ -1074,14 +1074,14 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; `context` is a live
         // BaseComponent* (or null) per the contract above; the C side
         // DynamicCasts and null-checks.
-        unsafe { dm_noesis_framework_element_set_data_context(self.ptr.as_ptr(), context) }
+        unsafe { noesis_framework_element_set_data_context(self.ptr.as_ptr(), context) }
     }
 
     /// Clear this element's `DataContext`.
     pub fn clear_data_context(&mut self) -> bool {
         // SAFETY: clearing with null is always sound.
         unsafe {
-            dm_noesis_framework_element_set_data_context(self.ptr.as_ptr(), core::ptr::null_mut())
+            noesis_framework_element_set_data_context(self.ptr.as_ptr(), core::ptr::null_mut())
         }
     }
 
@@ -1091,7 +1091,7 @@ impl FrameworkElement {
     pub fn data_context(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side returns a
         // borrowed pointer or null.
-        let p = unsafe { dm_noesis_framework_element_get_data_context(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_framework_element_get_data_context(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -1117,7 +1117,7 @@ impl FrameworkElement {
     pub fn clear_items_source(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; null is always valid.
         unsafe {
-            dm_noesis_items_control_set_items_source(self.ptr.as_ptr(), core::ptr::null_mut())
+            noesis_items_control_set_items_source(self.ptr.as_ptr(), core::ptr::null_mut())
         }
     }
 
@@ -1133,7 +1133,7 @@ impl FrameworkElement {
     pub unsafe fn set_items_source_raw(&mut self, items: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; `items` is a live
         // BaseComponent* (or null) per the contract above.
-        unsafe { dm_noesis_items_control_set_items_source(self.ptr.as_ptr(), items) }
+        unsafe { noesis_items_control_set_items_source(self.ptr.as_ptr(), items) }
     }
 
     /// Number of items this `ItemsControl` sees through its bound source (a live
@@ -1142,7 +1142,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn items_count(&self) -> Option<usize> {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        let n = unsafe { dm_noesis_items_control_items_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_items_control_items_count(self.ptr.as_ptr()) };
         (n >= 0).then_some(n as usize)
     }
 
@@ -1154,7 +1154,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn realized_item_count(&self) -> Option<usize> {
         // SAFETY: self.ptr is a live FrameworkElement*.
-        let n = unsafe { dm_noesis_items_control_realized_count(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_items_control_realized_count(self.ptr.as_ptr()) };
         (n >= 0).then_some(n as usize)
     }
 
@@ -1173,7 +1173,7 @@ impl FrameworkElement {
     pub fn visual_children_count(&self) -> u32 {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts
         // to Visual* and returns 0 on mismatch.
-        unsafe { dm_noesis_visual_children_count(self.ptr.as_ptr()) }
+        unsafe { noesis_visual_children_count(self.ptr.as_ptr()) }
     }
 
     /// Visual child at `index`, or `None` if out of bounds / not a `Visual`.
@@ -1181,7 +1181,7 @@ impl FrameworkElement {
     pub fn visual_child(&self, index: u32) -> Option<Self> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side bounds-checks
         // and hands back a +1 child or NULL.
-        let ptr = unsafe { dm_noesis_visual_child(self.ptr.as_ptr(), index) };
+        let ptr = unsafe { noesis_visual_child(self.ptr.as_ptr(), index) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -1189,7 +1189,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn visual_parent(&self) -> Option<Self> {
         // SAFETY: self.ptr is a live BaseComponent*; +1 parent or NULL.
-        let ptr = unsafe { dm_noesis_visual_parent(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_visual_parent(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -1200,7 +1200,7 @@ impl FrameworkElement {
     pub fn hit_test(&self, x: f32, y: f32) -> Option<Self> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side runs
         // VisualTreeHelper::HitTest and hands back a +1 hit or NULL.
-        let ptr = unsafe { dm_noesis_visual_hit_test(self.ptr.as_ptr(), x, y) };
+        let ptr = unsafe { noesis_visual_hit_test(self.ptr.as_ptr(), x, y) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -1276,7 +1276,7 @@ impl FrameworkElement {
         // SAFETY: trampolines match the C ABI; ctx outlives the synchronous
         // call; self.ptr is a live Visual* (or the C side no-ops on mismatch).
         unsafe {
-            dm_noesis_visual_hit_test_filtered(
+            noesis_visual_hit_test_filtered(
                 self.ptr.as_ptr(),
                 x,
                 y,
@@ -1310,7 +1310,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn logical_parent(&self) -> Option<Self> {
         // SAFETY: self.ptr is a live BaseComponent*; +1 parent or NULL.
-        let ptr = unsafe { dm_noesis_framework_element_logical_parent(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_framework_element_logical_parent(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -1318,7 +1318,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn logical_children_count(&self) -> u32 {
         // SAFETY: self.ptr is a live BaseComponent*; 0 on mismatch.
-        unsafe { dm_noesis_logical_children_count(self.ptr.as_ptr()) }
+        unsafe { noesis_logical_children_count(self.ptr.as_ptr()) }
     }
 
     /// Logical child at `index`, or `None` if out of bounds / not a
@@ -1327,7 +1327,7 @@ impl FrameworkElement {
     pub fn logical_child(&self, index: u32) -> Option<Self> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side bounds-checks
         // and hands back a +1 child or NULL.
-        let ptr = unsafe { dm_noesis_logical_child(self.ptr.as_ptr(), index) };
+        let ptr = unsafe { noesis_logical_child(self.ptr.as_ptr(), index) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -1344,7 +1344,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live BaseComponent*; c lives for the call; the
         // C side AddRefs the result so Rust owns the +1.
         let ptr =
-            unsafe { dm_noesis_framework_element_template_child(self.ptr.as_ptr(), c.as_ptr()) };
+            unsafe { noesis_framework_element_template_child(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -1368,7 +1368,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live DependencyObject*; both C strings live for
         // the call; `value_ptr` matches the per-tag FFI layout.
         unsafe {
-            dm_noesis_dependency_object_set_attached(
+            noesis_dependency_object_set_attached(
                 self.ptr.as_ptr(),
                 o.as_ptr(),
                 p.as_ptr(),
@@ -1385,7 +1385,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live DependencyObject*; both C strings live for
         // the call; `out` matches the per-tag FFI layout.
         unsafe {
-            dm_noesis_dependency_object_get_attached(
+            noesis_dependency_object_get_attached(
                 self.ptr.as_ptr(),
                 o.as_ptr(),
                 p.as_ptr(),
@@ -1504,7 +1504,7 @@ impl FrameworkElement {
     pub fn clear_value(&mut self, name: &str) -> bool {
         let c = CString::new(name).expect("property name contained interior NUL");
         // SAFETY: self.ptr is a live DependencyObject*; c lives for the call.
-        unsafe { dm_noesis_dependency_object_clear_value(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_dependency_object_clear_value(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Internal: forward a typed `SetCurrentValue`.
@@ -1513,7 +1513,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
         // `value_ptr` matches the per-tag FFI layout.
         unsafe {
-            dm_noesis_dependency_object_set_current_value(
+            noesis_dependency_object_set_current_value(
                 self.ptr.as_ptr(),
                 c.as_ptr(),
                 kind,
@@ -1528,7 +1528,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
         // `out` matches the per-tag FFI layout.
         unsafe {
-            dm_noesis_dependency_object_get_base_value(self.ptr.as_ptr(), c.as_ptr(), kind, out)
+            noesis_dependency_object_get_base_value(self.ptr.as_ptr(), c.as_ptr(), kind, out)
         }
     }
 
@@ -1802,7 +1802,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live BaseComponent*; c lives for the call; the
         // C side returns -1 or a valid tag ordinal.
         let tag =
-            unsafe { dm_noesis_dependency_object_property_tag(self.ptr.as_ptr(), c.as_ptr()) };
+            unsafe { noesis_dependency_object_property_tag(self.ptr.as_ptr(), c.as_ptr()) };
         match tag {
             0 => Some(PropType::Int32),
             1 => Some(PropType::Float),
@@ -2007,7 +2007,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn horizontal_alignment(&self) -> Option<HAlign> {
         // SAFETY: self.ptr is a live BaseComponent*; -1 on non-FE.
-        let v = unsafe { dm_noesis_framework_element_get_halign(self.ptr.as_ptr()) };
+        let v = unsafe { noesis_framework_element_get_halign(self.ptr.as_ptr()) };
         HAlign::from_ordinal(v)
     }
 
@@ -2015,14 +2015,14 @@ impl FrameworkElement {
     pub fn set_horizontal_alignment(&mut self, a: HAlign) {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts
         // and no-ops on mismatch.
-        unsafe { dm_noesis_framework_element_set_halign(self.ptr.as_ptr(), a as i32) }
+        unsafe { noesis_framework_element_set_halign(self.ptr.as_ptr(), a as i32) }
     }
 
     /// `VerticalAlignment`, or `None` if this is not a `FrameworkElement`.
     #[must_use]
     pub fn vertical_alignment(&self) -> Option<VAlign> {
         // SAFETY: self.ptr is a live BaseComponent*; -1 on non-FE.
-        let v = unsafe { dm_noesis_framework_element_get_valign(self.ptr.as_ptr()) };
+        let v = unsafe { noesis_framework_element_get_valign(self.ptr.as_ptr()) };
         VAlign::from_ordinal(v)
     }
 
@@ -2030,7 +2030,7 @@ impl FrameworkElement {
     pub fn set_vertical_alignment(&mut self, a: VAlign) {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts
         // and no-ops on mismatch.
-        unsafe { dm_noesis_framework_element_set_valign(self.ptr.as_ptr(), a as i32) }
+        unsafe { noesis_framework_element_set_valign(self.ptr.as_ptr(), a as i32) }
     }
 
     // ── Namescope register / unregister (TODO §2.F) ─────────────────────────
@@ -2048,7 +2048,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live BaseComponent*; c lives for the call;
         // `object` is a live element we borrow; the scope stores its own ref.
         unsafe {
-            dm_noesis_framework_element_register_name(
+            noesis_framework_element_register_name(
                 self.ptr.as_ptr(),
                 c.as_ptr(),
                 object.ptr.as_ptr(),
@@ -2065,7 +2065,7 @@ impl FrameworkElement {
     pub fn unregister_name(&mut self, name: &str) -> bool {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c lives for the call.
-        unsafe { dm_noesis_framework_element_unregister_name(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_framework_element_unregister_name(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     // ── Thread affinity (TODO §2.G) ─────────────────────────────────────────
@@ -2076,7 +2076,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn check_access(&self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; false on non-DO.
-        unsafe { dm_noesis_dependency_object_check_access(self.ptr.as_ptr()) }
+        unsafe { noesis_dependency_object_check_access(self.ptr.as_ptr()) }
     }
 
     /// The id of the thread this object is attached to
@@ -2085,7 +2085,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn thread_id(&self) -> u32 {
         // SAFETY: self.ptr is a live BaseComponent*; UINT32_MAX on non-DO.
-        unsafe { dm_noesis_dependency_object_thread_id(self.ptr.as_ptr()) }
+        unsafe { noesis_dependency_object_thread_id(self.ptr.as_ptr()) }
     }
 
     // ── Brushes / transforms / effects / RenderOptions (TODO §11) ────────────
@@ -2145,7 +2145,7 @@ impl FrameworkElement {
         let borrowed = self.get_component("RenderTransform")?;
         // SAFETY: borrowed is a live Transform* (BaseComponent*); AddRef and
         // wrap as an owning handle whose Drop releases the new reference.
-        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        let owned = unsafe { noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|p| unsafe { crate::transforms::AnyTransform::from_owned(p) })
     }
 
@@ -2159,7 +2159,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live BaseComponent*; both out-pointers are valid
         // for the call and always written by the C side.
         unsafe {
-            dm_noesis_ui_element_get_render_transform_origin(
+            noesis_ui_element_get_render_transform_origin(
                 self.ptr.as_ptr(),
                 &raw mut x,
                 &raw mut y,
@@ -2174,7 +2174,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_render_transform_origin(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; thin pass-through.
-        unsafe { dm_noesis_ui_element_set_render_transform_origin(self.ptr.as_ptr(), x, y) }
+        unsafe { noesis_ui_element_set_render_transform_origin(self.ptr.as_ptr(), x, y) }
     }
 
     /// Set this element's 3D transform (`UIElement::SetTransform3D`, the
@@ -2184,14 +2184,14 @@ impl FrameworkElement {
     pub fn set_transform3d<T: Transform3D>(&mut self, transform: &T) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; transform.transform3d_raw()
         // is a live Transform3D* borrowed for the call; Noesis stores its own ref.
-        unsafe { dm_noesis_element_set_transform3d(self.ptr.as_ptr(), transform.transform3d_raw()) }
+        unsafe { noesis_element_set_transform3d(self.ptr.as_ptr(), transform.transform3d_raw()) }
     }
 
     /// Clear this element's 3D transform. Returns `false` if this is not a
     /// `UIElement`.
     pub fn clear_transform3d(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; null clears the property.
-        unsafe { dm_noesis_element_set_transform3d(self.ptr.as_ptr(), core::ptr::null_mut()) }
+        unsafe { noesis_element_set_transform3d(self.ptr.as_ptr(), core::ptr::null_mut()) }
     }
 
     /// This element's current 3D transform (`UIElement::GetTransform3D`) as an
@@ -2201,11 +2201,11 @@ impl FrameworkElement {
     #[must_use]
     pub fn transform3d(&self) -> Option<crate::transforms::AnyTransform3D> {
         // SAFETY: self.ptr is a live BaseComponent*; returns a borrowed pointer.
-        let borrowed = unsafe { dm_noesis_element_get_transform3d(self.ptr.as_ptr()) };
+        let borrowed = unsafe { noesis_element_get_transform3d(self.ptr.as_ptr()) };
         let borrowed = NonNull::new(borrowed)?;
         // AddRef so the returned handle owns its reference (released on Drop).
         // SAFETY: borrowed is a live Transform3D* (BaseComponent*).
-        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        let owned = unsafe { noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|p| unsafe { crate::transforms::AnyTransform3D::from_owned(p) })
     }
 
@@ -2223,7 +2223,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_bitmap_scaling_mode(&mut self, mode: i32) -> bool {
         // SAFETY: self.ptr is a live DependencyObject*; the C side DynamicCasts.
-        unsafe { dm_noesis_render_options_set_bitmap_scaling_mode(self.ptr.as_ptr(), mode) }
+        unsafe { noesis_render_options_set_bitmap_scaling_mode(self.ptr.as_ptr(), mode) }
     }
 
     /// Read the `RenderOptions.BitmapScalingMode` attached property back as an
@@ -2231,7 +2231,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn bitmap_scaling_mode(&self) -> Option<i32> {
         // SAFETY: self.ptr is a live BaseComponent*; -1 on non-DO.
-        let v = unsafe { dm_noesis_render_options_get_bitmap_scaling_mode(self.ptr.as_ptr()) };
+        let v = unsafe { noesis_render_options_get_bitmap_scaling_mode(self.ptr.as_ptr()) };
         (v >= 0).then_some(v)
     }
 
@@ -2255,7 +2255,7 @@ impl FrameworkElement {
         let mut out: i32 = 0;
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // Selector and writes `out` only on success.
-        unsafe { dm_noesis_selector_get_selected_index(self.ptr.as_ptr(), &mut out) }.then_some(out)
+        unsafe { noesis_selector_get_selected_index(self.ptr.as_ptr(), &mut out) }.then_some(out)
     }
 
     /// Set the selected index. Pass `-1` to clear the selection; an out-of-range
@@ -2264,7 +2264,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_selected_index(&mut self, index: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_selector_set_selected_index(self.ptr.as_ptr(), index) }
+        unsafe { noesis_selector_set_selected_index(self.ptr.as_ptr(), index) }
     }
 
     /// Borrowed (no `+1`) pointer to the selected item, or `None` when nothing is
@@ -2277,7 +2277,7 @@ impl FrameworkElement {
     pub fn selected_item(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
         // pointer or null.
-        let p = unsafe { dm_noesis_selector_get_selected_item(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_selector_get_selected_item(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -2293,7 +2293,7 @@ impl FrameworkElement {
     pub unsafe fn set_selected_item(&mut self, item: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; `item` is a live
         // BaseComponent* (or null) per the contract above.
-        unsafe { dm_noesis_selector_set_selected_item(self.ptr.as_ptr(), item) }
+        unsafe { noesis_selector_set_selected_item(self.ptr.as_ptr(), item) }
     }
 
     // -- ItemsControl: direct Items mutation --
@@ -2311,7 +2311,7 @@ impl FrameworkElement {
     /// [`crate::binding::Boxed::raw`]).
     pub unsafe fn items_add(&mut self, item: *mut c_void) -> Option<usize> {
         // SAFETY: self.ptr is a live BaseComponent*; `item` is live per contract.
-        let idx = unsafe { dm_noesis_items_control_items_add(self.ptr.as_ptr(), item) };
+        let idx = unsafe { noesis_items_control_items_add(self.ptr.as_ptr(), item) };
         (idx >= 0).then_some(idx as usize)
     }
 
@@ -2338,21 +2338,21 @@ impl FrameworkElement {
     /// `item` must be a valid live `Noesis::BaseComponent*`.
     pub unsafe fn items_insert(&mut self, index: usize, item: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; `item` is live per contract.
-        unsafe { dm_noesis_items_control_items_insert(self.ptr.as_ptr(), index as u32, item) }
+        unsafe { noesis_items_control_items_insert(self.ptr.as_ptr(), index as u32, item) }
     }
 
     /// Remove the item at `index` from `Items`. Returns `false` on a
     /// non-`ItemsControl` or out-of-range `index`.
     pub fn items_remove_at(&mut self, index: usize) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*.
-        unsafe { dm_noesis_items_control_items_remove_at(self.ptr.as_ptr(), index as u32) }
+        unsafe { noesis_items_control_items_remove_at(self.ptr.as_ptr(), index as u32) }
     }
 
     /// Remove every item from `Items`. Returns `false` if this element is not an
     /// `ItemsControl`.
     pub fn items_clear(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*.
-        unsafe { dm_noesis_items_control_items_clear(self.ptr.as_ptr()) }
+        unsafe { noesis_items_control_items_clear(self.ptr.as_ptr()) }
     }
 
     // ── Decorator / Border Child (Phase 1) ──────────────────────────────────
@@ -2371,7 +2371,7 @@ impl FrameworkElement {
     pub fn set_decorator_child(&mut self, child: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live BaseComponent* (DynamicCast to Decorator
         // C-side); child.raw() is a live UIElement*.
-        unsafe { dm_noesis_decorator_set_child(self.ptr.as_ptr(), child.raw()) }
+        unsafe { noesis_decorator_set_child(self.ptr.as_ptr(), child.raw()) }
     }
 
     /// Clear this `Decorator`'s `Child`. Returns `false` if this element is not a
@@ -2379,7 +2379,7 @@ impl FrameworkElement {
     #[must_use = "a false return means this element is not a Decorator"]
     pub fn clear_decorator_child(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; null clears the child.
-        unsafe { dm_noesis_decorator_set_child(self.ptr.as_ptr(), core::ptr::null_mut()) }
+        unsafe { noesis_decorator_set_child(self.ptr.as_ptr(), core::ptr::null_mut()) }
     }
 
     /// This `Decorator`'s current `Child` as an owning [`FrameworkElement`]
@@ -2389,11 +2389,11 @@ impl FrameworkElement {
     pub fn decorator_child(&self) -> Option<FrameworkElement> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side returns a
         // borrowed Child* (no +1) or null.
-        let borrowed = unsafe { dm_noesis_decorator_get_child(self.ptr.as_ptr()) };
+        let borrowed = unsafe { noesis_decorator_get_child(self.ptr.as_ptr()) };
         let borrowed = NonNull::new(borrowed)?;
         // AddRef so the returned handle owns its reference, released on drop.
         // SAFETY: `borrowed` is a live UIElement* (BaseComponent*).
-        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        let owned = unsafe { noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|ptr| Self { ptr })
     }
 
@@ -2444,7 +2444,7 @@ impl FrameworkElement {
         let borrowed = self.get_component("Content")?;
         // AddRef so the returned handle owns its reference, released on drop.
         // SAFETY: `borrowed` is a live BaseComponent* held by this element.
-        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        let owned = unsafe { noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|ptr| Self { ptr })
     }
 
@@ -2472,7 +2472,7 @@ impl FrameworkElement {
         let mut out: f32 = 0.0;
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // RangeBase and writes `out` only on success.
-        unsafe { dm_noesis_rangebase_get(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
+        unsafe { noesis_rangebase_get(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
     }
 
     /// Set the `Value`, going through `RangeBase::SetValue` so Noesis coerces it
@@ -2480,21 +2480,21 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_range_value(&mut self, value: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 0, value) }
+        unsafe { noesis_rangebase_set(self.ptr.as_ptr(), 0, value) }
     }
 
     /// Set the `Minimum`. Returns `false` if not a `RangeBase`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_range_minimum(&mut self, value: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 1, value) }
+        unsafe { noesis_rangebase_set(self.ptr.as_ptr(), 1, value) }
     }
 
     /// Set the `Maximum`. Returns `false` if not a `RangeBase`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_range_maximum(&mut self, value: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 2, value) }
+        unsafe { noesis_rangebase_set(self.ptr.as_ptr(), 2, value) }
     }
 
     // -- ToggleButton: CheckBox / RadioButton (tri-state) --
@@ -2508,7 +2508,7 @@ impl FrameworkElement {
         let mut state: i8 = 0;
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // ToggleButton and writes `state` (0/1/2) only on success.
-        if !unsafe { dm_noesis_toggle_get_is_checked(self.ptr.as_ptr(), &mut state) } {
+        if !unsafe { noesis_toggle_get_is_checked(self.ptr.as_ptr(), &mut state) } {
             return None;
         }
         Some(match state {
@@ -2528,7 +2528,7 @@ impl FrameworkElement {
             None => 2,
         };
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_toggle_set_is_checked(self.ptr.as_ptr(), code) }
+        unsafe { noesis_toggle_set_is_checked(self.ptr.as_ptr(), code) }
     }
 
     // -- Popup / Expander --
@@ -2539,14 +2539,14 @@ impl FrameworkElement {
         let mut out = false;
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // Popup and writes `out` only on success.
-        unsafe { dm_noesis_popup_get_is_open(self.ptr.as_ptr(), &mut out) }.then_some(out)
+        unsafe { noesis_popup_get_is_open(self.ptr.as_ptr(), &mut out) }.then_some(out)
     }
 
     /// Set `Popup.IsOpen`. Returns `false` if this element is not a `Popup`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_open(&mut self, open: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_popup_set_is_open(self.ptr.as_ptr(), open) }
+        unsafe { noesis_popup_set_is_open(self.ptr.as_ptr(), open) }
     }
 
     /// `Expander.IsExpanded`. `None` if this element is not an `Expander`.
@@ -2555,14 +2555,14 @@ impl FrameworkElement {
         let mut out = false;
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // Expander and writes `out` only on success.
-        unsafe { dm_noesis_expander_get_is_expanded(self.ptr.as_ptr(), &mut out) }.then_some(out)
+        unsafe { noesis_expander_get_is_expanded(self.ptr.as_ptr(), &mut out) }.then_some(out)
     }
 
     /// Set `Expander.IsExpanded`. Returns `false` if not an `Expander`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_expanded(&mut self, expanded: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_expander_set_is_expanded(self.ptr.as_ptr(), expanded) }
+        unsafe { noesis_expander_set_is_expanded(self.ptr.as_ptr(), expanded) }
     }
 
     // -- ScrollViewer --
@@ -2599,7 +2599,7 @@ impl FrameworkElement {
         let mut out: f32 = 0.0;
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // ScrollViewer and writes `out` only on success.
-        unsafe { dm_noesis_scrollviewer_get(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
+        unsafe { noesis_scrollviewer_get(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
     }
 
     /// Scroll horizontally to `offset` (clamped by Noesis to the scrollable
@@ -2607,28 +2607,28 @@ impl FrameworkElement {
     /// `ScrollViewer`.
     pub fn scroll_to_horizontal_offset(&mut self, offset: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_scrollviewer_scroll_to_horizontal(self.ptr.as_ptr(), offset) }
+        unsafe { noesis_scrollviewer_scroll_to_horizontal(self.ptr.as_ptr(), offset) }
     }
 
     /// Scroll vertically to `offset` (clamped by Noesis to the scrollable range,
     /// applied at the next layout pass). Returns `false` if not a `ScrollViewer`.
     pub fn scroll_to_vertical_offset(&mut self, offset: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_scrollviewer_scroll_to_vertical(self.ptr.as_ptr(), offset) }
+        unsafe { noesis_scrollviewer_scroll_to_vertical(self.ptr.as_ptr(), offset) }
     }
 
     /// Scroll to the top-left origin (`ScrollToHome`). Returns `false` if not a
     /// `ScrollViewer`.
     pub fn scroll_to_home(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_scrollviewer_scroll_to_home(self.ptr.as_ptr()) }
+        unsafe { noesis_scrollviewer_scroll_to_home(self.ptr.as_ptr()) }
     }
 
     /// Scroll to the bottom (`ScrollToEnd`). Returns `false` if not a
     /// `ScrollViewer`.
     pub fn scroll_to_end(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_scrollviewer_scroll_to_end(self.ptr.as_ptr()) }
+        unsafe { noesis_scrollviewer_scroll_to_end(self.ptr.as_ptr()) }
     }
 
     // -- TextBox selection / caret --
@@ -2637,13 +2637,13 @@ impl FrameworkElement {
     /// element is not a `TextBox`.
     pub fn select(&mut self, start: i32, length: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_textbox_select(self.ptr.as_ptr(), start, length) }
+        unsafe { noesis_textbox_select(self.ptr.as_ptr(), start, length) }
     }
 
     /// Select all text. Returns `false` if this element is not a `TextBox`.
     pub fn select_all(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_textbox_select_all(self.ptr.as_ptr()) }
+        unsafe { noesis_textbox_select_all(self.ptr.as_ptr()) }
     }
 
     /// `SelectionStart` (caret-anchor offset of the current selection). `None`
@@ -2670,28 +2670,28 @@ impl FrameworkElement {
         let mut out: i32 = 0;
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // TextBox and writes `out` only on success.
-        unsafe { dm_noesis_textbox_get_int(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
+        unsafe { noesis_textbox_get_int(self.ptr.as_ptr(), which, &mut out) }.then_some(out)
     }
 
     /// Set `SelectionStart`. Returns `false` if not a `TextBox`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_selection_start(&mut self, value: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 0, value) }
+        unsafe { noesis_textbox_set_int(self.ptr.as_ptr(), 0, value) }
     }
 
     /// Set `SelectionLength`. Returns `false` if not a `TextBox`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_selection_length(&mut self, value: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 1, value) }
+        unsafe { noesis_textbox_set_int(self.ptr.as_ptr(), 1, value) }
     }
 
     /// Set `CaretIndex`. Returns `false` if not a `TextBox`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_caret_index(&mut self, value: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 2, value) }
+        unsafe { noesis_textbox_set_int(self.ptr.as_ptr(), 2, value) }
     }
 
     /// The currently-selected text, copied into an owned [`String`]. `None` if
@@ -2701,7 +2701,7 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
         // NUL-terminated UTF-8 string (or null on a non-TextBox); we copy out
         // immediately before yielding control.
-        let p = unsafe { dm_noesis_textbox_get_selected_text(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_textbox_get_selected_text(self.ptr.as_ptr()) };
         if p.is_null() {
             None
         } else {
@@ -2719,7 +2719,7 @@ impl FrameworkElement {
     pub fn password(&self) -> Option<String> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
         // NUL-terminated UTF-8 string (or null on a non-PasswordBox); copy out now.
-        let p = unsafe { dm_noesis_passwordbox_get_password(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_passwordbox_get_password(self.ptr.as_ptr()) };
         if p.is_null() {
             None
         } else {
@@ -2739,7 +2739,7 @@ impl FrameworkElement {
     pub fn set_password(&mut self, password: &str) -> bool {
         let c = CString::new(password).expect("password contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
-        unsafe { dm_noesis_passwordbox_set_password(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_passwordbox_set_password(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     // -- Selector: SelectedValue / SelectedValuePath --
@@ -2753,7 +2753,7 @@ impl FrameworkElement {
     pub fn selected_value(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts to
         // Selector and returns a borrowed pointer or null.
-        let p = unsafe { dm_noesis_controls_selector_get_selected_value(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_selector_get_selected_value(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -2767,7 +2767,7 @@ impl FrameworkElement {
     /// [`crate::binding::Boxed::raw`]) or null.
     pub unsafe fn set_selected_value(&mut self, value: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; `value` is live per contract.
-        unsafe { dm_noesis_controls_selector_set_selected_value(self.ptr.as_ptr(), value) }
+        unsafe { noesis_controls_selector_set_selected_value(self.ptr.as_ptr(), value) }
     }
 
     /// The `SelectedValuePath` (the property path projected from the selected
@@ -2777,7 +2777,7 @@ impl FrameworkElement {
     pub fn selected_value_path(&self) -> Option<String> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side returns a borrowed
         // NUL-terminated UTF-8 string (or null on a non-Selector); copy out now.
-        let p = unsafe { dm_noesis_controls_selector_get_selected_value_path(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_selector_get_selected_value_path(self.ptr.as_ptr()) };
         if p.is_null() {
             None
         } else {
@@ -2796,7 +2796,7 @@ impl FrameworkElement {
         let c = CString::new(path).expect("path contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
         unsafe {
-            dm_noesis_controls_selector_set_selected_value_path(self.ptr.as_ptr(), c.as_ptr())
+            noesis_controls_selector_set_selected_value_path(self.ptr.as_ptr(), c.as_ptr())
         }
     }
 
@@ -2809,7 +2809,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn tree_selected_item(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p = unsafe { dm_noesis_controls_treeview_get_selected_item(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_treeview_get_selected_item(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -2820,7 +2820,7 @@ impl FrameworkElement {
     pub fn tree_item_is_selected(&self) -> Option<bool> {
         let mut out = false;
         // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
-        unsafe { dm_noesis_controls_treeviewitem_get_is_selected(self.ptr.as_ptr(), &mut out) }
+        unsafe { noesis_controls_treeviewitem_get_is_selected(self.ptr.as_ptr(), &mut out) }
             .then_some(out)
     }
 
@@ -2828,7 +2828,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tree_item_is_selected(&mut self, selected: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_controls_treeviewitem_set_is_selected(self.ptr.as_ptr(), selected) }
+        unsafe { noesis_controls_treeviewitem_set_is_selected(self.ptr.as_ptr(), selected) }
     }
 
     /// `TreeViewItem.IsExpanded`. `None` if not a `TreeViewItem`.
@@ -2836,7 +2836,7 @@ impl FrameworkElement {
     pub fn tree_item_is_expanded(&self) -> Option<bool> {
         let mut out = false;
         // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
-        unsafe { dm_noesis_controls_treeviewitem_get_is_expanded(self.ptr.as_ptr(), &mut out) }
+        unsafe { noesis_controls_treeviewitem_get_is_expanded(self.ptr.as_ptr(), &mut out) }
             .then_some(out)
     }
 
@@ -2844,7 +2844,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tree_item_is_expanded(&mut self, expanded: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_controls_treeviewitem_set_is_expanded(self.ptr.as_ptr(), expanded) }
+        unsafe { noesis_controls_treeviewitem_set_is_expanded(self.ptr.as_ptr(), expanded) }
     }
 
     // -- ItemContainerGenerator (container <-> item <-> index) --
@@ -2859,7 +2859,7 @@ impl FrameworkElement {
     pub fn container_from_index(&self, index: i32) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
         let p =
-            unsafe { dm_noesis_controls_generator_container_from_index(self.ptr.as_ptr(), index) };
+            unsafe { noesis_controls_generator_container_from_index(self.ptr.as_ptr(), index) };
         NonNull::new(p)
     }
 
@@ -2872,7 +2872,7 @@ impl FrameworkElement {
     pub unsafe fn container_from_item(&self, item: *mut c_void) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is live; `item` is live per contract.
         let p =
-            unsafe { dm_noesis_controls_generator_container_from_item(self.ptr.as_ptr(), item) };
+            unsafe { noesis_controls_generator_container_from_item(self.ptr.as_ptr(), item) };
         NonNull::new(p)
     }
 
@@ -2887,7 +2887,7 @@ impl FrameworkElement {
     pub unsafe fn index_from_container(&self, container: *mut c_void) -> Option<i32> {
         // SAFETY: self.ptr is live; `container` is live per contract.
         let idx = unsafe {
-            dm_noesis_controls_generator_index_from_container(self.ptr.as_ptr(), container)
+            noesis_controls_generator_index_from_container(self.ptr.as_ptr(), container)
         };
         (idx >= 0).then_some(idx)
     }
@@ -2901,7 +2901,7 @@ impl FrameworkElement {
     pub unsafe fn item_from_container(&self, container: *mut c_void) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is live; `container` is live per contract.
         let p = unsafe {
-            dm_noesis_controls_generator_item_from_container(self.ptr.as_ptr(), container)
+            noesis_controls_generator_item_from_container(self.ptr.as_ptr(), container)
         };
         NonNull::new(p)
     }
@@ -2915,7 +2915,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn listview_gridview(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p = unsafe { dm_noesis_controls_listview_get_view(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_listview_get_view(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -2929,7 +2929,7 @@ impl FrameworkElement {
     #[must_use]
     pub unsafe fn gridview_column_count(gridview: NonNull<c_void>) -> Option<i32> {
         // SAFETY: `gridview` is a live GridView* per contract.
-        let n = unsafe { dm_noesis_controls_gridview_column_count(gridview.as_ptr()) };
+        let n = unsafe { noesis_controls_gridview_column_count(gridview.as_ptr()) };
         (n >= 0).then_some(n)
     }
 
@@ -2942,7 +2942,7 @@ impl FrameworkElement {
     pub unsafe fn gridview_column_width(gridview: NonNull<c_void>, index: u32) -> Option<f32> {
         let mut out = 0.0f32;
         // SAFETY: `gridview` is a live GridView* per contract; writes on success.
-        unsafe { dm_noesis_controls_gridview_column_get_width(gridview.as_ptr(), index, &mut out) }
+        unsafe { noesis_controls_gridview_column_get_width(gridview.as_ptr(), index, &mut out) }
             .then_some(out)
     }
 
@@ -2957,7 +2957,7 @@ impl FrameworkElement {
         width: f32,
     ) -> bool {
         // SAFETY: `gridview` is a live GridView* per contract.
-        unsafe { dm_noesis_controls_gridview_column_set_width(gridview.as_ptr(), index, width) }
+        unsafe { noesis_controls_gridview_column_set_width(gridview.as_ptr(), index, width) }
     }
 
     /// A column's computed `ActualWidth`. `None` on a bad index / non-GridView.
@@ -2973,7 +2973,7 @@ impl FrameworkElement {
         let mut out = 0.0f32;
         // SAFETY: `gridview` is a live GridView* per contract; writes on success.
         unsafe {
-            dm_noesis_controls_gridview_column_get_actual_width(gridview.as_ptr(), index, &mut out)
+            noesis_controls_gridview_column_get_actual_width(gridview.as_ptr(), index, &mut out)
         }
         .then_some(out)
     }
@@ -2990,7 +2990,7 @@ impl FrameworkElement {
         index: u32,
     ) -> Option<NonNull<c_void>> {
         // SAFETY: `gridview` is a live GridView* per contract.
-        let p = unsafe { dm_noesis_controls_gridview_column_get_header(gridview.as_ptr(), index) };
+        let p = unsafe { noesis_controls_gridview_column_get_header(gridview.as_ptr(), index) };
         NonNull::new(p)
     }
 
@@ -3001,7 +3001,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn tooltip(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p = unsafe { dm_noesis_controls_fe_get_tooltip(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_fe_get_tooltip(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -3014,7 +3014,7 @@ impl FrameworkElement {
     /// `tooltip` must be a valid live `Noesis::BaseComponent*` or null.
     pub unsafe fn set_tooltip(&mut self, tooltip: *mut c_void) -> bool {
         // SAFETY: self.ptr is live; `tooltip` is live per contract.
-        unsafe { dm_noesis_controls_fe_set_tooltip(self.ptr.as_ptr(), tooltip) }
+        unsafe { noesis_controls_fe_set_tooltip(self.ptr.as_ptr(), tooltip) }
     }
 
     /// Set this element's `ToolTip` to a plain string. Returns `false` if not a
@@ -3027,7 +3027,7 @@ impl FrameworkElement {
     pub fn set_tooltip_string(&mut self, text: &str) -> bool {
         let c = CString::new(text).expect("tooltip text contained interior NUL");
         // SAFETY: self.ptr is live; c.as_ptr() lives for the call.
-        unsafe { dm_noesis_controls_fe_set_tooltip_string(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_controls_fe_set_tooltip_string(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Borrowed pointer to the `ToolTipService.ToolTip` attached value on this
@@ -3036,7 +3036,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn tooltip_service_tooltip(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p = unsafe { dm_noesis_controls_tooltipservice_get_tooltip(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_tooltipservice_get_tooltip(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -3048,7 +3048,7 @@ impl FrameworkElement {
     /// `tooltip` must be a valid live `Noesis::BaseComponent*` or null.
     pub unsafe fn set_tooltip_service_tooltip(&mut self, tooltip: *mut c_void) -> bool {
         // SAFETY: self.ptr is live; `tooltip` is live per contract.
-        unsafe { dm_noesis_controls_tooltipservice_set_tooltip(self.ptr.as_ptr(), tooltip) }
+        unsafe { noesis_controls_tooltipservice_set_tooltip(self.ptr.as_ptr(), tooltip) }
     }
 
     /// `ToolTip.IsOpen`. `None` if not a `ToolTip` control.
@@ -3056,7 +3056,7 @@ impl FrameworkElement {
     pub fn tooltip_is_open(&self) -> Option<bool> {
         let mut out = false;
         // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
-        unsafe { dm_noesis_controls_tooltip_get_is_open(self.ptr.as_ptr(), &mut out) }
+        unsafe { noesis_controls_tooltip_get_is_open(self.ptr.as_ptr(), &mut out) }
             .then_some(out)
     }
 
@@ -3064,7 +3064,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tooltip_is_open(&mut self, open: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_controls_tooltip_set_is_open(self.ptr.as_ptr(), open) }
+        unsafe { noesis_controls_tooltip_set_is_open(self.ptr.as_ptr(), open) }
     }
 
     // -- ContextMenu / ContextMenuService --
@@ -3074,7 +3074,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn context_menu(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p = unsafe { dm_noesis_controls_fe_get_context_menu(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_fe_get_context_menu(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -3088,7 +3088,7 @@ impl FrameworkElement {
     /// `menu` must be a valid live `Noesis::ContextMenu*` or null.
     pub unsafe fn set_context_menu(&mut self, menu: *mut c_void) -> bool {
         // SAFETY: self.ptr is live; `menu` is live per contract.
-        unsafe { dm_noesis_controls_fe_set_context_menu(self.ptr.as_ptr(), menu) }
+        unsafe { noesis_controls_fe_set_context_menu(self.ptr.as_ptr(), menu) }
     }
 
     /// Borrowed pointer to the `ContextMenuService.ContextMenu` attached value,
@@ -3097,7 +3097,7 @@ impl FrameworkElement {
     pub fn context_menu_service_menu(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
         let p =
-            unsafe { dm_noesis_controls_contextmenuservice_get_context_menu(self.ptr.as_ptr()) };
+            unsafe { noesis_controls_contextmenuservice_get_context_menu(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -3109,7 +3109,7 @@ impl FrameworkElement {
     /// `menu` must be a valid live `Noesis::ContextMenu*` or null.
     pub unsafe fn set_context_menu_service_menu(&mut self, menu: *mut c_void) -> bool {
         // SAFETY: self.ptr is live; `menu` is live per contract.
-        unsafe { dm_noesis_controls_contextmenuservice_set_context_menu(self.ptr.as_ptr(), menu) }
+        unsafe { noesis_controls_contextmenuservice_set_context_menu(self.ptr.as_ptr(), menu) }
     }
 
     /// `ContextMenu.IsOpen`. `None` if not a `ContextMenu` control.
@@ -3117,7 +3117,7 @@ impl FrameworkElement {
     pub fn context_menu_is_open(&self) -> Option<bool> {
         let mut out = false;
         // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
-        unsafe { dm_noesis_controls_contextmenu_get_is_open(self.ptr.as_ptr(), &mut out) }
+        unsafe { noesis_controls_contextmenu_get_is_open(self.ptr.as_ptr(), &mut out) }
             .then_some(out)
     }
 
@@ -3125,7 +3125,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_context_menu_is_open(&mut self, open: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_controls_contextmenu_set_is_open(self.ptr.as_ptr(), open) }
+        unsafe { noesis_controls_contextmenu_set_is_open(self.ptr.as_ptr(), open) }
     }
 
     // -- ScrollViewer line / page / edge scrolling + IScrollInfo --
@@ -3152,7 +3152,7 @@ impl FrameworkElement {
 
     fn scrollviewer_line(&mut self, which: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_controls_scrollviewer_line(self.ptr.as_ptr(), which) }
+        unsafe { noesis_controls_scrollviewer_line(self.ptr.as_ptr(), which) }
     }
 
     /// Scroll up one page (`PageUp`). `false` if not a `ScrollViewer`.
@@ -3177,7 +3177,7 @@ impl FrameworkElement {
 
     fn scrollviewer_page(&mut self, which: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_controls_scrollviewer_page(self.ptr.as_ptr(), which) }
+        unsafe { noesis_controls_scrollviewer_page(self.ptr.as_ptr(), which) }
     }
 
     /// Scroll to the top edge (`ScrollToTop`). `false` if not a `ScrollViewer`.
@@ -3205,7 +3205,7 @@ impl FrameworkElement {
 
     fn scrollviewer_edge(&mut self, which: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
-        unsafe { dm_noesis_controls_scrollviewer_edge(self.ptr.as_ptr(), which) }
+        unsafe { noesis_controls_scrollviewer_edge(self.ptr.as_ptr(), which) }
     }
 
     /// `ExtentWidth` (the full content width). `None` if not a `ScrollViewer`.
@@ -3224,7 +3224,7 @@ impl FrameworkElement {
     fn scrollviewer_metric(&self, which: i32) -> Option<f32> {
         let mut out = 0.0f32;
         // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
-        unsafe { dm_noesis_controls_scrollviewer_metric(self.ptr.as_ptr(), which, &mut out) }
+        unsafe { noesis_controls_scrollviewer_metric(self.ptr.as_ptr(), which, &mut out) }
             .then_some(out)
     }
 
@@ -3236,7 +3236,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn image_source(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p = unsafe { dm_noesis_controls_image_get_source(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_image_get_source(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -3251,7 +3251,7 @@ impl FrameworkElement {
     /// `source` must be a valid live `Noesis::ImageSource*` or null.
     pub unsafe fn set_image_source(&mut self, source: *mut c_void) -> bool {
         // SAFETY: self.ptr is live; `source` is live per contract.
-        unsafe { dm_noesis_controls_image_set_source(self.ptr.as_ptr(), source) }
+        unsafe { noesis_controls_image_set_source(self.ptr.as_ptr(), source) }
     }
 
     // ── resources-styles-templates (§7) ─────────────────────────────────────
@@ -3271,7 +3271,7 @@ impl FrameworkElement {
     pub fn resources(&self) -> Option<crate::resources::ResourceDictionary> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs the
         // result so the wrapper owns a +1.
-        let ptr = unsafe { dm_noesis_framework_element_get_resources(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_framework_element_get_resources(self.ptr.as_ptr()) };
         NonNull::new(ptr)
             .map(|ptr| unsafe { crate::resources::ResourceDictionary::from_owned(ptr) })
     }
@@ -3283,7 +3283,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_resources(&mut self, dict: &crate::resources::ResourceDictionary) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the dictionary.
-        unsafe { dm_noesis_framework_element_set_resources(self.ptr.as_ptr(), dict.raw()) }
+        unsafe { noesis_framework_element_set_resources(self.ptr.as_ptr(), dict.raw()) }
     }
 
     /// Look up a resource by `key`, walking the logical parent chain and the
@@ -3300,7 +3300,7 @@ impl FrameworkElement {
         let c = CString::new(key).expect("resource key contained interior NUL");
         // SAFETY: self.ptr live; c lives for the call. The returned pointer is
         // borrowed (owned by whichever dictionary holds the entry).
-        let p = unsafe { dm_noesis_framework_element_find_resource(self.ptr.as_ptr(), c.as_ptr()) };
+        let p = unsafe { noesis_framework_element_find_resource(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -3311,7 +3311,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_style(&mut self, style: &crate::styles::Style) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the style.
-        unsafe { dm_noesis_framework_element_set_style(self.ptr.as_ptr(), style.raw()) }
+        unsafe { noesis_framework_element_set_style(self.ptr.as_ptr(), style.raw()) }
     }
 
     /// This element's assigned [`Style`](crate::styles::Style)
@@ -3320,7 +3320,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn style(&self) -> Option<crate::styles::Style> {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs.
-        let ptr = unsafe { dm_noesis_framework_element_get_style(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_framework_element_get_style(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| unsafe { crate::styles::Style::from_owned(ptr) })
     }
 
@@ -3333,7 +3333,7 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_template(&mut self, template: &crate::styles::ControlTemplate) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the template.
-        unsafe { dm_noesis_control_set_template(self.ptr.as_ptr(), template.raw()) }
+        unsafe { noesis_control_set_template(self.ptr.as_ptr(), template.raw()) }
     }
 
     /// This control's assigned [`ControlTemplate`](crate::styles::ControlTemplate)
@@ -3342,7 +3342,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn control_template(&self) -> Option<crate::styles::ControlTemplate> {
         // SAFETY: self.ptr is a live BaseComponent*; the C side AddRefs.
-        let ptr = unsafe { dm_noesis_control_get_template(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_control_get_template(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| unsafe { crate::styles::ControlTemplate::from_owned(ptr) })
     }
 }
@@ -3439,8 +3439,8 @@ impl VAlign {
 
 impl Drop for FrameworkElement {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_gui_load_xaml which returns a +1 ref.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        // SAFETY: produced by noesis_gui_load_xaml which returns a +1 ref.
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -3466,24 +3466,24 @@ impl View {
     pub fn create(content: FrameworkElement) -> Self {
         let raw = content.into_raw();
         // SAFETY: raw is a live FrameworkElement* with +1 ref.
-        let ptr = unsafe { dm_noesis_view_create(raw) };
+        let ptr = unsafe { noesis_view_create(raw) };
         // View took its own ref internally; release our +1 on the element so
         // refcount stays balanced (its total is still the original 1).
-        unsafe { dm_noesis_base_component_release(raw) };
+        unsafe { noesis_base_component_release(raw) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_view_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_view_create returned null"),
         }
     }
 
     /// Surface size the view lays out against.
     pub fn set_size(&mut self, width: u32, height: u32) {
-        unsafe { dm_noesis_view_set_size(self.ptr.as_ptr(), width, height) }
+        unsafe { noesis_view_set_size(self.ptr.as_ptr(), width, height) }
     }
 
     /// DPI scale for the view's content (1.0 == 96 ppi). Scales layout + hit
     /// testing without resizing the surface, keeping the UI crisp at any density.
     pub fn set_scale(&mut self, scale: f32) {
-        unsafe { dm_noesis_view_set_scale(self.ptr.as_ptr(), scale) }
+        unsafe { noesis_view_set_scale(self.ptr.as_ptr(), scale) }
     }
 
     /// Set the projection matrix. 16 floats, row-major — the native
@@ -3491,14 +3491,14 @@ impl View {
     /// ortho that maps UI pixel coords into Noesis's clip space (0..width,
     /// 0..height).
     pub fn set_projection_matrix(&mut self, matrix: &[f32; 16]) {
-        unsafe { dm_noesis_view_set_projection_matrix(self.ptr.as_ptr(), matrix.as_ptr()) }
+        unsafe { noesis_view_set_projection_matrix(self.ptr.as_ptr(), matrix.as_ptr()) }
     }
 
     /// Combination of [`RenderFlag`] values — see `NsGui/IView.h` for the
     /// canonical list. Kept for back-compat / interop with raw bitmasks;
     /// prefer [`Self::set_render_flags`] for a typed set.
     pub fn set_flags(&mut self, flags: u32) {
-        unsafe { dm_noesis_view_set_flags(self.ptr.as_ptr(), flags) }
+        unsafe { noesis_view_set_flags(self.ptr.as_ptr(), flags) }
     }
 
     /// Set the view's render flags from a typed [`RenderFlags`] set, so callers
@@ -3512,7 +3512,7 @@ impl View {
     #[must_use]
     pub fn get_flags(&self) -> u32 {
         // SAFETY: self.ptr is a live IView*; GetFlags is a const accessor.
-        unsafe { dm_noesis_view_get_flags(self.ptr.as_ptr()) }
+        unsafe { noesis_view_get_flags(self.ptr.as_ptr()) }
     }
 
     /// Current render flags as a typed [`RenderFlags`] set.
@@ -3527,7 +3527,7 @@ impl View {
     /// [`Self::set_quality`] for the named presets.
     pub fn set_tessellation_max_pixel_error(&mut self, error: f32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_tessellation_max_pixel_error(self.ptr.as_ptr(), error) }
+        unsafe { noesis_view_set_tessellation_max_pixel_error(self.ptr.as_ptr(), error) }
     }
 
     /// Set the antialiasing / curve quality to one of the named presets
@@ -3541,7 +3541,7 @@ impl View {
     #[must_use]
     pub fn tessellation_max_pixel_error(&self) -> f32 {
         // SAFETY: self.ptr is a live IView*; const accessor.
-        unsafe { dm_noesis_view_get_tessellation_max_pixel_error(self.ptr.as_ptr()) }
+        unsafe { noesis_view_get_tessellation_max_pixel_error(self.ptr.as_ptr()) }
     }
 
     /// Time, in milliseconds, an interaction must be held before it promotes to
@@ -3549,7 +3549,7 @@ impl View {
     /// SetHoldingTimeThreshold`). Default 500ms.
     pub fn set_holding_time_threshold(&mut self, ms: u32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_holding_time_threshold(self.ptr.as_ptr(), ms) }
+        unsafe { noesis_view_set_holding_time_threshold(self.ptr.as_ptr(), ms) }
     }
 
     /// Maximum distance, in pixels, between first and last contact for an
@@ -3557,7 +3557,7 @@ impl View {
     /// (`IView::SetHoldingDistanceThreshold`). Default 10px.
     pub fn set_holding_distance_threshold(&mut self, pixels: u32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_holding_distance_threshold(self.ptr.as_ptr(), pixels) }
+        unsafe { noesis_view_set_holding_distance_threshold(self.ptr.as_ptr(), pixels) }
     }
 
     /// Minimum distance, in pixels, from first contact before a manipulation
@@ -3565,7 +3565,7 @@ impl View {
     /// SetManipulationDistanceThreshold`. Default 10px.
     pub fn set_manipulation_distance_threshold(&mut self, pixels: u32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_manipulation_distance_threshold(self.ptr.as_ptr(), pixels) }
+        unsafe { noesis_view_set_manipulation_distance_threshold(self.ptr.as_ptr(), pixels) }
     }
 
     /// Maximum delay, in milliseconds, between two `Tapped` events for them to
@@ -3573,7 +3573,7 @@ impl View {
     /// Default 500ms.
     pub fn set_double_tap_time_threshold(&mut self, ms: u32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_double_tap_time_threshold(self.ptr.as_ptr(), ms) }
+        unsafe { noesis_view_set_double_tap_time_threshold(self.ptr.as_ptr(), ms) }
     }
 
     /// Maximum distance, in pixels, between two taps for them to be interpreted
@@ -3581,14 +3581,14 @@ impl View {
     /// 10px.
     pub fn set_double_tap_distance_threshold(&mut self, pixels: u32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_double_tap_distance_threshold(self.ptr.as_ptr(), pixels) }
+        unsafe { noesis_view_set_double_tap_distance_threshold(self.ptr.as_ptr(), pixels) }
     }
 
     /// Whether mouse input is emulated as touch input
     /// (`IView::SetEmulateTouch`). Off by default.
     pub fn set_emulate_touch(&mut self, emulate: bool) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_emulate_touch(self.ptr.as_ptr(), emulate) }
+        unsafe { noesis_view_set_emulate_touch(self.ptr.as_ptr(), emulate) }
     }
 
     /// Scale applied to the offscreen render phase to account for stereo (VR)
@@ -3597,7 +3597,7 @@ impl View {
     /// for non-VR rendering; `2.0`–`3.0` is recommended for VR.
     pub fn set_stereo_offscreen_scale_factor(&mut self, factor: f32) {
         // SAFETY: self.ptr is a live IView*; thin pass-through.
-        unsafe { dm_noesis_view_set_stereo_offscreen_scale_factor(self.ptr.as_ptr(), factor) }
+        unsafe { noesis_view_set_stereo_offscreen_scale_factor(self.ptr.as_ptr(), factor) }
     }
 
     /// Performance counters for the last rendered frame (`IView::GetStats`).
@@ -3610,7 +3610,7 @@ impl View {
         // SAFETY: self.ptr is a live IView*; `out` is a live, correctly-sized
         // ViewStats whose repr(C) layout matches the C ABI struct (guarded by
         // a static_assert in noesis_view.cpp); the C side writes all fields.
-        unsafe { dm_noesis_view_get_stats(self.ptr.as_ptr(), &raw mut out) };
+        unsafe { noesis_view_get_stats(self.ptr.as_ptr(), &raw mut out) };
         out
     }
 
@@ -3642,7 +3642,7 @@ impl View {
         // donated to the C++ RustTimer (freed via `timer_free` on cancel); the
         // view pointer is borrowed for the call only.
         let token = unsafe {
-            dm_noesis_view_create_timer(
+            noesis_view_create_timer(
                 self.ptr.as_ptr(),
                 interval_ms,
                 timer_trampoline,
@@ -3685,7 +3685,7 @@ impl View {
         // donated to the C++ handler (freed via `rendering_free` on removal);
         // the view pointer is borrowed for the call only.
         let token = unsafe {
-            dm_noesis_view_add_rendering_handler(
+            noesis_view_add_rendering_handler(
                 self.ptr.as_ptr(),
                 rendering_trampoline,
                 userdata.cast(),
@@ -3708,12 +3708,12 @@ impl View {
     /// Recover keyboard focus for this view. Noesis ignores keyboard input
     /// until a view is activated.
     pub fn activate(&mut self) {
-        unsafe { dm_noesis_view_activate(self.ptr.as_ptr()) }
+        unsafe { noesis_view_activate(self.ptr.as_ptr()) }
     }
 
     /// Release keyboard focus.
     pub fn deactivate(&mut self) {
-        unsafe { dm_noesis_view_deactivate(self.ptr.as_ptr()) }
+        unsafe { noesis_view_deactivate(self.ptr.as_ptr()) }
     }
 
     /// Pointer position, in physical pixels, origin top-left. Noesis
@@ -3721,24 +3721,24 @@ impl View {
     /// [`Self::mouse_button_down`] or [`Self::touch_down`] will hit-test
     /// correctly; callers must ensure the ordering.
     pub fn mouse_move(&mut self, x: i32, y: i32) -> bool {
-        unsafe { dm_noesis_view_mouse_move(self.ptr.as_ptr(), x, y) }
+        unsafe { noesis_view_mouse_move(self.ptr.as_ptr(), x, y) }
     }
 
     pub fn mouse_button_down(&mut self, x: i32, y: i32, button: MouseButton) -> bool {
-        unsafe { dm_noesis_view_mouse_button_down(self.ptr.as_ptr(), x, y, button as i32) }
+        unsafe { noesis_view_mouse_button_down(self.ptr.as_ptr(), x, y, button as i32) }
     }
 
     pub fn mouse_button_up(&mut self, x: i32, y: i32, button: MouseButton) -> bool {
-        unsafe { dm_noesis_view_mouse_button_up(self.ptr.as_ptr(), x, y, button as i32) }
+        unsafe { noesis_view_mouse_button_up(self.ptr.as_ptr(), x, y, button as i32) }
     }
 
     pub fn mouse_double_click(&mut self, x: i32, y: i32, button: MouseButton) -> bool {
-        unsafe { dm_noesis_view_mouse_double_click(self.ptr.as_ptr(), x, y, button as i32) }
+        unsafe { noesis_view_mouse_double_click(self.ptr.as_ptr(), x, y, button as i32) }
     }
 
     /// `delta` is signed — Noesis uses Windows-style 120 units per notch.
     pub fn mouse_wheel(&mut self, x: i32, y: i32, delta: i32) -> bool {
-        unsafe { dm_noesis_view_mouse_wheel(self.ptr.as_ptr(), x, y, delta) }
+        unsafe { noesis_view_mouse_wheel(self.ptr.as_ptr(), x, y, delta) }
     }
 
     /// Horizontal mouse wheel (e.g. a tilt-wheel or trackpad swipe). `delta`
@@ -3747,51 +3747,51 @@ impl View {
     /// handled the event.
     pub fn mouse_hwheel(&mut self, x: i32, y: i32, delta: i32) -> bool {
         // SAFETY: self.ptr is a live IView*; thin pass-through to MouseHWheel.
-        unsafe { dm_noesis_view_mouse_hwheel(self.ptr.as_ptr(), x, y, delta) }
+        unsafe { noesis_view_mouse_hwheel(self.ptr.as_ptr(), x, y, delta) }
     }
 
     /// Vertical scroll with the cursor at `(x, y)`. `value` is in lines
     /// (per WPF convention — integer lines, fractional allowed).
     pub fn scroll(&mut self, x: i32, y: i32, value: f32) -> bool {
-        unsafe { dm_noesis_view_scroll(self.ptr.as_ptr(), x, y, value) }
+        unsafe { noesis_view_scroll(self.ptr.as_ptr(), x, y, value) }
     }
 
     /// Horizontal scroll. See [`Self::scroll`].
     pub fn hscroll(&mut self, x: i32, y: i32, value: f32) -> bool {
-        unsafe { dm_noesis_view_hscroll(self.ptr.as_ptr(), x, y, value) }
+        unsafe { noesis_view_hscroll(self.ptr.as_ptr(), x, y, value) }
     }
 
     pub fn touch_down(&mut self, x: i32, y: i32, id: u64) -> bool {
-        unsafe { dm_noesis_view_touch_down(self.ptr.as_ptr(), x, y, id) }
+        unsafe { noesis_view_touch_down(self.ptr.as_ptr(), x, y, id) }
     }
 
     pub fn touch_move(&mut self, x: i32, y: i32, id: u64) -> bool {
-        unsafe { dm_noesis_view_touch_move(self.ptr.as_ptr(), x, y, id) }
+        unsafe { noesis_view_touch_move(self.ptr.as_ptr(), x, y, id) }
     }
 
     pub fn touch_up(&mut self, x: i32, y: i32, id: u64) -> bool {
-        unsafe { dm_noesis_view_touch_up(self.ptr.as_ptr(), x, y, id) }
+        unsafe { noesis_view_touch_up(self.ptr.as_ptr(), x, y, id) }
     }
 
     pub fn key_down(&mut self, key: Key) -> bool {
-        unsafe { dm_noesis_view_key_down(self.ptr.as_ptr(), key as i32) }
+        unsafe { noesis_view_key_down(self.ptr.as_ptr(), key as i32) }
     }
 
     pub fn key_up(&mut self, key: Key) -> bool {
-        unsafe { dm_noesis_view_key_up(self.ptr.as_ptr(), key as i32) }
+        unsafe { noesis_view_key_up(self.ptr.as_ptr(), key as i32) }
     }
 
     /// Text-input codepoint. Send between the matching
     /// [`Self::key_down`]/[`Self::key_up`] pair for the key that produced
     /// the character.
     pub fn char_input(&mut self, codepoint: u32) -> bool {
-        unsafe { dm_noesis_view_char(self.ptr.as_ptr(), codepoint) }
+        unsafe { noesis_view_char(self.ptr.as_ptr(), codepoint) }
     }
 
     /// Run layout + record a snapshot for the renderer. Returns `false` when
     /// nothing changed and skipping the render pair is safe.
     pub fn update(&mut self, time_seconds: f64) -> bool {
-        unsafe { dm_noesis_view_update(self.ptr.as_ptr(), time_seconds) }
+        unsafe { noesis_view_update(self.ptr.as_ptr(), time_seconds) }
     }
 
     /// Borrow the renderer owned by this view. The `Renderer` can't outlive
@@ -3802,7 +3802,7 @@ impl View {
     /// Panics if Noesis returns a null renderer — impossible on a
     /// successfully-constructed `View`.
     pub fn renderer(&mut self) -> Renderer<'_> {
-        let ptr = unsafe { dm_noesis_view_get_renderer(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_view_get_renderer(self.ptr.as_ptr()) };
         Renderer {
             ptr: NonNull::new(ptr).expect("GetRenderer returned null"),
             _view: PhantomData,
@@ -3837,12 +3837,12 @@ impl View {
     #[must_use]
     pub fn renderer_handle(&self) -> RendererHandle {
         // AddReference the IView so the handle keeps it alive independently of
-        // this View wrapper; balanced by dm_noesis_view_destroy in Drop.
+        // this View wrapper; balanced by noesis_view_destroy in Drop.
         // SAFETY: self.ptr is a live IView*.
-        let view = unsafe { dm_noesis_view_add_reference(self.ptr.as_ptr()) };
-        let view = NonNull::new(view).expect("dm_noesis_view_add_reference returned null");
+        let view = unsafe { noesis_view_add_reference(self.ptr.as_ptr()) };
+        let view = NonNull::new(view).expect("noesis_view_add_reference returned null");
         // SAFETY: view is the live IView* we just took a ref on.
-        let renderer = unsafe { dm_noesis_view_get_renderer(view.as_ptr()) };
+        let renderer = unsafe { noesis_view_get_renderer(view.as_ptr()) };
         RendererHandle {
             view,
             renderer: NonNull::new(renderer).expect("GetRenderer returned null"),
@@ -3868,15 +3868,15 @@ impl View {
     pub fn content(&self) -> Option<FrameworkElement> {
         // SAFETY: self.ptr is a live IView*; the C entrypoint AddRefs the
         // returned content pointer so Rust owns the +1.
-        let ptr = unsafe { dm_noesis_view_get_content(self.ptr.as_ptr()) };
+        let ptr = unsafe { noesis_view_get_content(self.ptr.as_ptr()) };
         NonNull::new(ptr).map(|ptr| FrameworkElement { ptr })
     }
 }
 
 impl Drop for View {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_view_create which returns +1 ref.
-        unsafe { dm_noesis_view_destroy(self.ptr.as_ptr()) }
+        // SAFETY: produced by noesis_view_create which returns +1 ref.
+        unsafe { noesis_view_destroy(self.ptr.as_ptr()) }
     }
 }
 
@@ -4085,7 +4085,7 @@ pub enum RenderFlag {
 /// [`View::set_render_flags`] and read it back via [`View::flags`].
 ///
 /// ```
-/// use dm_noesis_runtime::view::{RenderFlag, RenderFlags};
+/// use noesis_runtime::view::{RenderFlag, RenderFlags};
 /// let flags = RenderFlags::from_iter([RenderFlag::Ppaa, RenderFlag::Wireframe]);
 /// assert!(flags.contains(RenderFlag::Ppaa));
 /// assert!(!flags.contains(RenderFlag::Overdraw));
@@ -4287,7 +4287,7 @@ impl TimerSubscription {
     /// `IView::RestartTimer`; takes effect on the next [`View::update`].
     pub fn restart(&self, interval_ms: u32) {
         // SAFETY: token is a live RustTimer* until this handle drops.
-        unsafe { dm_noesis_view_restart_timer(self.token.as_ptr(), interval_ms) };
+        unsafe { noesis_view_restart_timer(self.token.as_ptr(), interval_ms) };
     }
 }
 
@@ -4295,7 +4295,7 @@ impl Drop for TimerSubscription {
     fn drop(&mut self) {
         // SAFETY: token produced by create_timer; cancel deletes the RustTimer
         // (running the donated free handler), freed exactly once here.
-        unsafe { dm_noesis_view_cancel_timer(self.token.as_ptr()) };
+        unsafe { noesis_view_cancel_timer(self.token.as_ptr()) };
     }
 }
 
@@ -4365,7 +4365,7 @@ impl Drop for RenderingSubscription {
     fn drop(&mut self) {
         // SAFETY: token produced by add_rendering_handler; removal detaches the
         // delegate and runs the donated free handler, exactly once here.
-        unsafe { dm_noesis_view_remove_rendering_handler(self.token.as_ptr()) };
+        unsafe { noesis_view_remove_rendering_handler(self.token.as_ptr()) };
     }
 }
 
@@ -4387,31 +4387,31 @@ impl Renderer<'_> {
     pub fn init(&mut self, render_device: &RegisteredDevice) {
         // SAFETY: RegisteredDevice owns a live Noesis::RenderDevice* and
         // outlives this call (borrow checker enforces).
-        unsafe { dm_noesis_renderer_init(self.ptr.as_ptr(), render_device.raw()) }
+        unsafe { noesis_renderer_init(self.ptr.as_ptr(), render_device.raw()) }
     }
 
     /// Release the renderer's device-bound resources.
     pub fn shutdown(&mut self) {
-        unsafe { dm_noesis_renderer_shutdown(self.ptr.as_ptr()) }
+        unsafe { noesis_renderer_shutdown(self.ptr.as_ptr()) }
     }
 
     /// Grab the most recent snapshot captured by [`View::update`]. Returns
     /// `false` when no new snapshot was available.
     pub fn update_render_tree(&mut self) -> bool {
-        unsafe { dm_noesis_renderer_update_render_tree(self.ptr.as_ptr()) }
+        unsafe { noesis_renderer_update_render_tree(self.ptr.as_ptr()) }
     }
 
     /// Populate offscreen textures the next [`Self::render`] may sample.
     /// Returns `false` when nothing was rendered (safe to skip GPU state
     /// restore in that case).
     pub fn render_offscreen(&mut self) -> bool {
-        unsafe { dm_noesis_renderer_render_offscreen(self.ptr.as_ptr()) }
+        unsafe { noesis_renderer_render_offscreen(self.ptr.as_ptr()) }
     }
 
     /// Render the UI into the currently-bound "onscreen" target (from the
     /// render device's perspective).
     pub fn render(&mut self, flip_y: bool, clear: bool) {
-        unsafe { dm_noesis_renderer_render(self.ptr.as_ptr(), flip_y, clear) }
+        unsafe { noesis_renderer_render(self.ptr.as_ptr(), flip_y, clear) }
     }
 
     /// Multi-pass stereo (VR) render of a single eye
@@ -4424,7 +4424,7 @@ impl Renderer<'_> {
         // SAFETY: self.ptr is a live IRenderer*; eye_matrix is exactly 16 floats
         // as the C side reads (Matrix4(const float*)).
         unsafe {
-            dm_noesis_renderer_render_stereo(self.ptr.as_ptr(), eye_matrix.as_ptr(), flip_y, clear)
+            noesis_renderer_render_stereo(self.ptr.as_ptr(), eye_matrix.as_ptr(), flip_y, clear)
         }
     }
 
@@ -4442,7 +4442,7 @@ impl Renderer<'_> {
         // SAFETY: self.ptr is a live IRenderer*; each matrix is exactly 16
         // floats as the C side reads.
         unsafe {
-            dm_noesis_renderer_render_stereo_both(
+            noesis_renderer_render_stereo_both(
                 self.ptr.as_ptr(),
                 left_eye_matrix.as_ptr(),
                 right_eye_matrix.as_ptr(),
@@ -4493,7 +4493,7 @@ impl RendererHandle {
 impl Drop for RendererHandle {
     fn drop(&mut self) {
         // SAFETY: `view` carries the +1 ref taken in View::renderer_handle;
-        // release it exactly once. dm_noesis_view_destroy is just IView::Release.
-        unsafe { dm_noesis_view_destroy(self.view.as_ptr()) };
+        // release it exactly once. noesis_view_destroy is just IView::Release.
+        unsafe { noesis_view_destroy(self.view.as_ptr()) };
     }
 }

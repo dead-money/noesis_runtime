@@ -10,7 +10,7 @@
 //     regenerates its containers. We just expose CRUD over the C ABI.
 //
 //   * Boxing — list items and DataContext values are `BaseComponent*`. The
-//     most common item is a string; `dm_noesis_box_string` wraps a C string
+//     most common item is a string; `noesis_box_string` wraps a C string
 //     in a `BoxedValue<String>` so a `DataTemplate` with `{Binding}` (the whole
 //     item) renders it. Reference-typed view models (the synthetic classes from
 //     noesis_classes.cpp) are passed through directly.
@@ -57,7 +57,7 @@ namespace {
 
 // Hand a freshly-created (or borrowed) BaseComponent out across the C ABI with
 // exactly one reference owned by the caller, balanced by
-// `dm_noesis_base_component_release`. Safe to call on a refcount-0 `new`'d
+// `noesis_base_component_release`. Safe to call on a refcount-0 `new`'d
 // object (bumps 0→1) or on a live borrowed object (bumps N→N+1).
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
@@ -79,7 +79,7 @@ ObsColl* as_collection(void* p) {
 
 // ── Boxing ──────────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_box_string(const char* text) {
+extern "C" void* noesis_box_string(const char* text) {
     // Box(const char*) copies the bytes into a Noesis::String inside a
     // BoxedValue<String>; the caller's `text` can go away after this call.
     Noesis::Ptr<Noesis::BoxedValue> boxed = Noesis::Boxing::Box(text ? text : "");
@@ -88,18 +88,18 @@ extern "C" void* dm_noesis_box_string(const char* text) {
 
 // ── ObservableCollection<BaseComponent> ─────────────────────────────────────
 
-extern "C" void* dm_noesis_observable_collection_create(void) {
+extern "C" void* noesis_observable_collection_create(void) {
     Noesis::Ptr<ObsColl> coll = *new ObsColl();
     return handout(coll.GetPtr());
 }
 
-extern "C" int32_t dm_noesis_observable_collection_add(void* collection, void* item) {
+extern "C" int32_t noesis_observable_collection_add(void* collection, void* item) {
     ObsColl* coll = as_collection(collection);
     if (!coll) return -1;
     return coll->Add(static_cast<Noesis::BaseComponent*>(item));
 }
 
-extern "C" bool dm_noesis_observable_collection_insert(
+extern "C" bool noesis_observable_collection_insert(
     void* collection, uint32_t index, void* item) {
     ObsColl* coll = as_collection(collection);
     if (!coll || index > (uint32_t)coll->Count()) return false;
@@ -107,7 +107,7 @@ extern "C" bool dm_noesis_observable_collection_insert(
     return true;
 }
 
-extern "C" bool dm_noesis_observable_collection_set(
+extern "C" bool noesis_observable_collection_set(
     void* collection, uint32_t index, void* item) {
     ObsColl* coll = as_collection(collection);
     if (!coll || index >= (uint32_t)coll->Count()) return false;
@@ -115,26 +115,26 @@ extern "C" bool dm_noesis_observable_collection_set(
     return true;
 }
 
-extern "C" bool dm_noesis_observable_collection_remove_at(void* collection, uint32_t index) {
+extern "C" bool noesis_observable_collection_remove_at(void* collection, uint32_t index) {
     ObsColl* coll = as_collection(collection);
     if (!coll || index >= (uint32_t)coll->Count()) return false;
     coll->RemoveAt(index);
     return true;
 }
 
-extern "C" void dm_noesis_observable_collection_clear(void* collection) {
+extern "C" void noesis_observable_collection_clear(void* collection) {
     ObsColl* coll = as_collection(collection);
     if (coll) coll->Clear();
 }
 
-extern "C" int32_t dm_noesis_observable_collection_count(void* collection) {
+extern "C" int32_t noesis_observable_collection_count(void* collection) {
     ObsColl* coll = as_collection(collection);
     return coll ? coll->Count() : -1;
 }
 
 // Borrowed (no +1) pointer to the item at `index`, or null. The collection
 // owns the reference; copy / AddReference if you need to keep it.
-extern "C" void* dm_noesis_observable_collection_get(void* collection, uint32_t index) {
+extern "C" void* noesis_observable_collection_get(void* collection, uint32_t index) {
     ObsColl* coll = as_collection(collection);
     if (!coll || index >= (uint32_t)coll->Count()) return nullptr;
     return coll->Get(index);
@@ -142,7 +142,7 @@ extern "C" void* dm_noesis_observable_collection_get(void* collection, uint32_t 
 
 // ── DataContext ─────────────────────────────────────────────────────────────
 
-extern "C" bool dm_noesis_framework_element_set_data_context(void* element, void* context) {
+extern "C" bool noesis_framework_element_set_data_context(void* element, void* context) {
     if (!element) return false;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -154,7 +154,7 @@ extern "C" bool dm_noesis_framework_element_set_data_context(void* element, void
 }
 
 // Borrowed (no +1) pointer to the element's current DataContext, or null.
-extern "C" void* dm_noesis_framework_element_get_data_context(void* element) {
+extern "C" void* noesis_framework_element_get_data_context(void* element) {
     if (!element) return nullptr;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -163,7 +163,7 @@ extern "C" void* dm_noesis_framework_element_get_data_context(void* element) {
 
 // ── ItemsControl.ItemsSource + container introspection ──────────────────────
 
-extern "C" bool dm_noesis_items_control_set_items_source(void* element, void* items) {
+extern "C" bool noesis_items_control_set_items_source(void* element, void* items) {
     if (!element) return false;
     auto* ic = Noesis::DynamicCast<Noesis::ItemsControl*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -174,7 +174,7 @@ extern "C" bool dm_noesis_items_control_set_items_source(void* element, void* it
 
 // Number of items the ItemsControl currently sees (its `Items` view over the
 // bound ItemsSource). -1 if `element` is not an ItemsControl.
-extern "C" int32_t dm_noesis_items_control_items_count(void* element) {
+extern "C" int32_t noesis_items_control_items_count(void* element) {
     if (!element) return -1;
     auto* ic = Noesis::DynamicCast<Noesis::ItemsControl*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -190,7 +190,7 @@ extern "C" int32_t dm_noesis_items_control_items_count(void* element) {
 // measure. So a realized count that tracks post-mutation collection size is a
 // genuine proof that change notification reached the control. -1 if `element`
 // is not an ItemsControl.
-extern "C" int32_t dm_noesis_items_control_realized_count(void* element) {
+extern "C" int32_t noesis_items_control_realized_count(void* element) {
     if (!element) return -1;
     auto* ic = Noesis::DynamicCast<Noesis::ItemsControl*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -216,14 +216,14 @@ extern "C" int32_t dm_noesis_items_control_realized_count(void* element) {
 // back a Visual* is fine. All owning returns AddReference() once for the
 // caller (matching `find_name`); the Rust drop releases.
 
-extern "C" uint32_t dm_noesis_visual_children_count(void* element) {
+extern "C" uint32_t noesis_visual_children_count(void* element) {
     if (!element) return 0;
     auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
     if (!v) return 0;
     return Noesis::VisualTreeHelper::GetChildrenCount(v);
 }
 
-extern "C" void* dm_noesis_visual_child(void* element, uint32_t index) {
+extern "C" void* noesis_visual_child(void* element, uint32_t index) {
     if (!element) return nullptr;
     auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
     if (!v || index >= Noesis::VisualTreeHelper::GetChildrenCount(v)) return nullptr;
@@ -233,7 +233,7 @@ extern "C" void* dm_noesis_visual_child(void* element, uint32_t index) {
     return static_cast<Noesis::BaseComponent*>(child);
 }
 
-extern "C" void* dm_noesis_visual_parent(void* element) {
+extern "C" void* noesis_visual_parent(void* element) {
     if (!element) return nullptr;
     auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
     if (!v) return nullptr;
@@ -245,7 +245,7 @@ extern "C" void* dm_noesis_visual_parent(void* element) {
 
 // Hit-test a single point in `element`-local DIPs. Returns the topmost hit
 // Visual* (+1) or null when nothing was hit / `element` is not a Visual.
-extern "C" void* dm_noesis_visual_hit_test(void* element, float x, float y) {
+extern "C" void* noesis_visual_hit_test(void* element, float x, float y) {
     if (!element) return nullptr;
     auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
     if (!v) return nullptr;
@@ -263,8 +263,8 @@ extern "C" void* dm_noesis_visual_hit_test(void* element, float x, float y) {
 // it wants to keep one. Return codes are the raw Noesis enum values.
 namespace {
 struct HitTestBridge {
-    dm_noesis_hit_filter_fn filter;
-    dm_noesis_hit_result_fn result;
+    noesis_hit_filter_fn filter;
+    noesis_hit_result_fn result;
     void* userdata;
 
     Noesis::HitTestFilterBehavior OnFilter(Noesis::Visual* target) {
@@ -280,9 +280,9 @@ struct HitTestBridge {
 };
 }  // namespace
 
-extern "C" void dm_noesis_visual_hit_test_filtered(
-    void* element, float x, float y, dm_noesis_hit_filter_fn filter,
-    dm_noesis_hit_result_fn result, void* userdata)
+extern "C" void noesis_visual_hit_test_filtered(
+    void* element, float x, float y, noesis_hit_filter_fn filter,
+    noesis_hit_result_fn result, void* userdata)
 {
     if (!element || !result) return;
     auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
@@ -294,7 +294,7 @@ extern "C" void dm_noesis_visual_hit_test_filtered(
         Noesis::MakeDelegate(&bridge, &HitTestBridge::OnResult));
 }
 
-extern "C" void* dm_noesis_framework_element_logical_parent(void* element) {
+extern "C" void* noesis_framework_element_logical_parent(void* element) {
     if (!element) return nullptr;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -310,7 +310,7 @@ extern "C" void* dm_noesis_framework_element_logical_parent(void* element) {
 // RenderTransform rotates/scales around. `out_x`/`out_y` are written 0 when the
 // element is not a UIElement; the setter is a no-op then.
 
-extern "C" void dm_noesis_ui_element_get_render_transform_origin(
+extern "C" void noesis_ui_element_get_render_transform_origin(
     void* element, float* out_x, float* out_y)
 {
     if (out_x) *out_x = 0.0f;
@@ -324,7 +324,7 @@ extern "C" void dm_noesis_ui_element_get_render_transform_origin(
     if (out_y) *out_y = p.y;
 }
 
-extern "C" bool dm_noesis_ui_element_set_render_transform_origin(
+extern "C" bool noesis_ui_element_set_render_transform_origin(
     void* element, float x, float y)
 {
     if (!element) return false;
@@ -338,17 +338,17 @@ extern "C" bool dm_noesis_ui_element_set_render_transform_origin(
 // ── Standalone NameScope (TODO §2) ──────────────────────────────────────────
 // The freestanding NameScope object, distinct from the per-FrameworkElement
 // RegisterName path. All component pointers handed back are +1 (release via
-// dm_noesis_base_component_release).
+// noesis_base_component_release).
 
 // Create an empty NameScope (+1).
-extern "C" void* dm_noesis_name_scope_create() {
+extern "C" void* noesis_name_scope_create() {
     Noesis::Ptr<Noesis::NameScope> scope = Noesis::MakePtr<Noesis::NameScope>();
     return scope.GiveOwnership();
 }
 
 // Attached NameScope on `element` (NameScope::GetNameScope), +1, or NULL if the
 // element carries none / is not a DependencyObject.
-extern "C" void* dm_noesis_name_scope_get(void* element) {
+extern "C" void* noesis_name_scope_get(void* element) {
     if (!element) return nullptr;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -361,7 +361,7 @@ extern "C" void* dm_noesis_name_scope_get(void* element) {
 
 // Attach `scope` (may be NULL to clear) as `element`'s NameScope. Returns false
 // if `element` is not a DependencyObject.
-extern "C" bool dm_noesis_name_scope_set(void* element, void* scope) {
+extern "C" bool noesis_name_scope_set(void* element, void* scope) {
     if (!element) return false;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -371,7 +371,7 @@ extern "C" bool dm_noesis_name_scope_set(void* element, void* scope) {
 }
 
 // INameScope operations on a NameScope*. find_name returns +1 or NULL.
-extern "C" void* dm_noesis_name_scope_find_name(void* scope, const char* name) {
+extern "C" void* noesis_name_scope_find_name(void* scope, const char* name) {
     if (!scope || !name) return nullptr;
     auto* s = static_cast<Noesis::NameScope*>(scope);
     Noesis::BaseComponent* obj = s->FindName(name);
@@ -380,18 +380,18 @@ extern "C" void* dm_noesis_name_scope_find_name(void* scope, const char* name) {
     return obj;
 }
 
-extern "C" void dm_noesis_name_scope_register_name(void* scope, const char* name, void* obj) {
+extern "C" void noesis_name_scope_register_name(void* scope, const char* name, void* obj) {
     if (!scope || !name || !obj) return;
     static_cast<Noesis::NameScope*>(scope)->RegisterName(
         name, static_cast<Noesis::BaseComponent*>(obj));
 }
 
-extern "C" void dm_noesis_name_scope_unregister_name(void* scope, const char* name) {
+extern "C" void noesis_name_scope_unregister_name(void* scope, const char* name) {
     if (!scope || !name) return;
     static_cast<Noesis::NameScope*>(scope)->UnregisterName(name);
 }
 
-extern "C" void dm_noesis_name_scope_update_name(void* scope, const char* name, void* obj) {
+extern "C" void noesis_name_scope_update_name(void* scope, const char* name, void* obj) {
     if (!scope || !name || !obj) return;
     static_cast<Noesis::NameScope*>(scope)->UpdateName(
         name, static_cast<Noesis::BaseComponent*>(obj));
@@ -399,7 +399,7 @@ extern "C" void dm_noesis_name_scope_update_name(void* scope, const char* name, 
 
 // Reverse lookup: the registered name of `obj`, or NULL. The returned pointer is
 // owned by the NameScope (borrowed); copy it out before mutating the scope.
-extern "C" const char* dm_noesis_name_scope_find_object(void* scope, void* obj) {
+extern "C" const char* noesis_name_scope_find_object(void* scope, void* obj) {
     if (!scope || !obj) return nullptr;
     return static_cast<Noesis::NameScope*>(scope)->FindObject(
         static_cast<Noesis::BaseComponent*>(obj));
@@ -407,12 +407,12 @@ extern "C" const char* dm_noesis_name_scope_find_object(void* scope, void* obj) 
 
 // Enumerate every (name, object) pair. `cb` receives borrowed pointers valid
 // only for that call. No-op on NULL scope/cb.
-extern "C" void dm_noesis_name_scope_enum(
-    void* scope, dm_noesis_name_scope_enum_fn cb, void* userdata)
+extern "C" void noesis_name_scope_enum(
+    void* scope, noesis_name_scope_enum_fn cb, void* userdata)
 {
     if (!scope || !cb) return;
     struct Ctx {
-        dm_noesis_name_scope_enum_fn cb;
+        noesis_name_scope_enum_fn cb;
         void* userdata;
     } ctx{cb, userdata};
     static_cast<Noesis::NameScope*>(scope)->EnumNamedObjects(
@@ -423,7 +423,7 @@ extern "C" void dm_noesis_name_scope_enum(
         &ctx);
 }
 
-extern "C" uint32_t dm_noesis_logical_children_count(void* element) {
+extern "C" uint32_t noesis_logical_children_count(void* element) {
     if (!element) return 0;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -431,7 +431,7 @@ extern "C" uint32_t dm_noesis_logical_children_count(void* element) {
     return Noesis::LogicalTreeHelper::GetChildrenCount(fe);
 }
 
-extern "C" void* dm_noesis_logical_child(void* element, uint32_t index) {
+extern "C" void* noesis_logical_child(void* element, uint32_t index) {
     if (!element) return nullptr;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -445,7 +445,7 @@ extern "C" void* dm_noesis_logical_child(void* element, uint32_t index) {
     return child.GetPtr();
 }
 
-extern "C" void* dm_noesis_framework_element_template_child(void* element, const char* name) {
+extern "C" void* noesis_framework_element_template_child(void* element, const char* name) {
     if (!element || !name) return nullptr;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -466,7 +466,7 @@ extern "C" void* dm_noesis_framework_element_template_child(void* element, const
 // Stretch, Top/Center/Bottom/Stretch — 0..=3). Getters return -1 if `element`
 // is not a FrameworkElement; setters no-op.
 
-extern "C" void dm_noesis_framework_element_set_halign(void* element, int32_t value) {
+extern "C" void noesis_framework_element_set_halign(void* element, int32_t value) {
     if (!element) return;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -474,7 +474,7 @@ extern "C" void dm_noesis_framework_element_set_halign(void* element, int32_t va
     fe->SetHorizontalAlignment(static_cast<Noesis::HorizontalAlignment>(value));
 }
 
-extern "C" void dm_noesis_framework_element_set_valign(void* element, int32_t value) {
+extern "C" void noesis_framework_element_set_valign(void* element, int32_t value) {
     if (!element) return;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -482,7 +482,7 @@ extern "C" void dm_noesis_framework_element_set_valign(void* element, int32_t va
     fe->SetVerticalAlignment(static_cast<Noesis::VerticalAlignment>(value));
 }
 
-extern "C" int32_t dm_noesis_framework_element_get_halign(void* element) {
+extern "C" int32_t noesis_framework_element_get_halign(void* element) {
     if (!element) return -1;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -490,7 +490,7 @@ extern "C" int32_t dm_noesis_framework_element_get_halign(void* element) {
     return static_cast<int32_t>(fe->GetHorizontalAlignment());
 }
 
-extern "C" int32_t dm_noesis_framework_element_get_valign(void* element) {
+extern "C" int32_t noesis_framework_element_get_valign(void* element) {
     if (!element) return -1;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -503,7 +503,7 @@ extern "C" int32_t dm_noesis_framework_element_get_valign(void* element) {
 // Only the affinity queries are exposed: NsGui has no public BeginInvoke
 // surface (cross-thread marshalling would need IView timers — TODO §1).
 
-extern "C" bool dm_noesis_dependency_object_check_access(void* obj) {
+extern "C" bool noesis_dependency_object_check_access(void* obj) {
     if (!obj) return false;
     auto* d = Noesis::DynamicCast<Noesis::DispatcherObject*>(
         static_cast<Noesis::BaseComponent*>(obj));
@@ -511,7 +511,7 @@ extern "C" bool dm_noesis_dependency_object_check_access(void* obj) {
     return d->CheckAccess();
 }
 
-extern "C" uint32_t dm_noesis_dependency_object_thread_id(void* obj) {
+extern "C" uint32_t noesis_dependency_object_thread_id(void* obj) {
     if (!obj) return UINT32_MAX;
     auto* d = Noesis::DynamicCast<Noesis::DispatcherObject*>(
         static_cast<Noesis::BaseComponent*>(obj));
@@ -541,7 +541,7 @@ Noesis::CollectionView* as_collection_view(void* p) {
 // unsubscribe.
 class RustCurrentChangedHandler {
 public:
-    RustCurrentChangedHandler(dm_noesis_collection_view_changed_fn cb, void* userdata,
+    RustCurrentChangedHandler(noesis_collection_view_changed_fn cb, void* userdata,
                               Noesis::CollectionView* view)
         : mCb(cb), mUserdata(userdata), mView(view) {
         if (mView) mView->AddReference();
@@ -561,7 +561,7 @@ public:
     Noesis::CollectionView* view() const { return mView; }
 
 private:
-    dm_noesis_collection_view_changed_fn mCb;
+    noesis_collection_view_changed_fn mCb;
     void* mUserdata;
     Noesis::CollectionView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
 };
@@ -569,7 +569,7 @@ private:
 }  // namespace
 
 // Create an empty CollectionViewSource (+1 ref for the caller).
-extern "C" void* dm_noesis_collection_view_source_create(void) {
+extern "C" void* noesis_collection_view_source_create(void) {
     Noesis::Ptr<Noesis::CollectionViewSource> cvs = *new Noesis::CollectionViewSource();
     return handout(cvs.GetPtr());
 }
@@ -577,7 +577,7 @@ extern "C" void* dm_noesis_collection_view_source_create(void) {
 // Point the source at `source` (a borrowed list, e.g. an ObservableCollection);
 // the CollectionViewSource (re)builds its view. Pass null to clear. false if
 // `cvs` is not a CollectionViewSource.
-extern "C" bool dm_noesis_collection_view_source_set_source(void* cvs, void* source) {
+extern "C" bool noesis_collection_view_source_set_source(void* cvs, void* source) {
     auto* s = Noesis::DynamicCast<Noesis::CollectionViewSource*>(
         static_cast<Noesis::BaseComponent*>(cvs));
     if (!s) return false;
@@ -594,7 +594,7 @@ extern "C" bool dm_noesis_collection_view_source_set_source(void* cvs, void* sou
 // leaves GetView() null. So when GetView() is null we build a CollectionView
 // directly over the source list (which is exactly what the hosted path would
 // produce) — the current-item navigation surface is identical either way.
-extern "C" void* dm_noesis_collection_view_source_get_view(void* cvs) {
+extern "C" void* noesis_collection_view_source_get_view(void* cvs) {
     auto* s = Noesis::DynamicCast<Noesis::CollectionViewSource*>(
         static_cast<Noesis::BaseComponent*>(cvs));
     if (!s) return nullptr;
@@ -606,72 +606,72 @@ extern "C" void* dm_noesis_collection_view_source_get_view(void* cvs) {
 }
 
 // Number of records in the view, or -1 if `view` is not a CollectionView.
-extern "C" int32_t dm_noesis_collection_view_count(void* view) {
+extern "C" int32_t noesis_collection_view_count(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->Count() : -1;
 }
 
 // Ordinal position of the CurrentItem, or INT32_MIN if not a CollectionView.
 // (Noesis uses -1 for "before first" and Count for "after last".)
-extern "C" int32_t dm_noesis_collection_view_current_position(void* view) {
+extern "C" int32_t noesis_collection_view_current_position(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->CurrentPosition() : INT32_MIN;
 }
 
 // +1-owned (AddRef'd) CurrentItem, or null if there is none / not a view.
-extern "C" void* dm_noesis_collection_view_current_item(void* view) {
+extern "C" void* noesis_collection_view_current_item(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     if (!cv) return nullptr;
     Noesis::Ptr<Noesis::BaseComponent> item = cv->CurrentItem();
     return handout(item.GetPtr());
 }
 
-extern "C" bool dm_noesis_collection_view_is_current_before_first(void* view) {
+extern "C" bool noesis_collection_view_is_current_before_first(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->IsCurrentBeforeFirst() : false;
 }
 
-extern "C" bool dm_noesis_collection_view_is_current_after_last(void* view) {
+extern "C" bool noesis_collection_view_is_current_after_last(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->IsCurrentAfterLast() : false;
 }
 
-extern "C" bool dm_noesis_collection_view_move_current_to_first(void* view) {
+extern "C" bool noesis_collection_view_move_current_to_first(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->MoveCurrentToFirst() : false;
 }
 
-extern "C" bool dm_noesis_collection_view_move_current_to_last(void* view) {
+extern "C" bool noesis_collection_view_move_current_to_last(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->MoveCurrentToLast() : false;
 }
 
-extern "C" bool dm_noesis_collection_view_move_current_to_next(void* view) {
+extern "C" bool noesis_collection_view_move_current_to_next(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->MoveCurrentToNext() : false;
 }
 
-extern "C" bool dm_noesis_collection_view_move_current_to_previous(void* view) {
+extern "C" bool noesis_collection_view_move_current_to_previous(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->MoveCurrentToPrevious() : false;
 }
 
-extern "C" bool dm_noesis_collection_view_move_current_to_position(void* view, int32_t position) {
+extern "C" bool noesis_collection_view_move_current_to_position(void* view, int32_t position) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->MoveCurrentToPosition(position) : false;
 }
 
 // Recreate the view (ICollectionView::Refresh).
-extern "C" void dm_noesis_collection_view_refresh(void* view) {
+extern "C" void noesis_collection_view_refresh(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     if (cv) cv->Refresh();
 }
 
 // Subscribe `cb` to the view's CurrentChanged event. Returns an opaque handler
-// token (release via dm_noesis_collection_view_unsubscribe_current_changed), or
+// token (release via noesis_collection_view_unsubscribe_current_changed), or
 // null on a non-CollectionView handle / null cb.
-extern "C" void* dm_noesis_collection_view_subscribe_current_changed(
-    void* view, dm_noesis_collection_view_changed_fn cb, void* userdata) {
+extern "C" void* noesis_collection_view_subscribe_current_changed(
+    void* view, noesis_collection_view_changed_fn cb, void* userdata) {
     Noesis::CollectionView* cv = as_collection_view(view);
     if (!cv || !cb) return nullptr;
     auto* handler = new RustCurrentChangedHandler(cb, userdata, cv);
@@ -679,7 +679,7 @@ extern "C" void* dm_noesis_collection_view_subscribe_current_changed(
     return handler;
 }
 
-extern "C" void dm_noesis_collection_view_unsubscribe_current_changed(void* token) {
+extern "C" void noesis_collection_view_unsubscribe_current_changed(void* token) {
     if (!token) return;
     auto* handler = static_cast<RustCurrentChangedHandler*>(token);
     if (auto* cv = handler->view()) {

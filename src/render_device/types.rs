@@ -503,7 +503,7 @@ impl UniformData {
     /// `num_dwords * 4` bytes.
     ///
     /// Quarantines the dereference so `unsafe_code = forbid` crates (e.g.
-    /// `dm_noesis_bevy`) can consume Noesis uniforms without opting in
+    /// `noesis_bevy`) can consume Noesis uniforms without opting in
     /// themselves.
     ///
     /// # Safety contract relied on
@@ -645,7 +645,7 @@ fn handle_from_texture_ptr(ptr: *mut Texture) -> Option<crate::render_device::Te
     // duration of the `draw_batch` call. The shim getter null-checks and
     // reads `RustTexture::mHandle` without further dereferencing.
     let raw = unsafe {
-        crate::render_device::ffi::dm_noesis_texture_get_handle(ptr.cast::<core::ffi::c_void>())
+        crate::render_device::ffi::noesis_texture_get_handle(ptr.cast::<core::ffi::c_void>())
     };
     core::num::NonZeroU64::new(raw).map(crate::render_device::TextureHandle)
 }

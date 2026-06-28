@@ -42,11 +42,11 @@ use std::ffi::{CString, c_void};
 use crate::binding::Binding;
 use crate::converters::{ConvertArg, Converted};
 use crate::ffi::{
-    MultiValueConverterVTable, dm_noesis_multi_binding_add_binding, dm_noesis_multi_binding_create,
-    dm_noesis_multi_binding_destroy, dm_noesis_multi_binding_set_converter,
-    dm_noesis_multi_binding_set_converter_parameter, dm_noesis_multi_binding_set_mode,
-    dm_noesis_multi_value_converter_create, dm_noesis_multi_value_converter_destroy,
-    dm_noesis_set_multi_binding,
+    MultiValueConverterVTable, noesis_multi_binding_add_binding, noesis_multi_binding_create,
+    noesis_multi_binding_destroy, noesis_multi_binding_set_converter,
+    noesis_multi_binding_set_converter_parameter, noesis_multi_binding_set_mode,
+    noesis_multi_value_converter_create, noesis_multi_value_converter_destroy,
+    noesis_set_multi_binding,
 };
 use crate::view::FrameworkElement;
 
@@ -149,7 +149,7 @@ impl MultiConverter {
         // SAFETY: vtable is 'static + valid; userdata ownership transfers to
         // C++; the free trampoline is extern "C".
         let ptr = unsafe {
-            dm_noesis_multi_value_converter_create(
+            noesis_multi_value_converter_create(
                 &MULTI_CONVERTER_VTABLE,
                 userdata.cast(),
                 multi_converter_free_trampoline,
@@ -163,7 +163,7 @@ impl MultiConverter {
                 // ownership on a null return.
                 unsafe { drop(Box::from_raw(userdata)) };
                 unreachable!(
-                    "dm_noesis_multi_value_converter_create returned null for a non-null vtable"
+                    "noesis_multi_value_converter_create returned null for a non-null vtable"
                 );
             }
         }
@@ -182,7 +182,7 @@ impl Drop for MultiConverter {
         // SAFETY: produced by create with +1; releases exactly that ref. The
         // handler box is freed by the C++ destructor once the last reference
         // (possibly a binding) drops.
-        unsafe { dm_noesis_multi_value_converter_destroy(self.ptr.as_ptr()) }
+        unsafe { noesis_multi_value_converter_destroy(self.ptr.as_ptr()) }
     }
 }
 
@@ -215,9 +215,9 @@ impl MultiBinding {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: no preconditions; returns a +1-owned MultiBinding*.
-        let ptr = unsafe { dm_noesis_multi_binding_create() };
+        let ptr = unsafe { noesis_multi_binding_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_multi_binding_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_multi_binding_create returned null"),
         }
     }
 
@@ -228,7 +228,7 @@ impl MultiBinding {
     #[must_use]
     pub fn add_binding(self, binding: Binding) -> Self {
         // SAFETY: both pointers are live; the MultiBinding takes its own ref.
-        unsafe { dm_noesis_multi_binding_add_binding(self.ptr.as_ptr(), binding.raw()) };
+        unsafe { noesis_multi_binding_add_binding(self.ptr.as_ptr(), binding.raw()) };
         self
     }
 
@@ -237,7 +237,7 @@ impl MultiBinding {
     #[must_use]
     pub fn converter(self, converter: &MultiConverter) -> Self {
         // SAFETY: both pointers are live; the binding stores its own ref.
-        unsafe { dm_noesis_multi_binding_set_converter(self.ptr.as_ptr(), converter.raw()) };
+        unsafe { noesis_multi_binding_set_converter(self.ptr.as_ptr(), converter.raw()) };
         self
     }
 
@@ -247,7 +247,7 @@ impl MultiBinding {
     pub fn converter_parameter(self, parameter: &crate::binding::Boxed) -> Self {
         // SAFETY: both pointers are live; the binding stores its own ref.
         unsafe {
-            dm_noesis_multi_binding_set_converter_parameter(self.ptr.as_ptr(), parameter.raw())
+            noesis_multi_binding_set_converter_parameter(self.ptr.as_ptr(), parameter.raw())
         };
         self
     }
@@ -256,7 +256,7 @@ impl MultiBinding {
     #[must_use]
     pub fn mode(self, mode: BindingMode) -> Self {
         // SAFETY: ptr is live.
-        unsafe { dm_noesis_multi_binding_set_mode(self.ptr.as_ptr(), mode as i32) };
+        unsafe { noesis_multi_binding_set_mode(self.ptr.as_ptr(), mode as i32) };
         self
     }
 
@@ -278,13 +278,13 @@ impl MultiBinding {
     pub fn set_on(&self, element: &FrameworkElement, dp_name: &str) -> bool {
         let c = CString::new(dp_name).expect("dp name contained interior NUL");
         // SAFETY: element + self are live; c is valid for the call.
-        unsafe { dm_noesis_set_multi_binding(element.raw(), c.as_ptr(), self.ptr.as_ptr()) }
+        unsafe { noesis_set_multi_binding(element.raw(), c.as_ptr(), self.ptr.as_ptr()) }
     }
 }
 
 impl Drop for MultiBinding {
     fn drop(&mut self) {
         // SAFETY: produced by create with +1; releases exactly that ref.
-        unsafe { dm_noesis_multi_binding_destroy(self.ptr.as_ptr()) }
+        unsafe { noesis_multi_binding_destroy(self.ptr.as_ptr()) }
     }
 }

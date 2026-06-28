@@ -18,7 +18,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::diagnostics::{self as diag, ErrorContext};
+use noesis_runtime::diagnostics::{self as diag, ErrorContext};
 
 type Rec<T> = Arc<Mutex<Vec<T>>>;
 
@@ -32,9 +32,9 @@ fn error_assert_thread_handlers() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Global error handler: exact value round-trip ───────────────────
@@ -211,5 +211,5 @@ fn error_assert_thread_handlers() {
         }
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

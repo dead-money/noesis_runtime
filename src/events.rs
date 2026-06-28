@@ -32,19 +32,19 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_key_args_key, dm_noesis_mouse_args_position, dm_noesis_mouse_button_args_button,
-    dm_noesis_mouse_wheel_args_delta, dm_noesis_routed_args_source,
-    dm_noesis_routed_events_add_copying_handler, dm_noesis_routed_events_add_pasting_handler,
-    dm_noesis_routed_events_do_drag_drop, dm_noesis_routed_events_drag_data,
-    dm_noesis_routed_events_drag_effects, dm_noesis_routed_events_drag_position,
-    dm_noesis_routed_events_drag_set_effects, dm_noesis_routed_events_focus_new,
-    dm_noesis_routed_events_focus_old, dm_noesis_routed_events_manip_cumulative,
-    dm_noesis_routed_events_manip_delta, dm_noesis_routed_events_manip_is_inertial,
-    dm_noesis_routed_events_manip_origin, dm_noesis_routed_events_manip_velocities,
-    dm_noesis_routed_events_remove_data_object_handler, dm_noesis_size_changed_args_new_size,
-    dm_noesis_subscribe_click, dm_noesis_subscribe_event, dm_noesis_subscribe_keydown,
-    dm_noesis_subscribe_lifecycle, dm_noesis_text_args_ch, dm_noesis_unsubscribe_click,
-    dm_noesis_unsubscribe_event, dm_noesis_unsubscribe_keydown, dm_noesis_unsubscribe_lifecycle,
+    noesis_key_args_key, noesis_mouse_args_position, noesis_mouse_button_args_button,
+    noesis_mouse_wheel_args_delta, noesis_routed_args_source,
+    noesis_routed_events_add_copying_handler, noesis_routed_events_add_pasting_handler,
+    noesis_routed_events_do_drag_drop, noesis_routed_events_drag_data,
+    noesis_routed_events_drag_effects, noesis_routed_events_drag_position,
+    noesis_routed_events_drag_set_effects, noesis_routed_events_focus_new,
+    noesis_routed_events_focus_old, noesis_routed_events_manip_cumulative,
+    noesis_routed_events_manip_delta, noesis_routed_events_manip_is_inertial,
+    noesis_routed_events_manip_origin, noesis_routed_events_manip_velocities,
+    noesis_routed_events_remove_data_object_handler, noesis_size_changed_args_new_size,
+    noesis_subscribe_click, noesis_subscribe_event, noesis_subscribe_keydown,
+    noesis_subscribe_lifecycle, noesis_text_args_ch, noesis_unsubscribe_click,
+    noesis_unsubscribe_event, noesis_unsubscribe_keydown, noesis_unsubscribe_lifecycle,
 };
 use crate::view::{FrameworkElement, Key, MouseButton};
 
@@ -96,7 +96,7 @@ impl Drop for ClickSubscription {
         // SAFETY: token + userdata produced together by subscribe_click;
         // freed exactly once here.
         unsafe {
-            dm_noesis_unsubscribe_click(self.token.as_ptr());
+            noesis_unsubscribe_click(self.token.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -127,7 +127,7 @@ pub fn subscribe_click<H: ClickHandler>(
     // element pointer is borrowed for the call duration only — Noesis copies
     // whatever it needs into the routed-event handler list.
     let token =
-        unsafe { dm_noesis_subscribe_click(element.raw(), click_trampoline, userdata.cast()) };
+        unsafe { noesis_subscribe_click(element.raw(), click_trampoline, userdata.cast()) };
 
     if let Some(token) = NonNull::new(token) {
         Some(ClickSubscription {
@@ -348,7 +348,7 @@ impl Drop for KeyDownSubscription {
         // SAFETY: token + userdata produced together by subscribe_keydown;
         // freed exactly once here.
         unsafe {
-            dm_noesis_unsubscribe_keydown(self.token.as_ptr());
+            noesis_unsubscribe_keydown(self.token.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -382,7 +382,7 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
     // element pointer is borrowed for the call duration only — Noesis copies
     // whatever it needs into the routed-event handler list.
     let token =
-        unsafe { dm_noesis_subscribe_keydown(element.raw(), keydown_trampoline, userdata.cast()) };
+        unsafe { noesis_subscribe_keydown(element.raw(), keydown_trampoline, userdata.cast()) };
 
     if let Some(token) = NonNull::new(token) {
         Some(KeyDownSubscription {
@@ -445,14 +445,14 @@ impl EventArgs {
         let mut y = 0.0f32;
         // SAFETY: `raw` is the opaque handle the trampoline received; the
         // accessor validates the arg kind and writes only on a match.
-        let ok = unsafe { dm_noesis_mouse_args_position(self.raw, &mut x, &mut y) };
+        let ok = unsafe { noesis_mouse_args_position(self.raw, &mut x, &mut y) };
         ok.then_some((x, y))
     }
 
     /// Changed mouse button for a mouse-button event; `None` otherwise.
     pub fn mouse_button(&self) -> Option<MouseButton> {
         // SAFETY: opaque handle; accessor returns -1 unless it's a button event.
-        let raw = unsafe { dm_noesis_mouse_button_args_button(self.raw) };
+        let raw = unsafe { noesis_mouse_button_args_button(self.raw) };
         match raw {
             0 => Some(MouseButton::Left),
             1 => Some(MouseButton::Right),
@@ -474,7 +474,7 @@ impl EventArgs {
             return None;
         }
         // SAFETY: opaque handle; accessor returns 0 unless it's a wheel event.
-        Some(unsafe { dm_noesis_mouse_wheel_args_delta(self.raw) })
+        Some(unsafe { noesis_mouse_wheel_args_delta(self.raw) })
     }
 
     /// Whether the live args are a mouse-wheel event. A wheel event is the only
@@ -489,7 +489,7 @@ impl EventArgs {
     /// `Some(Key::None)`.
     pub fn key(&self) -> Option<Key> {
         // SAFETY: opaque handle; accessor returns -1 unless it's a key event.
-        let raw = unsafe { dm_noesis_key_args_key(self.raw) };
+        let raw = unsafe { noesis_key_args_key(self.raw) };
         (raw >= 0).then(|| key_from_raw(raw))
     }
 
@@ -497,7 +497,7 @@ impl EventArgs {
     /// otherwise.
     pub fn text_char(&self) -> Option<char> {
         // SAFETY: opaque handle; accessor returns -1 unless it's text input.
-        let raw = unsafe { dm_noesis_text_args_ch(self.raw) };
+        let raw = unsafe { noesis_text_args_ch(self.raw) };
         if raw < 0 {
             return None;
         }
@@ -509,7 +509,7 @@ impl EventArgs {
         let mut w = 0.0f32;
         let mut h = 0.0f32;
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
-        let ok = unsafe { dm_noesis_size_changed_args_new_size(self.raw, &mut w, &mut h) };
+        let ok = unsafe { noesis_size_changed_args_new_size(self.raw, &mut w, &mut h) };
         ok.then_some((w, h))
     }
 
@@ -521,7 +521,7 @@ impl EventArgs {
     /// over-release) and do not let it escape the handler.
     pub fn source_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
-        let p = unsafe { dm_noesis_routed_args_source(self.raw) };
+        let p = unsafe { noesis_routed_args_source(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
@@ -536,7 +536,7 @@ impl EventArgs {
     /// contract as [`source_ptr`](Self::source_ptr)).
     pub fn focus_old_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
-        let p = unsafe { dm_noesis_routed_events_focus_old(self.raw) };
+        let p = unsafe { noesis_routed_events_focus_old(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
@@ -546,7 +546,7 @@ impl EventArgs {
     /// reference-counted; valid only for the callback duration.
     pub fn focus_new_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
-        let p = unsafe { dm_noesis_routed_events_focus_new(self.raw) };
+        let p = unsafe { noesis_routed_events_focus_new(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
@@ -562,7 +562,7 @@ impl EventArgs {
         let mut key_states = 0u32;
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
         let ok = unsafe {
-            dm_noesis_routed_events_drag_effects(
+            noesis_routed_events_drag_effects(
                 self.raw,
                 &mut effects,
                 &mut allowed,
@@ -582,7 +582,7 @@ impl EventArgs {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_drag_effects(&self, effects: DragEffects) -> bool {
         // SAFETY: opaque handle; accessor validates the kind before writing.
-        unsafe { dm_noesis_routed_events_drag_set_effects(self.raw, effects.bits()) }
+        unsafe { noesis_routed_events_drag_set_effects(self.raw, effects.bits()) }
     }
 
     /// Borrowed pointer to the dragged data object (`DragEventArgs::data`).
@@ -590,7 +590,7 @@ impl EventArgs {
     /// reference-counted; valid only for the callback duration.
     pub fn drag_data_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
-        let p = unsafe { dm_noesis_routed_events_drag_data(self.raw) };
+        let p = unsafe { noesis_routed_events_drag_data(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
@@ -603,7 +603,7 @@ impl EventArgs {
         // SAFETY: opaque handle + a borrowed live element pointer; accessor
         // validates the kind and writes on match.
         let ok = unsafe {
-            dm_noesis_routed_events_drag_position(self.raw, relative_to.raw(), &mut x, &mut y)
+            noesis_routed_events_drag_position(self.raw, relative_to.raw(), &mut x, &mut y)
         };
         ok.then_some((x, y))
     }
@@ -617,7 +617,7 @@ impl EventArgs {
         let mut x = 0.0f32;
         let mut y = 0.0f32;
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
-        let ok = unsafe { dm_noesis_routed_events_manip_origin(self.raw, &mut x, &mut y) };
+        let ok = unsafe { noesis_routed_events_manip_origin(self.raw, &mut x, &mut y) };
         ok.then_some((x, y))
     }
 
@@ -628,7 +628,7 @@ impl EventArgs {
         let mut d = ManipulationDelta::default();
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
         let ok = unsafe {
-            dm_noesis_routed_events_manip_delta(
+            noesis_routed_events_manip_delta(
                 self.raw,
                 &mut d.translation.0,
                 &mut d.translation.1,
@@ -647,7 +647,7 @@ impl EventArgs {
         let mut d = ManipulationDelta::default();
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
         let ok = unsafe {
-            dm_noesis_routed_events_manip_cumulative(
+            noesis_routed_events_manip_cumulative(
                 self.raw,
                 &mut d.translation.0,
                 &mut d.translation.1,
@@ -667,7 +667,7 @@ impl EventArgs {
         let mut v = ManipulationVelocities::default();
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
         let ok = unsafe {
-            dm_noesis_routed_events_manip_velocities(
+            noesis_routed_events_manip_velocities(
                 self.raw,
                 &mut v.angular,
                 &mut v.linear.0,
@@ -683,7 +683,7 @@ impl EventArgs {
     /// during the inertia phase (`isInertial`). `None` for other kinds.
     pub fn manip_is_inertial(&self) -> Option<bool> {
         // SAFETY: opaque handle; accessor returns -1 unless it's a delta/completed event.
-        match unsafe { dm_noesis_routed_events_manip_is_inertial(self.raw) } {
+        match unsafe { noesis_routed_events_manip_is_inertial(self.raw) } {
             0 => Some(false),
             1 => Some(true),
             _ => None,
@@ -698,7 +698,7 @@ impl EventArgs {
 /// Modeled on [`crate::input::ModifierKeys`] / [`crate::view::RenderFlags`].
 ///
 /// ```
-/// use dm_noesis_runtime::events::DragEffects;
+/// use noesis_runtime::events::DragEffects;
 /// let e = DragEffects::COPY.with(DragEffects::MOVE);
 /// assert!(e.contains(DragEffects::COPY));
 /// assert!(!e.contains(DragEffects::LINK));
@@ -928,7 +928,7 @@ impl Drop for EventSubscription {
         // SAFETY: token + userdata produced together by subscribe_event;
         // freed exactly once here.
         unsafe {
-            dm_noesis_unsubscribe_event(self.token.as_ptr());
+            noesis_unsubscribe_event(self.token.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -1190,7 +1190,7 @@ pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
     // element + name pointers are borrowed for the call duration only.
     let token = unsafe {
-        dm_noesis_subscribe_event(
+        noesis_subscribe_event(
             element.raw(),
             cname.as_ptr(),
             handled_too,
@@ -1265,7 +1265,7 @@ impl Drop for LifecycleSubscription {
         // SAFETY: token + userdata produced together by subscribe_lifecycle;
         // freed exactly once here.
         unsafe {
-            dm_noesis_unsubscribe_lifecycle(self.token.as_ptr());
+            noesis_unsubscribe_lifecycle(self.token.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -1380,7 +1380,7 @@ pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
     // element + name pointers are borrowed for the call duration only.
     let token = unsafe {
-        dm_noesis_subscribe_lifecycle(
+        noesis_subscribe_lifecycle(
             element.raw(),
             cname.as_ptr(),
             lifecycle_trampoline,
@@ -1424,7 +1424,7 @@ pub fn do_drag_drop(
     // SAFETY: both pointers are borrowed live elements; DoDragDrop copies what
     // it needs and does not retain the raw pointers past the call we make here.
     unsafe {
-        dm_noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects.bits())
+        noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects.bits())
     }
 }
 
@@ -1489,7 +1489,7 @@ impl Drop for DataObjectSubscription {
         // SAFETY: token + userdata produced together by a subscribe call; freed
         // exactly once here.
         unsafe {
-            dm_noesis_routed_events_remove_data_object_handler(self.token.as_ptr());
+            noesis_routed_events_remove_data_object_handler(self.token.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -1529,12 +1529,12 @@ pub fn subscribe_data_object<H: DataObjectHandler>(
     // element pointer is borrowed for the call duration only.
     let token = unsafe {
         match event {
-            DataObjectEvent::Copying => dm_noesis_routed_events_add_copying_handler(
+            DataObjectEvent::Copying => noesis_routed_events_add_copying_handler(
                 element.raw(),
                 data_object_trampoline,
                 userdata.cast(),
             ),
-            DataObjectEvent::Pasting => dm_noesis_routed_events_add_pasting_handler(
+            DataObjectEvent::Pasting => noesis_routed_events_add_pasting_handler(
                 element.raw(),
                 data_object_trampoline,
                 userdata.cast(),

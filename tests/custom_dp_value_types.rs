@@ -9,12 +9,12 @@
 //! registered defaults apply, and that the dynamic tag inference
 //! (`FrameworkElement::property_tag` / `get_dynamic`) classifies the new types.
 
-use dm_noesis_runtime::classes::{
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyOptions, PropertyValue,
 };
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::reflection::register_enum;
-use dm_noesis_runtime::view::{DynValue, FrameworkElement};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::reflection::register_enum;
+use noesis_runtime::view::{DynValue, FrameworkElement};
 
 struct Noop;
 impl PropertyChangeHandler for Noop {
@@ -34,9 +34,9 @@ fn custom_dp_value_types() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
     {
         // A runtime enum used as a DP value type.
         let mode = register_enum("DmVT.Mode", &[("Off", 0), ("On", 1), ("Auto", 2)])
@@ -88,7 +88,7 @@ fn custom_dp_value_types() {
         let _reg = b.register().expect("class registration failed");
 
         // Parse + instantiate via the factory; drive the name-keyed
-        // FrameworkElement accessors (dm_noesis_dependency_object_*).
+        // FrameworkElement accessors (noesis_dependency_object_*).
         let root = {
             let xaml = THING_XAML.replace("dm:Thing", "dm:Thing2");
             FrameworkElement::parse(&xaml).expect("parse returned None")
@@ -162,5 +162,5 @@ fn custom_dp_value_types() {
             "Enum base value unaffected by SetCurrentValue"
         );
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

@@ -6,9 +6,9 @@
 //! reads the value back THROUGH Noesis. Also checks the negative case (an
 //! unknown owner type is rejected).
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::FrameworkElement;
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
@@ -24,9 +24,9 @@ fn custom_attached_property() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // Register the owner type + its attached DP BEFORE resolving it.
@@ -59,5 +59,5 @@ fn custom_attached_property() {
         drop(reg);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

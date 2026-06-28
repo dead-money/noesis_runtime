@@ -14,16 +14,16 @@
 //! all owning wrappers drop inside the inner scope before `shutdown()`.
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test geometry -- --nocapture`
+//!   `cargo test -p noesis_runtime --test geometry -- --nocapture`
 
-use dm_noesis_runtime::geometry::{
+use noesis_runtime::geometry::{
     ArcSegment, BezierSegment, CombinedGeometry, EllipseGeometry, FillRule, Geometry,
     GeometryCombineMode, GeometryGroup, LineGeometry, LineSegment, PathFigure, PathGeometry,
     PolyBezierSegment, PolyLineSegment, PolyQuadraticBezierSegment, QuadraticBezierSegment,
     RectangleGeometry, StreamGeometry, SweepDirection,
 };
-use dm_noesis_runtime::transforms::TranslateTransform;
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::transforms::TranslateTransform;
+use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
@@ -37,9 +37,9 @@ fn geometry_object_model_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── EllipseGeometry ─────────────────────────────────────────────────
@@ -301,8 +301,8 @@ fn geometry_object_model_round_trip() {
         // PolyBezierSegment (points in groups of three) and
         // PolyQuadraticBezierSegment (pairs) have distinct create entrypoints
         // from PolyLineSegment; construct and round-trip each so a stub/no-op of
-        // dm_noesis_poly_bezier_segment_create /
-        // dm_noesis_poly_quadratic_bezier_segment_create is caught.
+        // noesis_poly_bezier_segment_create /
+        // noesis_poly_quadratic_bezier_segment_create is caught.
         let pbez = PolyBezierSegment::new(&[(120.0, 10.0), (140.0, 30.0), (120.0, 50.0)]);
         assert_eq!(pbez.point_count(), 3, "poly bezier point count");
         assert_eq!(
@@ -482,5 +482,5 @@ fn geometry_object_model_round_trip() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

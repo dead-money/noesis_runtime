@@ -11,15 +11,15 @@
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test multi_data_trigger -- --nocapture`
+//!   `cargo test -p noesis_runtime --test multi_data_trigger -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::animation::{BeginStoryboard, Storyboard};
-use dm_noesis_runtime::binding::{Binding, box_bool, box_f32, box_string};
-use dm_noesis_runtime::styles::{EventTrigger, MultiDataTrigger, Style};
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::animation::{BeginStoryboard, Storyboard};
+use noesis_runtime::binding::{Binding, box_bool, box_f32, box_string};
+use noesis_runtime::styles::{EventTrigger, MultiDataTrigger, Style};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 // A scene referencing the control types resolved by name, so the reflection
 // registry knows them (the built-ins register on first use).
@@ -49,7 +49,7 @@ impl XamlProvider for InMem {
 fn register_types() -> View {
     let mut bytes = HashMap::new();
     bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
-    let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+    let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
     let root = FrameworkElement::load("scene.xaml").expect("scene load");
     let mut view = View::create(root);
     view.set_size(200, 200);
@@ -64,9 +64,9 @@ fn multi_data_trigger_and_event_actions_roundtrip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let _view = register_types();
@@ -142,5 +142,5 @@ fn multi_data_trigger_and_event_actions_roundtrip() {
         assert_eq!(et.action_count(), 2, "two actions");
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

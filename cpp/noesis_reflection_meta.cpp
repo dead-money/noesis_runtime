@@ -19,7 +19,7 @@
 // internal registry that TypeConverterMetaData + Factory::RegisterComponent do
 // not drive at runtime (verified empirically: a synthetic converter type
 // registers in the Factory yet Get still returns null). The consumption side
-// (dm_noesis_type_converter_from_string) works for any built-in / reflected
+// (noesis_type_converter_from_string) works for any built-in / reflected
 // type. See TODO.md "Known SDK limitations".
 
 #include "noesis_shim.h"
@@ -87,8 +87,8 @@ public:
 
 }  // namespace
 
-extern "C" void* dm_noesis_register_enum(
-    const char* name, const dm_noesis_enum_value* values, uint32_t count) {
+extern "C" void* noesis_register_enum(
+    const char* name, const noesis_enum_value* values, uint32_t count) {
     if (!name || name[0] == '\0') return nullptr;
 
     Noesis::Symbol sym(name);
@@ -108,7 +108,7 @@ extern "C" void* dm_noesis_register_enum(
     return static_cast<Noesis::Type*>(te);
 }
 
-extern "C" bool dm_noesis_enum_value_from_name(
+extern "C" bool noesis_enum_value_from_name(
     const char* enum_type, const char* value_name, int32_t* out_value) {
     if (!value_name || !out_value) return false;
     const auto* te = Noesis::DynamicCast<const Noesis::TypeEnum*>(find_type(enum_type));
@@ -121,7 +121,7 @@ extern "C" bool dm_noesis_enum_value_from_name(
     return true;
 }
 
-extern "C" bool dm_noesis_enum_name_from_value(
+extern "C" bool noesis_enum_name_from_value(
     const char* enum_type, int32_t value, const char** out_name) {
     if (!out_name) return false;
     const auto* te = Noesis::DynamicCast<const Noesis::TypeEnum*>(find_type(enum_type));
@@ -132,7 +132,7 @@ extern "C" bool dm_noesis_enum_name_from_value(
     return true;
 }
 
-extern "C" bool dm_noesis_type_converter_from_string(
+extern "C" bool noesis_type_converter_from_string(
     const char* type_name, const char* str, void** out_boxed) {
     if (!str || !out_boxed) return false;
     const Noesis::Type* t = find_type(type_name);
@@ -147,7 +147,7 @@ extern "C" bool dm_noesis_type_converter_from_string(
 
 // ── (B) Custom routed events ──────────────────────────────────────────────────
 
-extern "C" bool dm_noesis_register_routed_event(
+extern "C" bool noesis_register_routed_event(
     const char* type_name, const char* event_name, int32_t strategy) {
     if (!event_name) return false;
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
@@ -177,7 +177,7 @@ extern "C" bool dm_noesis_register_routed_event(
     return slot != nullptr;
 }
 
-extern "C" bool dm_noesis_raise_routed_event(void* element, const char* event_name) {
+extern "C" bool noesis_raise_routed_event(void* element, const char* event_name) {
     if (!element || !event_name) return false;
     auto* uie = Noesis::DynamicCast<Noesis::UIElement*>(
         static_cast<Noesis::BaseComponent*>(element));
@@ -195,14 +195,14 @@ extern "C" bool dm_noesis_raise_routed_event(void* element, const char* event_na
 
 // ── (C) Factory / component metadata ───────────────────────────────────────
 
-extern "C" bool dm_noesis_factory_is_registered(const char* name) {
+extern "C" bool noesis_factory_is_registered(const char* name) {
     if (!name) return false;
     Noesis::Symbol sym(name, Noesis::Symbol::NullIfNotFound());
     if (sym.IsNull()) return false;
     return Noesis::Factory::IsComponentRegistered(sym);
 }
 
-extern "C" bool dm_noesis_type_set_content_property(
+extern "C" bool noesis_type_set_content_property(
     const char* type_name, const char* prop_name) {
     if (!prop_name) return false;
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
@@ -218,7 +218,7 @@ extern "C" bool dm_noesis_type_set_content_property(
     return true;
 }
 
-extern "C" bool dm_noesis_type_get_content_property(
+extern "C" bool noesis_type_get_content_property(
     const char* type_name, const char** out_name) {
     if (!out_name) return false;
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
@@ -233,7 +233,7 @@ extern "C" bool dm_noesis_type_get_content_property(
     return true;
 }
 
-extern "C" bool dm_noesis_type_add_depends_on(
+extern "C" bool noesis_type_add_depends_on(
     const char* type_name, const char* prop_name) {
     if (!prop_name) return false;
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
@@ -249,7 +249,7 @@ extern "C" bool dm_noesis_type_add_depends_on(
     return true;
 }
 
-extern "C" bool dm_noesis_type_get_depends_on(
+extern "C" bool noesis_type_get_depends_on(
     const char* type_name, const char** out_name) {
     if (!out_name) return false;
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));

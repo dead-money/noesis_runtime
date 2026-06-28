@@ -16,7 +16,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::font_provider::{FontProvider, set_font_provider};
+use noesis_runtime::font_provider::{FontProvider, set_font_provider};
 
 /// Records every `(folder, filename)` pair `open_font` was asked for. Faked
 /// `scan_folder` returns nothing — so the only way an entry shows up here
@@ -68,9 +68,9 @@ fn register_font_round_trips_through_open_font() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let sdk_dir =
         std::env::var("NOESIS_SDK_DIR").expect("NOESIS_SDK_DIR not set; required for this test");
@@ -122,5 +122,5 @@ fn register_font_round_trips_through_open_font() {
         drop(registered);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

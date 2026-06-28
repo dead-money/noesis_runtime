@@ -21,12 +21,12 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{collections::HashMap, ffi::c_void};
 
-use dm_noesis_runtime::events::{
+use noesis_runtime::events::{
     DataObjectEvent, DragEffects, EventArgs, RoutedEvent, do_drag_drop, subscribe_data_object,
     subscribe_event,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <StackPanel xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -55,9 +55,9 @@ fn typed_args_focus_drag_manipulation() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // Last GotKeyboardFocus newFocus / LostKeyboardFocus oldFocus pointers,
     // stored as `usize` (a raw `*mut c_void` is not `Send` so can't ride the
@@ -69,7 +69,7 @@ fn typed_args_focus_drag_manipulation() {
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE_XAML.as_bytes().to_vec());
-        let _registered = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
+        let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
@@ -169,11 +169,11 @@ fn typed_args_focus_drag_manipulation() {
         // ── Drag + manipulation typed accessors (test-utils raisers) ──
         #[cfg(feature = "test-utils")]
         {
-            use dm_noesis_runtime::events::DragKeyStates;
-            use dm_noesis_runtime::ffi::{
-                RoutedEventFn, dm_noesis_routed_events_test_raise_drag,
-                dm_noesis_routed_events_test_raise_manip_completed,
-                dm_noesis_routed_events_test_raise_manip_delta,
+            use noesis_runtime::events::DragKeyStates;
+            use noesis_runtime::ffi::{
+                RoutedEventFn, noesis_routed_events_test_raise_drag,
+                noesis_routed_events_test_raise_manip_completed,
+                noesis_routed_events_test_raise_manip_delta,
             };
 
             // Trampoline that re-exposes the borrowed args to a Rust closure,
@@ -208,7 +208,7 @@ fn typed_args_focus_drag_manipulation() {
 
             // ---- Drag ----
             let mut drag_seen = 0u32;
-            run_raise(dm_noesis_routed_events_test_raise_drag, &mut |args| {
+            run_raise(noesis_routed_events_test_raise_drag, &mut |args| {
                 let info = args.drag().expect("drag() should be Some for a drag event");
                 assert_eq!(info.effects, DragEffects::COPY, "effects");
                 assert_eq!(info.allowed_effects, DragEffects::ALL, "allowedEffects");
@@ -239,7 +239,7 @@ fn typed_args_focus_drag_manipulation() {
             // ---- Manipulation delta ----
             let mut md_seen = 0u32;
             run_raise(
-                dm_noesis_routed_events_test_raise_manip_delta,
+                noesis_routed_events_test_raise_manip_delta,
                 &mut |args| {
                     assert_eq!(args.manip_origin(), Some((100.0, 200.0)), "origin");
                     let d = args.manip_delta().expect("manip_delta Some");
@@ -263,7 +263,7 @@ fn typed_args_focus_drag_manipulation() {
             // ---- Manipulation completed ----
             let mut mc_seen = 0u32;
             run_raise(
-                dm_noesis_routed_events_test_raise_manip_completed,
+                noesis_routed_events_test_raise_manip_completed,
                 &mut |args| {
                     assert_eq!(args.manip_origin(), Some((100.0, 200.0)), "origin");
                     let d = args.manip_delta().expect("total Some");
@@ -299,5 +299,5 @@ fn typed_args_focus_drag_manipulation() {
         drop(_registered);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

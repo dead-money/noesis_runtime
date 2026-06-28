@@ -25,21 +25,21 @@ use std::ffi::c_void;
 
 use crate::commands::AsCommand;
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_focus_manager_get_focus_scope,
-    dm_noesis_focus_manager_get_focused_element, dm_noesis_focus_manager_get_is_focus_scope,
-    dm_noesis_focus_manager_set_focused_element, dm_noesis_focus_manager_set_is_focus_scope,
-    dm_noesis_input_binding_create, dm_noesis_key_binding_create, dm_noesis_key_gesture_create,
-    dm_noesis_keyboard_navigation_get_accepts_return,
-    dm_noesis_keyboard_navigation_get_control_tab_navigation,
-    dm_noesis_keyboard_navigation_get_directional_navigation,
-    dm_noesis_keyboard_navigation_get_is_tab_stop, dm_noesis_keyboard_navigation_get_tab_index,
-    dm_noesis_keyboard_navigation_get_tab_navigation,
-    dm_noesis_keyboard_navigation_set_accepts_return,
-    dm_noesis_keyboard_navigation_set_control_tab_navigation,
-    dm_noesis_keyboard_navigation_set_directional_navigation,
-    dm_noesis_keyboard_navigation_set_is_tab_stop, dm_noesis_keyboard_navigation_set_tab_index,
-    dm_noesis_keyboard_navigation_set_tab_navigation, dm_noesis_mouse_binding_create,
-    dm_noesis_mouse_gesture_create, dm_noesis_ui_element_add_input_binding,
+    noesis_base_component_release, noesis_focus_manager_get_focus_scope,
+    noesis_focus_manager_get_focused_element, noesis_focus_manager_get_is_focus_scope,
+    noesis_focus_manager_set_focused_element, noesis_focus_manager_set_is_focus_scope,
+    noesis_input_binding_create, noesis_key_binding_create, noesis_key_gesture_create,
+    noesis_keyboard_navigation_get_accepts_return,
+    noesis_keyboard_navigation_get_control_tab_navigation,
+    noesis_keyboard_navigation_get_directional_navigation,
+    noesis_keyboard_navigation_get_is_tab_stop, noesis_keyboard_navigation_get_tab_index,
+    noesis_keyboard_navigation_get_tab_navigation,
+    noesis_keyboard_navigation_set_accepts_return,
+    noesis_keyboard_navigation_set_control_tab_navigation,
+    noesis_keyboard_navigation_set_directional_navigation,
+    noesis_keyboard_navigation_set_is_tab_stop, noesis_keyboard_navigation_set_tab_index,
+    noesis_keyboard_navigation_set_tab_navigation, noesis_mouse_binding_create,
+    noesis_mouse_gesture_create, noesis_ui_element_add_input_binding,
 };
 use crate::view::{FrameworkElement, Key};
 
@@ -52,7 +52,7 @@ use crate::view::{FrameworkElement, Key};
 /// `noesis_input.cpp`.
 ///
 /// ```
-/// use dm_noesis_runtime::input::ModifierKeys;
+/// use noesis_runtime::input::ModifierKeys;
 /// let m = ModifierKeys::CONTROL.with(ModifierKeys::SHIFT);
 /// assert!(m.contains(ModifierKeys::CONTROL));
 /// assert!(!m.contains(ModifierKeys::ALT));
@@ -245,9 +245,9 @@ impl KeyGesture {
     #[must_use]
     pub fn new(key: Key, modifiers: ModifierKeys) -> Self {
         // SAFETY: the C side constructs a KeyGesture at +1; never null.
-        let ptr = unsafe { dm_noesis_key_gesture_create(key as i32, modifiers.bits()) };
+        let ptr = unsafe { noesis_key_gesture_create(key as i32, modifiers.bits()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_key_gesture_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_key_gesture_create returned null"),
         }
     }
 
@@ -261,7 +261,7 @@ impl KeyGesture {
 impl Drop for KeyGesture {
     fn drop(&mut self) {
         // SAFETY: +1 from create, released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -279,9 +279,9 @@ impl MouseGesture {
     #[must_use]
     pub fn new(action: MouseAction, modifiers: ModifierKeys) -> Self {
         // SAFETY: the C side constructs a MouseGesture at +1; never null.
-        let ptr = unsafe { dm_noesis_mouse_gesture_create(action as i32, modifiers.bits()) };
+        let ptr = unsafe { noesis_mouse_gesture_create(action as i32, modifiers.bits()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_mouse_gesture_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_mouse_gesture_create returned null"),
         }
     }
 
@@ -295,7 +295,7 @@ impl MouseGesture {
 impl Drop for MouseGesture {
     fn drop(&mut self) {
         // SAFETY: +1 from create, released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -321,7 +321,7 @@ impl KeyBinding {
         // SAFETY: command_ptr() is a borrowed live ICommand* for the call; the C
         // side builds a KeyBinding at +1 (or null on a non-command pointer).
         let ptr = unsafe {
-            dm_noesis_key_binding_create(command.command_ptr(), key as i32, modifiers.bits())
+            noesis_key_binding_create(command.command_ptr(), key as i32, modifiers.bits())
         };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
@@ -331,7 +331,7 @@ impl KeyBinding {
     /// while `element` (or its focus subtree) has focus.
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
-        unsafe { dm_noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
     /// Raw `Noesis::InputBinding*`, borrowed for the lifetime of `self`.
@@ -344,7 +344,7 @@ impl KeyBinding {
 impl Drop for KeyBinding {
     fn drop(&mut self) {
         // SAFETY: +1 from create, released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -368,7 +368,7 @@ impl MouseBinding {
     ) -> Option<Self> {
         // SAFETY: command_ptr() is a borrowed live ICommand* for the call.
         let ptr = unsafe {
-            dm_noesis_mouse_binding_create(command.command_ptr(), action as i32, modifiers.bits())
+            noesis_mouse_binding_create(command.command_ptr(), action as i32, modifiers.bits())
         };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
@@ -377,7 +377,7 @@ impl MouseBinding {
     /// [`KeyBinding::add_to`].
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
-        unsafe { dm_noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
     /// Raw `Noesis::InputBinding*`, borrowed for the lifetime of `self`.
@@ -390,7 +390,7 @@ impl MouseBinding {
 impl Drop for MouseBinding {
     fn drop(&mut self) {
         // SAFETY: +1 from create, released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -415,7 +415,7 @@ impl InputBinding {
     pub fn with_gesture<C: AsCommand>(command: &C, gesture: &KeyGesture) -> Option<Self> {
         // SAFETY: command/gesture pointers are borrowed live for the call; the C
         // side builds an InputBinding at +1 (adding its own ref to the gesture).
-        let ptr = unsafe { dm_noesis_input_binding_create(command.command_ptr(), gesture.raw()) };
+        let ptr = unsafe { noesis_input_binding_create(command.command_ptr(), gesture.raw()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -423,7 +423,7 @@ impl InputBinding {
     #[must_use]
     pub fn with_mouse_gesture<C: AsCommand>(command: &C, gesture: &MouseGesture) -> Option<Self> {
         // SAFETY: as above.
-        let ptr = unsafe { dm_noesis_input_binding_create(command.command_ptr(), gesture.raw()) };
+        let ptr = unsafe { noesis_input_binding_create(command.command_ptr(), gesture.raw()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -431,7 +431,7 @@ impl InputBinding {
     /// [`KeyBinding::add_to`].
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
-        unsafe { dm_noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
+        unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
     /// Raw `Noesis::InputBinding*`, borrowed for the lifetime of `self`.
@@ -444,7 +444,7 @@ impl InputBinding {
 impl Drop for InputBinding {
     fn drop(&mut self) {
         // SAFETY: +1 from create, released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -465,7 +465,7 @@ impl FocusManager {
     pub fn focused_element(scope: &FrameworkElement) -> Option<NonNull<c_void>> {
         // SAFETY: scope.raw() is a live DependencyObject*; the C side returns a
         // borrowed UIElement* or null.
-        let p = unsafe { dm_noesis_focus_manager_get_focused_element(scope.raw()) };
+        let p = unsafe { noesis_focus_manager_get_focused_element(scope.raw()) };
         NonNull::new(p)
     }
 
@@ -479,14 +479,14 @@ impl FocusManager {
         let e = element.map_or(core::ptr::null_mut(), FrameworkElement::raw);
         // SAFETY: scope.raw() is a live DependencyObject*; `e` is a live
         // UIElement* or null per the contract.
-        unsafe { dm_noesis_focus_manager_set_focused_element(scope.raw(), e) }
+        unsafe { noesis_focus_manager_set_focused_element(scope.raw(), e) }
     }
 
     /// Whether `element` is itself a focus scope (`FocusManager.IsFocusScope`).
     #[must_use]
     pub fn is_focus_scope(element: &FrameworkElement) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe { dm_noesis_focus_manager_get_is_focus_scope(element.raw()) }
+        unsafe { noesis_focus_manager_get_is_focus_scope(element.raw()) }
     }
 
     /// Mark `element` as a focus scope (or not). Returns `false` if `element`
@@ -494,7 +494,7 @@ impl FocusManager {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_focus_scope(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe { dm_noesis_focus_manager_set_is_focus_scope(element.raw(), value) }
+        unsafe { noesis_focus_manager_set_is_focus_scope(element.raw(), value) }
     }
 
     /// The nearest ancestor of `element` (inclusive) that is a focus scope,
@@ -503,7 +503,7 @@ impl FocusManager {
     #[must_use]
     pub fn focus_scope(element: &FrameworkElement) -> Option<NonNull<c_void>> {
         // SAFETY: element.raw() is a live DependencyObject*; borrowed or null.
-        let p = unsafe { dm_noesis_focus_manager_get_focus_scope(element.raw()) };
+        let p = unsafe { noesis_focus_manager_get_focus_scope(element.raw()) };
         NonNull::new(p)
     }
 }
@@ -525,7 +525,7 @@ impl KeyboardNavigation {
     pub fn tab_index(element: &FrameworkElement) -> Option<i32> {
         let mut out = 0;
         // SAFETY: element.raw() is a live DependencyObject*; out is a valid i32.
-        unsafe { dm_noesis_keyboard_navigation_get_tab_index(element.raw(), &mut out) }
+        unsafe { noesis_keyboard_navigation_get_tab_index(element.raw(), &mut out) }
             .then_some(out)
     }
 
@@ -534,7 +534,7 @@ impl KeyboardNavigation {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tab_index(element: &FrameworkElement, value: i32) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe { dm_noesis_keyboard_navigation_set_tab_index(element.raw(), value) }
+        unsafe { noesis_keyboard_navigation_set_tab_index(element.raw(), value) }
     }
 
     /// `KeyboardNavigation.IsTabStop` — whether Tab can land on the element.
@@ -542,7 +542,7 @@ impl KeyboardNavigation {
     pub fn is_tab_stop(element: &FrameworkElement) -> Option<bool> {
         let mut out = false;
         // SAFETY: element.raw() is a live DependencyObject*; out is a valid bool.
-        unsafe { dm_noesis_keyboard_navigation_get_is_tab_stop(element.raw(), &mut out) }
+        unsafe { noesis_keyboard_navigation_get_is_tab_stop(element.raw(), &mut out) }
             .then_some(out)
     }
 
@@ -550,21 +550,21 @@ impl KeyboardNavigation {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_tab_stop(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe { dm_noesis_keyboard_navigation_set_is_tab_stop(element.raw(), value) }
+        unsafe { noesis_keyboard_navigation_set_is_tab_stop(element.raw(), value) }
     }
 
     /// `KeyboardNavigation.TabNavigation` — how Tab traverses inside this
     /// container.
     #[must_use]
     pub fn tab_navigation(element: &FrameworkElement) -> Option<KeyboardNavigationMode> {
-        Self::get_mode(element, dm_noesis_keyboard_navigation_get_tab_navigation)
+        Self::get_mode(element, noesis_keyboard_navigation_get_tab_navigation)
     }
 
     /// Set `KeyboardNavigation.TabNavigation`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tab_navigation(element: &FrameworkElement, mode: KeyboardNavigationMode) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe { dm_noesis_keyboard_navigation_set_tab_navigation(element.raw(), mode as i32) }
+        unsafe { noesis_keyboard_navigation_set_tab_navigation(element.raw(), mode as i32) }
     }
 
     /// `KeyboardNavigation.ControlTabNavigation` — how Ctrl+Tab traverses.
@@ -572,7 +572,7 @@ impl KeyboardNavigation {
     pub fn control_tab_navigation(element: &FrameworkElement) -> Option<KeyboardNavigationMode> {
         Self::get_mode(
             element,
-            dm_noesis_keyboard_navigation_get_control_tab_navigation,
+            noesis_keyboard_navigation_get_control_tab_navigation,
         )
     }
 
@@ -583,7 +583,7 @@ impl KeyboardNavigation {
     ) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe {
-            dm_noesis_keyboard_navigation_set_control_tab_navigation(element.raw(), mode as i32)
+            noesis_keyboard_navigation_set_control_tab_navigation(element.raw(), mode as i32)
         }
     }
 
@@ -592,7 +592,7 @@ impl KeyboardNavigation {
     pub fn directional_navigation(element: &FrameworkElement) -> Option<KeyboardNavigationMode> {
         Self::get_mode(
             element,
-            dm_noesis_keyboard_navigation_get_directional_navigation,
+            noesis_keyboard_navigation_get_directional_navigation,
         )
     }
 
@@ -603,7 +603,7 @@ impl KeyboardNavigation {
     ) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe {
-            dm_noesis_keyboard_navigation_set_directional_navigation(element.raw(), mode as i32)
+            noesis_keyboard_navigation_set_directional_navigation(element.raw(), mode as i32)
         }
     }
 
@@ -613,7 +613,7 @@ impl KeyboardNavigation {
     pub fn accepts_return(element: &FrameworkElement) -> Option<bool> {
         let mut out = false;
         // SAFETY: element.raw() is a live DependencyObject*; out is a valid bool.
-        unsafe { dm_noesis_keyboard_navigation_get_accepts_return(element.raw(), &mut out) }
+        unsafe { noesis_keyboard_navigation_get_accepts_return(element.raw(), &mut out) }
             .then_some(out)
     }
 
@@ -621,7 +621,7 @@ impl KeyboardNavigation {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_accepts_return(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe { dm_noesis_keyboard_navigation_set_accepts_return(element.raw(), value) }
+        unsafe { noesis_keyboard_navigation_set_accepts_return(element.raw(), value) }
     }
 
     /// Shared getter for the three `KeyboardNavigationMode`-typed properties:

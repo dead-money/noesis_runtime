@@ -13,13 +13,13 @@
 //! narrowing rejects.
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p dm_noesis_runtime --test xaml_dependencies -- --nocapture`
+//!   `cargo test -p noesis_runtime --test xaml_dependencies -- --nocapture`
 
 use std::collections::HashMap;
 
-use dm_noesis_runtime::view::FrameworkElement;
-use dm_noesis_runtime::xaml::{XamlDependencyKind, get_xaml_dependencies, load_xaml_component};
-use dm_noesis_runtime::xaml_provider::{XamlProvider, set_xaml_provider};
+use noesis_runtime::view::FrameworkElement;
+use noesis_runtime::xaml::{XamlDependencyKind, get_xaml_dependencies, load_xaml_component};
+use noesis_runtime::xaml_provider::{XamlProvider, set_xaml_provider};
 
 // A UserControl that references exactly the dependencies we assert on:
 //   * Root          → "UserControl" (the root node's type)
@@ -64,9 +64,9 @@ fn xaml_dependencies_and_typed_load() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── GetXamlDependencies ─────────────────────────────────────────────
@@ -165,5 +165,5 @@ fn xaml_dependencies_and_typed_load() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

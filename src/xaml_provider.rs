@@ -8,7 +8,7 @@
 //!
 //! The `Registered` guard must outlive every Noesis-internal reference that
 //! might call back into [`XamlProvider::load_xaml`]. In practice that means
-//! keeping it alive until after `dm_noesis_runtime::shutdown()` returns — the latter
+//! keeping it alive until after `noesis_runtime::shutdown()` returns — the latter
 //! releases Noesis's internal `Ptr<XamlProvider>`, after which the C++
 //! wrapper's refcount drops to 1 (ours). Dropping the guard then releases the
 //! final ref, fires the C++ destructor, and frees the boxed Rust impl.
@@ -20,9 +20,9 @@ use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    XamlProviderVTable, dm_noesis_set_xaml_provider, dm_noesis_set_xaml_provider_assembly,
-    dm_noesis_set_xaml_provider_scheme, dm_noesis_set_xaml_provider_scheme_assembly,
-    dm_noesis_xaml_provider_create, dm_noesis_xaml_provider_destroy,
+    XamlProviderVTable, noesis_set_xaml_provider, noesis_set_xaml_provider_assembly,
+    noesis_set_xaml_provider_scheme, noesis_set_xaml_provider_scheme_assembly,
+    noesis_xaml_provider_create, noesis_xaml_provider_destroy,
 };
 
 /// Rust-side XAML provider. The bytes returned from [`load_xaml`] are wrapped
@@ -145,7 +145,7 @@ impl Drop for Registered {
         // SAFETY: handle + userdata produced together by register(); both
         // freed exactly once here.
         unsafe {
-            dm_noesis_xaml_provider_destroy(self.handle.as_ptr());
+            noesis_xaml_provider_destroy(self.handle.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -162,7 +162,7 @@ impl Drop for Registered {
 pub fn set_xaml_provider<P: XamlProvider + 'static>(provider: P) -> Registered {
     // SAFETY: install globally — Noesis retains its own +1.
     register_with(provider, |handle| unsafe {
-        dm_noesis_set_xaml_provider(handle)
+        noesis_set_xaml_provider(handle)
     })
 }
 
@@ -178,8 +178,8 @@ fn register_with<P: XamlProvider + 'static>(
     let outer: Box<Box<dyn XamlProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);
     // SAFETY: VTABLE is 'static; userdata is freshly leaked.
-    let handle = unsafe { dm_noesis_xaml_provider_create(&raw const VTABLE, userdata.cast()) };
-    let handle = NonNull::new(handle).expect("dm_noesis_xaml_provider_create returned null");
+    let handle = unsafe { noesis_xaml_provider_create(&raw const VTABLE, userdata.cast()) };
+    let handle = NonNull::new(handle).expect("noesis_xaml_provider_create returned null");
     // Noesis retains its own +1; we keep ours until the Registered is dropped.
     install(handle.as_ptr());
 
@@ -206,7 +206,7 @@ pub fn set_scheme_xaml_provider<P: XamlProvider + 'static>(
     let scheme = CString::new(scheme).expect("scheme contained interior NUL");
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustXamlProvider*; `scheme` outlives the call.
-        unsafe { dm_noesis_set_xaml_provider_scheme(scheme.as_ptr(), handle) }
+        unsafe { noesis_set_xaml_provider_scheme(scheme.as_ptr(), handle) }
     })
 }
 
@@ -225,7 +225,7 @@ pub fn set_assembly_xaml_provider<P: XamlProvider + 'static>(
     let assembly = CString::new(assembly).expect("assembly contained interior NUL");
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustXamlProvider*; `assembly` outlives the call.
-        unsafe { dm_noesis_set_xaml_provider_assembly(assembly.as_ptr(), handle) }
+        unsafe { noesis_set_xaml_provider_assembly(assembly.as_ptr(), handle) }
     })
 }
 
@@ -247,7 +247,7 @@ pub fn set_scheme_assembly_xaml_provider<P: XamlProvider + 'static>(
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustXamlProvider*; both CStrings outlive the call.
         unsafe {
-            dm_noesis_set_xaml_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
+            noesis_set_xaml_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
         }
     })
 }

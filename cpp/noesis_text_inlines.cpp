@@ -7,7 +7,7 @@
 //
 //   * Each *_create hands a freshly-`new`'d Inline out across the C ABI with a
 //     single owned +1 reference (handout()), balanced by the Rust handle's Drop
-//     calling dm_noesis_base_component_release. Adding the Inline to an
+//     calling noesis_base_component_release. Adding the Inline to an
 //     InlineCollection makes the collection take its own reference, so the Rust
 //     builder handle may be dropped afterwards.
 //
@@ -46,7 +46,7 @@ namespace {
 
 // Hand a freshly-created (or borrowed) BaseComponent out across the C ABI with
 // exactly one reference owned by the caller, balanced by
-// dm_noesis_base_component_release. Safe on a refcount-0 `new`'d object
+// noesis_base_component_release. Safe on a refcount-0 `new`'d object
 // (bumps 0->1) or a live borrowed object (bumps N->N+1).
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
@@ -71,49 +71,49 @@ InlineColl* as_inlines(void* p) {
 
 // ── Inline constructors ─────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_text_inlines_run_create(const char* text) {
+extern "C" void* noesis_text_inlines_run_create(const char* text) {
     Noesis::Ptr<Noesis::Run> run = text ? *new Noesis::Run(text) : *new Noesis::Run();
     return handout(run.GetPtr());
 }
 
-extern "C" void* dm_noesis_text_inlines_span_create(void) {
+extern "C" void* noesis_text_inlines_span_create(void) {
     Noesis::Ptr<Noesis::Span> span = *new Noesis::Span();
     return handout(span.GetPtr());
 }
 
-extern "C" void* dm_noesis_text_inlines_bold_create(void) {
+extern "C" void* noesis_text_inlines_bold_create(void) {
     Noesis::Ptr<Noesis::Bold> bold = *new Noesis::Bold();
     return handout(bold.GetPtr());
 }
 
-extern "C" void* dm_noesis_text_inlines_italic_create(void) {
+extern "C" void* noesis_text_inlines_italic_create(void) {
     Noesis::Ptr<Noesis::Italic> italic = *new Noesis::Italic();
     return handout(italic.GetPtr());
 }
 
-extern "C" void* dm_noesis_text_inlines_underline_create(void) {
+extern "C" void* noesis_text_inlines_underline_create(void) {
     Noesis::Ptr<Noesis::Underline> underline = *new Noesis::Underline();
     return handout(underline.GetPtr());
 }
 
-extern "C" void* dm_noesis_text_inlines_hyperlink_create(void) {
+extern "C" void* noesis_text_inlines_hyperlink_create(void) {
     Noesis::Ptr<Noesis::Hyperlink> link = *new Noesis::Hyperlink();
     return handout(link.GetPtr());
 }
 
-extern "C" void* dm_noesis_text_inlines_line_break_create(void) {
+extern "C" void* noesis_text_inlines_line_break_create(void) {
     Noesis::Ptr<Noesis::LineBreak> br = *new Noesis::LineBreak();
     return handout(br.GetPtr());
 }
 
-extern "C" void* dm_noesis_text_inlines_ui_container_create(void) {
+extern "C" void* noesis_text_inlines_ui_container_create(void) {
     Noesis::Ptr<Noesis::InlineUIContainer> c = *new Noesis::InlineUIContainer();
     return handout(c.GetPtr());
 }
 
 // ── Run text ────────────────────────────────────────────────────────────────
 
-extern "C" bool dm_noesis_text_inlines_run_set_text(void* run, const char* text) {
+extern "C" bool noesis_text_inlines_run_set_text(void* run, const char* text) {
     auto* r = cast<Noesis::Run>(run);
     if (!r) return false;
     // Run::SetText copies into the Run's own storage; `text` need not outlive
@@ -125,7 +125,7 @@ extern "C" bool dm_noesis_text_inlines_run_set_text(void* run, const char* text)
 // Borrowed (no +1) pointer into the Run's own UTF-8 storage, or NULL when `run`
 // is not a Run. Valid until the Run's text is next mutated; copy if you need to
 // keep it.
-extern "C" const char* dm_noesis_text_inlines_run_get_text(void* run) {
+extern "C" const char* noesis_text_inlines_run_get_text(void* run) {
     auto* r = cast<Noesis::Run>(run);
     if (!r) return nullptr;
     return r->GetText();
@@ -133,7 +133,7 @@ extern "C" const char* dm_noesis_text_inlines_run_get_text(void* run) {
 
 // ── Hyperlink NavigateUri ───────────────────────────────────────────────────
 
-extern "C" bool dm_noesis_text_inlines_hyperlink_set_navigate_uri(
+extern "C" bool noesis_text_inlines_hyperlink_set_navigate_uri(
     void* link, const char* uri) {
     auto* h = cast<Noesis::Hyperlink>(link);
     if (!h) return false;
@@ -143,7 +143,7 @@ extern "C" bool dm_noesis_text_inlines_hyperlink_set_navigate_uri(
 
 // Borrowed (no +1) pointer into the Hyperlink's NavigateUri storage, or NULL
 // when `link` is not a Hyperlink.
-extern "C" const char* dm_noesis_text_inlines_hyperlink_get_navigate_uri(void* link) {
+extern "C" const char* noesis_text_inlines_hyperlink_get_navigate_uri(void* link) {
     auto* h = cast<Noesis::Hyperlink>(link);
     if (!h) return nullptr;
     return h->GetNavigateUri();
@@ -154,7 +154,7 @@ extern "C" const char* dm_noesis_text_inlines_hyperlink_get_navigate_uri(void* l
 // `decorations` is a Noesis::TextDecorations enum value (0 None, 1 OverLine,
 // 2 Baseline, 3 Underline, 4 Strikethrough). Returns false if `inl` is not an
 // Inline.
-extern "C" bool dm_noesis_text_inlines_inline_set_text_decorations(
+extern "C" bool noesis_text_inlines_inline_set_text_decorations(
     void* inl, int32_t decorations) {
     auto* i = cast<Noesis::Inline>(inl);
     if (!i) return false;
@@ -164,7 +164,7 @@ extern "C" bool dm_noesis_text_inlines_inline_set_text_decorations(
 
 // Reads TextDecorations back from the live Inline. Returns -1 if `inl` is not
 // an Inline.
-extern "C" int32_t dm_noesis_text_inlines_inline_get_text_decorations(void* inl) {
+extern "C" int32_t noesis_text_inlines_inline_get_text_decorations(void* inl) {
     auto* i = cast<Noesis::Inline>(inl);
     if (!i) return -1;
     return static_cast<int32_t>(i->GetTextDecorations());
@@ -175,7 +175,7 @@ extern "C" int32_t dm_noesis_text_inlines_inline_get_text_decorations(void* inl)
 // Host `child` (a UIElement*, e.g. a Button) in the container. The container
 // takes its own reference; pass NULL to clear. Returns false if `container` is
 // not an InlineUIContainer or `child` is non-null but not a UIElement.
-extern "C" bool dm_noesis_text_inlines_ui_container_set_child(
+extern "C" bool noesis_text_inlines_ui_container_set_child(
     void* container, void* child) {
     auto* c = cast<Noesis::InlineUIContainer>(container);
     if (!c) return false;
@@ -192,7 +192,7 @@ extern "C" bool dm_noesis_text_inlines_ui_container_set_child(
 // Borrowed (no +1) BaseComponent* of the container's hosted Child, or NULL.
 // The address matches the BaseComponent subobject of the UIElement that was
 // set, so callers can compare it for identity against the element they passed.
-extern "C" void* dm_noesis_text_inlines_ui_container_get_child(void* container) {
+extern "C" void* noesis_text_inlines_ui_container_get_child(void* container) {
     auto* c = cast<Noesis::InlineUIContainer>(container);
     if (!c) return nullptr;
     Noesis::UIElement* child = c->GetChild();
@@ -202,10 +202,10 @@ extern "C" void* dm_noesis_text_inlines_ui_container_get_child(void* container) 
 // ── InlineCollection (UICollection<Inline>) ─────────────────────────────────
 
 // Live InlineCollection of a TextBlock's top-level inlines, handed out at +1
-// (release via dm_noesis_base_component_release). The collection is also owned
+// (release via noesis_base_component_release). The collection is also owned
 // by the TextBlock; the +1 keeps it alive for the handle's lifetime. NULL when
 // `text_block` is not a TextBlock.
-extern "C" void* dm_noesis_text_inlines_text_block_get_inlines(void* text_block) {
+extern "C" void* noesis_text_inlines_text_block_get_inlines(void* text_block) {
     auto* tb = cast<Noesis::TextBlock>(text_block);
     if (!tb) return nullptr;
     return handout(tb->GetInlines());
@@ -213,7 +213,7 @@ extern "C" void* dm_noesis_text_inlines_text_block_get_inlines(void* text_block)
 
 // Live nested InlineCollection of a Span (or Span subclass: Bold/Italic/
 // Underline/Hyperlink), handed out at +1. NULL when `span` is not a Span.
-extern "C" void* dm_noesis_text_inlines_span_get_inlines(void* span) {
+extern "C" void* noesis_text_inlines_span_get_inlines(void* span) {
     auto* s = cast<Noesis::Span>(span);
     if (!s) return nullptr;
     return handout(s->GetInlines());
@@ -222,7 +222,7 @@ extern "C" void* dm_noesis_text_inlines_span_get_inlines(void* span) {
 // Append `inl` (a borrowed Inline*; the collection takes its own reference).
 // Returns the insertion index, or -1 if `collection` is not an InlineCollection
 // or `inl` is not an Inline.
-extern "C" int32_t dm_noesis_text_inlines_collection_add(void* collection, void* inl) {
+extern "C" int32_t noesis_text_inlines_collection_add(void* collection, void* inl) {
     InlineColl* coll = as_inlines(collection);
     auto* i = cast<Noesis::Inline>(inl);
     if (!coll || !i) return -1;
@@ -230,14 +230,14 @@ extern "C" int32_t dm_noesis_text_inlines_collection_add(void* collection, void*
 }
 
 // Item count, or -1 if `collection` is not an InlineCollection.
-extern "C" int32_t dm_noesis_text_inlines_collection_count(void* collection) {
+extern "C" int32_t noesis_text_inlines_collection_count(void* collection) {
     InlineColl* coll = as_inlines(collection);
     return coll ? coll->Count() : -1;
 }
 
 // Borrowed (no +1) Inline* at `index`, or NULL on null/non-collection/
 // out-of-range. The collection owns the reference.
-extern "C" void* dm_noesis_text_inlines_collection_get(void* collection, uint32_t index) {
+extern "C" void* noesis_text_inlines_collection_get(void* collection, uint32_t index) {
     InlineColl* coll = as_inlines(collection);
     if (!coll || index >= (uint32_t)coll->Count()) return nullptr;
     return static_cast<Noesis::BaseComponent*>(coll->Get(index));

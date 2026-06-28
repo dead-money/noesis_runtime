@@ -45,16 +45,16 @@ use core::ptr::{self, NonNull};
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    PlainSetFn, dm_noesis_base_component_release, dm_noesis_box_bool, dm_noesis_box_double,
-    dm_noesis_box_int32, dm_noesis_box_string, dm_noesis_plain_vm_create_instance,
-    dm_noesis_plain_vm_get_value, dm_noesis_plain_vm_notify, dm_noesis_plain_vm_register,
-    dm_noesis_plain_vm_register_property, dm_noesis_plain_vm_set_value,
-    dm_noesis_plain_vm_unregister, dm_noesis_unbox_bool, dm_noesis_unbox_double,
-    dm_noesis_unbox_int32, dm_noesis_unbox_string,
+    PlainSetFn, noesis_base_component_release, noesis_box_bool, noesis_box_double,
+    noesis_box_int32, noesis_box_string, noesis_plain_vm_create_instance,
+    noesis_plain_vm_get_value, noesis_plain_vm_notify, noesis_plain_vm_register,
+    noesis_plain_vm_register_property, noesis_plain_vm_set_value,
+    noesis_plain_vm_unregister, noesis_unbox_bool, noesis_unbox_double,
+    noesis_unbox_int32, noesis_unbox_string,
 };
 use crate::view::FrameworkElement;
 
-/// Content type of a reflected plain-VM property. Mirrors `dm_noesis_plain_type`
+/// Content type of a reflected plain-VM property. Mirrors `noesis_plain_type`
 /// in `cpp/noesis_shim.h`; the ordinal is the FFI tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -86,13 +86,13 @@ impl PlainValue {
     fn into_boxed(self) -> *mut c_void {
         match self {
             // SAFETY: each box fn returns a +1-owned BaseComponent*.
-            PlainValue::Int32(i) => unsafe { dm_noesis_box_int32(i) },
-            PlainValue::Double(d) => unsafe { dm_noesis_box_double(d) },
-            PlainValue::Bool(b) => unsafe { dm_noesis_box_bool(b) },
+            PlainValue::Int32(i) => unsafe { noesis_box_int32(i) },
+            PlainValue::Double(d) => unsafe { noesis_box_double(d) },
+            PlainValue::Bool(b) => unsafe { noesis_box_bool(b) },
             PlainValue::String(s) => {
                 let cs = CString::new(s).unwrap_or_default();
                 // SAFETY: cs is valid for the call; the C side copies the bytes.
-                unsafe { dm_noesis_box_string(cs.as_ptr()) }
+                unsafe { noesis_box_string(cs.as_ptr()) }
             }
             PlainValue::Null => ptr::null_mut(),
         }
@@ -121,7 +121,7 @@ impl PlainValueRef {
         let p = self.0?;
         let mut out = 0i32;
         // SAFETY: p is a live boxed BaseComponent*; out is a valid slot.
-        let ok = unsafe { dm_noesis_unbox_int32(p.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_int32(p.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -131,7 +131,7 @@ impl PlainValueRef {
         let p = self.0?;
         let mut out = 0.0f64;
         // SAFETY: as above.
-        let ok = unsafe { dm_noesis_unbox_double(p.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_double(p.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -141,7 +141,7 @@ impl PlainValueRef {
         let p = self.0?;
         let mut out = false;
         // SAFETY: as above.
-        let ok = unsafe { dm_noesis_unbox_bool(p.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_bool(p.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -152,7 +152,7 @@ impl PlainValueRef {
         let p = self.0?;
         // SAFETY: p is a live boxed BaseComponent*; the returned pointer
         // borrows Noesis-owned storage valid for the callback.
-        let s = unsafe { dm_noesis_unbox_string(p.as_ptr()) };
+        let s = unsafe { noesis_unbox_string(p.as_ptr()) };
         if s.is_null() {
             return None;
         }
@@ -283,7 +283,7 @@ impl PlainVmBuilder {
             Some(plain_free_trampoline as crate::ffi::PlainFreeFn)
         };
         let token =
-            unsafe { dm_noesis_plain_vm_register(self.name.as_ptr(), on_set, userdata, free) };
+            unsafe { noesis_plain_vm_register(self.name.as_ptr(), on_set, userdata, free) };
 
         let Some(token) = NonNull::new(token) else {
             // Registration failed — reclaim the leaked handler box, since C++
@@ -300,13 +300,13 @@ impl PlainVmBuilder {
         for (pname, kind) in &self.props {
             // SAFETY: token is live; pname is a valid C string.
             let idx = unsafe {
-                dm_noesis_plain_vm_register_property(token.as_ptr(), pname.as_ptr(), *kind as u32)
+                noesis_plain_vm_register_property(token.as_ptr(), pname.as_ptr(), *kind as u32)
             };
             if idx == u32::MAX {
                 // A property failed — unregister to release our +1 (and free the
                 // handler box) rather than leak a half-built type.
                 // SAFETY: token is live and owned by us here.
-                unsafe { dm_noesis_plain_vm_unregister(token.as_ptr()) };
+                unsafe { noesis_plain_vm_unregister(token.as_ptr()) };
                 return None;
             }
             count += 1;
@@ -337,7 +337,7 @@ impl PlainVmClass {
     pub fn create_instance(&self) -> Option<PlainInstance> {
         // SAFETY: token is a live registration handle; the result is a
         // +1-owned BaseComponent*.
-        let ptr = unsafe { dm_noesis_plain_vm_create_instance(self.token.as_ptr()) };
+        let ptr = unsafe { noesis_plain_vm_create_instance(self.token.as_ptr()) };
         NonNull::new(ptr).map(|ptr| PlainInstance {
             ptr,
             prop_count: self.prop_count,
@@ -353,10 +353,10 @@ impl PlainVmClass {
 
 impl Drop for PlainVmClass {
     fn drop(&mut self) {
-        // SAFETY: token came from dm_noesis_plain_vm_register with +1; this
+        // SAFETY: token came from noesis_plain_vm_register with +1; this
         // releases exactly that ref. The handler box (if any) is freed once the
         // last reference — possibly a live instance — drops.
-        unsafe { dm_noesis_plain_vm_unregister(self.token.as_ptr()) }
+        unsafe { noesis_plain_vm_unregister(self.token.as_ptr()) }
     }
 }
 
@@ -389,11 +389,11 @@ impl PlainInstance {
         let boxed = value.into_boxed();
         // SAFETY: ptr is a live instance; the instance takes its OWN ref on
         // `boxed`, so we still own (and must release) our +1 below.
-        let ok = unsafe { dm_noesis_plain_vm_set_value(self.ptr.as_ptr(), prop_index, boxed) };
+        let ok = unsafe { noesis_plain_vm_set_value(self.ptr.as_ptr(), prop_index, boxed) };
         if !boxed.is_null() {
             // SAFETY: boxed is our +1 from into_boxed; release it (the instance
             // holds its own ref now). Null boxed (PlainValue::Null) is a no-op.
-            unsafe { dm_noesis_base_component_release(boxed) };
+            unsafe { noesis_base_component_release(boxed) };
         }
         ok
     }
@@ -408,7 +408,7 @@ impl PlainInstance {
     pub fn notify(&self, prop_name: &str) -> bool {
         let c = CString::new(prop_name).expect("property name contained NUL");
         // SAFETY: ptr is live; c is valid for the call.
-        unsafe { dm_noesis_plain_vm_notify(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_plain_vm_notify(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Convenience: [`set`](Self::set) then [`notify`](Self::notify).
@@ -454,7 +454,7 @@ impl PlainInstance {
     /// `None` if unset / out of range.
     fn get(&self, prop_index: u32) -> Option<OwnedBoxed> {
         // SAFETY: ptr is a live instance; result is +1-owned (or null).
-        let raw = unsafe { dm_noesis_plain_vm_get_value(self.ptr.as_ptr(), prop_index) };
+        let raw = unsafe { noesis_plain_vm_get_value(self.ptr.as_ptr(), prop_index) };
         NonNull::new(raw).map(OwnedBoxed)
     }
 
@@ -471,7 +471,7 @@ impl PlainInstance {
 impl Drop for PlainInstance {
     fn drop(&mut self) {
         // SAFETY: produced by create_instance with +1; releases exactly that.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -482,7 +482,7 @@ impl OwnedBoxed {
     fn as_str(&self) -> Option<&str> {
         // SAFETY: self.0 is a live +1-owned boxed BaseComponent*; the returned
         // pointer borrows Noesis storage valid while `self` is alive.
-        let s = unsafe { dm_noesis_unbox_string(self.0.as_ptr()) };
+        let s = unsafe { noesis_unbox_string(self.0.as_ptr()) };
         if s.is_null() {
             return None;
         }
@@ -492,19 +492,19 @@ impl OwnedBoxed {
     fn as_i32(&self) -> Option<i32> {
         let mut out = 0i32;
         // SAFETY: self.0 is a live boxed BaseComponent*; out is a valid slot.
-        let ok = unsafe { dm_noesis_unbox_int32(self.0.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_int32(self.0.as_ptr(), &mut out) };
         ok.then_some(out)
     }
     fn as_f64(&self) -> Option<f64> {
         let mut out = 0.0f64;
         // SAFETY: as above.
-        let ok = unsafe { dm_noesis_unbox_double(self.0.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_double(self.0.as_ptr(), &mut out) };
         ok.then_some(out)
     }
     fn as_bool(&self) -> Option<bool> {
         let mut out = false;
         // SAFETY: as above.
-        let ok = unsafe { dm_noesis_unbox_bool(self.0.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_unbox_bool(self.0.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 }
@@ -512,6 +512,6 @@ impl OwnedBoxed {
 impl Drop for OwnedBoxed {
     fn drop(&mut self) {
         // SAFETY: get() returned a +1-owned BaseComponent*; release it.
-        unsafe { dm_noesis_base_component_release(self.0.as_ptr()) }
+        unsafe { noesis_base_component_release(self.0.as_ptr()) }
     }
 }

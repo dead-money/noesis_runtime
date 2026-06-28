@@ -1,11 +1,11 @@
 [package]
-name = "dm_noesis_runtime"
+name = "noesis_runtime"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Brandon Reinhart <brandon@deadmoney.gg>"]
-description = "Rust bindings for the Noesis GUI Native SDK: load XAML UI, drive the view and renderer, and write custom controls in Rust. Renderer-agnostic; Bevy integration lives in dm_noesis_bevy."
-repository = "https://github.com/dead-money/dm_noesis_runtime"
+description = "Rust bindings for the Noesis GUI Native SDK: load XAML UI, drive the view and renderer, and write custom controls in Rust. Renderer-agnostic; Bevy integration lives in noesis_bevy."
+repository = "https://github.com/dead-money/noesis_runtime"
 license = "MIT"
 readme = "README.md"
 keywords = ["noesis", "xaml", "gui", "gamedev", "ui"]
@@ -19,7 +19,7 @@ exclude = [".github/", ".claude/", "scripts/", "CLAUDE.md"]
 
 [features]
 default = []
-# Enables the dm_noesis_test_* C entrypoints used by tests/render_device.rs.
+# Enables the noesis_test_* C entrypoints used by tests/render_device.rs.
 # Off by default so production builds don't carry the test helpers.
 test-utils = []
 

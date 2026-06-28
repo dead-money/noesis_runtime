@@ -28,7 +28,7 @@ class RustRenderDevice;
 // the getters are zero-overhead. Holds a back-pointer to its parent device so
 // the destructor can call `drop_texture`. The device outlives all textures it
 // produced because Rust drops the device only AFTER dropping the
-// `dm_noesis_render_device_destroy` reference, which transitively releases
+// `noesis_render_device_destroy` reference, which transitively releases
 // every Noesis-held `Ptr<Texture>`.
 
 class RustTexture final : public Noesis::Texture {
@@ -100,7 +100,7 @@ private:
 
 class RustRenderDevice final : public Noesis::RenderDevice {
 public:
-    RustRenderDevice(const dm_noesis_render_device_vtable* vtable, void* userdata)
+    RustRenderDevice(const noesis_render_device_vtable* vtable, void* userdata)
         : mVtable(*vtable)
         , mUserdata(userdata)
     {}
@@ -122,7 +122,7 @@ public:
         const char* label, uint32_t width, uint32_t height,
         uint32_t sampleCount, bool needsStencil) override
     {
-        dm_noesis_render_target_binding b{};
+        noesis_render_target_binding b{};
         mVtable.create_render_target(mUserdata, label, width, height,
                                      sampleCount, needsStencil, &b);
         return makeRenderTarget(b);
@@ -132,7 +132,7 @@ public:
         const char* label, Noesis::RenderTarget* surface) override
     {
         const auto src = static_cast<RustRenderTarget*>(surface);
-        dm_noesis_render_target_binding b{};
+        noesis_render_target_binding b{};
         mVtable.clone_render_target(mUserdata, label, src->handle(), &b);
         return makeRenderTarget(b);
     }
@@ -141,7 +141,7 @@ public:
         const char* label, uint32_t width, uint32_t height, uint32_t numLevels,
         Noesis::TextureFormat::Enum format, const void** data) override
     {
-        dm_noesis_texture_binding b{};
+        noesis_texture_binding b{};
         mVtable.create_texture(mUserdata, label, width, height, numLevels,
                                static_cast<uint32_t>(format), data, &b);
         return makeTexture(b, format);
@@ -202,14 +202,14 @@ public:
     }
 
 private:
-    Noesis::Ptr<RustTexture> makeTexture(const dm_noesis_texture_binding& b,
+    Noesis::Ptr<RustTexture> makeTexture(const noesis_texture_binding& b,
                                          Noesis::TextureFormat::Enum format) {
         return Noesis::MakePtr<RustTexture>(this, b.handle, b.width, b.height,
                                             format, b.has_mipmaps, b.inverted, b.has_alpha);
     }
 
     Noesis::Ptr<Noesis::RenderTarget> makeRenderTarget(
-        const dm_noesis_render_target_binding& b)
+        const noesis_render_target_binding& b)
     {
         // Resolve textures are always RGBA8 — that's what Noesis uses for the
         // composited surface. (The Rust impl is free to pick a wgpu format
@@ -220,7 +220,7 @@ private:
             makeTexture(b.resolve_texture, Noesis::TextureFormat::RGBA8));
     }
 
-    dm_noesis_render_device_vtable mVtable;
+    noesis_render_device_vtable mVtable;
     void* mUserdata;
     mutable Noesis::DeviceCaps mCaps{};
     mutable bool mCapsValid = false;
@@ -241,8 +241,8 @@ RustRenderTarget::~RustRenderTarget() {
 
 // ─── Factory C ABI ──────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_render_device_create(
-    const dm_noesis_render_device_vtable* vtable, void* userdata)
+extern "C" void* noesis_render_device_create(
+    const noesis_render_device_vtable* vtable, void* userdata)
 {
     if (!vtable) return nullptr;
     Noesis::Ptr<RustRenderDevice> device =
@@ -252,7 +252,7 @@ extern "C" void* dm_noesis_render_device_create(
     return device.GiveOwnership();
 }
 
-extern "C" void dm_noesis_render_device_destroy(void* device) {
+extern "C" void noesis_render_device_destroy(void* device) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->Release();
 }
@@ -264,83 +264,83 @@ extern "C" void dm_noesis_render_device_destroy(void* device) {
 // affect resource sizing only, so they are plain pass-through setters; no-ops
 // on a NULL device.
 
-extern "C" void dm_noesis_render_device_set_offscreen_width(void* device, uint32_t width) {
+extern "C" void noesis_render_device_set_offscreen_width(void* device, uint32_t width) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->SetOffscreenWidth(width);
 }
 
-extern "C" void dm_noesis_render_device_set_offscreen_height(void* device, uint32_t height) {
+extern "C" void noesis_render_device_set_offscreen_height(void* device, uint32_t height) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->SetOffscreenHeight(height);
 }
 
-extern "C" void dm_noesis_render_device_set_offscreen_sample_count(void* device, uint32_t count) {
+extern "C" void noesis_render_device_set_offscreen_sample_count(void* device, uint32_t count) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->SetOffscreenSampleCount(count);
 }
 
-extern "C" void dm_noesis_render_device_set_offscreen_default_num_surfaces(void* device, uint32_t num) {
+extern "C" void noesis_render_device_set_offscreen_default_num_surfaces(void* device, uint32_t num) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->SetOffscreenDefaultNumSurfaces(num);
 }
 
-extern "C" void dm_noesis_render_device_set_offscreen_max_num_surfaces(void* device, uint32_t num) {
+extern "C" void noesis_render_device_set_offscreen_max_num_surfaces(void* device, uint32_t num) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->SetOffscreenMaxNumSurfaces(num);
 }
 
-extern "C" void dm_noesis_render_device_set_glyph_cache_width(void* device, uint32_t width) {
+extern "C" void noesis_render_device_set_glyph_cache_width(void* device, uint32_t width) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->SetGlyphCacheWidth(width);
 }
 
-extern "C" void dm_noesis_render_device_set_glyph_cache_height(void* device, uint32_t height) {
+extern "C" void noesis_render_device_set_glyph_cache_height(void* device, uint32_t height) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->SetGlyphCacheHeight(height);
 }
 
-extern "C" uint32_t dm_noesis_render_device_get_offscreen_width(const void* device) {
+extern "C" uint32_t noesis_render_device_get_offscreen_width(const void* device) {
     if (!device) return 0;
     return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenWidth();
 }
 
-extern "C" uint32_t dm_noesis_render_device_get_offscreen_height(const void* device) {
+extern "C" uint32_t noesis_render_device_get_offscreen_height(const void* device) {
     if (!device) return 0;
     return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenHeight();
 }
 
-extern "C" uint32_t dm_noesis_render_device_get_offscreen_sample_count(const void* device) {
+extern "C" uint32_t noesis_render_device_get_offscreen_sample_count(const void* device) {
     if (!device) return 0;
     return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenSampleCount();
 }
 
-extern "C" uint32_t dm_noesis_render_device_get_offscreen_default_num_surfaces(const void* device) {
+extern "C" uint32_t noesis_render_device_get_offscreen_default_num_surfaces(const void* device) {
     if (!device) return 0;
     return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenDefaultNumSurfaces();
 }
 
-extern "C" uint32_t dm_noesis_render_device_get_offscreen_max_num_surfaces(const void* device) {
+extern "C" uint32_t noesis_render_device_get_offscreen_max_num_surfaces(const void* device) {
     if (!device) return 0;
     return static_cast<const Noesis::RenderDevice*>(device)->GetOffscreenMaxNumSurfaces();
 }
 
-extern "C" uint32_t dm_noesis_render_device_get_glyph_cache_width(const void* device) {
+extern "C" uint32_t noesis_render_device_get_glyph_cache_width(const void* device) {
     if (!device) return 0;
     return static_cast<const Noesis::RenderDevice*>(device)->GetGlyphCacheWidth();
 }
 
-extern "C" uint32_t dm_noesis_render_device_get_glyph_cache_height(const void* device) {
+extern "C" uint32_t noesis_render_device_get_glyph_cache_height(const void* device) {
     if (!device) return 0;
     return static_cast<const Noesis::RenderDevice*>(device)->GetGlyphCacheHeight();
 }
 
-extern "C" uint64_t dm_noesis_texture_get_handle(const void* texture) {
+extern "C" uint64_t noesis_texture_get_handle(const void* texture) {
     if (!texture) return 0;
     return static_cast<const RustTexture*>(
                static_cast<const Noesis::Texture*>(texture))->handle();
 }
 
-extern "C" uint64_t dm_noesis_render_target_get_handle(const void* surface) {
+extern "C" uint64_t noesis_render_target_get_handle(const void* surface) {
     if (!surface) return 0;
     return static_cast<const RustRenderTarget*>(
                static_cast<const Noesis::RenderTarget*>(surface))->handle();
@@ -348,10 +348,10 @@ extern "C" uint64_t dm_noesis_render_target_get_handle(const void* surface) {
 
 // ─── Test-only entrypoints ─────────────────────────────────────────────────
 //
-// Gated by the `test-utils` Cargo feature (which sets DM_NOESIS_TEST_UTILS).
+// Gated by the `test-utils` Cargo feature (which sets NOESIS_TEST_UTILS).
 // Production builds omit them entirely.
 
-#ifdef DM_NOESIS_TEST_UTILS
+#ifdef NOESIS_TEST_UTILS
 
 // One-shot frame scenario that exercises every Noesis virtual the device
 // implements, in the documented frame-protocol order. Lets all Ptr<>s die at
@@ -359,7 +359,7 @@ extern "C" uint64_t dm_noesis_render_target_get_handle(const void* surface) {
 // can observe the cleanup ordering.
 //
 // Used by tests/render_device.rs.
-extern "C" void dm_noesis_test_run_frame_scenario(void* device_ptr) {
+extern "C" void noesis_test_run_frame_scenario(void* device_ptr) {
     auto* device = static_cast<RustRenderDevice*>(device_ptr);
 
     // ── Caps query (cached after first call) ───────────────────────────────
@@ -444,4 +444,4 @@ extern "C" void dm_noesis_test_run_frame_scenario(void* device_ptr) {
     //   t_immutable  → drop_texture(immutable)
 }
 
-#endif  // DM_NOESIS_TEST_UTILS
+#endif  // NOESIS_TEST_UTILS

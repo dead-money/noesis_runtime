@@ -22,11 +22,11 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_formatted_text_create,
-    dm_noesis_formatted_text_get_bounds, dm_noesis_formatted_text_get_glyph_position,
-    dm_noesis_formatted_text_get_line_info, dm_noesis_formatted_text_get_num_lines,
-    dm_noesis_formatted_text_has_visual_brush, dm_noesis_formatted_text_hit_test,
-    dm_noesis_formatted_text_is_empty, dm_noesis_formatted_text_measure,
+    noesis_base_component_release, noesis_formatted_text_create,
+    noesis_formatted_text_get_bounds, noesis_formatted_text_get_glyph_position,
+    noesis_formatted_text_get_line_info, noesis_formatted_text_get_num_lines,
+    noesis_formatted_text_has_visual_brush, noesis_formatted_text_hit_test,
+    noesis_formatted_text_is_empty, noesis_formatted_text_measure,
 };
 
 /// Font weight ordinals (`NsGui/FontProperties.h`). The numeric value is the
@@ -253,7 +253,7 @@ impl Builder {
         // SAFETY: both CStrings outlive the synchronous call; `fg_ptr` is either
         // null or a 4-float buffer the C side only reads.
         let ptr = unsafe {
-            dm_noesis_formatted_text_create(
+            noesis_formatted_text_create(
                 text.as_ptr(),
                 family.as_ptr(),
                 self.weight,
@@ -270,7 +270,7 @@ impl Builder {
             )
         };
         FormattedText {
-            ptr: NonNull::new(ptr).expect("dm_noesis_formatted_text_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_formatted_text_create returned null"),
         }
     }
 }
@@ -310,7 +310,7 @@ impl FormattedText {
         let mut out = [0.0f32; 4];
         // SAFETY: live FormattedText*; `out` is a 4-float buffer.
         unsafe {
-            dm_noesis_formatted_text_get_bounds(self.ptr.as_ptr(), out.as_mut_ptr());
+            noesis_formatted_text_get_bounds(self.ptr.as_ptr(), out.as_mut_ptr());
         }
         out
     }
@@ -332,7 +332,7 @@ impl FormattedText {
     pub fn num_lines(&self) -> u32 {
         // SAFETY: live FormattedText*. -1 only on a null/wrong-type handle,
         // which cannot happen for a valid `self`.
-        let n = unsafe { dm_noesis_formatted_text_get_num_lines(self.ptr.as_ptr()) };
+        let n = unsafe { noesis_formatted_text_get_num_lines(self.ptr.as_ptr()) };
         u32::try_from(n).unwrap_or(0)
     }
 
@@ -344,7 +344,7 @@ impl FormattedText {
         let mut baseline = 0.0f32;
         // SAFETY: live FormattedText*; out pointers are valid local scalars.
         let ok = unsafe {
-            dm_noesis_formatted_text_get_line_info(
+            noesis_formatted_text_get_line_info(
                 self.ptr.as_ptr(),
                 index,
                 &mut num_glyphs,
@@ -365,7 +365,7 @@ impl FormattedText {
         let mut out = false;
         // SAFETY: live FormattedText*; `out` is a valid bool slot.
         unsafe {
-            dm_noesis_formatted_text_is_empty(self.ptr.as_ptr(), &mut out);
+            noesis_formatted_text_is_empty(self.ptr.as_ptr(), &mut out);
         }
         out
     }
@@ -376,7 +376,7 @@ impl FormattedText {
         let mut out = false;
         // SAFETY: live FormattedText*; `out` is a valid bool slot.
         unsafe {
-            dm_noesis_formatted_text_has_visual_brush(self.ptr.as_ptr(), &mut out);
+            noesis_formatted_text_has_visual_brush(self.ptr.as_ptr(), &mut out);
         }
         out
     }
@@ -401,7 +401,7 @@ impl FormattedText {
         let mut h = 0.0f32;
         // SAFETY: live FormattedText*; out pointers are valid local scalars.
         unsafe {
-            dm_noesis_formatted_text_measure(
+            noesis_formatted_text_measure(
                 self.ptr.as_ptr(),
                 alignment,
                 wrapping,
@@ -427,7 +427,7 @@ impl FormattedText {
         let mut y = 0.0f32;
         // SAFETY: live FormattedText*; out pointers are valid local scalars.
         unsafe {
-            dm_noesis_formatted_text_get_glyph_position(
+            noesis_formatted_text_get_glyph_position(
                 self.ptr.as_ptr(),
                 ch_index,
                 after_char,
@@ -447,7 +447,7 @@ impl FormattedText {
         let mut is_trailing = false;
         // SAFETY: live FormattedText*; out pointers are valid local scalars.
         unsafe {
-            dm_noesis_formatted_text_hit_test(
+            noesis_formatted_text_hit_test(
                 self.ptr.as_ptr(),
                 x,
                 y,
@@ -466,8 +466,8 @@ impl FormattedText {
 
 impl Drop for FormattedText {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_formatted_text_create with a +1 ref we
+        // SAFETY: produced by noesis_formatted_text_create with a +1 ref we
         // own; released exactly once here.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }

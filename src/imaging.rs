@@ -33,15 +33,15 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 
 use crate::ffi::{
-    TextureRenderCallback, dm_noesis_base_component_release, dm_noesis_bitmap_image_create,
-    dm_noesis_bitmap_image_get_uri_source, dm_noesis_bitmap_image_set_uri_source,
-    dm_noesis_bitmap_source_get_dpi, dm_noesis_bitmap_source_get_pixel_size,
-    dm_noesis_cropped_bitmap_create, dm_noesis_cropped_bitmap_get_source,
-    dm_noesis_cropped_bitmap_get_source_rect, dm_noesis_cropped_bitmap_set_source,
-    dm_noesis_cropped_bitmap_set_source_rect, dm_noesis_dynamic_texture_source_create,
-    dm_noesis_dynamic_texture_source_get_pixel_size, dm_noesis_dynamic_texture_source_resize,
-    dm_noesis_texture_source_create, dm_noesis_texture_source_get_texture,
-    dm_noesis_texture_source_set_texture,
+    TextureRenderCallback, noesis_base_component_release, noesis_bitmap_image_create,
+    noesis_bitmap_image_get_uri_source, noesis_bitmap_image_set_uri_source,
+    noesis_bitmap_source_get_dpi, noesis_bitmap_source_get_pixel_size,
+    noesis_cropped_bitmap_create, noesis_cropped_bitmap_get_source,
+    noesis_cropped_bitmap_get_source_rect, noesis_cropped_bitmap_set_source,
+    noesis_cropped_bitmap_set_source_rect, noesis_dynamic_texture_source_create,
+    noesis_dynamic_texture_source_get_pixel_size, noesis_dynamic_texture_source_resize,
+    noesis_texture_source_create, noesis_texture_source_get_texture,
+    noesis_texture_source_set_texture,
 };
 
 /// An integer rectangle (`Noesis::Int32Rect`): top-left `(x, y)` and unsigned
@@ -90,7 +90,7 @@ pub trait BitmapSource {
         let mut h = 0i32;
         // SAFETY: the raw pointer is a live BitmapSource*; out params are valid.
         unsafe {
-            dm_noesis_bitmap_source_get_pixel_size(
+            noesis_bitmap_source_get_pixel_size(
                 self.bitmap_source_raw(),
                 &mut w as *mut i32,
                 &mut h as *mut i32,
@@ -108,7 +108,7 @@ pub trait BitmapSource {
         let mut y = 0f32;
         // SAFETY: the raw pointer is a live BitmapSource*; out params are valid.
         unsafe {
-            dm_noesis_bitmap_source_get_dpi(
+            noesis_bitmap_source_get_dpi(
                 self.bitmap_source_raw(),
                 &mut x as *mut f32,
                 &mut y as *mut f32,
@@ -135,7 +135,7 @@ macro_rules! base_component_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref that
                 // we own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -166,9 +166,9 @@ impl CroppedBitmap {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: no arguments; the C side default-constructs.
-        let ptr = unsafe { dm_noesis_cropped_bitmap_create() };
+        let ptr = unsafe { noesis_cropped_bitmap_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_cropped_bitmap_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_cropped_bitmap_create returned null"),
         }
     }
 
@@ -178,7 +178,7 @@ impl CroppedBitmap {
         // SAFETY: self.ptr is a live CroppedBitmap*; source raw is a live
         // BitmapSource* (Noesis AddRefs it).
         unsafe {
-            dm_noesis_cropped_bitmap_set_source(self.ptr.as_ptr(), source.bitmap_source_raw())
+            noesis_cropped_bitmap_set_source(self.ptr.as_ptr(), source.bitmap_source_raw())
         }
     }
 
@@ -189,7 +189,7 @@ impl CroppedBitmap {
     #[must_use]
     pub fn source(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live CroppedBitmap*; returned pointer is borrowed.
-        let p = unsafe { dm_noesis_cropped_bitmap_get_source(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_cropped_bitmap_get_source(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 
@@ -197,7 +197,7 @@ impl CroppedBitmap {
     pub fn set_source_rect(&mut self, rect: Int32Rect) {
         // SAFETY: self.ptr is a live CroppedBitmap*.
         unsafe {
-            dm_noesis_cropped_bitmap_set_source_rect(
+            noesis_cropped_bitmap_set_source_rect(
                 self.ptr.as_ptr(),
                 rect.x,
                 rect.y,
@@ -213,7 +213,7 @@ impl CroppedBitmap {
         let mut r = Int32Rect::default();
         // SAFETY: self.ptr is a live CroppedBitmap*; out params are valid.
         unsafe {
-            dm_noesis_cropped_bitmap_get_source_rect(
+            noesis_cropped_bitmap_get_source_rect(
                 self.ptr.as_ptr(),
                 &mut r.x as *mut i32,
                 &mut r.y as *mut i32,
@@ -260,9 +260,9 @@ impl TextureSource {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: null texture => default ctor.
-        let ptr = unsafe { dm_noesis_texture_source_create(core::ptr::null_mut()) };
+        let ptr = unsafe { noesis_texture_source_create(core::ptr::null_mut()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_texture_source_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_texture_source_create returned null"),
         }
     }
 
@@ -277,7 +277,7 @@ impl TextureSource {
     #[must_use]
     pub unsafe fn with_texture(texture: *mut c_void) -> Option<Self> {
         // SAFETY: per contract, `texture` is a live Texture* or null.
-        let ptr = unsafe { dm_noesis_texture_source_create(texture) };
+        let ptr = unsafe { noesis_texture_source_create(texture) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -288,7 +288,7 @@ impl TextureSource {
     /// `texture` must be a valid live `Noesis::Texture*` or null.
     pub unsafe fn set_texture(&mut self, texture: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live TextureSource*; `texture` per contract.
-        unsafe { dm_noesis_texture_source_set_texture(self.ptr.as_ptr(), texture) }
+        unsafe { noesis_texture_source_set_texture(self.ptr.as_ptr(), texture) }
     }
 
     /// Borrowed `Texture*` currently bound, or `None`. The pointer has no `+1`;
@@ -297,7 +297,7 @@ impl TextureSource {
     #[must_use]
     pub fn texture(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live TextureSource*; returned pointer is borrowed.
-        let p = unsafe { dm_noesis_texture_source_get_texture(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_texture_source_get_texture(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 }
@@ -335,9 +335,9 @@ impl BitmapImage {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: null uri => default ctor.
-        let ptr = unsafe { dm_noesis_bitmap_image_create(core::ptr::null()) };
+        let ptr = unsafe { noesis_bitmap_image_create(core::ptr::null()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_bitmap_image_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_bitmap_image_create returned null"),
         }
     }
 
@@ -350,9 +350,9 @@ impl BitmapImage {
     pub fn from_uri(uri: &str) -> Self {
         let c = CString::new(uri).expect("BitmapImage uri contains interior NUL");
         // SAFETY: `c` outlives the call; the C side copies it into a Uri.
-        let ptr = unsafe { dm_noesis_bitmap_image_create(c.as_ptr()) };
+        let ptr = unsafe { noesis_bitmap_image_create(c.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_bitmap_image_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_bitmap_image_create returned null"),
         }
     }
 
@@ -365,7 +365,7 @@ impl BitmapImage {
     pub fn set_uri_source(&mut self, uri: &str) -> bool {
         let c = CString::new(uri).expect("BitmapImage uri contains interior NUL");
         // SAFETY: self.ptr is a live BitmapImage*; `c` outlives the call.
-        unsafe { dm_noesis_bitmap_image_set_uri_source(self.ptr.as_ptr(), c.as_ptr()) }
+        unsafe { noesis_bitmap_image_set_uri_source(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     /// Read the canonicalized URI source back from the live object.
@@ -376,7 +376,7 @@ impl BitmapImage {
         // SAFETY: self.ptr is a live BitmapImage*; the returned pointer is
         // borrowed and valid until the UriSource changes or the image drops, so
         // we copy it into an owned String immediately.
-        let p = unsafe { dm_noesis_bitmap_image_get_uri_source(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_bitmap_image_get_uri_source(self.ptr.as_ptr()) };
         if p.is_null() {
             return String::new();
         }
@@ -431,16 +431,16 @@ impl DynamicTextureSource {
     ) -> Self {
         // SAFETY: per contract; the C side reinterprets the fn pointer to the
         // Noesis TextureRenderCallback and stores `user`.
-        let ptr = unsafe { dm_noesis_dynamic_texture_source_create(width, height, callback, user) };
+        let ptr = unsafe { noesis_dynamic_texture_source_create(width, height, callback, user) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_dynamic_texture_source_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_dynamic_texture_source_create returned null"),
         }
     }
 
     /// Resize the dynamic texture.
     pub fn resize(&mut self, width: u32, height: u32) -> bool {
         // SAFETY: self.ptr is a live DynamicTextureSource*.
-        unsafe { dm_noesis_dynamic_texture_source_resize(self.ptr.as_ptr(), width, height) }
+        unsafe { noesis_dynamic_texture_source_resize(self.ptr.as_ptr(), width, height) }
     }
 
     /// Read the texture pixel dimensions `(width, height)` back from the live
@@ -451,7 +451,7 @@ impl DynamicTextureSource {
         let mut h = 0u32;
         // SAFETY: self.ptr is a live DynamicTextureSource*; out params valid.
         unsafe {
-            dm_noesis_dynamic_texture_source_get_pixel_size(
+            noesis_dynamic_texture_source_get_pixel_size(
                 self.ptr.as_ptr(),
                 &mut w as *mut u32,
                 &mut h as *mut u32,

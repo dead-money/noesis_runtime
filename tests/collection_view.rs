@@ -10,13 +10,13 @@
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test collection_view -- --nocapture`
+//!   `cargo test -p noesis_runtime --test collection_view -- --nocapture`
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::binding::ObservableCollection;
-use dm_noesis_runtime::collection_view::CollectionViewSource;
+use noesis_runtime::binding::ObservableCollection;
+use noesis_runtime::collection_view::CollectionViewSource;
 
 #[test]
 fn collection_view_current_item_navigation() {
@@ -24,9 +24,9 @@ fn collection_view_current_item_navigation() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let mut list = ObservableCollection::new();
@@ -128,5 +128,5 @@ fn collection_view_current_item_navigation() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

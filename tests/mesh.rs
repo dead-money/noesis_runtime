@@ -19,20 +19,20 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-use dm_noesis_runtime::brushes::SolidColorBrush;
-use dm_noesis_runtime::classes::{
+use noesis_runtime::brushes::SolidColorBrush;
+use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyValue, RenderHandler,
 };
-use dm_noesis_runtime::drawing::DrawingContext;
-use dm_noesis_runtime::ffi::ClassBase;
-use dm_noesis_runtime::formatted_text::FormattedText;
-use dm_noesis_runtime::mesh::{Mesh, MeshData};
-use dm_noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
-use dm_noesis_runtime::render_device::{
+use noesis_runtime::drawing::DrawingContext;
+use noesis_runtime::ffi::ClassBase;
+use noesis_runtime::formatted_text::FormattedText;
+use noesis_runtime::mesh::{Mesh, MeshData};
+use noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
+use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
     TextureDesc, TextureHandle, TextureRect, register,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
@@ -145,9 +145,9 @@ fn mesh_round_trips_and_draws() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── Headless MeshData round-trip (proves buffers + bounds crossed FFI).
@@ -225,7 +225,7 @@ fn mesh_round_trips_and_draws() {
         );
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }
 
 // ────────────────────────────────────────────────────────────────────────────

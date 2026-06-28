@@ -10,10 +10,10 @@
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test pen_dash -- --nocapture`
+//!   `cargo test -p noesis_runtime --test pen_dash -- --nocapture`
 
-use dm_noesis_runtime::brushes::SolidColorBrush;
-use dm_noesis_runtime::drawing::Pen;
+use noesis_runtime::brushes::SolidColorBrush;
+use noesis_runtime::drawing::Pen;
 
 fn approx(a: f32, b: f32) -> bool {
     (a - b).abs() < 1.0e-4
@@ -25,9 +25,9 @@ fn pen_dash_style_roundtrip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let brush = SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]);
@@ -72,5 +72,5 @@ fn pen_dash_style_roundtrip() {
         assert!(pen.dash_offset().is_none(), "dash offset cleared");
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

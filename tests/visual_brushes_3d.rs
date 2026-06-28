@@ -11,13 +11,13 @@
 //! Single `#[test]` per the harness convention (one Noesis init per process).
 //!
 //! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p dm_noesis_runtime --test visual_brushes_3d -- --nocapture`
+//!   `cargo test -p noesis_runtime --test visual_brushes_3d -- --nocapture`
 
-use dm_noesis_runtime::brushes::{
+use noesis_runtime::brushes::{
     AlignmentX, AlignmentY, BrushMappingMode, ImageBrush, Stretch, TileBrush, TileMode, VisualBrush,
 };
-use dm_noesis_runtime::transforms::{Composite3DFields, CompositeTransform3D, MatrixTransform3D};
-use dm_noesis_runtime::view::FrameworkElement;
+use noesis_runtime::transforms::{Composite3DFields, CompositeTransform3D, MatrixTransform3D};
+use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
@@ -35,9 +35,9 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // ── VisualBrush: source wiring round-trip ───────────────────────────
@@ -247,5 +247,5 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
         let _ = &vb2;
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

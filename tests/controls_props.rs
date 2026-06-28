@@ -17,7 +17,7 @@
 //   * `PasswordBox`: password get/set round-trip.
 //   * Negatives: each typed accessor returns `None`/`false` on the wrong type.
 
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation""#;
 
@@ -51,9 +51,9 @@ fn control_property_round_trips() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         // -- RangeBase (Slider) with coercion -- no view needed --
@@ -199,5 +199,5 @@ fn control_property_round_trips() {
         drop(slider);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

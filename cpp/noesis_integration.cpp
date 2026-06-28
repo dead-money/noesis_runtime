@@ -30,10 +30,10 @@ namespace {
 
 // ── Callback slots ─────────────────────────────────────────────────────────
 
-struct CursorReg { void* user; dm_noesis_cursor_cb cb; };
-struct KeyboardReg { void* user; dm_noesis_software_keyboard_cb cb; };
-struct OpenUrlReg { void* user; dm_noesis_open_url_cb cb; };
-struct PlayAudioReg { void* user; dm_noesis_play_audio_cb cb; };
+struct CursorReg { void* user; noesis_cursor_cb cb; };
+struct KeyboardReg { void* user; noesis_software_keyboard_cb cb; };
+struct OpenUrlReg { void* user; noesis_open_url_cb cb; };
+struct PlayAudioReg { void* user; noesis_play_audio_cb cb; };
 
 CursorReg g_cursor{nullptr, nullptr};
 KeyboardReg g_keyboard{nullptr, nullptr};
@@ -73,7 +73,7 @@ void PlayAudioTramp(void* user, const Noesis::Uri& uri, float volume) {
 
 // ── Cursor ──────────────────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_set_cursor_callback(void* user, dm_noesis_cursor_cb cb) {
+extern "C" void noesis_set_cursor_callback(void* user, noesis_cursor_cb cb) {
     if (cb) {
         g_cursor.user = user;
         g_cursor.cb = cb;
@@ -87,8 +87,8 @@ extern "C" void dm_noesis_set_cursor_callback(void* user, dm_noesis_cursor_cb cb
 
 // ── Software keyboard ────────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_set_software_keyboard_callback(
-    void* user, dm_noesis_software_keyboard_cb cb)
+extern "C" void noesis_set_software_keyboard_callback(
+    void* user, noesis_software_keyboard_cb cb)
 {
     if (cb) {
         g_keyboard.user = user;
@@ -103,7 +103,7 @@ extern "C" void dm_noesis_set_software_keyboard_callback(
 
 // ── Open URL ─────────────────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_set_open_url_callback(void* user, dm_noesis_open_url_cb cb) {
+extern "C" void noesis_set_open_url_callback(void* user, noesis_open_url_cb cb) {
     if (cb) {
         g_openUrl.user = user;
         g_openUrl.cb = cb;
@@ -115,13 +115,13 @@ extern "C" void dm_noesis_set_open_url_callback(void* user, dm_noesis_open_url_c
     }
 }
 
-extern "C" void dm_noesis_open_url(const char* url) {
+extern "C" void noesis_open_url(const char* url) {
     Noesis::GUI::OpenUrl(url ? url : "");
 }
 
 // ── Play audio ───────────────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_set_play_audio_callback(void* user, dm_noesis_play_audio_cb cb) {
+extern "C" void noesis_set_play_audio_callback(void* user, noesis_play_audio_cb cb) {
     if (cb) {
         g_playAudio.user = user;
         g_playAudio.cb = cb;
@@ -133,14 +133,14 @@ extern "C" void dm_noesis_set_play_audio_callback(void* user, dm_noesis_play_aud
     }
 }
 
-extern "C" void dm_noesis_play_audio(const char* uri, float volume) {
+extern "C" void noesis_play_audio(const char* uri, float volume) {
     Noesis::Uri u{uri ? uri : ""};
     Noesis::GUI::PlayAudio(u, volume);
 }
 
 // ── Culture ──────────────────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_set_culture(const char* name) {
+extern "C" void noesis_set_culture(const char* name) {
     // CultureInfo stores `name` as a raw `const char*`; SetCulture copies the
     // struct by value (and thus the pointer). Keep the string alive for the
     // process lifetime in a static buffer so the pointer stays valid for any
@@ -152,6 +152,6 @@ extern "C" void dm_noesis_set_culture(const char* name) {
     Noesis::GUI::SetCulture(culture);
 }
 
-extern "C" const char* dm_noesis_get_culture(void) {
+extern "C" const char* noesis_get_culture(void) {
     return Noesis::GUI::GetCulture().name;
 }

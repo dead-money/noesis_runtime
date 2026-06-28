@@ -7,9 +7,9 @@
 //! `GetDependsOnProperty`): a stub that did not actually attach the metadata
 //! would return `None` from `get_depends_on`.
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::reflection::{
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::reflection::{
     add_depends_on, get_content_property, get_depends_on, set_content_property,
 };
 
@@ -28,9 +28,9 @@ fn depends_on_metadata() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
     {
         let mut b = ClassBuilder::new("DmDep.Widget", ClassBase::FrameworkElement, Noop);
         b.add_property("First", PropType::Int32);
@@ -86,5 +86,5 @@ fn depends_on_metadata() {
             "DependsOn did not round-trip alongside ContentProperty"
         );
     }
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

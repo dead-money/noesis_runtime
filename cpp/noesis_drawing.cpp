@@ -69,41 +69,41 @@ Noesis::Rect rect_xywh(float x, float y, float w, float h) {
 
 // ── Pen ──────────────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_pen_create(void* brush, float thickness) {
+extern "C" void* noesis_pen_create(void* brush, float thickness) {
     Noesis::Ptr<Noesis::Pen> pen = *new Noesis::Pen();
     pen->SetThickness(thickness);
     if (auto* b = cast<Noesis::Brush>(brush)) pen->SetBrush(b);
     return handout(pen.GetPtr());
 }
 
-extern "C" bool dm_noesis_pen_set_brush(void* pen, void* brush) {
+extern "C" bool noesis_pen_set_brush(void* pen, void* brush) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return false;
     p->SetBrush(cast<Noesis::Brush>(brush));
     return true;
 }
 
-extern "C" void* dm_noesis_pen_get_brush(void* pen) {
+extern "C" void* noesis_pen_get_brush(void* pen) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return nullptr;
     return p->GetBrush();
 }
 
-extern "C" bool dm_noesis_pen_set_thickness(void* pen, float thickness) {
+extern "C" bool noesis_pen_set_thickness(void* pen, float thickness) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return false;
     p->SetThickness(thickness);
     return true;
 }
 
-extern "C" bool dm_noesis_pen_get_thickness(void* pen, float* out) {
+extern "C" bool noesis_pen_get_thickness(void* pen, float* out) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p || !out) return false;
     *out = p->GetThickness();
     return true;
 }
 
-extern "C" bool dm_noesis_pen_set_line_caps(void* pen, int32_t start_cap, int32_t end_cap,
+extern "C" bool noesis_pen_set_line_caps(void* pen, int32_t start_cap, int32_t end_cap,
                                             int32_t dash_cap) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return false;
@@ -113,7 +113,7 @@ extern "C" bool dm_noesis_pen_set_line_caps(void* pen, int32_t start_cap, int32_
     return true;
 }
 
-extern "C" bool dm_noesis_pen_get_line_caps(void* pen, int32_t out[3]) {
+extern "C" bool noesis_pen_get_line_caps(void* pen, int32_t out[3]) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p || !out) return false;
     out[0] = static_cast<int32_t>(p->GetStartLineCap());
@@ -122,7 +122,7 @@ extern "C" bool dm_noesis_pen_get_line_caps(void* pen, int32_t out[3]) {
     return true;
 }
 
-extern "C" bool dm_noesis_pen_set_line_join(void* pen, int32_t join, float miter_limit) {
+extern "C" bool noesis_pen_set_line_join(void* pen, int32_t join, float miter_limit) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return false;
     p->SetLineJoin(static_cast<Noesis::PenLineJoin>(join));
@@ -130,7 +130,7 @@ extern "C" bool dm_noesis_pen_set_line_join(void* pen, int32_t join, float miter
     return true;
 }
 
-extern "C" bool dm_noesis_pen_get_line_join(void* pen, int32_t* out_join, float* out_miter_limit) {
+extern "C" bool noesis_pen_get_line_join(void* pen, int32_t* out_join, float* out_miter_limit) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return false;
     if (out_join) *out_join = static_cast<int32_t>(p->GetLineJoin());
@@ -146,7 +146,7 @@ extern "C" bool dm_noesis_pen_get_line_join(void* pen, int32_t* out_join, float*
 // `count == 0` clears the dash style (a solid stroke). The dash lengths are in
 // multiples of the pen thickness, matching WPF/Noesis semantics.
 
-extern "C" bool dm_noesis_pen_set_dash_style(
+extern "C" bool noesis_pen_set_dash_style(
     void* pen, const float* dashes, uint32_t count, float offset) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return false;
@@ -171,7 +171,7 @@ extern "C" bool dm_noesis_pen_set_dash_style(
 
 // Read the Pen's DashStyle.Offset into *out. False (output untouched) if the
 // Pen has no dash style set or `pen` is not a Pen.
-extern "C" bool dm_noesis_pen_get_dash_offset(void* pen, float* out) {
+extern "C" bool noesis_pen_get_dash_offset(void* pen, float* out) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p || !out) return false;
     Noesis::DashStyle* style = p->GetDashStyle();
@@ -183,7 +183,7 @@ extern "C" bool dm_noesis_pen_get_dash_offset(void* pen, float* out) {
 // Borrowed space-separated dash string from the Pen's DashStyle
 // (DashStyle::GetDashes), or null if no dash style is set / not a Pen. Valid
 // until the Pen (or its DashStyle) is next mutated; copy it out immediately.
-extern "C" const char* dm_noesis_pen_get_dashes(void* pen) {
+extern "C" const char* noesis_pen_get_dashes(void* pen) {
     auto* p = cast<Noesis::Pen>(pen);
     if (!p) return nullptr;
     Noesis::DashStyle* style = p->GetDashStyle();
@@ -192,7 +192,7 @@ extern "C" const char* dm_noesis_pen_get_dashes(void* pen) {
 
 // ── RectangleGeometry ────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_drawing_rect_geometry_create(float x, float y, float w, float h, float rX,
+extern "C" void* noesis_drawing_rect_geometry_create(float x, float y, float w, float h, float rX,
                                                      float rY) {
     Noesis::Ptr<Noesis::RectangleGeometry> geo =
         *new Noesis::RectangleGeometry(rect_xywh(x, y, w, h), rX, rY);
@@ -200,7 +200,7 @@ extern "C" void* dm_noesis_drawing_rect_geometry_create(float x, float y, float 
 }
 
 // out = {x, y, w, h}
-extern "C" bool dm_noesis_rectangle_geometry_get_rect(void* geometry, float out[4]) {
+extern "C" bool noesis_rectangle_geometry_get_rect(void* geometry, float out[4]) {
     auto* g = cast<Noesis::RectangleGeometry>(geometry);
     if (!g || !out) return false;
     const Noesis::Rect& r = g->GetRect();
@@ -213,7 +213,7 @@ extern "C" bool dm_noesis_rectangle_geometry_get_rect(void* geometry, float out[
 
 // ── DrawingContext ───────────────────────────────────────────────────────────
 
-extern "C" bool dm_noesis_drawing_draw_line(void* context, void* pen, float x0, float y0, float x1,
+extern "C" bool noesis_drawing_draw_line(void* context, void* pen, float x0, float y0, float x1,
                                             float y1) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     if (!dc) return false;
@@ -221,7 +221,7 @@ extern "C" bool dm_noesis_drawing_draw_line(void* context, void* pen, float x0, 
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_draw_rectangle(void* context, void* brush, void* pen, float x,
+extern "C" bool noesis_drawing_draw_rectangle(void* context, void* brush, void* pen, float x,
                                                  float y, float w, float h) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     if (!dc) return false;
@@ -229,7 +229,7 @@ extern "C" bool dm_noesis_drawing_draw_rectangle(void* context, void* brush, voi
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_draw_rounded_rectangle(void* context, void* brush, void* pen,
+extern "C" bool noesis_drawing_draw_rounded_rectangle(void* context, void* brush, void* pen,
                                                          float x, float y, float w, float h,
                                                          float rX, float rY) {
     auto* dc = cast<Noesis::DrawingContext>(context);
@@ -239,7 +239,7 @@ extern "C" bool dm_noesis_drawing_draw_rounded_rectangle(void* context, void* br
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_draw_ellipse(void* context, void* brush, void* pen, float cx,
+extern "C" bool noesis_drawing_draw_ellipse(void* context, void* brush, void* pen, float cx,
                                                float cy, float rX, float rY) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     if (!dc) return false;
@@ -248,7 +248,7 @@ extern "C" bool dm_noesis_drawing_draw_ellipse(void* context, void* brush, void*
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_draw_geometry(void* context, void* brush, void* pen,
+extern "C" bool noesis_drawing_draw_geometry(void* context, void* brush, void* pen,
                                                 void* geometry) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     if (!dc) return false;
@@ -261,7 +261,7 @@ extern "C" bool dm_noesis_drawing_draw_geometry(void* context, void* brush, void
 // cpp/noesis_formatted_text.cpp) into the bounds rect {x, y, w, h}. The text's
 // foreground/brush is baked into the FormattedText itself, so DrawText takes no
 // brush argument (see NsGui/DrawingContext.h: DrawText(FormattedText*, Rect)).
-extern "C" bool dm_noesis_drawing_draw_text(void* context, void* formatted_text, float x, float y,
+extern "C" bool noesis_drawing_draw_text(void* context, void* formatted_text, float x, float y,
                                             float w, float h) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* ft = cast<Noesis::FormattedText>(formatted_text);
@@ -270,10 +270,10 @@ extern "C" bool dm_noesis_drawing_draw_text(void* context, void* formatted_text,
     return true;
 }
 
-// Fill a MeshData (NsGui/MeshData.h, built via dm_noesis_mesh_data_* in
+// Fill a MeshData (NsGui/MeshData.h, built via noesis_mesh_data_* in
 // cpp/noesis_mesh.cpp) with `brush`. A null mesh is rejected; a null brush
 // paints nothing (matching the other fill calls).
-extern "C" bool dm_noesis_drawing_draw_mesh(void* context, void* brush, void* mesh) {
+extern "C" bool noesis_drawing_draw_mesh(void* context, void* brush, void* mesh) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!dc || !md) return false;
@@ -281,7 +281,7 @@ extern "C" bool dm_noesis_drawing_draw_mesh(void* context, void* brush, void* me
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_draw_image(void* context, void* image_source, float x, float y,
+extern "C" bool noesis_drawing_draw_image(void* context, void* image_source, float x, float y,
                                              float w, float h) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* img = cast<Noesis::ImageSource>(image_source);
@@ -292,14 +292,14 @@ extern "C" bool dm_noesis_drawing_draw_image(void* context, void* image_source, 
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_pop(void* context) {
+extern "C" bool noesis_drawing_pop(void* context) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     if (!dc) return false;
     dc->Pop();
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_push_clip(void* context, void* geometry) {
+extern "C" bool noesis_drawing_push_clip(void* context, void* geometry) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* g = cast<Noesis::Geometry>(geometry);
     if (!dc || !g) return false;
@@ -307,7 +307,7 @@ extern "C" bool dm_noesis_drawing_push_clip(void* context, void* geometry) {
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_push_transform(void* context, void* transform) {
+extern "C" bool noesis_drawing_push_transform(void* context, void* transform) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* t = cast<Noesis::Transform>(transform);
     if (!dc || !t) return false;
@@ -315,7 +315,7 @@ extern "C" bool dm_noesis_drawing_push_transform(void* context, void* transform)
     return true;
 }
 
-extern "C" bool dm_noesis_drawing_push_blending_mode(void* context, int32_t mode) {
+extern "C" bool noesis_drawing_push_blending_mode(void* context, int32_t mode) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     if (!dc) return false;
     dc->PushBlendingMode(static_cast<Noesis::BlendingMode>(mode));

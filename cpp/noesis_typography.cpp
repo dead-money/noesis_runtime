@@ -2,10 +2,10 @@
 // font properties, a representative subset of the OpenType Typography attached
 // DPs, and the IME CompositionUnderline list on a TextBox.
 //
-// Ownership: dm_noesis_typography_font_family_create hands a FontFamily out
+// Ownership: noesis_typography_font_family_create hands a FontFamily out
 // across the C ABI with a single owned +1 reference (the handout() idiom shared
 // with cpp/noesis_brushes.cpp). The Rust handle's Drop releases it via
-// dm_noesis_base_component_release. Assigning a FontFamily to an element (the
+// noesis_base_component_release. Assigning a FontFamily to an element (the
 // attached TextElement.FontFamily DP) makes Noesis take its own reference.
 //
 // The TextElement and Typography accessors operate on a borrowed DependencyObject
@@ -48,7 +48,7 @@ T* cast(void* p) {
 
 // ── FontFamily ───────────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_typography_font_family_create(const char* source) {
+extern "C" void* noesis_typography_font_family_create(const char* source) {
     Noesis::Ptr<Noesis::FontFamily> family =
         source ? *new Noesis::FontFamily(source) : *new Noesis::FontFamily();
     return handout(family.GetPtr());
@@ -56,7 +56,7 @@ extern "C" void* dm_noesis_typography_font_family_create(const char* source) {
 
 // Borrowed NUL-terminated UTF-8 source string, valid while the caller holds a
 // reference to the FontFamily. NULL on type mismatch.
-extern "C" const char* dm_noesis_typography_font_family_get_source(void* family) {
+extern "C" const char* noesis_typography_font_family_get_source(void* family) {
     auto* f = cast<Noesis::FontFamily>(family);
     if (!f) return nullptr;
     return f->GetSource();
@@ -64,14 +64,14 @@ extern "C" const char* dm_noesis_typography_font_family_get_source(void* family)
 
 // Number of concrete fonts the family resolved to (depends on the registered
 // font provider). 0 if `family` is not a FontFamily or nothing resolved.
-extern "C" uint32_t dm_noesis_typography_font_family_get_num_fonts(void* family) {
+extern "C" uint32_t noesis_typography_font_family_get_num_fonts(void* family) {
     auto* f = cast<Noesis::FontFamily>(family);
     if (!f) return 0;
     return f->GetNumFonts();
 }
 
 // Borrowed name of the font at `index`, or NULL if out of range / type mismatch.
-extern "C" const char* dm_noesis_typography_font_family_get_font_name(void* family,
+extern "C" const char* noesis_typography_font_family_get_font_name(void* family,
                                                                       uint32_t index) {
     auto* f = cast<Noesis::FontFamily>(family);
     if (!f || index >= f->GetNumFonts()) return nullptr;
@@ -80,21 +80,21 @@ extern "C" const char* dm_noesis_typography_font_family_get_font_name(void* fami
 
 // ── TextElement attached font properties ─────────────────────────────────────
 
-extern "C" bool dm_noesis_typography_text_element_set_font_size(void* element, float size) {
+extern "C" bool noesis_typography_text_element_set_font_size(void* element, float size) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     Noesis::TextElement::SetFontSize(d, size);
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_element_get_font_size(void* element, float* out) {
+extern "C" bool noesis_typography_text_element_get_font_size(void* element, float* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = Noesis::TextElement::GetFontSize(d);
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_element_set_font_family(void* element, void* family) {
+extern "C" bool noesis_typography_text_element_set_font_family(void* element, void* family) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     Noesis::TextElement::SetFontFamily(d, cast<Noesis::FontFamily>(family));
@@ -102,13 +102,13 @@ extern "C" bool dm_noesis_typography_text_element_set_font_family(void* element,
 }
 
 // Borrowed FontFamily* currently set (no +1), or NULL.
-extern "C" void* dm_noesis_typography_text_element_get_font_family(void* element) {
+extern "C" void* noesis_typography_text_element_get_font_family(void* element) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return nullptr;
     return Noesis::TextElement::GetFontFamily(d);
 }
 
-extern "C" bool dm_noesis_typography_text_element_set_foreground(void* element, void* brush) {
+extern "C" bool noesis_typography_text_element_set_foreground(void* element, void* brush) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     Noesis::TextElement::SetForeground(d, cast<Noesis::Brush>(brush));
@@ -116,48 +116,48 @@ extern "C" bool dm_noesis_typography_text_element_set_foreground(void* element, 
 }
 
 // Borrowed Brush* currently set (no +1), or NULL.
-extern "C" void* dm_noesis_typography_text_element_get_foreground(void* element) {
+extern "C" void* noesis_typography_text_element_get_foreground(void* element) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return nullptr;
     return Noesis::TextElement::GetForeground(d);
 }
 
-extern "C" bool dm_noesis_typography_text_element_set_font_weight(void* element, int32_t weight) {
+extern "C" bool noesis_typography_text_element_set_font_weight(void* element, int32_t weight) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     Noesis::TextElement::SetFontWeight(d, static_cast<Noesis::FontWeight>(weight));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_element_get_font_weight(void* element, int32_t* out) {
+extern "C" bool noesis_typography_text_element_get_font_weight(void* element, int32_t* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = static_cast<int32_t>(Noesis::TextElement::GetFontWeight(d));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_element_set_font_style(void* element, int32_t style) {
+extern "C" bool noesis_typography_text_element_set_font_style(void* element, int32_t style) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     Noesis::TextElement::SetFontStyle(d, static_cast<Noesis::FontStyle>(style));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_element_get_font_style(void* element, int32_t* out) {
+extern "C" bool noesis_typography_text_element_get_font_style(void* element, int32_t* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = static_cast<int32_t>(Noesis::TextElement::GetFontStyle(d));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_element_set_font_stretch(void* element, int32_t stretch) {
+extern "C" bool noesis_typography_text_element_set_font_stretch(void* element, int32_t stretch) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     Noesis::TextElement::SetFontStretch(d, static_cast<Noesis::FontStretch>(stretch));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_element_get_font_stretch(void* element, int32_t* out) {
+extern "C" bool noesis_typography_text_element_get_font_stretch(void* element, int32_t* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = static_cast<int32_t>(Noesis::TextElement::GetFontStretch(d));
@@ -172,7 +172,7 @@ extern "C" bool dm_noesis_typography_text_element_get_font_stretch(void* element
 // (CapitalSpacing, ContextualAlternates, the 20 StylisticSet* flags, swash/
 // alternate indices, …) follow this identical pattern.
 
-extern "C" bool dm_noesis_typography_set_capitals(void* element, int32_t value) {
+extern "C" bool noesis_typography_set_capitals(void* element, int32_t value) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     d->SetValue<Noesis::FontCapitals>(Noesis::Typography::CapitalsProperty,
@@ -180,14 +180,14 @@ extern "C" bool dm_noesis_typography_set_capitals(void* element, int32_t value) 
     return true;
 }
 
-extern "C" bool dm_noesis_typography_get_capitals(void* element, int32_t* out) {
+extern "C" bool noesis_typography_get_capitals(void* element, int32_t* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = static_cast<int32_t>(d->GetValue<Noesis::FontCapitals>(Noesis::Typography::CapitalsProperty));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_set_numeral_style(void* element, int32_t value) {
+extern "C" bool noesis_typography_set_numeral_style(void* element, int32_t value) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     d->SetValue<Noesis::FontNumeralStyle>(Noesis::Typography::NumeralStyleProperty,
@@ -195,7 +195,7 @@ extern "C" bool dm_noesis_typography_set_numeral_style(void* element, int32_t va
     return true;
 }
 
-extern "C" bool dm_noesis_typography_get_numeral_style(void* element, int32_t* out) {
+extern "C" bool noesis_typography_get_numeral_style(void* element, int32_t* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = static_cast<int32_t>(
@@ -203,7 +203,7 @@ extern "C" bool dm_noesis_typography_get_numeral_style(void* element, int32_t* o
     return true;
 }
 
-extern "C" bool dm_noesis_typography_set_fraction(void* element, int32_t value) {
+extern "C" bool noesis_typography_set_fraction(void* element, int32_t value) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     d->SetValue<Noesis::FontFraction>(Noesis::Typography::FractionProperty,
@@ -211,14 +211,14 @@ extern "C" bool dm_noesis_typography_set_fraction(void* element, int32_t value) 
     return true;
 }
 
-extern "C" bool dm_noesis_typography_get_fraction(void* element, int32_t* out) {
+extern "C" bool noesis_typography_get_fraction(void* element, int32_t* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = static_cast<int32_t>(d->GetValue<Noesis::FontFraction>(Noesis::Typography::FractionProperty));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_set_variants(void* element, int32_t value) {
+extern "C" bool noesis_typography_set_variants(void* element, int32_t value) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     d->SetValue<Noesis::FontVariants>(Noesis::Typography::VariantsProperty,
@@ -226,35 +226,35 @@ extern "C" bool dm_noesis_typography_set_variants(void* element, int32_t value) 
     return true;
 }
 
-extern "C" bool dm_noesis_typography_get_variants(void* element, int32_t* out) {
+extern "C" bool noesis_typography_get_variants(void* element, int32_t* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = static_cast<int32_t>(d->GetValue<Noesis::FontVariants>(Noesis::Typography::VariantsProperty));
     return true;
 }
 
-extern "C" bool dm_noesis_typography_set_standard_ligatures(void* element, bool value) {
+extern "C" bool noesis_typography_set_standard_ligatures(void* element, bool value) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     d->SetValue<bool>(Noesis::Typography::StandardLigaturesProperty, value);
     return true;
 }
 
-extern "C" bool dm_noesis_typography_get_standard_ligatures(void* element, bool* out) {
+extern "C" bool noesis_typography_get_standard_ligatures(void* element, bool* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = d->GetValue<bool>(Noesis::Typography::StandardLigaturesProperty);
     return true;
 }
 
-extern "C" bool dm_noesis_typography_set_kerning(void* element, bool value) {
+extern "C" bool noesis_typography_set_kerning(void* element, bool value) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d) return false;
     d->SetValue<bool>(Noesis::Typography::KerningProperty, value);
     return true;
 }
 
-extern "C" bool dm_noesis_typography_get_kerning(void* element, bool* out) {
+extern "C" bool noesis_typography_get_kerning(void* element, bool* out) {
     auto* d = cast<Noesis::DependencyObject>(element);
     if (!d || !out) return false;
     *out = d->GetValue<bool>(Noesis::Typography::KerningProperty);
@@ -263,7 +263,7 @@ extern "C" bool dm_noesis_typography_get_kerning(void* element, bool* out) {
 
 // ── CompositionUnderline (IME) on a TextBox ──────────────────────────────────
 
-extern "C" bool dm_noesis_typography_text_box_add_composition_underline(void* element,
+extern "C" bool noesis_typography_text_box_add_composition_underline(void* element,
                                                                         uint32_t start,
                                                                         uint32_t end, int32_t style,
                                                                         bool bold) {
@@ -279,13 +279,13 @@ extern "C" bool dm_noesis_typography_text_box_add_composition_underline(void* el
 }
 
 // Number of IME composition underlines, or -1 if `element` is not a TextBox.
-extern "C" int32_t dm_noesis_typography_text_box_num_composition_underlines(void* element) {
+extern "C" int32_t noesis_typography_text_box_num_composition_underlines(void* element) {
     auto* tb = cast<Noesis::TextBox>(element);
     if (!tb) return -1;
     return static_cast<int32_t>(tb->GetNumCompositionUnderlines());
 }
 
-extern "C" bool dm_noesis_typography_text_box_get_composition_underline(
+extern "C" bool noesis_typography_text_box_get_composition_underline(
     void* element, uint32_t index, uint32_t* out_start, uint32_t* out_end, int32_t* out_style,
     bool* out_bold) {
     auto* tb = cast<Noesis::TextBox>(element);
@@ -298,7 +298,7 @@ extern "C" bool dm_noesis_typography_text_box_get_composition_underline(
     return true;
 }
 
-extern "C" bool dm_noesis_typography_text_box_clear_composition_underlines(void* element) {
+extern "C" bool noesis_typography_text_box_clear_composition_underlines(void* element) {
     auto* tb = cast<Noesis::TextBox>(element);
     if (!tb) return false;
     tb->ClearCompositionUnderlines();

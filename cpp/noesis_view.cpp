@@ -41,7 +41,7 @@ namespace {
 
 class RustXamlProvider final : public Noesis::XamlProvider {
 public:
-    RustXamlProvider(const dm_noesis_xaml_provider_vtable* vtable, void* userdata)
+    RustXamlProvider(const noesis_xaml_provider_vtable* vtable, void* userdata)
         : mVtable(*vtable), mUserdata(userdata)
     {}
 
@@ -60,7 +60,7 @@ public:
     }
 
 private:
-    dm_noesis_xaml_provider_vtable mVtable;
+    noesis_xaml_provider_vtable mVtable;
     void* mUserdata;
 };
 
@@ -68,8 +68,8 @@ private:
 
 // ── XamlProvider C ABI ─────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_xaml_provider_create(
-    const dm_noesis_xaml_provider_vtable* vtable, void* userdata)
+extern "C" void* noesis_xaml_provider_create(
+    const noesis_xaml_provider_vtable* vtable, void* userdata)
 {
     if (!vtable) return nullptr;
     Noesis::Ptr<RustXamlProvider> p =
@@ -77,18 +77,18 @@ extern "C" void* dm_noesis_xaml_provider_create(
     return p.GiveOwnership();
 }
 
-extern "C" void dm_noesis_xaml_provider_destroy(void* provider) {
+extern "C" void noesis_xaml_provider_destroy(void* provider) {
     if (!provider) return;
     static_cast<Noesis::XamlProvider*>(provider)->Release();
 }
 
-extern "C" void dm_noesis_set_xaml_provider(void* provider) {
+extern "C" void noesis_set_xaml_provider(void* provider) {
     Noesis::GUI::SetXamlProvider(static_cast<Noesis::XamlProvider*>(provider));
 }
 
 // ── XAML load + generic release ────────────────────────────────────────────
 
-extern "C" void* dm_noesis_gui_load_xaml(const char* uri) {
+extern "C" void* noesis_gui_load_xaml(const char* uri) {
     if (!uri) return nullptr;
     Noesis::Ptr<Noesis::BaseComponent> component =
         Noesis::GUI::LoadXaml(Noesis::Uri(uri));
@@ -101,10 +101,10 @@ extern "C" void* dm_noesis_gui_load_xaml(const char* uri) {
     return element.GiveOwnership();
 }
 
-extern "C" void* dm_noesis_gui_parse_xaml(const char* text) {
+extern "C" void* noesis_gui_parse_xaml(const char* text) {
     if (!text) return nullptr;
     // ParseXaml builds an object tree directly from the string — no
-    // XamlProvider URI round-trip. Mirrors dm_noesis_gui_load_xaml's
+    // XamlProvider URI round-trip. Mirrors noesis_gui_load_xaml's
     // ownership: cast the root to FrameworkElement and hand out a +1 ref.
     // Malformed XAML yields a null Ptr (the error is routed through the log
     // handler), so this returns NULL rather than crashing.
@@ -116,7 +116,7 @@ extern "C" void* dm_noesis_gui_parse_xaml(const char* text) {
     return element.GiveOwnership();
 }
 
-extern "C" bool dm_noesis_gui_load_component(void* component, const char* uri) {
+extern "C" bool noesis_gui_load_component(void* component, const char* uri) {
     if (!component || !uri) return false;
     // LoadComponent populates an existing instance (the code-behind / x:Class
     // pattern). `component` is borrowed; Noesis does not take ownership of the
@@ -127,7 +127,7 @@ extern "C" bool dm_noesis_gui_load_component(void* component, const char* uri) {
     return true;
 }
 
-extern "C" void dm_noesis_base_component_release(void* obj) {
+extern "C" void noesis_base_component_release(void* obj) {
     if (!obj) return;
     static_cast<Noesis::BaseComponent*>(obj)->Release();
 }
@@ -135,8 +135,8 @@ extern "C" void dm_noesis_base_component_release(void* obj) {
 // Add a +1 reference to any BaseComponent and return it (NULL on NULL input).
 // Lets Rust promote a borrowed component pointer (e.g. a hit-test visual handed
 // to a callback, or GetRenderTransform's borrowed result) into an owning
-// handle. Balance with dm_noesis_base_component_release.
-extern "C" void* dm_noesis_base_component_add_reference(void* obj) {
+// handle. Balance with noesis_base_component_release.
+extern "C" void* noesis_base_component_add_reference(void* obj) {
     if (!obj) return nullptr;
     static_cast<Noesis::BaseComponent*>(obj)->AddReference();
     return obj;
@@ -146,12 +146,12 @@ extern "C" void* dm_noesis_base_component_add_reference(void* obj) {
 // GetNumReferences). Returns 0 on NULL input. The absolute value is an internal
 // detail — callers should reason about deltas (AddReference => +1, Release =>
 // -1), not the raw number.
-extern "C" int32_t dm_noesis_base_component_get_num_references(void* obj) {
+extern "C" int32_t noesis_base_component_get_num_references(void* obj) {
     if (!obj) return 0;
     return static_cast<Noesis::BaseComponent*>(obj)->GetNumReferences();
 }
 
-extern "C" bool dm_noesis_gui_load_application_resources(const char* uri) {
+extern "C" bool noesis_gui_load_application_resources(const char* uri) {
     if (!uri) return false;
     Noesis::Ptr<Noesis::ResourceDictionary> dict =
         Noesis::GUI::LoadXaml<Noesis::ResourceDictionary>(Noesis::Uri(uri));
@@ -180,7 +180,7 @@ extern "C" bool dm_noesis_gui_load_application_resources(const char* uri) {
 // (parent scope is now visible to the child), and assigns
 // `child.Source = uri` to trigger the load. Each leaf parses with the
 // growing parent context already live.
-extern "C" bool dm_noesis_gui_install_app_resources_chain(
+extern "C" bool noesis_gui_install_app_resources_chain(
     const char* const* uris, uint32_t count)
 {
     if (!uris || count == 0) return false;
@@ -198,7 +198,7 @@ extern "C" bool dm_noesis_gui_install_app_resources_chain(
 
 // ── View lifecycle ─────────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_view_create(void* framework_element) {
+extern "C" void* noesis_view_create(void* framework_element) {
     if (!framework_element) return nullptr;
     Noesis::Ptr<Noesis::IView> view = Noesis::GUI::CreateView(
         static_cast<Noesis::FrameworkElement*>(framework_element));
@@ -206,7 +206,7 @@ extern "C" void* dm_noesis_view_create(void* framework_element) {
     return view.GiveOwnership();
 }
 
-extern "C" void dm_noesis_view_destroy(void* view) {
+extern "C" void noesis_view_destroy(void* view) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->Release();
 }
@@ -215,8 +215,8 @@ extern "C" void dm_noesis_view_destroy(void* view) {
 // keep the view (and the IRenderer it owns) alive independently of the View
 // wrapper, so the two can drive different threads (Update on the UI thread;
 // UpdateRenderTree / Render on the render thread). Balance with
-// dm_noesis_view_destroy. No-op (returns NULL) on a NULL view.
-extern "C" void* dm_noesis_view_add_reference(void* view) {
+// noesis_view_destroy. No-op (returns NULL) on a NULL view.
+extern "C" void* noesis_view_add_reference(void* view) {
     if (!view) return nullptr;
     static_cast<Noesis::IView*>(view)->AddReference();
     return view;
@@ -224,18 +224,18 @@ extern "C" void* dm_noesis_view_add_reference(void* view) {
 
 // ── View setters ───────────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_view_set_size(void* view, uint32_t width, uint32_t height) {
+extern "C" void noesis_view_set_size(void* view, uint32_t width, uint32_t height) {
     static_cast<Noesis::IView*>(view)->SetSize(width, height);
 }
 
-extern "C" void dm_noesis_view_set_scale(void* view, float scale) {
+extern "C" void noesis_view_set_scale(void* view, float scale) {
     // DPI scale: 1.0 == 96 ppi. Scales content + hit-testing without changing
     // the surface size, so the UI stays crisp (vector re-tessellation) at any
     // display density.
     static_cast<Noesis::IView*>(view)->SetScale(scale);
 }
 
-extern "C" void dm_noesis_view_set_projection_matrix(void* view, const float* matrix) {
+extern "C" void noesis_view_set_projection_matrix(void* view, const float* matrix) {
     // Matrix4(const float*) reads 16 floats; the native GetData() layout is
     // row-major (Vector4 mVal[4] holding rows), so we pass the Rust array
     // through untouched.
@@ -243,19 +243,19 @@ extern "C" void dm_noesis_view_set_projection_matrix(void* view, const float* ma
     static_cast<Noesis::IView*>(view)->SetProjectionMatrix(m);
 }
 
-extern "C" bool dm_noesis_view_update(void* view, double time_seconds) {
+extern "C" bool noesis_view_update(void* view, double time_seconds) {
     return static_cast<Noesis::IView*>(view)->Update(time_seconds);
 }
 
-extern "C" void dm_noesis_view_set_flags(void* view, uint32_t flags) {
+extern "C" void noesis_view_set_flags(void* view, uint32_t flags) {
     static_cast<Noesis::IView*>(view)->SetFlags(flags);
 }
 
-extern "C" void* dm_noesis_view_get_renderer(void* view) {
+extern "C" void* noesis_view_get_renderer(void* view) {
     return static_cast<Noesis::IView*>(view)->GetRenderer();
 }
 
-extern "C" void* dm_noesis_view_get_content(void* view) {
+extern "C" void* noesis_view_get_content(void* view) {
     if (!view) return nullptr;
     Noesis::FrameworkElement* content = static_cast<Noesis::IView*>(view)->GetContent();
     if (!content) return nullptr;
@@ -268,36 +268,36 @@ extern "C" void* dm_noesis_view_get_content(void* view) {
 
 // ── Renderer ───────────────────────────────────────────────────────────────
 
-extern "C" void dm_noesis_renderer_init(void* renderer, void* render_device) {
+extern "C" void noesis_renderer_init(void* renderer, void* render_device) {
     static_cast<Noesis::IRenderer*>(renderer)->Init(
         static_cast<Noesis::RenderDevice*>(render_device));
 }
 
-extern "C" void dm_noesis_renderer_shutdown(void* renderer) {
+extern "C" void noesis_renderer_shutdown(void* renderer) {
     static_cast<Noesis::IRenderer*>(renderer)->Shutdown();
 }
 
-extern "C" bool dm_noesis_renderer_update_render_tree(void* renderer) {
+extern "C" bool noesis_renderer_update_render_tree(void* renderer) {
     return static_cast<Noesis::IRenderer*>(renderer)->UpdateRenderTree();
 }
 
-extern "C" bool dm_noesis_renderer_render_offscreen(void* renderer) {
+extern "C" bool noesis_renderer_render_offscreen(void* renderer) {
     return static_cast<Noesis::IRenderer*>(renderer)->RenderOffscreen();
 }
 
-extern "C" void dm_noesis_renderer_render(void* renderer, bool flip_y, bool clear) {
+extern "C" void noesis_renderer_render(void* renderer, bool flip_y, bool clear) {
     static_cast<Noesis::IRenderer*>(renderer)->Render(flip_y, clear);
 }
 
 // ── Stereo / VR rendering (TODO §1) ─────────────────────────────────────────
 // `RenderStereo` overloads (the non-deprecated VR path). Each eye matrix is a
 // row-major 4×4 read straight from 16 Rust floats, same layout convention as
-// dm_noesis_view_set_projection_matrix. Culling always uses the view's
+// noesis_view_set_projection_matrix. Culling always uses the view's
 // projection matrix, so the eye matrices must be enclosed by it.
 
 // Multi-pass stereo: one eye per call (call twice, once per eye, into the
 // matching render target).
-extern "C" void dm_noesis_renderer_render_stereo(
+extern "C" void noesis_renderer_render_stereo(
     void* renderer, const float* eye_matrix, bool flip_y, bool clear)
 {
     if (!renderer || !eye_matrix) return;
@@ -306,7 +306,7 @@ extern "C" void dm_noesis_renderer_render_stereo(
 }
 
 // Single-pass stereo: both eyes in one call (e.g. multiview / instanced VR).
-extern "C" void dm_noesis_renderer_render_stereo_both(
+extern "C" void noesis_renderer_render_stereo_both(
     void* renderer, const float* left_eye_matrix, const float* right_eye_matrix,
     bool flip_y, bool clear)
 {
@@ -320,7 +320,7 @@ extern "C" void dm_noesis_renderer_render_stereo_both(
 //
 // The safe wrappers in `src/view.rs` define `MouseButton` and `Key` enums with
 // explicit discriminants. Assert each ordinal here so any accidental drift
-// between Noesis SDK versions fails dm_noesis's own C++ compile, long before
+// between Noesis SDK versions fails noesis_runtime's own C++ compile, long before
 // a wrong-key bug shows up at runtime.
 
 static_assert((int32_t)Noesis::MouseButton_Left == 0, "MouseButton::Left");
@@ -385,87 +385,87 @@ static_assert((int32_t)Noesis::Key_OemPipe == 150, "Key::OemPipe");
 static_assert((int32_t)Noesis::Key_OemCloseBrackets == 151, "Key::OemCloseBrackets");
 static_assert((int32_t)Noesis::Key_OemQuotes == 152, "Key::OemQuotes");
 
-extern "C" bool dm_noesis_view_mouse_move(void* view, int32_t x, int32_t y) {
+extern "C" bool noesis_view_mouse_move(void* view, int32_t x, int32_t y) {
     return static_cast<Noesis::IView*>(view)->MouseMove(x, y);
 }
 
-extern "C" bool dm_noesis_view_mouse_button_down(void* view, int32_t x, int32_t y, int32_t button) {
+extern "C" bool noesis_view_mouse_button_down(void* view, int32_t x, int32_t y, int32_t button) {
     return static_cast<Noesis::IView*>(view)
         ->MouseButtonDown(x, y, static_cast<Noesis::MouseButton>(button));
 }
 
-extern "C" bool dm_noesis_view_mouse_button_up(void* view, int32_t x, int32_t y, int32_t button) {
+extern "C" bool noesis_view_mouse_button_up(void* view, int32_t x, int32_t y, int32_t button) {
     return static_cast<Noesis::IView*>(view)
         ->MouseButtonUp(x, y, static_cast<Noesis::MouseButton>(button));
 }
 
-extern "C" bool dm_noesis_view_mouse_double_click(void* view, int32_t x, int32_t y, int32_t button) {
+extern "C" bool noesis_view_mouse_double_click(void* view, int32_t x, int32_t y, int32_t button) {
     return static_cast<Noesis::IView*>(view)
         ->MouseDoubleClick(x, y, static_cast<Noesis::MouseButton>(button));
 }
 
-extern "C" bool dm_noesis_view_mouse_wheel(void* view, int32_t x, int32_t y, int32_t delta) {
+extern "C" bool noesis_view_mouse_wheel(void* view, int32_t x, int32_t y, int32_t delta) {
     return static_cast<Noesis::IView*>(view)->MouseWheel(x, y, delta);
 }
 
-extern "C" bool dm_noesis_view_scroll(void* view, int32_t x, int32_t y, float value) {
+extern "C" bool noesis_view_scroll(void* view, int32_t x, int32_t y, float value) {
     return static_cast<Noesis::IView*>(view)->Scroll(x, y, value);
 }
 
-extern "C" bool dm_noesis_view_hscroll(void* view, int32_t x, int32_t y, float value) {
+extern "C" bool noesis_view_hscroll(void* view, int32_t x, int32_t y, float value) {
     return static_cast<Noesis::IView*>(view)->HScroll(x, y, value);
 }
 
-extern "C" bool dm_noesis_view_touch_down(void* view, int32_t x, int32_t y, uint64_t id) {
+extern "C" bool noesis_view_touch_down(void* view, int32_t x, int32_t y, uint64_t id) {
     return static_cast<Noesis::IView*>(view)->TouchDown(x, y, id);
 }
 
-extern "C" bool dm_noesis_view_touch_move(void* view, int32_t x, int32_t y, uint64_t id) {
+extern "C" bool noesis_view_touch_move(void* view, int32_t x, int32_t y, uint64_t id) {
     return static_cast<Noesis::IView*>(view)->TouchMove(x, y, id);
 }
 
-extern "C" bool dm_noesis_view_touch_up(void* view, int32_t x, int32_t y, uint64_t id) {
+extern "C" bool noesis_view_touch_up(void* view, int32_t x, int32_t y, uint64_t id) {
     return static_cast<Noesis::IView*>(view)->TouchUp(x, y, id);
 }
 
-extern "C" bool dm_noesis_view_key_down(void* view, int32_t key) {
+extern "C" bool noesis_view_key_down(void* view, int32_t key) {
     return static_cast<Noesis::IView*>(view)->KeyDown(static_cast<Noesis::Key>(key));
 }
 
-extern "C" bool dm_noesis_view_key_up(void* view, int32_t key) {
+extern "C" bool noesis_view_key_up(void* view, int32_t key) {
     return static_cast<Noesis::IView*>(view)->KeyUp(static_cast<Noesis::Key>(key));
 }
 
-extern "C" bool dm_noesis_view_char(void* view, uint32_t codepoint) {
+extern "C" bool noesis_view_char(void* view, uint32_t codepoint) {
     return static_cast<Noesis::IView*>(view)->Char(codepoint);
 }
 
-extern "C" void dm_noesis_view_activate(void* view) {
+extern "C" void noesis_view_activate(void* view) {
     static_cast<Noesis::IView*>(view)->Activate();
 }
 
-extern "C" void dm_noesis_view_deactivate(void* view) {
+extern "C" void noesis_view_deactivate(void* view) {
     static_cast<Noesis::IView*>(view)->Deactivate();
 }
 
-extern "C" bool dm_noesis_view_mouse_hwheel(void* view, int32_t x, int32_t y, int32_t delta) {
+extern "C" bool noesis_view_mouse_hwheel(void* view, int32_t x, int32_t y, int32_t delta) {
     return static_cast<Noesis::IView*>(view)->MouseHWheel(x, y, delta);
 }
 
 // ── View flags / quality / stats (TODO §1) ─────────────────────────────────
 
-extern "C" uint32_t dm_noesis_view_get_flags(void* view) {
+extern "C" uint32_t noesis_view_get_flags(void* view) {
     if (!view) return 0;
     return static_cast<Noesis::IView*>(view)->GetFlags();
 }
 
-extern "C" void dm_noesis_view_set_tessellation_max_pixel_error(void* view, float error) {
+extern "C" void noesis_view_set_tessellation_max_pixel_error(void* view, float error) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetTessellationMaxPixelError(
         Noesis::TessellationMaxPixelError(error));
 }
 
-extern "C" float dm_noesis_view_get_tessellation_max_pixel_error(void* view) {
+extern "C" float noesis_view_get_tessellation_max_pixel_error(void* view) {
     if (!view) return 0.0f;
     return static_cast<Noesis::IView*>(view)->GetTessellationMaxPixelError().error;
 }
@@ -473,32 +473,32 @@ extern "C" float dm_noesis_view_get_tessellation_max_pixel_error(void* view) {
 // ── Gesture / touch thresholds (TODO §1) ───────────────────────────────────
 // Pure pass-through setters; all are no-ops on a null view.
 
-extern "C" void dm_noesis_view_set_holding_time_threshold(void* view, uint32_t ms) {
+extern "C" void noesis_view_set_holding_time_threshold(void* view, uint32_t ms) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetHoldingTimeThreshold(ms);
 }
 
-extern "C" void dm_noesis_view_set_holding_distance_threshold(void* view, uint32_t pixels) {
+extern "C" void noesis_view_set_holding_distance_threshold(void* view, uint32_t pixels) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetHoldingDistanceThreshold(pixels);
 }
 
-extern "C" void dm_noesis_view_set_manipulation_distance_threshold(void* view, uint32_t pixels) {
+extern "C" void noesis_view_set_manipulation_distance_threshold(void* view, uint32_t pixels) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetManipulationDistanceThreshold(pixels);
 }
 
-extern "C" void dm_noesis_view_set_double_tap_time_threshold(void* view, uint32_t ms) {
+extern "C" void noesis_view_set_double_tap_time_threshold(void* view, uint32_t ms) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetDoubleTapTimeThreshold(ms);
 }
 
-extern "C" void dm_noesis_view_set_double_tap_distance_threshold(void* view, uint32_t pixels) {
+extern "C" void noesis_view_set_double_tap_distance_threshold(void* view, uint32_t pixels) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetDoubleTapDistanceThreshold(pixels);
 }
 
-extern "C" void dm_noesis_view_set_emulate_touch(void* view, bool emulate) {
+extern "C" void noesis_view_set_emulate_touch(void* view, bool emulate) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetEmulateTouch(emulate);
 }
@@ -507,17 +507,17 @@ extern "C" void dm_noesis_view_set_emulate_touch(void* view, bool emulate) {
 // Adjusts the offscreen-phase scale used when stereo eye matrices differ from
 // the view projection. Must be 1.0 for non-VR; 2–3 is recommended for VR.
 
-extern "C" void dm_noesis_view_set_stereo_offscreen_scale_factor(void* view, float factor) {
+extern "C" void noesis_view_set_stereo_offscreen_scale_factor(void* view, float factor) {
     if (!view) return;
     static_cast<Noesis::IView*>(view)->SetStereoOffscreenScaleFactor(factor);
 }
 
 // The C ABI struct mirrors `Noesis::ViewStats` field-for-field; guard the size
 // so a future SDK field addition can't silently desync the copy below.
-static_assert(sizeof(dm_noesis_view_stats) == sizeof(Noesis::ViewStats),
-    "dm_noesis_view_stats must match Noesis::ViewStats layout");
+static_assert(sizeof(noesis_view_stats) == sizeof(Noesis::ViewStats),
+    "noesis_view_stats must match Noesis::ViewStats layout");
 
-extern "C" void dm_noesis_view_get_stats(void* view, dm_noesis_view_stats* out) {
+extern "C" void noesis_view_get_stats(void* view, noesis_view_stats* out) {
     if (!view || !out) return;
     const Noesis::ViewStats s = static_cast<Noesis::IView*>(view)->GetStats();
     out->frame_time = s.frameTime;
@@ -551,8 +551,8 @@ namespace {
 // the object must stay alive until then — which the Rust RAII handle enforces.
 class RustTimer {
 public:
-    RustTimer(Noesis::IView* view, dm_noesis_timer_fn cb, void* userdata,
-              dm_noesis_timer_free_fn free_handler)
+    RustTimer(Noesis::IView* view, noesis_timer_fn cb, void* userdata,
+              noesis_timer_free_fn free_handler)
         : mView(view), mCb(cb), mUserdata(userdata), mFree(free_handler), mId(0)
     {
         if (mView) {
@@ -592,17 +592,17 @@ public:
 
 private:
     Noesis::IView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
-    dm_noesis_timer_fn mCb;
+    noesis_timer_fn mCb;
     void* mUserdata;
-    dm_noesis_timer_free_fn mFree;
+    noesis_timer_free_fn mFree;
     uint32_t mId;
 };
 
 }  // namespace
 
-extern "C" void* dm_noesis_view_create_timer(
-    void* view, uint32_t interval_ms, dm_noesis_timer_fn cb, void* userdata,
-    dm_noesis_timer_free_fn free_handler)
+extern "C" void* noesis_view_create_timer(
+    void* view, uint32_t interval_ms, noesis_timer_fn cb, void* userdata,
+    noesis_timer_free_fn free_handler)
 {
     if (!view || !cb) return nullptr;
     auto* v = static_cast<Noesis::IView*>(view);
@@ -612,7 +612,7 @@ extern "C" void* dm_noesis_view_create_timer(
     return timer;
 }
 
-extern "C" void dm_noesis_view_restart_timer(void* token, uint32_t interval_ms) {
+extern "C" void noesis_view_restart_timer(void* token, uint32_t interval_ms) {
     if (!token) return;
     auto* timer = static_cast<RustTimer*>(token);
     if (auto* v = timer->view()) {
@@ -620,7 +620,7 @@ extern "C" void dm_noesis_view_restart_timer(void* token, uint32_t interval_ms) 
     }
 }
 
-extern "C" void dm_noesis_view_cancel_timer(void* token) {
+extern "C" void noesis_view_cancel_timer(void* token) {
     if (!token) return;
     auto* timer = static_cast<RustTimer*>(token);
     if (auto* v = timer->view()) {
@@ -642,8 +642,8 @@ namespace {
 // object must (and does, via the Rust RAII handle) outlive registration.
 class RustRenderingHandler {
 public:
-    RustRenderingHandler(Noesis::IView* view, dm_noesis_rendering_fn cb,
-                         void* userdata, dm_noesis_rendering_free_fn free_handler)
+    RustRenderingHandler(Noesis::IView* view, noesis_rendering_fn cb,
+                         void* userdata, noesis_rendering_free_fn free_handler)
         : mView(view), mCb(cb), mUserdata(userdata), mFree(free_handler)
     {
         mView->AddReference();
@@ -672,23 +672,23 @@ private:
     }
 
     Noesis::IView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
-    dm_noesis_rendering_fn mCb;
+    noesis_rendering_fn mCb;
     void* mUserdata;
-    dm_noesis_rendering_free_fn mFree;
+    noesis_rendering_free_fn mFree;
 };
 
 }  // namespace
 
-extern "C" void* dm_noesis_view_add_rendering_handler(
-    void* view, dm_noesis_rendering_fn cb, void* userdata,
-    dm_noesis_rendering_free_fn free_handler)
+extern "C" void* noesis_view_add_rendering_handler(
+    void* view, noesis_rendering_fn cb, void* userdata,
+    noesis_rendering_free_fn free_handler)
 {
     if (!view || !cb) return nullptr;
     auto* v = static_cast<Noesis::IView*>(view);
     return new RustRenderingHandler(v, cb, userdata, free_handler);
 }
 
-extern "C" void dm_noesis_view_remove_rendering_handler(void* token) {
+extern "C" void noesis_view_remove_rendering_handler(void* token) {
     if (!token) return;
     // dtor detaches the delegate, frees the donated userdata, releases the ref.
     delete static_cast<RustRenderingHandler*>(token);

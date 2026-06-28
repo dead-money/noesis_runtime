@@ -11,13 +11,13 @@
 //! Single `#[test]` per file (Noesis can't be re-init'd in a process); all work
 //! happens in an inner scope so every owning wrapper drops before `shutdown()`.
 
-use dm_noesis_runtime::animation::{
+use noesis_runtime::animation::{
     Animation, BooleanAnimationUsingKeyFrames, ColorAnimationUsingKeyFrames, DoubleAnimation,
     DoubleAnimationUsingKeyFrames, EasingFunction, EasingKind, EasingMode, KeyFrameInterp,
     KeyFrameKind, KeySpline, ParallelTimeline, PointAnimationUsingKeyFrames, Storyboard,
     StringAnimationUsingKeyFrames, ThicknessAnimationUsingKeyFrames, Timeline,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -32,9 +32,9 @@ fn keyframe_types_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     {
         let spline = KeySpline::new((0.25, 0.1), (0.25, 1.0));
@@ -185,5 +185,5 @@ fn keyframe_types_round_trip() {
         drop(content);
     }
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }

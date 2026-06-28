@@ -37,10 +37,10 @@ use std::ffi::{CStr, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    TextureInfoFfi, TextureProviderVTable, dm_noesis_set_texture_provider,
-    dm_noesis_set_texture_provider_assembly, dm_noesis_set_texture_provider_scheme,
-    dm_noesis_set_texture_provider_scheme_assembly, dm_noesis_texture_provider_create,
-    dm_noesis_texture_provider_destroy,
+    TextureInfoFfi, TextureProviderVTable, noesis_set_texture_provider,
+    noesis_set_texture_provider_assembly, noesis_set_texture_provider_scheme,
+    noesis_set_texture_provider_scheme_assembly, noesis_texture_provider_create,
+    noesis_texture_provider_destroy,
 };
 
 /// Metadata a [`TextureProvider`] can report for a URI without decoding
@@ -221,7 +221,7 @@ impl Drop for Registered {
         // SAFETY: handle + userdata produced together by set_texture_provider;
         // both freed exactly once here.
         unsafe {
-            dm_noesis_texture_provider_destroy(self.handle.as_ptr());
+            noesis_texture_provider_destroy(self.handle.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
@@ -237,7 +237,7 @@ impl Drop for Registered {
 pub fn set_texture_provider<P: TextureProvider>(provider: P) -> Registered {
     // SAFETY: install globally — Noesis retains its own +1.
     register_with(provider, |handle| unsafe {
-        dm_noesis_set_texture_provider(handle)
+        noesis_set_texture_provider(handle)
     })
 }
 
@@ -249,8 +249,8 @@ fn register_with<P: TextureProvider>(provider: P, install: impl FnOnce(*mut c_vo
     let outer: Box<Box<dyn TextureProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);
     // SAFETY: VTABLE is 'static; userdata is freshly leaked.
-    let handle = unsafe { dm_noesis_texture_provider_create(&raw const VTABLE, userdata.cast()) };
-    let handle = NonNull::new(handle).expect("dm_noesis_texture_provider_create returned null");
+    let handle = unsafe { noesis_texture_provider_create(&raw const VTABLE, userdata.cast()) };
+    let handle = NonNull::new(handle).expect("noesis_texture_provider_create returned null");
     install(handle.as_ptr());
 
     Registered {
@@ -273,7 +273,7 @@ pub fn set_scheme_texture_provider<P: TextureProvider>(scheme: &str, provider: P
     let scheme = std::ffi::CString::new(scheme).expect("scheme contained interior NUL");
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustTextureProvider*; `scheme` outlives the call.
-        unsafe { dm_noesis_set_texture_provider_scheme(scheme.as_ptr(), handle) }
+        unsafe { noesis_set_texture_provider_scheme(scheme.as_ptr(), handle) }
     })
 }
 
@@ -292,7 +292,7 @@ pub fn set_assembly_texture_provider<P: TextureProvider>(
     let assembly = std::ffi::CString::new(assembly).expect("assembly contained interior NUL");
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustTextureProvider*; `assembly` outlives the call.
-        unsafe { dm_noesis_set_texture_provider_assembly(assembly.as_ptr(), handle) }
+        unsafe { noesis_set_texture_provider_assembly(assembly.as_ptr(), handle) }
     })
 }
 
@@ -314,7 +314,7 @@ pub fn set_scheme_assembly_texture_provider<P: TextureProvider>(
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustTextureProvider*; both CStrings outlive the call.
         unsafe {
-            dm_noesis_set_texture_provider_scheme_assembly(
+            noesis_set_texture_provider_scheme_assembly(
                 scheme.as_ptr(),
                 assembly.as_ptr(),
                 handle,

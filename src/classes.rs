@@ -45,16 +45,16 @@ use std::sync::Mutex;
 
 use crate::drawing::DrawingContext;
 use crate::ffi::{
-    ClassBase, LayoutVtable, PropType, dm_noesis_base_component_release,
-    dm_noesis_class_create_instance, dm_noesis_class_register,
-    dm_noesis_class_register_enum_property, dm_noesis_class_register_property_ex,
-    dm_noesis_class_set_coerce, dm_noesis_class_set_layout, dm_noesis_class_set_render,
-    dm_noesis_class_unregister, dm_noesis_freezable_can_freeze, dm_noesis_freezable_freeze,
-    dm_noesis_freezable_is_frozen, dm_noesis_image_source_get_size,
-    dm_noesis_instance_get_property, dm_noesis_instance_set_property,
-    dm_noesis_instance_set_readonly_property, dm_noesis_uielement_arrange,
-    dm_noesis_uielement_desired_size, dm_noesis_uielement_measure, dm_noesis_visual_child,
-    dm_noesis_visual_children_count,
+    ClassBase, LayoutVtable, PropType, noesis_base_component_release,
+    noesis_class_create_instance, noesis_class_register,
+    noesis_class_register_enum_property, noesis_class_register_property_ex,
+    noesis_class_set_coerce, noesis_class_set_layout, noesis_class_set_render,
+    noesis_class_unregister, noesis_freezable_can_freeze, noesis_freezable_freeze,
+    noesis_freezable_is_frozen, noesis_image_source_get_size,
+    noesis_instance_get_property, noesis_instance_set_property,
+    noesis_instance_set_readonly_property, noesis_uielement_arrange,
+    noesis_uielement_desired_size, noesis_uielement_measure, noesis_visual_child,
+    noesis_visual_children_count,
 };
 
 /// Free trampoline matching [`crate::ffi::ClassFreeFn`]. The C++ side holds a
@@ -98,7 +98,7 @@ unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
 pub unsafe fn image_source_size(image_source: NonNull<c_void>) -> Option<(f32, f32)> {
     let mut w: f32 = 0.0;
     let mut h: f32 = 0.0;
-    let ok = dm_noesis_image_source_get_size(image_source.as_ptr(), &mut w, &mut h);
+    let ok = noesis_image_source_get_size(image_source.as_ptr(), &mut w, &mut h);
     ok.then_some((w, h))
 }
 
@@ -217,7 +217,7 @@ enum OwnedDefault {
     Enum(i32),
 }
 
-/// Owned storage for a `DM_NOESIS_PROP_STRING` default. The FFI expects a
+/// Owned storage for a `NOESIS_PROP_STRING` default. The FFI expects a
 /// `const char* const*` (a pointer *to* a c-string pointer), so we keep both
 /// the NUL-terminated bytes (`_bytes`) and a stable slot (`ptr`) holding the
 /// pointer into them. `ptr` is computed from the heap-allocated `CString`
@@ -384,7 +384,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         record_prop_types(userdata.cast(), prop_types.clone());
 
         let token = unsafe {
-            dm_noesis_class_register(
+            noesis_class_register(
                 name.as_ptr(),
                 base,
                 prop_changed_trampoline,
@@ -410,7 +410,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
                     _ => 0,
                 };
                 unsafe {
-                    dm_noesis_class_register_enum_property(
+                    noesis_class_register_enum_property(
                         token.as_ptr(),
                         spec.name.as_ptr(),
                         enum_type.as_ptr(),
@@ -422,7 +422,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             } else {
                 let default_ptr = spec.default.as_ffi_ptr();
                 unsafe {
-                    dm_noesis_class_register_property_ex(
+                    noesis_class_register_property_ex(
                         token.as_ptr(),
                         spec.name.as_ptr(),
                         spec.kind,
@@ -437,7 +437,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
                 // C++ owns the property-handler box now; unregister triggers
                 // its free trampoline (no instances exist yet). The coerce /
                 // layout boxes were never donated — drop them here.
-                unsafe { dm_noesis_class_unregister(token.as_ptr()) };
+                unsafe { noesis_class_unregister(token.as_ptr()) };
                 drop(coerce);
                 drop(layout);
                 drop(render);
@@ -454,7 +454,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             // table; key it on the coerce userdata pointer.
             record_prop_types(coerce_ud.cast(), prop_types);
             unsafe {
-                dm_noesis_class_set_coerce(
+                noesis_class_set_coerce(
                     token.as_ptr(),
                     coerce_trampoline,
                     coerce_ud.cast(),
@@ -472,7 +472,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
                 arrange: Some(layout_arrange_trampoline),
             };
             unsafe {
-                dm_noesis_class_set_layout(
+                noesis_class_set_layout(
                     token.as_ptr(),
                     &vtable,
                     layout_ud.cast(),
@@ -486,7 +486,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             let boxed: Box<Box<dyn RenderHandler>> = Box::new(handler);
             let render_ud = Box::into_raw(boxed);
             unsafe {
-                dm_noesis_class_set_render(
+                noesis_class_set_render(
                     token.as_ptr(),
                     render_trampoline,
                     render_ud.cast(),
@@ -638,7 +638,7 @@ impl ClassRegistration {
     }
 
     /// Internal token (a `void*` to the C++-side `ClassData`). Used by
-    /// `dm_noesis_bevy` when collecting registrations into the render-app sync.
+    /// `noesis_bevy` when collecting registrations into the render-app sync.
     pub fn token(&self) -> NonNull<c_void> {
         self.token
     }
@@ -661,7 +661,7 @@ impl ClassRegistration {
     #[must_use]
     pub fn create_instance(&self) -> Option<ClassInstance> {
         // SAFETY: `self.token` is a live ClassData* for the lifetime of `self`.
-        let ptr = unsafe { dm_noesis_class_create_instance(self.token.as_ptr()) };
+        let ptr = unsafe { noesis_class_create_instance(self.token.as_ptr()) };
         NonNull::new(ptr).map(|ptr| ClassInstance { ptr })
     }
 }
@@ -699,7 +699,7 @@ impl ClassInstance {
     /// is not a `Freezable` or cannot currently be frozen.
     pub fn freeze(&self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
-        unsafe { dm_noesis_freezable_freeze(self.ptr.as_ptr()) }
+        unsafe { noesis_freezable_freeze(self.ptr.as_ptr()) }
     }
 
     /// Whether this instance is currently frozen (`Noesis::Freezable::IsFrozen`).
@@ -707,7 +707,7 @@ impl ClassInstance {
     #[must_use]
     pub fn is_frozen(&self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
-        unsafe { dm_noesis_freezable_is_frozen(self.ptr.as_ptr()) }
+        unsafe { noesis_freezable_is_frozen(self.ptr.as_ptr()) }
     }
 
     /// Whether this instance can be frozen (`Noesis::Freezable::CanFreeze`).
@@ -715,14 +715,14 @@ impl ClassInstance {
     #[must_use]
     pub fn can_freeze(&self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
-        unsafe { dm_noesis_freezable_can_freeze(self.ptr.as_ptr()) }
+        unsafe { noesis_freezable_can_freeze(self.ptr.as_ptr()) }
     }
 }
 
 impl Drop for ClassInstance {
     fn drop(&mut self) {
-        // SAFETY: produced by dm_noesis_class_create_instance with +1 ref.
-        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+        // SAFETY: produced by noesis_class_create_instance with +1 ref.
+        unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
@@ -739,7 +739,7 @@ impl Drop for ClassRegistration {
         //
         // SAFETY: `self.token` was produced by `ClassBuilder::register`
         // and is freed exactly once here.
-        unsafe { dm_noesis_class_unregister(self.token.as_ptr()) };
+        unsafe { noesis_class_unregister(self.token.as_ptr()) };
     }
 }
 
@@ -769,7 +769,7 @@ impl Instance {
     /// Set an `Int32` DP. Triggers the change callback if the value differs.
     pub fn set_int32(self, prop_index: u32, value: i32) {
         unsafe {
-            dm_noesis_instance_set_property(
+            noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const i32).cast(),
@@ -778,7 +778,7 @@ impl Instance {
     }
     pub fn set_float(self, prop_index: u32, value: f32) {
         unsafe {
-            dm_noesis_instance_set_property(
+            noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const f32).cast(),
@@ -787,7 +787,7 @@ impl Instance {
     }
     pub fn set_double(self, prop_index: u32, value: f64) {
         unsafe {
-            dm_noesis_instance_set_property(
+            noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const f64).cast(),
@@ -796,7 +796,7 @@ impl Instance {
     }
     pub fn set_bool(self, prop_index: u32, value: bool) {
         unsafe {
-            dm_noesis_instance_set_property(
+            noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const bool).cast(),
@@ -807,7 +807,7 @@ impl Instance {
         let cstr = CString::new(value).expect("string contained NUL");
         let ptr: *const i8 = cstr.as_ptr();
         unsafe {
-            dm_noesis_instance_set_property(
+            noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&ptr as *const *const i8).cast(),
@@ -817,47 +817,47 @@ impl Instance {
     pub fn set_thickness(self, prop_index: u32, left: f32, top: f32, right: f32, bottom: f32) {
         let arr = [left, top, right, bottom];
         unsafe {
-            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+            noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
     pub fn set_color(self, prop_index: u32, r: f32, g: f32, b: f32, a: f32) {
         let arr = [r, g, b, a];
         unsafe {
-            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+            noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
     pub fn set_rect(self, prop_index: u32, x: f32, y: f32, width: f32, height: f32) {
         let arr = [x, y, width, height];
         unsafe {
-            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+            noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
     /// Set a `Point` DP (`Noesis::Point`).
     pub fn set_point(self, prop_index: u32, x: f32, y: f32) {
         let arr = [x, y];
         unsafe {
-            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+            noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
     /// Set a `Size` DP (`Noesis::Size`).
     pub fn set_size(self, prop_index: u32, width: f32, height: f32) {
         let arr = [width, height];
         unsafe {
-            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+            noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
     /// Set a `Vector` DP (`Noesis::Vector2`).
     pub fn set_vector(self, prop_index: u32, x: f32, y: f32) {
         let arr = [x, y];
         unsafe {
-            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+            noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
     /// Set an enum DP (the underlying `int32` member value). Register the DP
     /// with [`ClassBuilder::add_enum_property`].
     pub fn set_enum(self, prop_index: u32, value: i32) {
         unsafe {
-            dm_noesis_instance_set_property(
+            noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const i32).cast(),
@@ -878,7 +878,7 @@ impl Instance {
     /// caller's reference is not consumed.
     pub unsafe fn set_component(self, prop_index: u32, component: *mut c_void) {
         unsafe {
-            dm_noesis_instance_set_property(
+            noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&component as *const *mut c_void).cast(),
@@ -914,7 +914,7 @@ impl Instance {
     pub fn get_int32(self, prop_index: u32) -> Option<i32> {
         let mut out: i32 = 0;
         let ok = unsafe {
-            dm_noesis_instance_get_property(
+            noesis_instance_get_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&mut out as *mut i32).cast(),
@@ -925,7 +925,7 @@ impl Instance {
     pub fn get_float(self, prop_index: u32) -> Option<f32> {
         let mut out: f32 = 0.0;
         let ok = unsafe {
-            dm_noesis_instance_get_property(
+            noesis_instance_get_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&mut out as *mut f32).cast(),
@@ -938,7 +938,7 @@ impl Instance {
     pub fn get_string(self, prop_index: u32) -> Option<String> {
         let mut p: *const c_char = ptr::null();
         let ok = unsafe {
-            dm_noesis_instance_get_property(
+            noesis_instance_get_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&mut p as *mut *const c_char).cast(),
@@ -955,14 +955,14 @@ impl Instance {
     pub fn get_thickness(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
-            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
         };
         ok.then_some((out[0], out[1], out[2], out[3]))
     }
     pub fn get_rect(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
-            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
         };
         ok.then_some((out[0], out[1], out[2], out[3]))
     }
@@ -970,7 +970,7 @@ impl Instance {
     pub fn get_point(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut out = [0.0f32; 2];
         let ok = unsafe {
-            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
         };
         ok.then_some((out[0], out[1]))
     }
@@ -978,7 +978,7 @@ impl Instance {
     pub fn get_size(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut out = [0.0f32; 2];
         let ok = unsafe {
-            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
         };
         ok.then_some((out[0], out[1]))
     }
@@ -986,7 +986,7 @@ impl Instance {
     pub fn get_vector(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut out = [0.0f32; 2];
         let ok = unsafe {
-            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
         };
         ok.then_some((out[0], out[1]))
     }
@@ -994,7 +994,7 @@ impl Instance {
     pub fn get_enum(self, prop_index: u32) -> Option<i32> {
         let mut out: i32 = 0;
         let ok = unsafe {
-            dm_noesis_instance_get_property(
+            noesis_instance_get_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&mut out as *mut i32).cast(),
@@ -1008,7 +1008,7 @@ impl Instance {
     pub fn get_color(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
-            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
         };
         ok.then_some((out[0], out[1], out[2], out[3]))
     }
@@ -1023,7 +1023,7 @@ impl Instance {
     pub fn get_image_source_size(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut raw_ptr: *mut c_void = ptr::null_mut();
         let ok = unsafe {
-            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, (&raw mut raw_ptr).cast())
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, (&raw mut raw_ptr).cast())
         };
         if !ok {
             return None;
@@ -1376,14 +1376,14 @@ impl LayoutChild {
     /// `false` if the child is not a `UIElement`.
     pub fn measure(&self, available: Size) -> bool {
         // SAFETY: ptr is a live UIElement* borrowed for the callback.
-        unsafe { dm_noesis_uielement_measure(self.ptr.as_ptr(), available.width, available.height) }
+        unsafe { noesis_uielement_measure(self.ptr.as_ptr(), available.width, available.height) }
     }
 
     /// Run the child's arrange pass at `(x, y)` with size `(w, h)` in this
     /// element's coordinate space. Returns `false` if not a `UIElement`.
     pub fn arrange(&self, x: f32, y: f32, w: f32, h: f32) -> bool {
         // SAFETY: ptr is a live UIElement* borrowed for the callback.
-        unsafe { dm_noesis_uielement_arrange(self.ptr.as_ptr(), x, y, w, h) }
+        unsafe { noesis_uielement_arrange(self.ptr.as_ptr(), x, y, w, h) }
     }
 
     /// Read the child's `DesiredSize` (valid after [`Self::measure`]).
@@ -1392,7 +1392,7 @@ impl LayoutChild {
         let mut w = 0.0f32;
         let mut h = 0.0f32;
         // SAFETY: ptr is a live UIElement* borrowed for the callback.
-        let ok = unsafe { dm_noesis_uielement_desired_size(self.ptr.as_ptr(), &mut w, &mut h) };
+        let ok = unsafe { noesis_uielement_desired_size(self.ptr.as_ptr(), &mut w, &mut h) };
         ok.then_some(Size::new(w, h))
     }
 
@@ -1408,14 +1408,14 @@ impl Instance {
     #[must_use]
     pub fn layout_child_count(self) -> u32 {
         // SAFETY: self.0 is a live element pointer.
-        unsafe { dm_noesis_visual_children_count(self.0.as_ptr()) }
+        unsafe { noesis_visual_children_count(self.0.as_ptr()) }
     }
 
     /// Borrow the `index`-th visual child for layout. `None` if out of range.
     #[must_use]
     pub fn layout_child(self, index: u32) -> Option<LayoutChild> {
         // SAFETY: self.0 is a live element pointer.
-        let p = unsafe { dm_noesis_visual_child(self.0.as_ptr(), index) };
+        let p = unsafe { noesis_visual_child(self.0.as_ptr(), index) };
         NonNull::new(p).map(|ptr| LayoutChild { ptr })
     }
 
@@ -1426,7 +1426,7 @@ impl Instance {
     pub fn set_readonly_int32(self, prop_index: u32, value: i32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const i32).cast(),
@@ -1438,7 +1438,7 @@ impl Instance {
     pub fn set_readonly_uint32(self, prop_index: u32, value: u32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const u32).cast(),
@@ -1450,7 +1450,7 @@ impl Instance {
     pub fn set_readonly_float(self, prop_index: u32, value: f32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const f32).cast(),
@@ -1462,7 +1462,7 @@ impl Instance {
     pub fn set_readonly_double(self, prop_index: u32, value: f64) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const f64).cast(),
@@ -1474,7 +1474,7 @@ impl Instance {
     pub fn set_readonly_bool(self, prop_index: u32, value: bool) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const bool).cast(),
@@ -1492,7 +1492,7 @@ impl Instance {
         let ptr: *const i8 = cstr.as_ptr();
         // SAFETY: self.0 is a live instance pointer; cstr outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&ptr as *const *const i8).cast(),
@@ -1505,7 +1505,7 @@ impl Instance {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 arr.as_ptr().cast(),
@@ -1518,7 +1518,7 @@ impl Instance {
         let arr = [width, height];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 arr.as_ptr().cast(),
@@ -1531,7 +1531,7 @@ impl Instance {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 arr.as_ptr().cast(),
@@ -1544,7 +1544,7 @@ impl Instance {
     pub fn set_readonly_enum(self, prop_index: u32, value: i32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
-            dm_noesis_instance_set_readonly_property(
+            noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
                 (&value as *const i32).cast(),

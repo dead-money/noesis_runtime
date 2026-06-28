@@ -5,8 +5,8 @@ use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
 
 use crate::ffi::{
-    dm_noesis_gui_install_app_resources_chain, dm_noesis_gui_load_application_resources,
-    dm_noesis_gui_load_component,
+    noesis_gui_install_app_resources_chain, noesis_gui_load_application_resources,
+    noesis_gui_load_component,
 };
 
 /// Load a [`ResourceDictionary`] XAML via the installed XAML provider and
@@ -27,7 +27,7 @@ pub fn load_application_resources(uri: &str) -> bool {
     let c = CString::new(uri).expect("uri contained NUL");
     // SAFETY: c.as_ptr() lives for the duration of the call; the shim
     // only reads it.
-    unsafe { dm_noesis_gui_load_application_resources(c.as_ptr()) }
+    unsafe { noesis_gui_load_application_resources(c.as_ptr()) }
 }
 
 /// Install application resources by building the merged-dictionary
@@ -77,7 +77,7 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
     // SAFETY: the C side reads `count` pointers, each valid for the
     // duration of the call; the parent dictionary it constructs holds
     // its own refs on the loaded children.
-    unsafe { dm_noesis_gui_install_app_resources_chain(ptrs.as_ptr(), ptrs.len() as u32) }
+    unsafe { noesis_gui_install_app_resources_chain(ptrs.as_ptr(), ptrs.len() as u32) }
 }
 
 /// Load the XAML at `uri` into an existing component instance — the
@@ -124,5 +124,5 @@ pub unsafe fn load_component(component: *mut c_void, uri: &str) -> bool {
     let c = CString::new(uri).expect("uri contained NUL");
     // SAFETY: `component` is a caller-guaranteed live BaseComponent* (or was
     // null, handled above); `c` outlives the call. The shim borrows both.
-    unsafe { dm_noesis_gui_load_component(component, c.as_ptr()) }
+    unsafe { noesis_gui_load_component(component, c.as_ptr()) }
 }

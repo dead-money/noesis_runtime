@@ -30,11 +30,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use dm_noesis_runtime::integration::{
+use noesis_runtime::integration::{
     CursorType, get_culture, open_url, play_audio, set_culture, set_cursor_callback,
     set_open_url_callback, set_play_audio_callback, set_software_keyboard_callback,
 };
-use dm_noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::view::{FrameworkElement, View};
 
 /// Root sets a non-default `Cursor` so a mouse-move over it must drive the
 /// global cursor callback. `Background` makes the `Grid` hit-testable.
@@ -49,9 +49,9 @@ fn integration_callbacks_round_trip() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     // ── No callback registered: triggers must be safe no-ops ────────────────
     // At fresh state no open-URL / play-audio callback is registered. The
@@ -194,7 +194,7 @@ fn integration_callbacks_round_trip() {
     assert_eq!(CursorType::from_raw(29), CursorType::None);
     assert_eq!(CursorType::from_raw(-1), CursorType::None);
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }
 
 /// `open_url` documents that it panics on an interior NUL byte. The panic

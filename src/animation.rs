@@ -4,7 +4,7 @@
 //! easing-function family from Rust, then run them off the [`View`] clock.
 //!
 //! Each handle here owns a freshly-created Noesis object holding a single `+1`
-//! reference, released on [`Drop`] via `dm_noesis_base_component_release` — the
+//! reference, released on [`Drop`] via `noesis_base_component_release` — the
 //! same idiom as [`crate::brushes`]. Adding an animation to a [`Storyboard`], or
 //! a key frame / easing function to its parent, makes Noesis take its own
 //! reference, so the Rust builder handle may be dropped after wiring.
@@ -30,98 +30,98 @@ use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_animation_begin_on, dm_noesis_animation_set_easing_function,
-    dm_noesis_base_component_release, dm_noesis_color_animation_add_keyframe,
-    dm_noesis_color_animation_create, dm_noesis_color_animation_keyframes_create,
-    dm_noesis_color_animation_set_by, dm_noesis_color_animation_set_from,
-    dm_noesis_color_animation_set_to, dm_noesis_double_animation_add_keyframe,
-    dm_noesis_double_animation_create, dm_noesis_double_animation_keyframes_create,
-    dm_noesis_double_animation_set_by, dm_noesis_double_animation_set_from,
-    dm_noesis_double_animation_set_to, dm_noesis_easing_function_create,
-    dm_noesis_easing_function_set_amplitude, dm_noesis_easing_function_set_exponent,
-    dm_noesis_easing_function_set_oscillations, dm_noesis_easing_function_set_power,
-    dm_noesis_easing_function_set_springiness, dm_noesis_point_animation_create,
-    dm_noesis_point_animation_set_by, dm_noesis_point_animation_set_from,
-    dm_noesis_point_animation_set_to, dm_noesis_storyboard_add_child, dm_noesis_storyboard_begin,
-    dm_noesis_storyboard_begin_handoff, dm_noesis_storyboard_child_count,
-    dm_noesis_storyboard_create, dm_noesis_storyboard_is_paused, dm_noesis_storyboard_is_playing,
-    dm_noesis_storyboard_pause, dm_noesis_storyboard_resume, dm_noesis_storyboard_seek,
-    dm_noesis_storyboard_set_target_name, dm_noesis_storyboard_set_target_property,
-    dm_noesis_storyboard_stop, dm_noesis_thickness_animation_create,
-    dm_noesis_thickness_animation_set_by, dm_noesis_thickness_animation_set_from,
-    dm_noesis_thickness_animation_set_to, dm_noesis_timeline_get_duration_seconds,
-    dm_noesis_timeline_set_auto_reverse, dm_noesis_timeline_set_begin_time_seconds,
-    dm_noesis_timeline_set_duration_auto, dm_noesis_timeline_set_duration_forever,
-    dm_noesis_timeline_set_duration_seconds, dm_noesis_timeline_set_fill_behavior,
-    dm_noesis_timeline_set_repeat_count, dm_noesis_timeline_set_repeat_duration,
-    dm_noesis_timeline_set_repeat_forever, dm_noesis_timeline_set_speed_ratio,
+    noesis_animation_begin_on, noesis_animation_set_easing_function,
+    noesis_base_component_release, noesis_color_animation_add_keyframe,
+    noesis_color_animation_create, noesis_color_animation_keyframes_create,
+    noesis_color_animation_set_by, noesis_color_animation_set_from,
+    noesis_color_animation_set_to, noesis_double_animation_add_keyframe,
+    noesis_double_animation_create, noesis_double_animation_keyframes_create,
+    noesis_double_animation_set_by, noesis_double_animation_set_from,
+    noesis_double_animation_set_to, noesis_easing_function_create,
+    noesis_easing_function_set_amplitude, noesis_easing_function_set_exponent,
+    noesis_easing_function_set_oscillations, noesis_easing_function_set_power,
+    noesis_easing_function_set_springiness, noesis_point_animation_create,
+    noesis_point_animation_set_by, noesis_point_animation_set_from,
+    noesis_point_animation_set_to, noesis_storyboard_add_child, noesis_storyboard_begin,
+    noesis_storyboard_begin_handoff, noesis_storyboard_child_count,
+    noesis_storyboard_create, noesis_storyboard_is_paused, noesis_storyboard_is_playing,
+    noesis_storyboard_pause, noesis_storyboard_resume, noesis_storyboard_seek,
+    noesis_storyboard_set_target_name, noesis_storyboard_set_target_property,
+    noesis_storyboard_stop, noesis_thickness_animation_create,
+    noesis_thickness_animation_set_by, noesis_thickness_animation_set_from,
+    noesis_thickness_animation_set_to, noesis_timeline_get_duration_seconds,
+    noesis_timeline_set_auto_reverse, noesis_timeline_set_begin_time_seconds,
+    noesis_timeline_set_duration_auto, noesis_timeline_set_duration_forever,
+    noesis_timeline_set_duration_seconds, noesis_timeline_set_fill_behavior,
+    noesis_timeline_set_repeat_count, noesis_timeline_set_repeat_duration,
+    noesis_timeline_set_repeat_forever, noesis_timeline_set_speed_ratio,
 };
 use crate::ffi::{
-    dm_noesis_animation_begin_storyboard_create, dm_noesis_animation_begin_storyboard_get_handoff,
-    dm_noesis_animation_begin_storyboard_get_name,
-    dm_noesis_animation_begin_storyboard_get_storyboard,
-    dm_noesis_animation_begin_storyboard_set_handoff,
-    dm_noesis_animation_begin_storyboard_set_name,
-    dm_noesis_animation_begin_storyboard_set_storyboard,
-    dm_noesis_animation_int16_animation_create, dm_noesis_animation_int16_animation_get_by,
-    dm_noesis_animation_int16_animation_get_from, dm_noesis_animation_int16_animation_get_to,
-    dm_noesis_animation_int16_animation_set_by, dm_noesis_animation_int16_animation_set_from,
-    dm_noesis_animation_int16_animation_set_to, dm_noesis_animation_int16_keyframes_add,
-    dm_noesis_animation_int16_keyframes_count, dm_noesis_animation_int16_keyframes_create,
-    dm_noesis_animation_int16_keyframes_get_key_time,
-    dm_noesis_animation_int16_keyframes_get_value, dm_noesis_animation_int32_animation_create,
-    dm_noesis_animation_int32_animation_get_by, dm_noesis_animation_int32_animation_get_from,
-    dm_noesis_animation_int32_animation_get_to, dm_noesis_animation_int32_animation_set_by,
-    dm_noesis_animation_int32_animation_set_from, dm_noesis_animation_int32_animation_set_to,
-    dm_noesis_animation_int32_keyframes_add, dm_noesis_animation_int32_keyframes_count,
-    dm_noesis_animation_int32_keyframes_create, dm_noesis_animation_int32_keyframes_get_key_time,
-    dm_noesis_animation_int32_keyframes_get_value, dm_noesis_animation_int64_animation_create,
-    dm_noesis_animation_int64_animation_get_by, dm_noesis_animation_int64_animation_get_from,
-    dm_noesis_animation_int64_animation_get_to, dm_noesis_animation_int64_animation_set_by,
-    dm_noesis_animation_int64_animation_set_from, dm_noesis_animation_int64_animation_set_to,
-    dm_noesis_animation_int64_keyframes_add, dm_noesis_animation_int64_keyframes_count,
-    dm_noesis_animation_int64_keyframes_create, dm_noesis_animation_int64_keyframes_get_key_time,
-    dm_noesis_animation_int64_keyframes_get_value, dm_noesis_animation_keyspline_create,
-    dm_noesis_animation_keyspline_get_control_point1,
-    dm_noesis_animation_keyspline_get_control_point2,
-    dm_noesis_animation_keyspline_set_control_point1,
-    dm_noesis_animation_keyspline_set_control_point2, dm_noesis_animation_matrix_keyframes_add,
-    dm_noesis_animation_matrix_keyframes_count, dm_noesis_animation_matrix_keyframes_create,
-    dm_noesis_animation_matrix_keyframes_get_key_time,
-    dm_noesis_animation_matrix_keyframes_get_value, dm_noesis_animation_object_keyframes_add,
-    dm_noesis_animation_object_keyframes_count, dm_noesis_animation_object_keyframes_create,
-    dm_noesis_animation_object_keyframes_get_key_time,
-    dm_noesis_animation_object_keyframes_get_value, dm_noesis_animation_rect_animation_create,
-    dm_noesis_animation_rect_animation_get_by, dm_noesis_animation_rect_animation_get_from,
-    dm_noesis_animation_rect_animation_get_to, dm_noesis_animation_rect_animation_set_by,
-    dm_noesis_animation_rect_animation_set_from, dm_noesis_animation_rect_animation_set_to,
-    dm_noesis_animation_rect_keyframes_add, dm_noesis_animation_rect_keyframes_count,
-    dm_noesis_animation_rect_keyframes_create, dm_noesis_animation_rect_keyframes_get_key_time,
-    dm_noesis_animation_rect_keyframes_get_value, dm_noesis_animation_size_animation_create,
-    dm_noesis_animation_size_animation_get_by, dm_noesis_animation_size_animation_get_from,
-    dm_noesis_animation_size_animation_get_to, dm_noesis_animation_size_animation_set_by,
-    dm_noesis_animation_size_animation_set_from, dm_noesis_animation_size_animation_set_to,
-    dm_noesis_animation_size_keyframes_add, dm_noesis_animation_size_keyframes_count,
-    dm_noesis_animation_size_keyframes_create, dm_noesis_animation_size_keyframes_get_key_time,
-    dm_noesis_animation_size_keyframes_get_value,
+    noesis_animation_begin_storyboard_create, noesis_animation_begin_storyboard_get_handoff,
+    noesis_animation_begin_storyboard_get_name,
+    noesis_animation_begin_storyboard_get_storyboard,
+    noesis_animation_begin_storyboard_set_handoff,
+    noesis_animation_begin_storyboard_set_name,
+    noesis_animation_begin_storyboard_set_storyboard,
+    noesis_animation_int16_animation_create, noesis_animation_int16_animation_get_by,
+    noesis_animation_int16_animation_get_from, noesis_animation_int16_animation_get_to,
+    noesis_animation_int16_animation_set_by, noesis_animation_int16_animation_set_from,
+    noesis_animation_int16_animation_set_to, noesis_animation_int16_keyframes_add,
+    noesis_animation_int16_keyframes_count, noesis_animation_int16_keyframes_create,
+    noesis_animation_int16_keyframes_get_key_time,
+    noesis_animation_int16_keyframes_get_value, noesis_animation_int32_animation_create,
+    noesis_animation_int32_animation_get_by, noesis_animation_int32_animation_get_from,
+    noesis_animation_int32_animation_get_to, noesis_animation_int32_animation_set_by,
+    noesis_animation_int32_animation_set_from, noesis_animation_int32_animation_set_to,
+    noesis_animation_int32_keyframes_add, noesis_animation_int32_keyframes_count,
+    noesis_animation_int32_keyframes_create, noesis_animation_int32_keyframes_get_key_time,
+    noesis_animation_int32_keyframes_get_value, noesis_animation_int64_animation_create,
+    noesis_animation_int64_animation_get_by, noesis_animation_int64_animation_get_from,
+    noesis_animation_int64_animation_get_to, noesis_animation_int64_animation_set_by,
+    noesis_animation_int64_animation_set_from, noesis_animation_int64_animation_set_to,
+    noesis_animation_int64_keyframes_add, noesis_animation_int64_keyframes_count,
+    noesis_animation_int64_keyframes_create, noesis_animation_int64_keyframes_get_key_time,
+    noesis_animation_int64_keyframes_get_value, noesis_animation_keyspline_create,
+    noesis_animation_keyspline_get_control_point1,
+    noesis_animation_keyspline_get_control_point2,
+    noesis_animation_keyspline_set_control_point1,
+    noesis_animation_keyspline_set_control_point2, noesis_animation_matrix_keyframes_add,
+    noesis_animation_matrix_keyframes_count, noesis_animation_matrix_keyframes_create,
+    noesis_animation_matrix_keyframes_get_key_time,
+    noesis_animation_matrix_keyframes_get_value, noesis_animation_object_keyframes_add,
+    noesis_animation_object_keyframes_count, noesis_animation_object_keyframes_create,
+    noesis_animation_object_keyframes_get_key_time,
+    noesis_animation_object_keyframes_get_value, noesis_animation_rect_animation_create,
+    noesis_animation_rect_animation_get_by, noesis_animation_rect_animation_get_from,
+    noesis_animation_rect_animation_get_to, noesis_animation_rect_animation_set_by,
+    noesis_animation_rect_animation_set_from, noesis_animation_rect_animation_set_to,
+    noesis_animation_rect_keyframes_add, noesis_animation_rect_keyframes_count,
+    noesis_animation_rect_keyframes_create, noesis_animation_rect_keyframes_get_key_time,
+    noesis_animation_rect_keyframes_get_value, noesis_animation_size_animation_create,
+    noesis_animation_size_animation_get_by, noesis_animation_size_animation_get_from,
+    noesis_animation_size_animation_get_to, noesis_animation_size_animation_set_by,
+    noesis_animation_size_animation_set_from, noesis_animation_size_animation_set_to,
+    noesis_animation_size_keyframes_add, noesis_animation_size_keyframes_count,
+    noesis_animation_size_keyframes_create, noesis_animation_size_keyframes_get_key_time,
+    noesis_animation_size_keyframes_get_value,
 };
 use crate::ffi::{
-    dm_noesis_animation_boolean_keyframes_add, dm_noesis_animation_boolean_keyframes_count,
-    dm_noesis_animation_boolean_keyframes_create,
-    dm_noesis_animation_boolean_keyframes_get_key_time,
-    dm_noesis_animation_boolean_keyframes_get_value,
-    dm_noesis_animation_parallel_timeline_add_child,
-    dm_noesis_animation_parallel_timeline_child_count,
-    dm_noesis_animation_parallel_timeline_create, dm_noesis_animation_point_keyframes_add,
-    dm_noesis_animation_point_keyframes_count, dm_noesis_animation_point_keyframes_create,
-    dm_noesis_animation_point_keyframes_get_key_time,
-    dm_noesis_animation_point_keyframes_get_value, dm_noesis_animation_string_keyframes_add,
-    dm_noesis_animation_string_keyframes_count, dm_noesis_animation_string_keyframes_create,
-    dm_noesis_animation_string_keyframes_get_key_time,
-    dm_noesis_animation_string_keyframes_get_value, dm_noesis_animation_thickness_keyframes_add,
-    dm_noesis_animation_thickness_keyframes_count, dm_noesis_animation_thickness_keyframes_create,
-    dm_noesis_animation_thickness_keyframes_get_key_time,
-    dm_noesis_animation_thickness_keyframes_get_value,
+    noesis_animation_boolean_keyframes_add, noesis_animation_boolean_keyframes_count,
+    noesis_animation_boolean_keyframes_create,
+    noesis_animation_boolean_keyframes_get_key_time,
+    noesis_animation_boolean_keyframes_get_value,
+    noesis_animation_parallel_timeline_add_child,
+    noesis_animation_parallel_timeline_child_count,
+    noesis_animation_parallel_timeline_create, noesis_animation_point_keyframes_add,
+    noesis_animation_point_keyframes_count, noesis_animation_point_keyframes_create,
+    noesis_animation_point_keyframes_get_key_time,
+    noesis_animation_point_keyframes_get_value, noesis_animation_string_keyframes_add,
+    noesis_animation_string_keyframes_count, noesis_animation_string_keyframes_create,
+    noesis_animation_string_keyframes_get_key_time,
+    noesis_animation_string_keyframes_get_value, noesis_animation_thickness_keyframes_add,
+    noesis_animation_thickness_keyframes_count, noesis_animation_thickness_keyframes_create,
+    noesis_animation_thickness_keyframes_get_key_time,
+    noesis_animation_thickness_keyframes_get_value,
 };
 use crate::view::FrameworkElement;
 
@@ -266,7 +266,7 @@ macro_rules! base_component_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref that
                 // we own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -281,69 +281,69 @@ pub trait Timeline {
     /// Set the single-pass duration in seconds.
     fn set_duration_secs(&mut self, seconds: f64) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_duration_seconds(self.timeline_raw(), seconds) }
+        unsafe { noesis_timeline_set_duration_seconds(self.timeline_raw(), seconds) }
     }
 
     /// Set `Duration="Automatic"` (resolved from the content, e.g. key frames).
     fn set_duration_auto(&mut self) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_duration_auto(self.timeline_raw()) }
+        unsafe { noesis_timeline_set_duration_auto(self.timeline_raw()) }
     }
 
     /// Set `Duration="Forever"`.
     fn set_duration_forever(&mut self) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_duration_forever(self.timeline_raw()) }
+        unsafe { noesis_timeline_set_duration_forever(self.timeline_raw()) }
     }
 
     /// Read the configured single-pass duration in seconds, or `None` if the
     /// duration is `Automatic` / `Forever` (not a resolved `TimeSpan`).
     fn duration_secs(&self) -> Option<f64> {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        let s = unsafe { dm_noesis_timeline_get_duration_seconds(self.timeline_raw()) };
+        let s = unsafe { noesis_timeline_get_duration_seconds(self.timeline_raw()) };
         (s >= 0.0).then_some(s)
     }
 
     /// Delay before the timeline begins, in seconds.
     fn set_begin_time_secs(&mut self, seconds: f64) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_begin_time_seconds(self.timeline_raw(), seconds) }
+        unsafe { noesis_timeline_set_begin_time_seconds(self.timeline_raw(), seconds) }
     }
 
     /// Play forwards then backwards each iteration when `true`.
     fn set_auto_reverse(&mut self, value: bool) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_auto_reverse(self.timeline_raw(), value) }
+        unsafe { noesis_timeline_set_auto_reverse(self.timeline_raw(), value) }
     }
 
     /// Rate at which time progresses relative to the parent (default `1.0`).
     fn set_speed_ratio(&mut self, value: f32) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_speed_ratio(self.timeline_raw(), value) }
+        unsafe { noesis_timeline_set_speed_ratio(self.timeline_raw(), value) }
     }
 
     /// Behaviour once the active period ends (hold the end value or release it).
     fn set_fill_behavior(&mut self, behavior: FillBehavior) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_fill_behavior(self.timeline_raw(), behavior as i32) }
+        unsafe { noesis_timeline_set_fill_behavior(self.timeline_raw(), behavior as i32) }
     }
 
     /// Repeat a fixed number of (possibly fractional) iterations.
     fn set_repeat_count(&mut self, count: f32) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_repeat_count(self.timeline_raw(), count) }
+        unsafe { noesis_timeline_set_repeat_count(self.timeline_raw(), count) }
     }
 
     /// Repeat for a fixed wall-clock duration, in seconds.
     fn set_repeat_duration_secs(&mut self, seconds: f64) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_repeat_duration(self.timeline_raw(), seconds) }
+        unsafe { noesis_timeline_set_repeat_duration(self.timeline_raw(), seconds) }
     }
 
     /// Repeat forever.
     fn set_repeat_forever(&mut self) -> bool {
         // SAFETY: timeline_raw() is a live Timeline* for the call.
-        unsafe { dm_noesis_timeline_set_repeat_forever(self.timeline_raw()) }
+        unsafe { noesis_timeline_set_repeat_forever(self.timeline_raw()) }
     }
 }
 
@@ -363,7 +363,7 @@ pub trait Animation: Timeline {
     fn set_target_name(&mut self, name: &str) -> bool {
         let c = CString::new(name).expect("target name contained interior NUL");
         // SAFETY: animation_raw() is a live DependencyObject*; c lives for the call.
-        unsafe { dm_noesis_storyboard_set_target_name(self.animation_raw(), c.as_ptr()) }
+        unsafe { noesis_storyboard_set_target_name(self.animation_raw(), c.as_ptr()) }
     }
 
     /// Set this animation's `Storyboard.TargetProperty` — the property path it
@@ -376,7 +376,7 @@ pub trait Animation: Timeline {
     fn set_target_property(&mut self, path: &str) -> bool {
         let c = CString::new(path).expect("target property contained interior NUL");
         // SAFETY: animation_raw() is a live DependencyObject*; c lives for the call.
-        unsafe { dm_noesis_storyboard_set_target_property(self.animation_raw(), c.as_ptr()) }
+        unsafe { noesis_storyboard_set_target_property(self.animation_raw(), c.as_ptr()) }
     }
 
     /// Attach an easing function. No-op (returns `false`) for key-frame
@@ -384,7 +384,7 @@ pub trait Animation: Timeline {
     fn set_easing(&mut self, easing: &EasingFunction) -> bool {
         // SAFETY: both pointers are live for the call; Noesis takes its own ref
         // to the easing function.
-        unsafe { dm_noesis_animation_set_easing_function(self.animation_raw(), easing.raw()) }
+        unsafe { noesis_animation_set_easing_function(self.animation_raw(), easing.raw()) }
     }
 
     /// Start this animation directly on `target`'s `dp_name` dependency
@@ -406,7 +406,7 @@ pub trait Animation: Timeline {
         // SAFETY: animation_raw() and target.raw() are live for the call; c lives
         // for the call; the C side resolves the DP and the TimeManager.
         unsafe {
-            dm_noesis_animation_begin_on(
+            noesis_animation_begin_on(
                 self.animation_raw(),
                 target.raw(),
                 c.as_ptr(),
@@ -447,9 +447,9 @@ impl Storyboard {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned Storyboard*.
-        let ptr = unsafe { dm_noesis_storyboard_create() };
+        let ptr = unsafe { noesis_storyboard_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_storyboard_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_storyboard_create returned null"),
         }
     }
 
@@ -458,7 +458,7 @@ impl Storyboard {
     /// mismatch.
     pub fn add_child<A: Animation>(&mut self, anim: &A) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_add_child(self.raw(), anim.animation_raw()) }
+        unsafe { noesis_storyboard_add_child(self.raw(), anim.animation_raw()) }
     }
 
     /// Number of child animations, or `None` if the handle is not a Storyboard
@@ -466,7 +466,7 @@ impl Storyboard {
     #[must_use]
     pub fn child_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is a live Storyboard*.
-        let n = unsafe { dm_noesis_storyboard_child_count(self.raw()) };
+        let n = unsafe { noesis_storyboard_child_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -478,7 +478,7 @@ impl Storyboard {
     /// / [`seek`](Self::seek).
     pub fn begin(&mut self, root: &FrameworkElement, controllable: bool) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_begin(self.raw(), root.raw(), controllable) }
+        unsafe { noesis_storyboard_begin(self.raw(), root.raw(), controllable) }
     }
 
     /// Like [`begin`](Self::begin), but with an explicit [`HandoffBehavior`]
@@ -494,7 +494,7 @@ impl Storyboard {
     ) -> bool {
         // SAFETY: both pointers are live for the call.
         unsafe {
-            dm_noesis_storyboard_begin_handoff(self.raw(), root.raw(), handoff as i32, controllable)
+            noesis_storyboard_begin_handoff(self.raw(), root.raw(), handoff as i32, controllable)
         }
     }
 
@@ -502,40 +502,40 @@ impl Storyboard {
     /// storyboard was [`begin`](Self::begin)-run with `controllable = true`.
     pub fn pause(&mut self, root: &FrameworkElement) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_pause(self.raw(), root.raw()) }
+        unsafe { noesis_storyboard_pause(self.raw(), root.raw()) }
     }
 
     /// Resume the controllable clocks created for `root`.
     pub fn resume(&mut self, root: &FrameworkElement) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_resume(self.raw(), root.raw()) }
+        unsafe { noesis_storyboard_resume(self.raw(), root.raw()) }
     }
 
     /// Stop the controllable clocks created for `root`.
     pub fn stop(&mut self, root: &FrameworkElement) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_stop(self.raw(), root.raw()) }
+        unsafe { noesis_storyboard_stop(self.raw(), root.raw()) }
     }
 
     /// Seek the controllable clocks created for `root` to `seconds` from the
     /// beginning, applied on the next clock tick.
     pub fn seek(&mut self, root: &FrameworkElement, seconds: f64) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_seek(self.raw(), root.raw(), seconds) }
+        unsafe { noesis_storyboard_seek(self.raw(), root.raw(), seconds) }
     }
 
     /// Whether a controllable storyboard is currently playing for `root`.
     #[must_use]
     pub fn is_playing(&self, root: &FrameworkElement) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_is_playing(self.raw(), root.raw()) }
+        unsafe { noesis_storyboard_is_playing(self.raw(), root.raw()) }
     }
 
     /// Whether a controllable storyboard is currently paused for `root`.
     #[must_use]
     pub fn is_paused(&self, root: &FrameworkElement) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_storyboard_is_paused(self.raw(), root.raw()) }
+        unsafe { noesis_storyboard_is_paused(self.raw(), root.raw()) }
     }
 }
 
@@ -557,9 +557,9 @@ impl EasingFunction {
     #[must_use]
     pub fn new(kind: EasingKind, mode: EasingMode) -> Self {
         // SAFETY: factory returns a +1-owned EasingFunctionBase*.
-        let ptr = unsafe { dm_noesis_easing_function_create(kind as i32, mode as i32) };
+        let ptr = unsafe { noesis_easing_function_create(kind as i32, mode as i32) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_easing_function_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_easing_function_create returned null"),
         }
     }
 
@@ -568,21 +568,21 @@ impl EasingFunction {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_amplitude(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
-        unsafe { dm_noesis_easing_function_set_amplitude(self.raw(), value) }
+        unsafe { noesis_easing_function_set_amplitude(self.raw(), value) }
     }
 
     /// Set `PowerEase.Power`. No-op on other kinds.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_power(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
-        unsafe { dm_noesis_easing_function_set_power(self.raw(), value) }
+        unsafe { noesis_easing_function_set_power(self.raw(), value) }
     }
 
     /// Set `ExponentialEase.Exponent`. No-op on other kinds.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_exponent(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
-        unsafe { dm_noesis_easing_function_set_exponent(self.raw(), value) }
+        unsafe { noesis_easing_function_set_exponent(self.raw(), value) }
     }
 
     /// Set `ElasticEase.Oscillations` / `BounceEase.Bounces`. No-op on other
@@ -590,7 +590,7 @@ impl EasingFunction {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_oscillations(&mut self, value: i32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
-        unsafe { dm_noesis_easing_function_set_oscillations(self.raw(), value) }
+        unsafe { noesis_easing_function_set_oscillations(self.raw(), value) }
     }
 
     /// Set `ElasticEase.Springiness` / `BounceEase.Bounciness`. No-op on other
@@ -598,7 +598,7 @@ impl EasingFunction {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_springiness(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
-        unsafe { dm_noesis_easing_function_set_springiness(self.raw(), value) }
+        unsafe { noesis_easing_function_set_springiness(self.raw(), value) }
     }
 }
 
@@ -645,9 +645,9 @@ impl DoubleAnimation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned DoubleAnimation*.
-        let ptr = unsafe { dm_noesis_double_animation_create() };
+        let ptr = unsafe { noesis_double_animation_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_double_animation_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_double_animation_create returned null"),
         }
     }
 
@@ -656,7 +656,7 @@ impl DoubleAnimation {
     pub fn set_from(&mut self, value: Option<f32>) -> bool {
         // SAFETY: self.raw() is a live DoubleAnimation* for the call.
         unsafe {
-            dm_noesis_double_animation_set_from(self.raw(), value.is_some(), value.unwrap_or(0.0))
+            noesis_double_animation_set_from(self.raw(), value.is_some(), value.unwrap_or(0.0))
         }
     }
 
@@ -665,7 +665,7 @@ impl DoubleAnimation {
     pub fn set_to(&mut self, value: Option<f32>) -> bool {
         // SAFETY: self.raw() is a live DoubleAnimation* for the call.
         unsafe {
-            dm_noesis_double_animation_set_to(self.raw(), value.is_some(), value.unwrap_or(0.0))
+            noesis_double_animation_set_to(self.raw(), value.is_some(), value.unwrap_or(0.0))
         }
     }
 
@@ -674,7 +674,7 @@ impl DoubleAnimation {
     pub fn set_by(&mut self, value: Option<f32>) -> bool {
         // SAFETY: self.raw() is a live DoubleAnimation* for the call.
         unsafe {
-            dm_noesis_double_animation_set_by(self.raw(), value.is_some(), value.unwrap_or(0.0))
+            noesis_double_animation_set_by(self.raw(), value.is_some(), value.unwrap_or(0.0))
         }
     }
 }
@@ -702,9 +702,9 @@ impl ColorAnimation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned ColorAnimation*.
-        let ptr = unsafe { dm_noesis_color_animation_create() };
+        let ptr = unsafe { noesis_color_animation_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_color_animation_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_color_animation_create returned null"),
         }
     }
 
@@ -713,7 +713,7 @@ impl ColorAnimation {
     pub fn set_from(&mut self, rgba: Option<[f32; 4]>) -> bool {
         let v = rgba.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ColorAnimation*; `v` outlives the call.
-        unsafe { dm_noesis_color_animation_set_from(self.raw(), rgba.is_some(), v.as_ptr()) }
+        unsafe { noesis_color_animation_set_from(self.raw(), rgba.is_some(), v.as_ptr()) }
     }
 
     /// Set (`Some`) or clear (`None`) the ending color.
@@ -721,7 +721,7 @@ impl ColorAnimation {
     pub fn set_to(&mut self, rgba: Option<[f32; 4]>) -> bool {
         let v = rgba.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ColorAnimation*; `v` outlives the call.
-        unsafe { dm_noesis_color_animation_set_to(self.raw(), rgba.is_some(), v.as_ptr()) }
+        unsafe { noesis_color_animation_set_to(self.raw(), rgba.is_some(), v.as_ptr()) }
     }
 
     /// Set (`Some`) or clear (`None`) the relative color offset (`By`).
@@ -729,7 +729,7 @@ impl ColorAnimation {
     pub fn set_by(&mut self, rgba: Option<[f32; 4]>) -> bool {
         let v = rgba.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ColorAnimation*; `v` outlives the call.
-        unsafe { dm_noesis_color_animation_set_by(self.raw(), rgba.is_some(), v.as_ptr()) }
+        unsafe { noesis_color_animation_set_by(self.raw(), rgba.is_some(), v.as_ptr()) }
     }
 }
 
@@ -756,9 +756,9 @@ impl ThicknessAnimation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned ThicknessAnimation*.
-        let ptr = unsafe { dm_noesis_thickness_animation_create() };
+        let ptr = unsafe { noesis_thickness_animation_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_thickness_animation_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_thickness_animation_create returned null"),
         }
     }
 
@@ -767,7 +767,7 @@ impl ThicknessAnimation {
     pub fn set_from(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ThicknessAnimation*; `v` outlives the call.
-        unsafe { dm_noesis_thickness_animation_set_from(self.raw(), value.is_some(), v.as_ptr()) }
+        unsafe { noesis_thickness_animation_set_from(self.raw(), value.is_some(), v.as_ptr()) }
     }
 
     /// Set (`Some`) or clear (`None`) the ending thickness.
@@ -775,7 +775,7 @@ impl ThicknessAnimation {
     pub fn set_to(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ThicknessAnimation*; `v` outlives the call.
-        unsafe { dm_noesis_thickness_animation_set_to(self.raw(), value.is_some(), v.as_ptr()) }
+        unsafe { noesis_thickness_animation_set_to(self.raw(), value.is_some(), v.as_ptr()) }
     }
 
     /// Set (`Some`) or clear (`None`) the relative thickness offset (`By`).
@@ -783,7 +783,7 @@ impl ThicknessAnimation {
     pub fn set_by(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ThicknessAnimation*; `v` outlives the call.
-        unsafe { dm_noesis_thickness_animation_set_by(self.raw(), value.is_some(), v.as_ptr()) }
+        unsafe { noesis_thickness_animation_set_by(self.raw(), value.is_some(), v.as_ptr()) }
     }
 }
 
@@ -809,9 +809,9 @@ impl PointAnimation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned PointAnimation*.
-        let ptr = unsafe { dm_noesis_point_animation_create() };
+        let ptr = unsafe { noesis_point_animation_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_point_animation_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_point_animation_create returned null"),
         }
     }
 
@@ -820,7 +820,7 @@ impl PointAnimation {
     pub fn set_from(&mut self, value: Option<(f32, f32)>) -> bool {
         let (x, y) = value.unwrap_or((0.0, 0.0));
         // SAFETY: self.raw() is a live PointAnimation* for the call.
-        unsafe { dm_noesis_point_animation_set_from(self.raw(), value.is_some(), x, y) }
+        unsafe { noesis_point_animation_set_from(self.raw(), value.is_some(), x, y) }
     }
 
     /// Set (`Some`) or clear (`None`) the ending point.
@@ -828,7 +828,7 @@ impl PointAnimation {
     pub fn set_to(&mut self, value: Option<(f32, f32)>) -> bool {
         let (x, y) = value.unwrap_or((0.0, 0.0));
         // SAFETY: self.raw() is a live PointAnimation* for the call.
-        unsafe { dm_noesis_point_animation_set_to(self.raw(), value.is_some(), x, y) }
+        unsafe { noesis_point_animation_set_to(self.raw(), value.is_some(), x, y) }
     }
 
     /// Set (`Some`) or clear (`None`) the relative point offset (`By`).
@@ -836,7 +836,7 @@ impl PointAnimation {
     pub fn set_by(&mut self, value: Option<(f32, f32)>) -> bool {
         let (x, y) = value.unwrap_or((0.0, 0.0));
         // SAFETY: self.raw() is a live PointAnimation* for the call.
-        unsafe { dm_noesis_point_animation_set_by(self.raw(), value.is_some(), x, y) }
+        unsafe { noesis_point_animation_set_by(self.raw(), value.is_some(), x, y) }
     }
 }
 
@@ -865,10 +865,10 @@ impl DoubleAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned DoubleAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_double_animation_keyframes_create() };
+        let ptr = unsafe { noesis_double_animation_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_double_animation_keyframes_create returned null"),
+                .expect("noesis_double_animation_keyframes_create returned null"),
         }
     }
 
@@ -886,7 +886,7 @@ impl DoubleAnimationUsingKeyFrames {
         // is null or a live easing/spline object; both are only read during the
         // call.
         unsafe {
-            dm_noesis_double_animation_add_keyframe(
+            noesis_double_animation_add_keyframe(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -920,10 +920,10 @@ impl ColorAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned ColorAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_color_animation_keyframes_create() };
+        let ptr = unsafe { noesis_color_animation_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_color_animation_keyframes_create returned null"),
+                .expect("noesis_color_animation_keyframes_create returned null"),
         }
     }
 
@@ -940,7 +940,7 @@ impl ColorAnimationUsingKeyFrames {
         // SAFETY: self.raw() is a live keyframe animation; `rgba` outlives the
         // call; the interp raw pointer is null or a live easing/spline object.
         unsafe {
-            dm_noesis_color_animation_add_keyframe(
+            noesis_color_animation_add_keyframe(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -976,10 +976,10 @@ impl RectAnimation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned RectAnimation*.
-        let ptr = unsafe { dm_noesis_animation_rect_animation_create() };
+        let ptr = unsafe { noesis_animation_rect_animation_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_rect_animation_create returned null"),
+                .expect("noesis_animation_rect_animation_create returned null"),
         }
     }
 
@@ -989,7 +989,7 @@ impl RectAnimation {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
         unsafe {
-            dm_noesis_animation_rect_animation_set_from(self.raw(), value.is_some(), v.as_ptr())
+            noesis_animation_rect_animation_set_from(self.raw(), value.is_some(), v.as_ptr())
         }
     }
 
@@ -999,7 +999,7 @@ impl RectAnimation {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
         unsafe {
-            dm_noesis_animation_rect_animation_set_to(self.raw(), value.is_some(), v.as_ptr())
+            noesis_animation_rect_animation_set_to(self.raw(), value.is_some(), v.as_ptr())
         }
     }
 
@@ -1009,7 +1009,7 @@ impl RectAnimation {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
         unsafe {
-            dm_noesis_animation_rect_animation_set_by(self.raw(), value.is_some(), v.as_ptr())
+            noesis_animation_rect_animation_set_by(self.raw(), value.is_some(), v.as_ptr())
         }
     }
 
@@ -1019,7 +1019,7 @@ impl RectAnimation {
         let mut out = [0.0f32; 4];
         // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
         let has =
-            unsafe { dm_noesis_animation_rect_animation_get_from(self.raw(), out.as_mut_ptr()) };
+            unsafe { noesis_animation_rect_animation_get_from(self.raw(), out.as_mut_ptr()) };
         has.then_some(out)
     }
 
@@ -1029,7 +1029,7 @@ impl RectAnimation {
         let mut out = [0.0f32; 4];
         // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
         let has =
-            unsafe { dm_noesis_animation_rect_animation_get_to(self.raw(), out.as_mut_ptr()) };
+            unsafe { noesis_animation_rect_animation_get_to(self.raw(), out.as_mut_ptr()) };
         has.then_some(out)
     }
 
@@ -1039,7 +1039,7 @@ impl RectAnimation {
         let mut out = [0.0f32; 4];
         // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
         let has =
-            unsafe { dm_noesis_animation_rect_animation_get_by(self.raw(), out.as_mut_ptr()) };
+            unsafe { noesis_animation_rect_animation_get_by(self.raw(), out.as_mut_ptr()) };
         has.then_some(out)
     }
 }
@@ -1067,10 +1067,10 @@ impl SizeAnimation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned SizeAnimation*.
-        let ptr = unsafe { dm_noesis_animation_size_animation_create() };
+        let ptr = unsafe { noesis_animation_size_animation_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_size_animation_create returned null"),
+                .expect("noesis_animation_size_animation_create returned null"),
         }
     }
 
@@ -1080,7 +1080,7 @@ impl SizeAnimation {
         let v = value.unwrap_or([0.0; 2]);
         // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
         unsafe {
-            dm_noesis_animation_size_animation_set_from(self.raw(), value.is_some(), v.as_ptr())
+            noesis_animation_size_animation_set_from(self.raw(), value.is_some(), v.as_ptr())
         }
     }
 
@@ -1090,7 +1090,7 @@ impl SizeAnimation {
         let v = value.unwrap_or([0.0; 2]);
         // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
         unsafe {
-            dm_noesis_animation_size_animation_set_to(self.raw(), value.is_some(), v.as_ptr())
+            noesis_animation_size_animation_set_to(self.raw(), value.is_some(), v.as_ptr())
         }
     }
 
@@ -1100,7 +1100,7 @@ impl SizeAnimation {
         let v = value.unwrap_or([0.0; 2]);
         // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
         unsafe {
-            dm_noesis_animation_size_animation_set_by(self.raw(), value.is_some(), v.as_ptr())
+            noesis_animation_size_animation_set_by(self.raw(), value.is_some(), v.as_ptr())
         }
     }
 
@@ -1110,7 +1110,7 @@ impl SizeAnimation {
         let mut out = [0.0f32; 2];
         // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
         let has =
-            unsafe { dm_noesis_animation_size_animation_get_from(self.raw(), out.as_mut_ptr()) };
+            unsafe { noesis_animation_size_animation_get_from(self.raw(), out.as_mut_ptr()) };
         has.then_some(out)
     }
 
@@ -1120,7 +1120,7 @@ impl SizeAnimation {
         let mut out = [0.0f32; 2];
         // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
         let has =
-            unsafe { dm_noesis_animation_size_animation_get_to(self.raw(), out.as_mut_ptr()) };
+            unsafe { noesis_animation_size_animation_get_to(self.raw(), out.as_mut_ptr()) };
         has.then_some(out)
     }
 
@@ -1130,7 +1130,7 @@ impl SizeAnimation {
         let mut out = [0.0f32; 2];
         // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
         let has =
-            unsafe { dm_noesis_animation_size_animation_get_by(self.raw(), out.as_mut_ptr()) };
+            unsafe { noesis_animation_size_animation_get_by(self.raw(), out.as_mut_ptr()) };
         has.then_some(out)
     }
 }
@@ -1160,10 +1160,10 @@ impl Int16Animation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned Int16Animation*.
-        let ptr = unsafe { dm_noesis_animation_int16_animation_create() };
+        let ptr = unsafe { noesis_animation_int16_animation_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_int16_animation_create returned null"),
+                .expect("noesis_animation_int16_animation_create returned null"),
         }
     }
 
@@ -1172,7 +1172,7 @@ impl Int16Animation {
     pub fn set_from(&mut self, value: Option<i16>) -> bool {
         // SAFETY: self.raw() is a live Int16Animation* for the call.
         unsafe {
-            dm_noesis_animation_int16_animation_set_from(
+            noesis_animation_int16_animation_set_from(
                 self.raw(),
                 value.is_some(),
                 i32::from(value.unwrap_or(0)),
@@ -1185,7 +1185,7 @@ impl Int16Animation {
     pub fn set_to(&mut self, value: Option<i16>) -> bool {
         // SAFETY: self.raw() is a live Int16Animation* for the call.
         unsafe {
-            dm_noesis_animation_int16_animation_set_to(
+            noesis_animation_int16_animation_set_to(
                 self.raw(),
                 value.is_some(),
                 i32::from(value.unwrap_or(0)),
@@ -1198,7 +1198,7 @@ impl Int16Animation {
     pub fn set_by(&mut self, value: Option<i16>) -> bool {
         // SAFETY: self.raw() is a live Int16Animation* for the call.
         unsafe {
-            dm_noesis_animation_int16_animation_set_by(
+            noesis_animation_int16_animation_set_by(
                 self.raw(),
                 value.is_some(),
                 i32::from(value.unwrap_or(0)),
@@ -1211,7 +1211,7 @@ impl Int16Animation {
     pub fn from(&self) -> Option<i16> {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
-        let has = unsafe { dm_noesis_animation_int16_animation_get_from(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int16_animation_get_from(self.raw(), &mut out) };
         has.then_some(out as i16)
     }
 
@@ -1220,7 +1220,7 @@ impl Int16Animation {
     pub fn to(&self) -> Option<i16> {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
-        let has = unsafe { dm_noesis_animation_int16_animation_get_to(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int16_animation_get_to(self.raw(), &mut out) };
         has.then_some(out as i16)
     }
 
@@ -1229,7 +1229,7 @@ impl Int16Animation {
     pub fn by(&self) -> Option<i16> {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
-        let has = unsafe { dm_noesis_animation_int16_animation_get_by(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int16_animation_get_by(self.raw(), &mut out) };
         has.then_some(out as i16)
     }
 }
@@ -1257,10 +1257,10 @@ impl Int32Animation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned Int32Animation*.
-        let ptr = unsafe { dm_noesis_animation_int32_animation_create() };
+        let ptr = unsafe { noesis_animation_int32_animation_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_int32_animation_create returned null"),
+                .expect("noesis_animation_int32_animation_create returned null"),
         }
     }
 
@@ -1269,7 +1269,7 @@ impl Int32Animation {
     pub fn set_from(&mut self, value: Option<i32>) -> bool {
         // SAFETY: self.raw() is a live Int32Animation* for the call.
         unsafe {
-            dm_noesis_animation_int32_animation_set_from(
+            noesis_animation_int32_animation_set_from(
                 self.raw(),
                 value.is_some(),
                 value.unwrap_or(0),
@@ -1282,7 +1282,7 @@ impl Int32Animation {
     pub fn set_to(&mut self, value: Option<i32>) -> bool {
         // SAFETY: self.raw() is a live Int32Animation* for the call.
         unsafe {
-            dm_noesis_animation_int32_animation_set_to(
+            noesis_animation_int32_animation_set_to(
                 self.raw(),
                 value.is_some(),
                 value.unwrap_or(0),
@@ -1295,7 +1295,7 @@ impl Int32Animation {
     pub fn set_by(&mut self, value: Option<i32>) -> bool {
         // SAFETY: self.raw() is a live Int32Animation* for the call.
         unsafe {
-            dm_noesis_animation_int32_animation_set_by(
+            noesis_animation_int32_animation_set_by(
                 self.raw(),
                 value.is_some(),
                 value.unwrap_or(0),
@@ -1308,7 +1308,7 @@ impl Int32Animation {
     pub fn from(&self) -> Option<i32> {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
-        let has = unsafe { dm_noesis_animation_int32_animation_get_from(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int32_animation_get_from(self.raw(), &mut out) };
         has.then_some(out)
     }
 
@@ -1317,7 +1317,7 @@ impl Int32Animation {
     pub fn to(&self) -> Option<i32> {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
-        let has = unsafe { dm_noesis_animation_int32_animation_get_to(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int32_animation_get_to(self.raw(), &mut out) };
         has.then_some(out)
     }
 
@@ -1326,7 +1326,7 @@ impl Int32Animation {
     pub fn by(&self) -> Option<i32> {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
-        let has = unsafe { dm_noesis_animation_int32_animation_get_by(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int32_animation_get_by(self.raw(), &mut out) };
         has.then_some(out)
     }
 }
@@ -1354,10 +1354,10 @@ impl Int64Animation {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned Int64Animation*.
-        let ptr = unsafe { dm_noesis_animation_int64_animation_create() };
+        let ptr = unsafe { noesis_animation_int64_animation_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_int64_animation_create returned null"),
+                .expect("noesis_animation_int64_animation_create returned null"),
         }
     }
 
@@ -1366,7 +1366,7 @@ impl Int64Animation {
     pub fn set_from(&mut self, value: Option<i64>) -> bool {
         // SAFETY: self.raw() is a live Int64Animation* for the call.
         unsafe {
-            dm_noesis_animation_int64_animation_set_from(
+            noesis_animation_int64_animation_set_from(
                 self.raw(),
                 value.is_some(),
                 value.unwrap_or(0),
@@ -1379,7 +1379,7 @@ impl Int64Animation {
     pub fn set_to(&mut self, value: Option<i64>) -> bool {
         // SAFETY: self.raw() is a live Int64Animation* for the call.
         unsafe {
-            dm_noesis_animation_int64_animation_set_to(
+            noesis_animation_int64_animation_set_to(
                 self.raw(),
                 value.is_some(),
                 value.unwrap_or(0),
@@ -1392,7 +1392,7 @@ impl Int64Animation {
     pub fn set_by(&mut self, value: Option<i64>) -> bool {
         // SAFETY: self.raw() is a live Int64Animation* for the call.
         unsafe {
-            dm_noesis_animation_int64_animation_set_by(
+            noesis_animation_int64_animation_set_by(
                 self.raw(),
                 value.is_some(),
                 value.unwrap_or(0),
@@ -1405,7 +1405,7 @@ impl Int64Animation {
     pub fn from(&self) -> Option<i64> {
         let mut out = 0i64;
         // SAFETY: self.raw() is live; `out` is a valid i64.
-        let has = unsafe { dm_noesis_animation_int64_animation_get_from(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int64_animation_get_from(self.raw(), &mut out) };
         has.then_some(out)
     }
 
@@ -1414,7 +1414,7 @@ impl Int64Animation {
     pub fn to(&self) -> Option<i64> {
         let mut out = 0i64;
         // SAFETY: self.raw() is live; `out` is a valid i64.
-        let has = unsafe { dm_noesis_animation_int64_animation_get_to(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int64_animation_get_to(self.raw(), &mut out) };
         has.then_some(out)
     }
 
@@ -1423,7 +1423,7 @@ impl Int64Animation {
     pub fn by(&self) -> Option<i64> {
         let mut out = 0i64;
         // SAFETY: self.raw() is live; `out` is a valid i64.
-        let has = unsafe { dm_noesis_animation_int64_animation_get_by(self.raw(), &mut out) };
+        let has = unsafe { noesis_animation_int64_animation_get_by(self.raw(), &mut out) };
         has.then_some(out)
     }
 }
@@ -1449,7 +1449,7 @@ impl KeySpline {
     pub fn new(control_point1: (f32, f32), control_point2: (f32, f32)) -> Self {
         // SAFETY: factory returns a +1-owned KeySpline*.
         let ptr = unsafe {
-            dm_noesis_animation_keyspline_create(
+            noesis_animation_keyspline_create(
                 control_point1.0,
                 control_point1.1,
                 control_point2.0,
@@ -1457,7 +1457,7 @@ impl KeySpline {
             )
         };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_animation_keyspline_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_animation_keyspline_create returned null"),
         }
     }
 
@@ -1465,14 +1465,14 @@ impl KeySpline {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_point1(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.raw() is a live KeySpline* for the call.
-        unsafe { dm_noesis_animation_keyspline_set_control_point1(self.raw(), x, y) }
+        unsafe { noesis_animation_keyspline_set_control_point1(self.raw(), x, y) }
     }
 
     /// Set the second control point `(x, y)`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_point2(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.raw() is a live KeySpline* for the call.
-        unsafe { dm_noesis_animation_keyspline_set_control_point2(self.raw(), x, y) }
+        unsafe { noesis_animation_keyspline_set_control_point2(self.raw(), x, y) }
     }
 
     /// Read back the first control point `(x, y)`.
@@ -1481,7 +1481,7 @@ impl KeySpline {
         let mut out = [0.0f32; 2];
         // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
         let ok = unsafe {
-            dm_noesis_animation_keyspline_get_control_point1(self.raw(), out.as_mut_ptr())
+            noesis_animation_keyspline_get_control_point1(self.raw(), out.as_mut_ptr())
         };
         ok.then_some((out[0], out[1]))
     }
@@ -1492,7 +1492,7 @@ impl KeySpline {
         let mut out = [0.0f32; 2];
         // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
         let ok = unsafe {
-            dm_noesis_animation_keyspline_get_control_point2(self.raw(), out.as_mut_ptr())
+            noesis_animation_keyspline_get_control_point2(self.raw(), out.as_mut_ptr())
         };
         ok.then_some((out[0], out[1]))
     }
@@ -1523,10 +1523,10 @@ impl RectAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned RectAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_rect_keyframes_create() };
+        let ptr = unsafe { noesis_animation_rect_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_rect_keyframes_create returned null"),
+                .expect("noesis_animation_rect_keyframes_create returned null"),
         }
     }
 
@@ -1543,7 +1543,7 @@ impl RectAnimationUsingKeyFrames {
         // SAFETY: self.raw() is live; `value` outlives the call; the interp raw
         // pointer is null or a live easing/spline object.
         unsafe {
-            dm_noesis_animation_rect_keyframes_add(
+            noesis_animation_rect_keyframes_add(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -1557,7 +1557,7 @@ impl RectAnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_rect_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_rect_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -1567,7 +1567,7 @@ impl RectAnimationUsingKeyFrames {
         let mut out = [0.0f32; 4];
         // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
         let ok = unsafe {
-            dm_noesis_animation_rect_keyframes_get_value(self.raw(), index as i32, out.as_mut_ptr())
+            noesis_animation_rect_keyframes_get_value(self.raw(), index as i32, out.as_mut_ptr())
         };
         ok.then_some(out)
     }
@@ -1577,7 +1577,7 @@ impl RectAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_rect_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_rect_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -1605,10 +1605,10 @@ impl SizeAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned SizeAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_size_keyframes_create() };
+        let ptr = unsafe { noesis_animation_size_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_size_keyframes_create returned null"),
+                .expect("noesis_animation_size_keyframes_create returned null"),
         }
     }
 
@@ -1625,7 +1625,7 @@ impl SizeAnimationUsingKeyFrames {
         // SAFETY: self.raw() is live; `value` outlives the call; the interp raw
         // pointer is null or a live easing/spline object.
         unsafe {
-            dm_noesis_animation_size_keyframes_add(
+            noesis_animation_size_keyframes_add(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -1639,7 +1639,7 @@ impl SizeAnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_size_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_size_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -1649,7 +1649,7 @@ impl SizeAnimationUsingKeyFrames {
         let mut out = [0.0f32; 2];
         // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
         let ok = unsafe {
-            dm_noesis_animation_size_keyframes_get_value(self.raw(), index as i32, out.as_mut_ptr())
+            noesis_animation_size_keyframes_get_value(self.raw(), index as i32, out.as_mut_ptr())
         };
         ok.then_some(out)
     }
@@ -1659,7 +1659,7 @@ impl SizeAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_size_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_size_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -1687,10 +1687,10 @@ impl Int16AnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned Int16AnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_int16_keyframes_create() };
+        let ptr = unsafe { noesis_animation_int16_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_int16_keyframes_create returned null"),
+                .expect("noesis_animation_int16_keyframes_create returned null"),
         }
     }
 
@@ -1707,7 +1707,7 @@ impl Int16AnimationUsingKeyFrames {
         // SAFETY: self.raw() is live; the interp raw pointer is null or a live
         // easing/spline object.
         unsafe {
-            dm_noesis_animation_int16_keyframes_add(
+            noesis_animation_int16_keyframes_add(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -1721,7 +1721,7 @@ impl Int16AnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_int16_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_int16_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -1731,7 +1731,7 @@ impl Int16AnimationUsingKeyFrames {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
         let ok = unsafe {
-            dm_noesis_animation_int16_keyframes_get_value(self.raw(), index as i32, &mut out)
+            noesis_animation_int16_keyframes_get_value(self.raw(), index as i32, &mut out)
         };
         ok.then_some(out as i16)
     }
@@ -1741,7 +1741,7 @@ impl Int16AnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_int16_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_int16_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -1769,10 +1769,10 @@ impl Int32AnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned Int32AnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_int32_keyframes_create() };
+        let ptr = unsafe { noesis_animation_int32_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_int32_keyframes_create returned null"),
+                .expect("noesis_animation_int32_keyframes_create returned null"),
         }
     }
 
@@ -1789,7 +1789,7 @@ impl Int32AnimationUsingKeyFrames {
         // SAFETY: self.raw() is live; the interp raw pointer is null or a live
         // easing/spline object.
         unsafe {
-            dm_noesis_animation_int32_keyframes_add(
+            noesis_animation_int32_keyframes_add(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -1803,7 +1803,7 @@ impl Int32AnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_int32_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_int32_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -1813,7 +1813,7 @@ impl Int32AnimationUsingKeyFrames {
         let mut out = 0i32;
         // SAFETY: self.raw() is live; `out` is a valid i32.
         let ok = unsafe {
-            dm_noesis_animation_int32_keyframes_get_value(self.raw(), index as i32, &mut out)
+            noesis_animation_int32_keyframes_get_value(self.raw(), index as i32, &mut out)
         };
         ok.then_some(out)
     }
@@ -1823,7 +1823,7 @@ impl Int32AnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_int32_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_int32_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -1851,10 +1851,10 @@ impl Int64AnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned Int64AnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_int64_keyframes_create() };
+        let ptr = unsafe { noesis_animation_int64_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_int64_keyframes_create returned null"),
+                .expect("noesis_animation_int64_keyframes_create returned null"),
         }
     }
 
@@ -1871,7 +1871,7 @@ impl Int64AnimationUsingKeyFrames {
         // SAFETY: self.raw() is live; the interp raw pointer is null or a live
         // easing/spline object.
         unsafe {
-            dm_noesis_animation_int64_keyframes_add(
+            noesis_animation_int64_keyframes_add(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -1885,7 +1885,7 @@ impl Int64AnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_int64_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_int64_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -1895,7 +1895,7 @@ impl Int64AnimationUsingKeyFrames {
         let mut out = 0i64;
         // SAFETY: self.raw() is live; `out` is a valid i64.
         let ok = unsafe {
-            dm_noesis_animation_int64_keyframes_get_value(self.raw(), index as i32, &mut out)
+            noesis_animation_int64_keyframes_get_value(self.raw(), index as i32, &mut out)
         };
         ok.then_some(out)
     }
@@ -1905,7 +1905,7 @@ impl Int64AnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_int64_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_int64_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -1935,10 +1935,10 @@ impl PointAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned PointAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_point_keyframes_create() };
+        let ptr = unsafe { noesis_animation_point_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_point_keyframes_create returned null"),
+                .expect("noesis_animation_point_keyframes_create returned null"),
         }
     }
 
@@ -1956,7 +1956,7 @@ impl PointAnimationUsingKeyFrames {
         // SAFETY: self.raw() is live; `p` outlives the call; the interp raw
         // pointer is null or a live easing/spline object.
         unsafe {
-            dm_noesis_animation_point_keyframes_add(
+            noesis_animation_point_keyframes_add(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -1970,7 +1970,7 @@ impl PointAnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_point_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_point_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -1981,7 +1981,7 @@ impl PointAnimationUsingKeyFrames {
         let mut out = [0.0f32; 2];
         // SAFETY: self.raw() is live; `out` is a valid 2-float buffer.
         let ok = unsafe {
-            dm_noesis_animation_point_keyframes_get_value(
+            noesis_animation_point_keyframes_get_value(
                 self.raw(),
                 index as i32,
                 out.as_mut_ptr(),
@@ -1995,7 +1995,7 @@ impl PointAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_point_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_point_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -2024,10 +2024,10 @@ impl ThicknessAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned ThicknessAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_thickness_keyframes_create() };
+        let ptr = unsafe { noesis_animation_thickness_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_thickness_keyframes_create returned null"),
+                .expect("noesis_animation_thickness_keyframes_create returned null"),
         }
     }
 
@@ -2044,7 +2044,7 @@ impl ThicknessAnimationUsingKeyFrames {
         // SAFETY: self.raw() is live; `value` outlives the call; the interp raw
         // pointer is null or a live easing/spline object.
         unsafe {
-            dm_noesis_animation_thickness_keyframes_add(
+            noesis_animation_thickness_keyframes_add(
                 self.raw(),
                 kind as i32,
                 key_time_secs,
@@ -2058,7 +2058,7 @@ impl ThicknessAnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_thickness_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_thickness_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -2068,7 +2068,7 @@ impl ThicknessAnimationUsingKeyFrames {
         let mut out = [0.0f32; 4];
         // SAFETY: self.raw() is live; `out` is a valid 4-float buffer.
         let ok = unsafe {
-            dm_noesis_animation_thickness_keyframes_get_value(
+            noesis_animation_thickness_keyframes_get_value(
                 self.raw(),
                 index as i32,
                 out.as_mut_ptr(),
@@ -2082,7 +2082,7 @@ impl ThicknessAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t = unsafe {
-            dm_noesis_animation_thickness_keyframes_get_key_time(self.raw(), index as i32)
+            noesis_animation_thickness_keyframes_get_key_time(self.raw(), index as i32)
         };
         (t >= 0.0).then_some(t)
     }
@@ -2114,24 +2114,24 @@ impl BooleanAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned BooleanAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_boolean_keyframes_create() };
+        let ptr = unsafe { noesis_animation_boolean_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_boolean_keyframes_create returned null"),
+                .expect("noesis_animation_boolean_keyframes_create returned null"),
         }
     }
 
     /// Append a discrete key frame setting `value` at `key_time_secs`.
     pub fn add_key_frame(&mut self, key_time_secs: f64, value: bool) -> bool {
         // SAFETY: self.raw() is a live keyframe animation for the call.
-        unsafe { dm_noesis_animation_boolean_keyframes_add(self.raw(), key_time_secs, value) }
+        unsafe { noesis_animation_boolean_keyframes_add(self.raw(), key_time_secs, value) }
     }
 
     /// Number of key frames.
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_boolean_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_boolean_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -2141,7 +2141,7 @@ impl BooleanAnimationUsingKeyFrames {
         let mut out = false;
         // SAFETY: self.raw() is live; `out` is a valid bool.
         let ok = unsafe {
-            dm_noesis_animation_boolean_keyframes_get_value(self.raw(), index as i32, &mut out)
+            noesis_animation_boolean_keyframes_get_value(self.raw(), index as i32, &mut out)
         };
         ok.then_some(out)
     }
@@ -2151,7 +2151,7 @@ impl BooleanAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_boolean_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_boolean_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -2180,10 +2180,10 @@ impl StringAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned StringAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_string_keyframes_create() };
+        let ptr = unsafe { noesis_animation_string_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_string_keyframes_create returned null"),
+                .expect("noesis_animation_string_keyframes_create returned null"),
         }
     }
 
@@ -2195,14 +2195,14 @@ impl StringAnimationUsingKeyFrames {
     pub fn add_key_frame(&mut self, key_time_secs: f64, value: &str) -> bool {
         let c = CString::new(value).expect("key frame value contained interior NUL");
         // SAFETY: self.raw() is live; `c` outlives the call.
-        unsafe { dm_noesis_animation_string_keyframes_add(self.raw(), key_time_secs, c.as_ptr()) }
+        unsafe { noesis_animation_string_keyframes_add(self.raw(), key_time_secs, c.as_ptr()) }
     }
 
     /// Number of key frames.
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_string_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_string_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -2212,7 +2212,7 @@ impl StringAnimationUsingKeyFrames {
     pub fn key_frame_value(&self, index: u32) -> Option<String> {
         // SAFETY: self.raw() is live; the returned pointer (if non-null) is a
         // borrowed NUL-terminated string valid for the read.
-        let p = unsafe { dm_noesis_animation_string_keyframes_get_value(self.raw(), index as i32) };
+        let p = unsafe { noesis_animation_string_keyframes_get_value(self.raw(), index as i32) };
         if p.is_null() {
             return None;
         }
@@ -2225,7 +2225,7 @@ impl StringAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_string_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_string_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -2264,10 +2264,10 @@ impl ObjectAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned ObjectAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_object_keyframes_create() };
+        let ptr = unsafe { noesis_animation_object_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_object_keyframes_create returned null"),
+                .expect("noesis_animation_object_keyframes_create returned null"),
         }
     }
 
@@ -2278,7 +2278,7 @@ impl ObjectAnimationUsingKeyFrames {
     pub fn add_key_frame<C: AsComponent>(&mut self, key_time_secs: f64, value: &C) -> bool {
         // SAFETY: self.raw() is live; value.component_raw() is a live BaseComponent*.
         unsafe {
-            dm_noesis_animation_object_keyframes_add(
+            noesis_animation_object_keyframes_add(
                 self.raw(),
                 key_time_secs,
                 value.component_raw(),
@@ -2290,7 +2290,7 @@ impl ObjectAnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_object_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_object_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -2300,7 +2300,7 @@ impl ObjectAnimationUsingKeyFrames {
     pub fn key_frame_value(&self, index: u32) -> Option<OwnedComponent> {
         // SAFETY: self.raw() is live; the C side hands out a +1 reference.
         let ptr =
-            unsafe { dm_noesis_animation_object_keyframes_get_value(self.raw(), index as i32) };
+            unsafe { noesis_animation_object_keyframes_get_value(self.raw(), index as i32) };
         NonNull::new(ptr).map(|ptr| OwnedComponent { ptr })
     }
 
@@ -2309,7 +2309,7 @@ impl ObjectAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_object_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_object_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -2341,10 +2341,10 @@ impl MatrixAnimationUsingKeyFrames {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned MatrixAnimationUsingKeyFrames*.
-        let ptr = unsafe { dm_noesis_animation_matrix_keyframes_create() };
+        let ptr = unsafe { noesis_animation_matrix_keyframes_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_matrix_keyframes_create returned null"),
+                .expect("noesis_animation_matrix_keyframes_create returned null"),
         }
     }
 
@@ -2353,7 +2353,7 @@ impl MatrixAnimationUsingKeyFrames {
     pub fn add_key_frame(&mut self, key_time_secs: f64, value: [f32; 6]) -> bool {
         // SAFETY: self.raw() is live; `value` outlives the call.
         unsafe {
-            dm_noesis_animation_matrix_keyframes_add(self.raw(), key_time_secs, value.as_ptr())
+            noesis_animation_matrix_keyframes_add(self.raw(), key_time_secs, value.as_ptr())
         }
     }
 
@@ -2361,7 +2361,7 @@ impl MatrixAnimationUsingKeyFrames {
     #[must_use]
     pub fn key_frame_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is live.
-        let n = unsafe { dm_noesis_animation_matrix_keyframes_count(self.raw()) };
+        let n = unsafe { noesis_animation_matrix_keyframes_count(self.raw()) };
         u32::try_from(n).ok()
     }
 
@@ -2371,7 +2371,7 @@ impl MatrixAnimationUsingKeyFrames {
         let mut out = [0.0f32; 6];
         // SAFETY: self.raw() is live; `out` is a valid 6-float buffer.
         let ok = unsafe {
-            dm_noesis_animation_matrix_keyframes_get_value(
+            noesis_animation_matrix_keyframes_get_value(
                 self.raw(),
                 index as i32,
                 out.as_mut_ptr(),
@@ -2385,7 +2385,7 @@ impl MatrixAnimationUsingKeyFrames {
     pub fn key_frame_time(&self, index: u32) -> Option<f64> {
         // SAFETY: self.raw() is live.
         let t =
-            unsafe { dm_noesis_animation_matrix_keyframes_get_key_time(self.raw(), index as i32) };
+            unsafe { noesis_animation_matrix_keyframes_get_key_time(self.raw(), index as i32) };
         (t >= 0.0).then_some(t)
     }
 }
@@ -2416,10 +2416,10 @@ impl BeginStoryboard {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned BeginStoryboard*.
-        let ptr = unsafe { dm_noesis_animation_begin_storyboard_create() };
+        let ptr = unsafe { noesis_animation_begin_storyboard_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_begin_storyboard_create returned null"),
+                .expect("noesis_animation_begin_storyboard_create returned null"),
         }
     }
 
@@ -2428,7 +2428,7 @@ impl BeginStoryboard {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_storyboard(&mut self, storyboard: &Storyboard) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_animation_begin_storyboard_set_storyboard(self.raw(), storyboard.raw()) }
+        unsafe { noesis_animation_begin_storyboard_set_storyboard(self.raw(), storyboard.raw()) }
     }
 
     /// Whether a storyboard has been assigned.
@@ -2436,12 +2436,12 @@ impl BeginStoryboard {
     pub fn has_storyboard(&self) -> bool {
         // SAFETY: self.raw() is live; the C side hands out a +1 reference we
         // release immediately after the null check.
-        let ptr = unsafe { dm_noesis_animation_begin_storyboard_get_storyboard(self.raw()) };
+        let ptr = unsafe { noesis_animation_begin_storyboard_get_storyboard(self.raw()) };
         if ptr.is_null() {
             false
         } else {
             // SAFETY: `ptr` is a +1-owned reference; release the borrow.
-            unsafe { dm_noesis_base_component_release(ptr) };
+            unsafe { noesis_base_component_release(ptr) };
             true
         }
     }
@@ -2450,14 +2450,14 @@ impl BeginStoryboard {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_handoff(&mut self, handoff: HandoffBehavior) -> bool {
         // SAFETY: self.raw() is live for the call.
-        unsafe { dm_noesis_animation_begin_storyboard_set_handoff(self.raw(), handoff as i32) }
+        unsafe { noesis_animation_begin_storyboard_set_handoff(self.raw(), handoff as i32) }
     }
 
     /// Read back the hand-off behavior, or `None` if the handle is invalid.
     #[must_use]
     pub fn handoff(&self) -> Option<HandoffBehavior> {
         // SAFETY: self.raw() is live for the call.
-        match unsafe { dm_noesis_animation_begin_storyboard_get_handoff(self.raw()) } {
+        match unsafe { noesis_animation_begin_storyboard_get_handoff(self.raw()) } {
             0 => Some(HandoffBehavior::SnapshotAndReplace),
             1 => Some(HandoffBehavior::Compose),
             _ => None,
@@ -2473,7 +2473,7 @@ impl BeginStoryboard {
     pub fn set_name(&mut self, name: &str) -> bool {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: self.raw() is live; `c` outlives the call.
-        unsafe { dm_noesis_animation_begin_storyboard_set_name(self.raw(), c.as_ptr()) }
+        unsafe { noesis_animation_begin_storyboard_set_name(self.raw(), c.as_ptr()) }
     }
 
     /// Read back the `Name`, or `None` if unset.
@@ -2481,7 +2481,7 @@ impl BeginStoryboard {
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.raw() is live; the returned pointer (if non-null) is a
         // borrowed NUL-terminated string valid for the read.
-        let p = unsafe { dm_noesis_animation_begin_storyboard_get_name(self.raw()) };
+        let p = unsafe { noesis_animation_begin_storyboard_get_name(self.raw()) };
         if p.is_null() {
             return None;
         }
@@ -2524,10 +2524,10 @@ impl ParallelTimeline {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: factory returns a +1-owned ParallelTimeline*.
-        let ptr = unsafe { dm_noesis_animation_parallel_timeline_create() };
+        let ptr = unsafe { noesis_animation_parallel_timeline_create() };
         Self {
             ptr: NonNull::new(ptr)
-                .expect("dm_noesis_animation_parallel_timeline_create returned null"),
+                .expect("noesis_animation_parallel_timeline_create returned null"),
         }
     }
 
@@ -2535,7 +2535,7 @@ impl ParallelTimeline {
     /// `child` may be dropped afterwards. Returns `false` on a type mismatch.
     pub fn add_child<T: Timeline>(&mut self, child: &T) -> bool {
         // SAFETY: both pointers are live for the call.
-        unsafe { dm_noesis_animation_parallel_timeline_add_child(self.raw(), child.timeline_raw()) }
+        unsafe { noesis_animation_parallel_timeline_add_child(self.raw(), child.timeline_raw()) }
     }
 
     /// Number of child timelines, or `None` if the handle is not a timeline group
@@ -2543,7 +2543,7 @@ impl ParallelTimeline {
     #[must_use]
     pub fn child_count(&self) -> Option<u32> {
         // SAFETY: self.raw() is a live TimelineGroup*.
-        let n = unsafe { dm_noesis_animation_parallel_timeline_child_count(self.raw()) };
+        let n = unsafe { noesis_animation_parallel_timeline_child_count(self.raw()) };
         u32::try_from(n).ok()
     }
 }

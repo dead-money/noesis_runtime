@@ -37,7 +37,7 @@ namespace {
 // base class handles font matching / weight-stretch-style lookup.
 class RustFontProvider final : public Noesis::CachedFontProvider {
 public:
-    RustFontProvider(const dm_noesis_font_provider_vtable* vtable, void* userdata)
+    RustFontProvider(const noesis_font_provider_vtable* vtable, void* userdata)
         : mVtable(*vtable), mUserdata(userdata)
     {}
 
@@ -97,7 +97,7 @@ protected:
     }
 
 private:
-    dm_noesis_font_provider_vtable mVtable;
+    noesis_font_provider_vtable mVtable;
     void* mUserdata;
 };
 
@@ -105,8 +105,8 @@ private:
 
 // ── FontProvider C ABI ─────────────────────────────────────────────────────
 
-extern "C" void* dm_noesis_font_provider_create(
-    const dm_noesis_font_provider_vtable* vtable, void* userdata)
+extern "C" void* noesis_font_provider_create(
+    const noesis_font_provider_vtable* vtable, void* userdata)
 {
     if (!vtable) return nullptr;
     Noesis::Ptr<RustFontProvider> p =
@@ -114,16 +114,16 @@ extern "C" void* dm_noesis_font_provider_create(
     return p.GiveOwnership();
 }
 
-extern "C" void dm_noesis_font_provider_destroy(void* provider) {
+extern "C" void noesis_font_provider_destroy(void* provider) {
     if (!provider) return;
     static_cast<Noesis::FontProvider*>(provider)->Release();
 }
 
-extern "C" void dm_noesis_set_font_provider(void* provider) {
+extern "C" void noesis_set_font_provider(void* provider) {
     Noesis::GUI::SetFontProvider(static_cast<Noesis::FontProvider*>(provider));
 }
 
-extern "C" void dm_noesis_font_provider_register_font(
+extern "C" void noesis_font_provider_register_font(
     void* provider, const char* folder_uri, const char* filename)
 {
     if (!provider || !filename) return;
@@ -132,7 +132,7 @@ extern "C" void dm_noesis_font_provider_register_font(
     p->RegisterFontFromRust(folder, filename);
 }
 
-extern "C" void dm_noesis_set_font_fallbacks(const char* const* families, uint32_t count) {
+extern "C" void noesis_set_font_fallbacks(const char* const* families, uint32_t count) {
     if (!families || count == 0) {
         Noesis::GUI::SetFontFallbacks(nullptr, 0);
         return;
@@ -142,7 +142,7 @@ extern "C" void dm_noesis_set_font_fallbacks(const char* const* families, uint32
     Noesis::GUI::SetFontFallbacks(const_cast<const char**>(families), count);
 }
 
-extern "C" void dm_noesis_set_font_default_properties(
+extern "C" void noesis_set_font_default_properties(
     float size, int32_t weight, int32_t stretch, int32_t style)
 {
     Noesis::GUI::SetFontDefaultProperties(

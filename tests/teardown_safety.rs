@@ -12,7 +12,7 @@
 //! The C++ side now holds an intrusive refcount on `ClassData` /
 //! `MarkupClassData`. Each live instance bumps the count; the Rust
 //! caller's registration holds the +1 created at register time.
-//! `dm_noesis_class_unregister` releases that ref but defers the actual
+//! `noesis_class_unregister` releases that ref but defers the actual
 //! free + handler-box drop to the moment the last instance dies.
 //!
 //! Each test exercises that contract:
@@ -25,16 +25,16 @@
 //!   * assert the handler dropped exactly once (counter == 1).
 //!
 //! Run with `NOESIS_SDK_DIR` set; no licence env vars required:
-//!   `cargo test -p dm_noesis_runtime --test teardown_safety`
+//!   `cargo test -p noesis_runtime --test teardown_safety`
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use dm_noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use dm_noesis_runtime::ffi::{ClassBase, PropType};
-use dm_noesis_runtime::view::{FrameworkElement, View};
-use dm_noesis_runtime::xaml_provider::XamlProvider;
+use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+use noesis_runtime::ffi::{ClassBase, PropType};
+use noesis_runtime::view::{FrameworkElement, View};
+use noesis_runtime::xaml_provider::XamlProvider;
 
 struct InMem(HashMap<String, Vec<u8>>);
 impl XamlProvider for InMem {
@@ -76,16 +76,16 @@ fn class_handler_drops_when_last_instance_dies_not_at_unregister() {
         std::env::var("NOESIS_LICENSE_NAME"),
         std::env::var("NOESIS_LICENSE_KEY"),
     ) {
-        dm_noesis_runtime::set_license(&name, &key);
+        noesis_runtime::set_license(&name, &key);
     }
-    dm_noesis_runtime::init();
+    noesis_runtime::init();
 
     let drop_count = Arc::new(AtomicU32::new(0));
 
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), CLASS_XAML.as_bytes().to_vec());
-        let _xaml = dm_noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
+        let _xaml = noesis_runtime::xaml_provider::set_xaml_provider(InMem(bytes));
 
         // Register the class. Box the handler with the shared counter; we
         // expect the box to live until the View drops.
@@ -143,7 +143,7 @@ fn class_handler_drops_when_last_instance_dies_not_at_unregister() {
         "handler must drop exactly once after the View tears down"
     );
 
-    dm_noesis_runtime::shutdown();
+    noesis_runtime::shutdown();
 }
 
 // Markup-extension counterpart lives in `tests/teardown_safety_markup.rs`

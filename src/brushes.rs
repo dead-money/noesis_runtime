@@ -18,33 +18,33 @@ use core::ptr::NonNull;
 use std::ffi::c_void;
 
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_blur_effect_create,
-    dm_noesis_blur_effect_get_radius, dm_noesis_blur_effect_set_radius,
-    dm_noesis_drop_shadow_effect_create, dm_noesis_drop_shadow_effect_get,
-    dm_noesis_drop_shadow_effect_set_blur_radius, dm_noesis_drop_shadow_effect_set_color,
-    dm_noesis_drop_shadow_effect_set_direction, dm_noesis_drop_shadow_effect_set_opacity,
-    dm_noesis_drop_shadow_effect_set_shadow_depth, dm_noesis_gradient_brush_add_stop,
-    dm_noesis_gradient_brush_get_mapping_mode, dm_noesis_gradient_brush_get_spread_method,
-    dm_noesis_gradient_brush_get_stop, dm_noesis_gradient_brush_set_mapping_mode,
-    dm_noesis_gradient_brush_set_spread_method, dm_noesis_gradient_brush_stop_count,
-    dm_noesis_image_brush_create, dm_noesis_image_brush_get_image_source,
-    dm_noesis_image_brush_set_image_source, dm_noesis_linear_gradient_brush_create,
-    dm_noesis_linear_gradient_brush_get_points, dm_noesis_linear_gradient_brush_set_end_point,
-    dm_noesis_linear_gradient_brush_set_start_point, dm_noesis_radial_gradient_brush_create,
-    dm_noesis_radial_gradient_brush_get_radius, dm_noesis_radial_gradient_brush_set_center,
-    dm_noesis_radial_gradient_brush_set_gradient_origin,
-    dm_noesis_radial_gradient_brush_set_radius, dm_noesis_solid_color_brush_create,
-    dm_noesis_solid_color_brush_get_color, dm_noesis_solid_color_brush_set_color,
-    dm_noesis_tile_brush_get_alignment_x, dm_noesis_tile_brush_get_alignment_y,
-    dm_noesis_tile_brush_get_stretch, dm_noesis_tile_brush_get_tile_mode,
-    dm_noesis_tile_brush_get_viewbox, dm_noesis_tile_brush_get_viewbox_units,
-    dm_noesis_tile_brush_get_viewport, dm_noesis_tile_brush_get_viewport_units,
-    dm_noesis_tile_brush_set_alignment_x, dm_noesis_tile_brush_set_alignment_y,
-    dm_noesis_tile_brush_set_stretch, dm_noesis_tile_brush_set_tile_mode,
-    dm_noesis_tile_brush_set_viewbox, dm_noesis_tile_brush_set_viewbox_units,
-    dm_noesis_tile_brush_set_viewport, dm_noesis_tile_brush_set_viewport_units,
-    dm_noesis_visual_brush_create, dm_noesis_visual_brush_get_visual,
-    dm_noesis_visual_brush_set_visual,
+    noesis_base_component_release, noesis_blur_effect_create,
+    noesis_blur_effect_get_radius, noesis_blur_effect_set_radius,
+    noesis_drop_shadow_effect_create, noesis_drop_shadow_effect_get,
+    noesis_drop_shadow_effect_set_blur_radius, noesis_drop_shadow_effect_set_color,
+    noesis_drop_shadow_effect_set_direction, noesis_drop_shadow_effect_set_opacity,
+    noesis_drop_shadow_effect_set_shadow_depth, noesis_gradient_brush_add_stop,
+    noesis_gradient_brush_get_mapping_mode, noesis_gradient_brush_get_spread_method,
+    noesis_gradient_brush_get_stop, noesis_gradient_brush_set_mapping_mode,
+    noesis_gradient_brush_set_spread_method, noesis_gradient_brush_stop_count,
+    noesis_image_brush_create, noesis_image_brush_get_image_source,
+    noesis_image_brush_set_image_source, noesis_linear_gradient_brush_create,
+    noesis_linear_gradient_brush_get_points, noesis_linear_gradient_brush_set_end_point,
+    noesis_linear_gradient_brush_set_start_point, noesis_radial_gradient_brush_create,
+    noesis_radial_gradient_brush_get_radius, noesis_radial_gradient_brush_set_center,
+    noesis_radial_gradient_brush_set_gradient_origin,
+    noesis_radial_gradient_brush_set_radius, noesis_solid_color_brush_create,
+    noesis_solid_color_brush_get_color, noesis_solid_color_brush_set_color,
+    noesis_tile_brush_get_alignment_x, noesis_tile_brush_get_alignment_y,
+    noesis_tile_brush_get_stretch, noesis_tile_brush_get_tile_mode,
+    noesis_tile_brush_get_viewbox, noesis_tile_brush_get_viewbox_units,
+    noesis_tile_brush_get_viewport, noesis_tile_brush_get_viewport_units,
+    noesis_tile_brush_set_alignment_x, noesis_tile_brush_set_alignment_y,
+    noesis_tile_brush_set_stretch, noesis_tile_brush_set_tile_mode,
+    noesis_tile_brush_set_viewbox, noesis_tile_brush_set_viewbox_units,
+    noesis_tile_brush_set_viewport, noesis_tile_brush_set_viewport_units,
+    noesis_visual_brush_create, noesis_visual_brush_get_visual,
+    noesis_visual_brush_set_visual,
 };
 
 /// A handle to a Noesis `Brush`. Implemented by every brush type in this module
@@ -81,7 +81,7 @@ macro_rules! base_component_handle {
             fn drop(&mut self) {
                 // SAFETY: produced by a `*_create` entrypoint with a +1 ref that
                 // we own; released exactly once here.
-                unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+                unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
             }
         }
     };
@@ -106,9 +106,9 @@ impl SolidColorBrush {
     #[must_use]
     pub fn new(rgba: [f32; 4]) -> Self {
         // SAFETY: `rgba` outlives the call; the C side copies it into a Color.
-        let ptr = unsafe { dm_noesis_solid_color_brush_create(rgba.as_ptr()) };
+        let ptr = unsafe { noesis_solid_color_brush_create(rgba.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_solid_color_brush_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_solid_color_brush_create returned null"),
         }
     }
 
@@ -116,7 +116,7 @@ impl SolidColorBrush {
     pub fn set_color(&mut self, rgba: [f32; 4]) {
         // SAFETY: self.ptr is a live SolidColorBrush*; `rgba` outlives the call.
         unsafe {
-            dm_noesis_solid_color_brush_set_color(self.ptr.as_ptr(), rgba.as_ptr());
+            noesis_solid_color_brush_set_color(self.ptr.as_ptr(), rgba.as_ptr());
         }
     }
 
@@ -126,7 +126,7 @@ impl SolidColorBrush {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live SolidColorBrush*; `out` is a 4-float buffer.
         unsafe {
-            dm_noesis_solid_color_brush_get_color(self.ptr.as_ptr(), out.as_mut_ptr());
+            noesis_solid_color_brush_get_color(self.ptr.as_ptr(), out.as_mut_ptr());
         }
         out
     }
@@ -161,13 +161,13 @@ impl GradientStop {
 // derive from GradientBrush, so the stop FFI is type-agnostic).
 fn gradient_add_stop(ptr: *mut c_void, stop: GradientStop) -> Option<usize> {
     // SAFETY: `ptr` is a live GradientBrush*; `color` outlives the call.
-    let idx = unsafe { dm_noesis_gradient_brush_add_stop(ptr, stop.offset, stop.color.as_ptr()) };
+    let idx = unsafe { noesis_gradient_brush_add_stop(ptr, stop.offset, stop.color.as_ptr()) };
     (idx >= 0).then_some(idx as usize)
 }
 
 fn gradient_stop_count(ptr: *mut c_void) -> usize {
     // SAFETY: `ptr` is a live GradientBrush*.
-    let n = unsafe { dm_noesis_gradient_brush_stop_count(ptr) };
+    let n = unsafe { noesis_gradient_brush_stop_count(ptr) };
     n.max(0) as usize
 }
 
@@ -176,7 +176,7 @@ fn gradient_get_stop(ptr: *mut c_void, index: usize) -> Option<GradientStop> {
     let mut color = [0.0f32; 4];
     // SAFETY: `ptr` is a live GradientBrush*; out params are valid buffers.
     let ok = unsafe {
-        dm_noesis_gradient_brush_get_stop(
+        noesis_gradient_brush_get_stop(
             ptr,
             index as u32,
             &mut offset as *mut f32,
@@ -188,22 +188,22 @@ fn gradient_get_stop(ptr: *mut c_void, index: usize) -> Option<GradientStop> {
 
 fn gradient_set_spread_method(ptr: *mut c_void, method: GradientSpreadMethod) -> bool {
     // SAFETY: `ptr` is a live GradientBrush*.
-    unsafe { dm_noesis_gradient_brush_set_spread_method(ptr, method as i32) }
+    unsafe { noesis_gradient_brush_set_spread_method(ptr, method as i32) }
 }
 
 fn gradient_spread_method(ptr: *mut c_void) -> Option<GradientSpreadMethod> {
     // SAFETY: `ptr` is a live GradientBrush*.
-    GradientSpreadMethod::from_ordinal(unsafe { dm_noesis_gradient_brush_get_spread_method(ptr) })
+    GradientSpreadMethod::from_ordinal(unsafe { noesis_gradient_brush_get_spread_method(ptr) })
 }
 
 fn gradient_set_mapping_mode(ptr: *mut c_void, mode: BrushMappingMode) -> bool {
     // SAFETY: `ptr` is a live GradientBrush*.
-    unsafe { dm_noesis_gradient_brush_set_mapping_mode(ptr, mode as i32) }
+    unsafe { noesis_gradient_brush_set_mapping_mode(ptr, mode as i32) }
 }
 
 fn gradient_mapping_mode(ptr: *mut c_void) -> Option<BrushMappingMode> {
     // SAFETY: `ptr` is a live GradientBrush*.
-    BrushMappingMode::from_ordinal(unsafe { dm_noesis_gradient_brush_get_mapping_mode(ptr) })
+    BrushMappingMode::from_ordinal(unsafe { noesis_gradient_brush_get_mapping_mode(ptr) })
 }
 
 /// `Noesis::GradientSpreadMethod` (`NsGui/Enums.h`): how a gradient paints the
@@ -255,22 +255,22 @@ impl LinearGradientBrush {
     /// Panics if Noesis fails to allocate the brush.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_linear_gradient_brush_create() };
+        let ptr = unsafe { noesis_linear_gradient_brush_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_linear_gradient_brush_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_linear_gradient_brush_create returned null"),
         }
     }
 
     /// Set the gradient start point (relative coordinates by default).
     pub fn set_start_point(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live LinearGradientBrush*.
-        unsafe { dm_noesis_linear_gradient_brush_set_start_point(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_linear_gradient_brush_set_start_point(self.ptr.as_ptr(), x, y) };
     }
 
     /// Set the gradient end point.
     pub fn set_end_point(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live LinearGradientBrush*.
-        unsafe { dm_noesis_linear_gradient_brush_set_end_point(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_linear_gradient_brush_set_end_point(self.ptr.as_ptr(), x, y) };
     }
 
     /// Read `({startX, startY}, {endX, endY})` back from the live object.
@@ -278,7 +278,7 @@ impl LinearGradientBrush {
     pub fn points(&self) -> ([f32; 2], [f32; 2]) {
         let mut out = [0.0f32; 4];
         // SAFETY: self.ptr is a live LinearGradientBrush*; `out` is 4 floats.
-        unsafe { dm_noesis_linear_gradient_brush_get_points(self.ptr.as_ptr(), out.as_mut_ptr()) };
+        unsafe { noesis_linear_gradient_brush_get_points(self.ptr.as_ptr(), out.as_mut_ptr()) };
         ([out[0], out[1]], [out[2], out[3]])
     }
 
@@ -333,7 +333,7 @@ impl LinearGradientBrush {
 /// method and mapping mode, append `.stop(..)`s, then [`build`](Self::build).
 ///
 /// ```no_run
-/// # use dm_noesis_runtime::brushes::{LinearGradientBrush, GradientSpreadMethod, BrushMappingMode};
+/// # use noesis_runtime::brushes::{LinearGradientBrush, GradientSpreadMethod, BrushMappingMode};
 /// let brush = LinearGradientBrush::builder()
 ///     .start(0.0, 0.0)
 ///     .end(1.0, 1.0)
@@ -416,28 +416,28 @@ impl RadialGradientBrush {
     /// Panics if Noesis fails to allocate the brush.
     #[must_use]
     pub fn new() -> Self {
-        let ptr = unsafe { dm_noesis_radial_gradient_brush_create() };
+        let ptr = unsafe { noesis_radial_gradient_brush_create() };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_radial_gradient_brush_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_radial_gradient_brush_create returned null"),
         }
     }
 
     /// Set the center of the outermost circle.
     pub fn set_center(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live RadialGradientBrush*.
-        unsafe { dm_noesis_radial_gradient_brush_set_center(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_radial_gradient_brush_set_center(self.ptr.as_ptr(), x, y) };
     }
 
     /// Set the focal point where the gradient begins.
     pub fn set_gradient_origin(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live RadialGradientBrush*.
-        unsafe { dm_noesis_radial_gradient_brush_set_gradient_origin(self.ptr.as_ptr(), x, y) };
+        unsafe { noesis_radial_gradient_brush_set_gradient_origin(self.ptr.as_ptr(), x, y) };
     }
 
     /// Set the horizontal/vertical radii of the outermost circle.
     pub fn set_radius(&mut self, rx: f32, ry: f32) {
         // SAFETY: self.ptr is a live RadialGradientBrush*.
-        unsafe { dm_noesis_radial_gradient_brush_set_radius(self.ptr.as_ptr(), rx, ry) };
+        unsafe { noesis_radial_gradient_brush_set_radius(self.ptr.as_ptr(), rx, ry) };
     }
 
     /// Read `(radiusX, radiusY)` back from the live object.
@@ -447,7 +447,7 @@ impl RadialGradientBrush {
         let mut ry = 0.0f32;
         // SAFETY: self.ptr is a live RadialGradientBrush*; out params valid.
         unsafe {
-            dm_noesis_radial_gradient_brush_get_radius(
+            noesis_radial_gradient_brush_get_radius(
                 self.ptr.as_ptr(),
                 &mut rx as *mut f32,
                 &mut ry as *mut f32,
@@ -508,7 +508,7 @@ impl RadialGradientBrush {
 /// [`build`](Self::build).
 ///
 /// ```no_run
-/// # use dm_noesis_runtime::brushes::{RadialGradientBrush, GradientSpreadMethod};
+/// # use noesis_runtime::brushes::{RadialGradientBrush, GradientSpreadMethod};
 /// let brush = RadialGradientBrush::builder()
 ///     .center(0.5, 0.5)
 ///     .gradient_origin(0.5, 0.5)
@@ -721,72 +721,72 @@ pub trait TileBrush: Brush {
     /// Set the horizontal alignment of content within the base tile.
     fn set_alignment_x(&mut self, value: AlignmentX) {
         // SAFETY: brush_raw() is a live TileBrush*.
-        unsafe { dm_noesis_tile_brush_set_alignment_x(self.brush_raw(), value as i32) };
+        unsafe { noesis_tile_brush_set_alignment_x(self.brush_raw(), value as i32) };
     }
     /// Read the horizontal alignment back from the live object.
     fn alignment_x(&self) -> Option<AlignmentX> {
         // SAFETY: brush_raw() is a live TileBrush*.
-        AlignmentX::from_ordinal(unsafe { dm_noesis_tile_brush_get_alignment_x(self.brush_raw()) })
+        AlignmentX::from_ordinal(unsafe { noesis_tile_brush_get_alignment_x(self.brush_raw()) })
     }
 
     /// Set the vertical alignment of content within the base tile.
     fn set_alignment_y(&mut self, value: AlignmentY) {
         // SAFETY: brush_raw() is a live TileBrush*.
-        unsafe { dm_noesis_tile_brush_set_alignment_y(self.brush_raw(), value as i32) };
+        unsafe { noesis_tile_brush_set_alignment_y(self.brush_raw(), value as i32) };
     }
     /// Read the vertical alignment back from the live object.
     fn alignment_y(&self) -> Option<AlignmentY> {
         // SAFETY: brush_raw() is a live TileBrush*.
-        AlignmentY::from_ordinal(unsafe { dm_noesis_tile_brush_get_alignment_y(self.brush_raw()) })
+        AlignmentY::from_ordinal(unsafe { noesis_tile_brush_get_alignment_y(self.brush_raw()) })
     }
 
     /// Set how content stretches to fit its tile.
     fn set_stretch(&mut self, value: Stretch) {
         // SAFETY: brush_raw() is a live TileBrush*.
-        unsafe { dm_noesis_tile_brush_set_stretch(self.brush_raw(), value as i32) };
+        unsafe { noesis_tile_brush_set_stretch(self.brush_raw(), value as i32) };
     }
     /// Read the stretch mode back from the live object.
     fn stretch(&self) -> Option<Stretch> {
         // SAFETY: brush_raw() is a live TileBrush*.
-        Stretch::from_ordinal(unsafe { dm_noesis_tile_brush_get_stretch(self.brush_raw()) })
+        Stretch::from_ordinal(unsafe { noesis_tile_brush_get_stretch(self.brush_raw()) })
     }
 
     /// Set how the base tile repeats to fill the painted area.
     fn set_tile_mode(&mut self, value: TileMode) {
         // SAFETY: brush_raw() is a live TileBrush*.
-        unsafe { dm_noesis_tile_brush_set_tile_mode(self.brush_raw(), value as i32) };
+        unsafe { noesis_tile_brush_set_tile_mode(self.brush_raw(), value as i32) };
     }
     /// Read the tile mode back from the live object.
     fn tile_mode(&self) -> Option<TileMode> {
         // SAFETY: brush_raw() is a live TileBrush*.
-        TileMode::from_ordinal(unsafe { dm_noesis_tile_brush_get_tile_mode(self.brush_raw()) })
+        TileMode::from_ordinal(unsafe { noesis_tile_brush_get_tile_mode(self.brush_raw()) })
     }
 
     /// Set the base-tile rectangle as `[x, y, width, height]`.
     fn set_viewport(&mut self, rect: [f32; 4]) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe {
-            dm_noesis_tile_brush_set_viewport(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
+            noesis_tile_brush_set_viewport(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
         };
     }
     /// Read the `Viewport` Rect back as `[x, y, width, height]`.
     fn viewport(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: brush_raw() is a live TileBrush*; `out` is 4 floats.
-        unsafe { dm_noesis_tile_brush_get_viewport(self.brush_raw(), out.as_mut_ptr()) };
+        unsafe { noesis_tile_brush_get_viewport(self.brush_raw(), out.as_mut_ptr()) };
         out
     }
 
     /// Set the mapping mode of the `Viewport` Rect.
     fn set_viewport_units(&mut self, value: BrushMappingMode) {
         // SAFETY: brush_raw() is a live TileBrush*.
-        unsafe { dm_noesis_tile_brush_set_viewport_units(self.brush_raw(), value as i32) };
+        unsafe { noesis_tile_brush_set_viewport_units(self.brush_raw(), value as i32) };
     }
     /// Read the `Viewport` mapping mode back from the live object.
     fn viewport_units(&self) -> Option<BrushMappingMode> {
         // SAFETY: brush_raw() is a live TileBrush*.
         BrushMappingMode::from_ordinal(unsafe {
-            dm_noesis_tile_brush_get_viewport_units(self.brush_raw())
+            noesis_tile_brush_get_viewport_units(self.brush_raw())
         })
     }
 
@@ -794,27 +794,27 @@ pub trait TileBrush: Brush {
     fn set_viewbox(&mut self, rect: [f32; 4]) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe {
-            dm_noesis_tile_brush_set_viewbox(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
+            noesis_tile_brush_set_viewbox(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
         };
     }
     /// Read the `Viewbox` Rect back as `[x, y, width, height]`.
     fn viewbox(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: brush_raw() is a live TileBrush*; `out` is 4 floats.
-        unsafe { dm_noesis_tile_brush_get_viewbox(self.brush_raw(), out.as_mut_ptr()) };
+        unsafe { noesis_tile_brush_get_viewbox(self.brush_raw(), out.as_mut_ptr()) };
         out
     }
 
     /// Set the mapping mode of the `Viewbox` Rect.
     fn set_viewbox_units(&mut self, value: BrushMappingMode) {
         // SAFETY: brush_raw() is a live TileBrush*.
-        unsafe { dm_noesis_tile_brush_set_viewbox_units(self.brush_raw(), value as i32) };
+        unsafe { noesis_tile_brush_set_viewbox_units(self.brush_raw(), value as i32) };
     }
     /// Read the `Viewbox` mapping mode back from the live object.
     fn viewbox_units(&self) -> Option<BrushMappingMode> {
         // SAFETY: brush_raw() is a live TileBrush*.
         BrushMappingMode::from_ordinal(unsafe {
-            dm_noesis_tile_brush_get_viewbox_units(self.brush_raw())
+            noesis_tile_brush_get_viewbox_units(self.brush_raw())
         })
     }
 }
@@ -848,9 +848,9 @@ impl ImageBrush {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: null source is allowed (created without an image).
-        let ptr = unsafe { dm_noesis_image_brush_create(core::ptr::null_mut()) };
+        let ptr = unsafe { noesis_image_brush_create(core::ptr::null_mut()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_image_brush_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_image_brush_create returned null"),
         }
     }
 
@@ -865,7 +865,7 @@ impl ImageBrush {
     #[must_use]
     pub unsafe fn with_source(image_source: *mut c_void) -> Option<Self> {
         // SAFETY: per the contract, `image_source` is a live ImageSource* or null.
-        let ptr = unsafe { dm_noesis_image_brush_create(image_source) };
+        let ptr = unsafe { noesis_image_brush_create(image_source) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -877,7 +877,7 @@ impl ImageBrush {
     /// `image_source` must be a valid live `Noesis::ImageSource*` or null.
     pub unsafe fn set_image_source(&mut self, image_source: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live ImageBrush*; `image_source` per contract.
-        unsafe { dm_noesis_image_brush_set_image_source(self.ptr.as_ptr(), image_source) }
+        unsafe { noesis_image_brush_set_image_source(self.ptr.as_ptr(), image_source) }
     }
 
     /// Borrowed `ImageSource*` currently set on the brush, or `None`. The
@@ -885,7 +885,7 @@ impl ImageBrush {
     #[must_use]
     pub fn image_source(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live ImageBrush*; the returned pointer is borrowed.
-        let p = unsafe { dm_noesis_image_brush_get_image_source(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_image_brush_get_image_source(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 }
@@ -932,9 +932,9 @@ impl VisualBrush {
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: null visual is allowed (source wired later).
-        let ptr = unsafe { dm_noesis_visual_brush_create(core::ptr::null_mut()) };
+        let ptr = unsafe { noesis_visual_brush_create(core::ptr::null_mut()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_visual_brush_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_visual_brush_create returned null"),
         }
     }
 
@@ -948,9 +948,9 @@ impl VisualBrush {
     pub fn from_element(element: &crate::view::FrameworkElement) -> Self {
         // SAFETY: element.raw() is a live Visual* (every element is a Visual),
         // borrowed for the call; Noesis stores its own reference.
-        let ptr = unsafe { dm_noesis_visual_brush_create(element.raw()) };
+        let ptr = unsafe { noesis_visual_brush_create(element.raw()) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_visual_brush_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_visual_brush_create returned null"),
         }
     }
 
@@ -962,13 +962,13 @@ impl VisualBrush {
     pub fn set_visual(&mut self, element: &crate::view::FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live VisualBrush*; element.raw() is a live
         // Visual* borrowed for the call.
-        unsafe { dm_noesis_visual_brush_set_visual(self.ptr.as_ptr(), element.raw()) }
+        unsafe { noesis_visual_brush_set_visual(self.ptr.as_ptr(), element.raw()) }
     }
 
     /// Clear the brush's visual source.
     pub fn clear_visual(&mut self) -> bool {
         // SAFETY: self.ptr is a live VisualBrush*; null clears the source.
-        unsafe { dm_noesis_visual_brush_set_visual(self.ptr.as_ptr(), core::ptr::null_mut()) }
+        unsafe { noesis_visual_brush_set_visual(self.ptr.as_ptr(), core::ptr::null_mut()) }
     }
 
     /// Borrowed `Visual*` currently set on the brush, or `None`. The pointer has
@@ -976,7 +976,7 @@ impl VisualBrush {
     #[must_use]
     pub fn visual(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live VisualBrush*; the returned pointer is borrowed.
-        let p = unsafe { dm_noesis_visual_brush_get_visual(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_visual_brush_get_visual(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 }
@@ -1006,16 +1006,16 @@ impl BlurEffect {
     /// Panics if Noesis fails to allocate the effect.
     #[must_use]
     pub fn new(radius: f32) -> Self {
-        let ptr = unsafe { dm_noesis_blur_effect_create(radius) };
+        let ptr = unsafe { noesis_blur_effect_create(radius) };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_blur_effect_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_blur_effect_create returned null"),
         }
     }
 
     /// Change the blur radius.
     pub fn set_radius(&mut self, radius: f32) {
         // SAFETY: self.ptr is a live BlurEffect*.
-        unsafe { dm_noesis_blur_effect_set_radius(self.ptr.as_ptr(), radius) };
+        unsafe { noesis_blur_effect_set_radius(self.ptr.as_ptr(), radius) };
     }
 
     /// Read the blur radius back from the live object.
@@ -1023,7 +1023,7 @@ impl BlurEffect {
     pub fn radius(&self) -> f32 {
         let mut out = 0.0f32;
         // SAFETY: self.ptr is a live BlurEffect*; `out` is a valid float.
-        unsafe { dm_noesis_blur_effect_get_radius(self.ptr.as_ptr(), &mut out as *mut f32) };
+        unsafe { noesis_blur_effect_get_radius(self.ptr.as_ptr(), &mut out as *mut f32) };
         out
     }
 }
@@ -1105,7 +1105,7 @@ impl DropShadowEffect {
     ) -> Self {
         // SAFETY: `color` outlives the call; the C side copies it into a Color.
         let ptr = unsafe {
-            dm_noesis_drop_shadow_effect_create(
+            noesis_drop_shadow_effect_create(
                 color.as_ptr(),
                 blur_radius,
                 direction,
@@ -1114,7 +1114,7 @@ impl DropShadowEffect {
             )
         };
         Self {
-            ptr: NonNull::new(ptr).expect("dm_noesis_drop_shadow_effect_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_drop_shadow_effect_create returned null"),
         }
     }
 
@@ -1128,7 +1128,7 @@ impl DropShadowEffect {
         let mut opacity = 0.0f32;
         // SAFETY: self.ptr is a live DropShadowEffect*; all out params valid.
         unsafe {
-            dm_noesis_drop_shadow_effect_get(
+            noesis_drop_shadow_effect_get(
                 self.ptr.as_ptr(),
                 color.as_mut_ptr(),
                 &mut blur_radius as *mut f32,
@@ -1158,31 +1158,31 @@ impl DropShadowEffect {
     /// Set the shadow color `{r, g, b, a}`.
     pub fn set_color(&mut self, rgba: [f32; 4]) {
         // SAFETY: self.ptr is a live DropShadowEffect*; `rgba` outlives the call.
-        unsafe { dm_noesis_drop_shadow_effect_set_color(self.ptr.as_ptr(), rgba.as_ptr()) };
+        unsafe { noesis_drop_shadow_effect_set_color(self.ptr.as_ptr(), rgba.as_ptr()) };
     }
 
     /// Set the blur radius of the shadow edge.
     pub fn set_blur_radius(&mut self, blur_radius: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
-        unsafe { dm_noesis_drop_shadow_effect_set_blur_radius(self.ptr.as_ptr(), blur_radius) };
+        unsafe { noesis_drop_shadow_effect_set_blur_radius(self.ptr.as_ptr(), blur_radius) };
     }
 
     /// Set the shadow direction, in degrees.
     pub fn set_direction(&mut self, direction: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
-        unsafe { dm_noesis_drop_shadow_effect_set_direction(self.ptr.as_ptr(), direction) };
+        unsafe { noesis_drop_shadow_effect_set_direction(self.ptr.as_ptr(), direction) };
     }
 
     /// Set the distance of the shadow from the content.
     pub fn set_shadow_depth(&mut self, shadow_depth: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
-        unsafe { dm_noesis_drop_shadow_effect_set_shadow_depth(self.ptr.as_ptr(), shadow_depth) };
+        unsafe { noesis_drop_shadow_effect_set_shadow_depth(self.ptr.as_ptr(), shadow_depth) };
     }
 
     /// Set the shadow opacity, `0..=1`.
     pub fn set_opacity(&mut self, opacity: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
-        unsafe { dm_noesis_drop_shadow_effect_set_opacity(self.ptr.as_ptr(), opacity) };
+        unsafe { noesis_drop_shadow_effect_set_opacity(self.ptr.as_ptr(), opacity) };
     }
 }
 
