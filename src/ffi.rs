@@ -2684,6 +2684,61 @@ unsafe extern "C" {
         collection: *mut c_void,
         index: u32,
     ) -> *mut c_void;
+
+    // Code-side element-tree construction (Phase 1): Decorator/Border Child,
+    // Panel Children, Grid row/column definitions. Collections hand out a +1
+    // BaseComponent* (release via dm_noesis_base_component_release); get/get_at
+    // return borrowed (no +1) pointers owned by the host.
+    pub fn dm_noesis_decorator_set_child(decorator: *mut c_void, child: *mut c_void) -> bool;
+    pub fn dm_noesis_decorator_get_child(decorator: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_panel_children_get(panel: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_panel_children_add(coll: *mut c_void, child: *mut c_void) -> i32;
+    pub fn dm_noesis_panel_children_insert(
+        coll: *mut c_void,
+        index: u32,
+        child: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_panel_children_remove_at(coll: *mut c_void, index: u32) -> bool;
+    pub fn dm_noesis_panel_children_clear(coll: *mut c_void) -> bool;
+    pub fn dm_noesis_panel_children_count(coll: *mut c_void) -> i32;
+    pub fn dm_noesis_panel_children_get_at(coll: *mut c_void, index: u32) -> *mut c_void;
+
+    pub fn dm_noesis_grid_row_definition_create() -> *mut c_void;
+    pub fn dm_noesis_grid_column_definition_create() -> *mut c_void;
+    pub fn dm_noesis_grid_row_definition_set_height(
+        def: *mut c_void,
+        value: f32,
+        unit: i32,
+    ) -> bool;
+    pub fn dm_noesis_grid_row_definition_get_height(
+        def: *mut c_void,
+        out_value: *mut f32,
+        out_unit: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_grid_column_definition_set_width(
+        def: *mut c_void,
+        value: f32,
+        unit: i32,
+    ) -> bool;
+    pub fn dm_noesis_grid_column_definition_get_width(
+        def: *mut c_void,
+        out_value: *mut f32,
+        out_unit: *mut i32,
+    ) -> bool;
+
+    pub fn dm_noesis_grid_get_row_definitions(grid: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_grid_get_column_definitions(grid: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_definition_collection_add(coll: *mut c_void, def: *mut c_void) -> i32;
+    pub fn dm_noesis_definition_collection_insert(
+        coll: *mut c_void,
+        index: u32,
+        def: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_definition_collection_remove_at(coll: *mut c_void, index: u32) -> bool;
+    pub fn dm_noesis_definition_collection_clear(coll: *mut c_void) -> bool;
+    pub fn dm_noesis_definition_collection_count(coll: *mut c_void) -> i32;
+    pub fn dm_noesis_definition_collection_get(coll: *mut c_void, index: u32) -> *mut c_void;
 }
 /// Coerce callback (TODO §9). Invoked inside Noesis's value pipeline when a
 /// coerced DP's effective value is computed. `in_value` is the pre-coercion

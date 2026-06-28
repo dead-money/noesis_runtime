@@ -44,6 +44,7 @@ pub mod commands;
 pub mod converters;
 pub mod diagnostics;
 pub mod drawing;
+pub mod element_tree;
 pub mod events;
 // Not part of the stable API; no semver guarantees.
 #[doc(hidden)]

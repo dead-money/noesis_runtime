@@ -3114,6 +3114,64 @@ void* dm_noesis_text_inlines_span_get_inlines(void* span);
 int32_t dm_noesis_text_inlines_collection_add(void* collection, void* inl);
 int32_t dm_noesis_text_inlines_collection_count(void* collection);
 void* dm_noesis_text_inlines_collection_get(void* collection, uint32_t index);
+
+// ── Code-side element-tree construction (Phase 1) ────────────────────────────
+//
+// Build/mutate panel trees, Border/Decorator children, and Grid row/column
+// definitions from code. These collections + the Decorator Child are NOT
+// DependencyProperties, so the by-name DP setters cannot reach them. Collections
+// are handed out at +1 (release via dm_noesis_base_component_release); GetChild
+// and the Get* accessors return borrowed (no +1) pointers owned by the host.
+
+// Decorator (e.g. Border) single Child. `set` makes the Decorator take its own
+// reference (NULL clears) and returns false if `decorator` is not a Decorator or
+// `child` is non-null but not a UIElement. `get` returns a borrowed (no +1)
+// BaseComponent* whose address matches the element set, or NULL.
+bool dm_noesis_decorator_set_child(void* decorator, void* child);
+void* dm_noesis_decorator_get_child(void* decorator);
+
+// Live UIElementCollection of a Panel's children, handed out at +1, or NULL if
+// `panel` is not a Panel.
+void* dm_noesis_panel_children_get(void* panel);
+// `add` appends a borrowed UIElement* (the collection takes its own ref) and
+// returns the insertion index, or -1 on non-collection/non-UIElement. `insert`
+// allows index == count. `remove_at`/`clear` mutate; `count` returns the item
+// count (-1 for a non-collection); `get_at` returns a borrowed (no +1) UIElement*
+// at `index` or NULL on out-of-range.
+int32_t dm_noesis_panel_children_add(void* coll, void* child);
+bool dm_noesis_panel_children_insert(void* coll, uint32_t index, void* child);
+bool dm_noesis_panel_children_remove_at(void* coll, uint32_t index);
+bool dm_noesis_panel_children_clear(void* coll);
+int32_t dm_noesis_panel_children_count(void* coll);
+void* dm_noesis_panel_children_get_at(void* coll, uint32_t index);
+
+// RowDefinition / ColumnDefinition constructors (+1, default 1* length).
+void* dm_noesis_grid_row_definition_create(void);
+void* dm_noesis_grid_column_definition_create(void);
+// Marshalled GridLength get/set. `unit` is a GridUnitType ordinal (0 Auto,
+// 1 Pixel, 2 Star). `set` returns false on non-definition / out-of-range unit;
+// `get` writes *out_value / *out_unit (either may be NULL) and returns false on
+// a non-definition.
+bool dm_noesis_grid_row_definition_set_height(void* def, float value, int32_t unit);
+bool dm_noesis_grid_row_definition_get_height(void* def, float* out_value, int32_t* out_unit);
+bool dm_noesis_grid_column_definition_set_width(void* def, float value, int32_t unit);
+bool dm_noesis_grid_column_definition_get_width(void* def, float* out_value, int32_t* out_unit);
+
+// Live Row/ColumnDefinitionCollection of a Grid, handed out at +1, or NULL if
+// `grid` is not a Grid.
+void* dm_noesis_grid_get_row_definitions(void* grid);
+void* dm_noesis_grid_get_column_definitions(void* grid);
+// Definition-collection mutation/inspection (works on both Row and Column
+// collections; the collection validates the BaseDefinition subtype). `add`
+// returns the insertion index or -1; `insert` allows index == count; `count`
+// returns -1 for a non-collection; `get` returns a borrowed (no +1) definition.
+int32_t dm_noesis_definition_collection_add(void* coll, void* def);
+bool dm_noesis_definition_collection_insert(void* coll, uint32_t index, void* def);
+bool dm_noesis_definition_collection_remove_at(void* coll, uint32_t index);
+bool dm_noesis_definition_collection_clear(void* coll);
+int32_t dm_noesis_definition_collection_count(void* coll);
+void* dm_noesis_definition_collection_get(void* coll, uint32_t index);
+
 // ── FormattedText measurement / layout (TODO §13) ───────────────────────────
 //
 // FormattedText (NsGui/FormattedText.h) computes glyph metrics + a text layout

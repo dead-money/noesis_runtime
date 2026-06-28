@@ -48,7 +48,8 @@ use crate::ffi::{
     dm_noesis_controls_treeviewitem_get_is_expanded,
     dm_noesis_controls_treeviewitem_get_is_selected,
     dm_noesis_controls_treeviewitem_set_is_expanded,
-    dm_noesis_controls_treeviewitem_set_is_selected, dm_noesis_dependency_object_check_access,
+    dm_noesis_controls_treeviewitem_set_is_selected, dm_noesis_decorator_get_child,
+    dm_noesis_decorator_set_child, dm_noesis_dependency_object_check_access,
     dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
@@ -2300,6 +2301,48 @@ impl FrameworkElement {
     pub fn items_clear(&mut self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*.
         unsafe { dm_noesis_items_control_items_clear(self.ptr.as_ptr()) }
+    }
+
+    // ── Decorator / Border Child (Phase 1) ──────────────────────────────────
+    //
+    // `Decorator::Child` is NOT a DependencyProperty, so it cannot be reached by
+    // the by-name DP setters; these wrap the typed `Decorator::SetChild` /
+    // `GetChild` (Border derives from Decorator). Other panel-tree building
+    // blocks (`Panel::Children`, `Grid` definitions) live in
+    // [`crate::element_tree`].
+
+    /// Set this `Decorator`'s (e.g. `Border`'s) single `Child`. The decorator
+    /// takes its own reference, so `child` may be dropped afterwards. Returns
+    /// `false` if this element is not a `Decorator` or `child` is not a
+    /// `UIElement`.
+    #[must_use = "a false return means the child was not set (not a Decorator / not a UIElement)"]
+    pub fn set_decorator_child(&mut self, child: &FrameworkElement) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent* (DynamicCast to Decorator
+        // C-side); child.raw() is a live UIElement*.
+        unsafe { dm_noesis_decorator_set_child(self.ptr.as_ptr(), child.raw()) }
+    }
+
+    /// Clear this `Decorator`'s `Child`. Returns `false` if this element is not a
+    /// `Decorator`.
+    #[must_use = "a false return means this element is not a Decorator"]
+    pub fn clear_decorator_child(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; null clears the child.
+        unsafe { dm_noesis_decorator_set_child(self.ptr.as_ptr(), core::ptr::null_mut()) }
+    }
+
+    /// This `Decorator`'s current `Child` as an owning [`FrameworkElement`]
+    /// (an independent `+1`, so dropping it does not affect the tree), or `None`
+    /// if there is no child or this element is not a `Decorator`.
+    #[must_use]
+    pub fn decorator_child(&self) -> Option<FrameworkElement> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side returns a
+        // borrowed Child* (no +1) or null.
+        let borrowed = unsafe { dm_noesis_decorator_get_child(self.ptr.as_ptr()) };
+        let borrowed = NonNull::new(borrowed)?;
+        // AddRef so the returned handle owns its reference, released on drop.
+        // SAFETY: `borrowed` is a live UIElement* (BaseComponent*).
+        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        NonNull::new(owned).map(|ptr| Self { ptr })
     }
 
     // -- RangeBase: Slider / ProgressBar / ScrollBar --
