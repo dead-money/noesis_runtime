@@ -66,7 +66,7 @@ fn custom_dp_coerce_point() {
         let inst = reg.create_instance().expect("create_instance");
         let h = inst.handle();
 
-        // Negative coords are clamped to zero — read back through Noesis.
+        // Negative coords are clamped to zero, read back through Noesis.
         h.set_point(pt, -3.0, 7.0);
         assert_eq!(h.get_point(pt), Some((0.0, 7.0)), "Point coerce clamp x");
         h.set_point(pt, 4.0, -2.0);

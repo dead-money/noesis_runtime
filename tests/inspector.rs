@@ -1,4 +1,4 @@
-//! Inspector toggle and query smoke test — linkage / no-crash only.
+//! Inspector toggle and query smoke test: linkage / no-crash only.
 //!
 //! The shipped Release dylib has the Inspector compiled out, so
 //! `is_inspector_connected()` always returns `false` and `update_inspector()`

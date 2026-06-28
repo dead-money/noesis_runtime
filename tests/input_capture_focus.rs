@@ -1,4 +1,4 @@
-//! Mouse capture, focus state, and focus traversal — end-to-end across the FFI.
+//! Mouse capture, focus state, and focus traversal across the FFI, end-to-end.
 
 use std::collections::HashMap;
 
@@ -175,7 +175,7 @@ fn capture_focus_roundtrip() {
             "focus left `one` after MoveFocus(Next)"
         );
 
-        // focus_engage(false) is the 1-arg Focus(bool) knob — focuses `one`.
+        // focus_engage(false) is the 1-arg Focus(bool) knob; focuses `one`.
         assert!(one.focus_engage(false), "focus_engage focuses the element");
         let _ = view.update(0.16);
         assert!(one.is_keyboard_focused(), "engage path focused `one`");
@@ -196,7 +196,7 @@ fn capture_focus_roundtrip() {
         );
         // Headless note: touch capture is tracked per-TouchDevice, distinct from
         // Mouse capture, so it does NOT surface through GetIsMouseCaptured /
-        // Mouse::GetCaptured — those stay clear (the observable, asserted fact).
+        // Mouse::GetCaptured; those stay clear (the observable, asserted fact).
         let _ = view.update(0.184);
         assert!(
             !one.is_mouse_captured(),

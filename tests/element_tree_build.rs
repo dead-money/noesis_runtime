@@ -1,5 +1,5 @@
 //! Code-side element-tree construction: `StackPanel` children, `Grid` row/column
-//! definitions, and `Border` child — mutated from Rust and round-tripped by identity.
+//! definitions, and `Border` child, mutated from Rust and round-tripped by identity.
 
 use noesis_runtime::element_tree::{
     ColumnDefinition, GridLength, GridUnitType, RowDefinition, column_definitions, panel_children,

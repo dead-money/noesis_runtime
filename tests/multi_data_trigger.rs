@@ -97,7 +97,7 @@ fn multi_data_trigger_and_event_actions_roundtrip() {
         );
         assert_eq!(mdt.setter_count(), 1, "one setter");
 
-        // It's a real BaseTrigger — attach it to a Style.
+        // It's a real BaseTrigger, so attach it to a Style.
         let mut style = Style::new();
         assert!(style.set_target_type("TextBlock"));
         assert!(

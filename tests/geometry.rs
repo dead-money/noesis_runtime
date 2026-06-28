@@ -115,7 +115,7 @@ fn geometry_object_model_round_trip() {
             "dropped (unclosed) context leaves geometry empty"
         );
 
-        // no getter on context — bounds are the only observable
+        // no getter on context; bounds are the only observable
         let quad = StreamGeometry::new();
         {
             let ctx = quad.open();
@@ -189,7 +189,7 @@ fn geometry_object_model_round_trip() {
         stream.set_fill_rule(FillRule::Nonzero);
         assert_eq!(stream.fill_rule(), FillRule::Nonzero, "stream fill rule");
 
-        // set_data() rebuilds in place — bounds must follow the new path-data
+        // set_data() rebuilds in place; bounds must follow the new path-data
         let mut reshaped = StreamGeometry::from_data("M 0,0 L 10,0 10,10 Z");
         let r0 = reshaped.bounds();
         assert!(

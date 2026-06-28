@@ -28,7 +28,7 @@ const SCROLL_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
   </StackPanel>
 </ScrollViewer>"##;
 
-// No scrollable surface — the negative control for the MouseHWheel assertion.
+// No scrollable surface. The negative control for the MouseHWheel assertion.
 const GRID_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -286,7 +286,7 @@ fn view_timers_flags_stats_quality_hwheel() {
 
         // Necessary but not sufficient: the 16 ms interval already fires once
         // per 50 ms step, so this alone cannot distinguish a working restart
-        // from a no-op — see the huge→short restart below for the real proof.
+        // from a no-op. See the huge->short restart below for the real proof.
         sub_const.restart(8);
         for _ in 0..10 {
             t += 0.05;
@@ -298,7 +298,7 @@ fn view_timers_flags_stats_quality_hwheel() {
         );
 
         // A no-op restart() leaves the ~10000 s interval in place, so the
-        // counter stays 0 — this assertion fails iff RestartTimer did not cross
+        // counter stays 0; this assertion fails iff RestartTimer did not cross
         // into IView.
         let r = Arc::clone(&restart_ticks);
         let sub_restart = view

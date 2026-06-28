@@ -48,7 +48,7 @@ fn double_animation_drives_opacity() {
         let mut sb = Storyboard::new();
         assert!(sb.add_child(&anim));
         assert_eq!(sb.child_count(), Some(1));
-        // The builder handles may be dropped after wiring — Noesis holds its own
+        // The builder handles may be dropped after wiring; Noesis holds its own
         // references through the storyboard's children collection.
         drop(anim);
 

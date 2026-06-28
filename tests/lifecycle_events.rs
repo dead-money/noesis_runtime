@@ -1,4 +1,4 @@
-//! Non-routed lifecycle events (`Event_` / `AddEventHandler` mechanism) — fire and unsubscribe.
+//! Non-routed lifecycle events (`Event_` / `AddEventHandler` mechanism): fire and unsubscribe.
 //!
 //! `LayoutUpdated` and `Initialized` are render-/load-driven and do not re-fire
 //! in a headless harness; only their subscription wiring is asserted.

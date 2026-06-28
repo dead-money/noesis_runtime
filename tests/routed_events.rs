@@ -10,7 +10,7 @@ use noesis_runtime::view::{FrameworkElement, Key, MouseButton, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
 // Root Grid intentionally has NO explicit Width/Height so it stretches to the
-// View — that lets `SizeChanged` track `set_size`. Background makes it
+// View. That lets `SizeChanged` track `set_size`. Background makes it
 // hit-testable so mouse-button events resolve to it.
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -133,7 +133,7 @@ fn routed_events_dispatch_typed_args() {
             true,
             move |_args: &EventArgs| {
                 pa.fetch_add(1, Ordering::SeqCst);
-                true // mark handled — exercises the out_handled write path
+                true // mark handled; exercises the out_handled write path
             },
         )
         .expect("subscribe MouseLeftButtonUp (A) returned None");
@@ -218,7 +218,7 @@ fn routed_events_dispatch_typed_args() {
             "handler B (handled_too=false) should be skipped after A marks handled"
         );
 
-        // Ordered teardown — drop every subscription + handle before shutdown.
+        // Ordered teardown: drop every subscription + handle before shutdown.
         drop(loaded_sub);
         drop(size_sub);
         drop(mouse_sub);

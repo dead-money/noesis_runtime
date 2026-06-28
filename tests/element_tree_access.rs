@@ -95,7 +95,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
         );
         assert_eq!(stop_hits, 0, "filter=Stop must prevent any result callback");
 
-        // result=Stop after the first hit yields exactly one — the topmost (Inner).
+        // result=Stop after the first hit yields exactly one: the topmost (Inner).
         let mut first: Vec<String> = Vec::new();
         root.hit_test_filtered(
             100.0,
@@ -114,7 +114,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "result=Stop after first hit"
         );
 
-        // Skipping the Inner subtree excludes Inner but keeps Outer — per-visual filter selectivity.
+        // Skipping the Inner subtree excludes Inner but keeps Outer: per-visual filter selectivity.
         let mut filtered: Vec<String> = Vec::new();
         root.hit_test_filtered(
             100.0,
@@ -212,7 +212,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
         )
         .expect("parse t1");
         let identity = t1.render_transform().map(|t| t.raw());
-        // Default is non-null Identity (Some) — assert it so the assert_ne! below isn't trivially Some != None.
+        // Default is non-null Identity (Some); assert it so the assert_ne! below isn't trivially Some != None.
         assert!(
             identity.is_some(),
             "default RenderTransform should be the non-null Identity"

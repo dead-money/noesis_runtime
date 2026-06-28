@@ -1,4 +1,4 @@
-//! Keyboard state, modifier keys, and `KeyboardNavigation` attached properties — end-to-end across the FFI.
+//! Keyboard state, modifier keys, and `KeyboardNavigation` attached properties across the FFI, end-to-end.
 
 use std::collections::HashMap;
 

@@ -1,6 +1,6 @@
 //! Error, assert, and per-thread error handler round-trips.
 //!
-//! All invokes use `fatal = false` — a fatal error or real assert can abort
+//! All invokes use `fatal = false`; a fatal error or real assert can abort
 //! the process.
 //!
 //! The assert round-trip cannot be observed on a Release Noesis build because
@@ -170,8 +170,8 @@ fn error_assert_thread_handlers() {
             let recorded = s.lock().unwrap().clone();
 
             if recorded.is_empty() {
-                // Release SDK (this build): the assert subsystem is compiled out
-                // — SetAssertHandler/InvokeAssertHandler are a shared no-op stub,
+                // Release SDK (this build): the assert subsystem is compiled out;
+                // SetAssertHandler/InvokeAssertHandler are a shared no-op stub,
                 // so the handler never runs and the invoker returns false. Assert
                 // exactly that contract so a regression that wires asserts wrong
                 // (e.g. spuriously invoking) is still caught.
@@ -180,7 +180,7 @@ fn error_assert_thread_handlers() {
                     "stubbed InvokeAssertHandler must return false on a Release SDK"
                 );
             } else {
-                // Debug SDK: the handler ran — assert the full round-trip and
+                // Debug SDK: the handler ran. Assert the full round-trip and
                 // that our `true` return propagated out of InvokeAssertHandler.
                 assert_eq!(recorded.len(), 1, "assert handler fired exactly once");
                 assert_eq!(

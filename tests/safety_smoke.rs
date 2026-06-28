@@ -1,5 +1,5 @@
 //! Safety smoke: edge-case FFI inputs (all `PropType`s, template bindings, re-entrant handlers, drop order) asserted to not crash.
-//! Single `#[test]` — Noesis init/shutdown is once-per-process; each `{}` block covers one crash class.
+//! Single `#[test]`: Noesis init/shutdown is once-per-process; each `{}` block covers one crash class.
 
 use std::collections::HashMap;
 
@@ -9,8 +9,8 @@ use noesis_runtime::markup::MarkupExtensionRegistration;
 use noesis_runtime::view::{FrameworkElement, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// Quiet handler that records nothing; we just want to make sure the FFI
-// doesn't crash when callbacks fire.
+// Quiet handler that records nothing; just confirms the FFI doesn't crash
+// when callbacks fire.
 struct QuietHandler;
 impl PropertyChangeHandler for QuietHandler {
     fn on_changed(&self, _instance: Instance, _idx: u32, _value: PropertyValue<'_>) {}
@@ -27,20 +27,20 @@ impl XamlProvider for Provider {
     }
 }
 
-/// Quickly build a one-shot view from a XAML string. Returns `(view,
-/// content)` so the caller can `find_name` / drop in the right order.
+/// Build a one-shot view from a XAML string. Returns `(view, content)` so
+/// the caller can `find_name` / drop in the right order.
 fn build_view(xaml: &str) -> (View, FrameworkElement) {
     let mut bytes = HashMap::new();
     bytes.insert("scene.xaml".to_string(), xaml.as_bytes().to_vec());
     let provider = Provider(bytes);
     let _guard = noesis_runtime::xaml_provider::set_xaml_provider(provider);
-    // _guard immediately drops at end of scope — but we need it alive for
+    // _guard would otherwise drop at end of scope, but we need it alive for
     // the load. Hold it across the load by leaking; the next call to
     // set_xaml_provider replaces it.
     std::mem::forget(_guard);
 
     let element = FrameworkElement::load("scene.xaml")
-        .expect("FrameworkElement::load returned None — scene.xaml not parseable");
+        .expect("FrameworkElement::load returned None : scene.xaml not parseable");
     let mut view = View::create(element);
     view.set_size(200, 200);
     view.activate();
@@ -74,7 +74,7 @@ fn safety_smoke() {
         b.add_property("Cmp", PropType::BaseComponent);
         let reg = b.register().expect("AllProps registration failed");
         assert_eq!(reg.num_properties(), 10);
-        // Drop without ever instantiating — registry teardown should be clean.
+        // Drop without ever instantiating; registry teardown should be clean.
         drop(reg);
     }
 
@@ -100,9 +100,9 @@ fn safety_smoke() {
         b.add_property("Cmp", PropType::BaseComponent);
         let reg = b.register().expect("AllDefaults registration failed");
 
-        // Implicit Style + ControlTemplate matching the synthetic class —
-        // this is what makes the visual-tree init walk through the
-        // typed-Box code path that crashes when defaults are missing.
+        // Implicit Style + ControlTemplate matching the synthetic class. This
+        // makes the visual-tree init walk through the typed-Box code path that
+        // crashes when defaults are missing.
         let theme_xaml = r##"<?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -194,8 +194,8 @@ fn safety_smoke() {
         drop(reg);
     }
 
-    // The binding system must be able to read synthetic DPs through a
-    // ControlTemplate's `RelativeSource TemplatedParent` without crashing.
+    // The binding system must read synthetic DPs through a ControlTemplate's
+    // `RelativeSource TemplatedParent` without crashing.
     eprintln!("=== Block 4: ControlTemplate w/ TemplatedParent bindings ===");
     {
         let mut b = ClassBuilder::new("Smoke.Templated", ClassBase::ContentControl, QuietHandler);
@@ -444,7 +444,7 @@ fn safety_smoke() {
                 if idx == self.input_idx
                     && let PropertyValue::Float(f) = value
                 {
-                    // Mirror to output_idx — fires another callback for
+                    // Mirror to output_idx; fires another callback for
                     // output_idx, which the matches above ignore (no
                     // infinite loop).
                     instance.set_float(self.output_idx, f * 2.0);

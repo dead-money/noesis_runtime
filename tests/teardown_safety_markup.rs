@@ -76,8 +76,8 @@ fn markup_handler_drops_exactly_once_after_view_teardown() {
         view.activate();
         assert!(view.update(0.0));
 
-        // Drop registration while an extension instance is still live in the tree —
-        // exercises the deferred-free path through MarkupClassData's refcount.
+        // Drop registration while an extension instance is still live in the tree.
+        // Exercises the deferred-free path through MarkupClassData's refcount.
         drop(registration);
 
         view.deactivate();

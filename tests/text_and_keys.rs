@@ -122,7 +122,7 @@ fn text_keydown_focus_round_trip() {
             }
             _ => false,
         })
-        .expect("subscribe_keydown returned None — TextBox not a UIElement?");
+        .expect("subscribe_keydown returned None : TextBox not a UIElement?");
 
         assert!(view.update(0.0), "first Update should report change");
 

@@ -192,7 +192,7 @@ fn dependency_extras() {
 
         // clear_value reverts Width to its default. In Noesis (as in WPF) the
         // FrameworkElement.Width default is NaN ("Auto"), so the post-clear
-        // read is Some(NaN) rather than a finite number — assert that shape.
+        // read is Some(NaN) rather than a finite number; assert that shape.
         assert!(clear_child.clear_value("Width"), "clear_value(Width) ok");
         let after = clear_child.get_f32("Width");
         assert!(
@@ -252,7 +252,7 @@ fn dependency_extras() {
             "base Text unaffected by SetCurrentValue",
         );
 
-        // There is no get_base_component — BaseComponent tags are not supported
+        // There is no get_base_component: BaseComponent tags are not supported
         // by the base-value FFI, so that path is unreachable from Rust by
         // construction.
 

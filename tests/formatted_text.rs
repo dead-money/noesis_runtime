@@ -79,7 +79,7 @@ fn formatted_text_measures_real_glyphs() {
     assert!(lw > 0.0, "long width should be positive, got {lw}");
     assert!(lh > 0.0, "long height should be positive, got {lh}");
 
-    // longer string must measure wider — a stub returning a constant fails here
+    // longer string must measure wider: a stub returning a constant fails here
     assert!(
         lw > sw,
         "longer string ({lw}) should measure wider than shorter ({sw})",
@@ -126,7 +126,7 @@ fn formatted_text_measures_real_glyphs() {
         .build();
     assert!(bold.width() > 0.0, "bold variant still measures positive");
 
-    // Wrapping a long string into a narrow box yields multiple lines — proves
+    // Wrapping a long string into a narrow box yields multiple lines: proves
     // max_width crosses the FFI and influences layout.
     let wrapped = FormattedText::builder("one two three four five six seven", FAMILY, SIZE)
         .max_width(80.0)
@@ -138,7 +138,7 @@ fn formatted_text_measures_real_glyphs() {
     );
 
     // measurement-only ctor doesn't run Layout(); (-10,-10) for out-of-layout
-    // glyphs is a documented valid result — don't assert on coordinates
+    // glyphs is a documented valid result; don't assert on coordinates
     let (gx, gy) = short.glyph_position(0, false);
     assert!(gx.is_finite() && gy.is_finite(), "glyph pos finite");
     let hit = short.hit_test(sw + 1000.0, sh / 2.0);

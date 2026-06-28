@@ -97,7 +97,7 @@ fn scoped_providers_route_by_scheme_and_assembly() {
         );
 
         let schemed = FrameworkElement::load("myassets:///main.xaml")
-            .expect("scheme load returned None — scheme provider not consulted");
+            .expect("scheme load returned None : scheme provider not consulted");
         assert!(
             schemed.find_name("SCHEMED").is_some(),
             "named child from the scheme-served XAML not reachable; routing failed"
@@ -105,7 +105,7 @@ fn scoped_providers_route_by_scheme_and_assembly() {
         drop(schemed);
 
         let assembled = FrameworkElement::load("pack://application:,,,/App;component/main.xaml")
-            .expect("assembly load returned None — assembly provider not consulted");
+            .expect("assembly load returned None : assembly provider not consulted");
         assert!(
             assembled.find_name("ASSEMBLED").is_some(),
             "named child from the assembly-served XAML not reachable; routing failed"
@@ -113,14 +113,14 @@ fn scoped_providers_route_by_scheme_and_assembly() {
         drop(assembled);
 
         let both = FrameworkElement::load("packs://application:,,,/Skin;component/main.xaml")
-            .expect("scheme+assembly load returned None — combined provider not consulted");
+            .expect("scheme+assembly load returned None : combined provider not consulted");
         assert!(
             both.find_name("SCHEME_ASSEMBLED").is_some(),
             "named child from the scheme+assembly-served XAML not reachable; routing failed"
         );
         drop(both);
 
-        // The global provider serves nothing, so this fails — but the attempt
+        // The global provider serves nothing, so this fails, but the attempt
         // must be recorded against the global provider.
         assert!(
             FrameworkElement::load("plain.xaml").is_none(),
@@ -159,7 +159,7 @@ fn scoped_providers_route_by_scheme_and_assembly() {
         assert!(
             !entries.iter().any(|(l, u)| *l == "global"
                 && (u.contains("myassets") || u.contains("App") || u.contains("Skin"))),
-            "global provider was consulted for a scoped URI — scope routing broke; \
+            "global provider was consulted for a scoped URI : scope routing broke; \
              log = {entries:?}"
         );
         // "App" is capitalized so the lowercase "application" in pack URIs does

@@ -35,7 +35,7 @@ fn collection_view_current_item_navigation() {
             .expect("GetView returns a CollectionView once Source is set");
         assert_eq!(view.count(), 3, "view sees all 3 source records");
 
-        // CurrentChanged counter — proves the event delegate crossed the FFI.
+        // CurrentChanged counter to prove the event delegate crossed the FFI.
         let counter = Arc::new(AtomicU32::new(0));
         let counter_cb = Arc::clone(&counter);
         let _sub = view
@@ -66,7 +66,7 @@ fn collection_view_current_item_navigation() {
             Some("gamma"),
         );
 
-        // Past the end — the cursor lands in the well-defined "after last"
+        // Past the end, the cursor lands in the well-defined "after last"
         // state (position == count, no current item).
         let _ = view.move_current_to_next();
         assert!(view.is_current_after_last(), "cursor is after the last");

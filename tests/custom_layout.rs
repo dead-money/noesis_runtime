@@ -39,7 +39,7 @@ impl LayoutHandler for StackLayout {
                 child.measure(Size::new(f32::INFINITY, f32::INFINITY));
             }
         }
-        // Deliberately fixed — discriminates a stubbed trampoline.
+        // Deliberately fixed: discriminates a stubbed trampoline.
         Size::new(150.0, 80.0)
     }
 

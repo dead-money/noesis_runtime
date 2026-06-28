@@ -53,7 +53,7 @@ fn view_input_ffi_smoke() {
         view.set_size(200, 200);
         view.activate();
 
-        // First Update builds the render tree — always reports change.
+        // First Update builds the render tree: always reports change.
         // Subsequent Updates depend on theme VisualStates (not guaranteed headless).
         assert!(view.update(0.0), "first Update should report change");
 

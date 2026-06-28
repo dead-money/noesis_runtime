@@ -40,7 +40,7 @@ fn svg_path_and_document_round_trip() {
             "exterior point (200,200) must NOT be filled"
         );
         // A point clearly inside the bbox but outside the triangle (above the
-        // hypotenuse) — proves the test exercises true geometry, not the bbox.
+        // hypotenuse). Proves the test exercises true geometry, not the bbox.
         assert!(
             !path.fill_contains(10.0, 40.0, FillRule::EvenOdd),
             "point (10,40) is outside the triangle"
@@ -120,7 +120,7 @@ fn svg_path_and_document_round_trip() {
             "document has at least the rect + circle shapes, got {}",
             image.shape_count()
         );
-        // The first shape carries a solid red fill — proves brush parsing.
+        // The first shape carries a solid red fill. Proves brush parsing.
         assert!(
             image.shape_fill_type(0).is_some(),
             "first shape has a parsed fill type"

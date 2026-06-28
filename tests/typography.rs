@@ -56,7 +56,7 @@ fn typography_round_trips() {
     }
     noesis_runtime::init();
 
-    // The guard is bound to the function scope so it outlives shutdown() —
+    // The guard is bound to the function scope so it outlives shutdown();
     // Noesis may call back into the provider during teardown.
     let sdk_dir =
         std::env::var("NOESIS_SDK_DIR").expect("NOESIS_SDK_DIR not set; required for this test");
@@ -201,7 +201,7 @@ fn typography_round_trips() {
             "Typography.Variants round-trips Superscript"
         );
 
-        // Bool flags default true (StandardLigatures, Kerning) — flip to false.
+        // Bool flags default true (StandardLigatures, Kerning); flip to false.
         assert!(
             typography::set_standard_ligatures(&tb, false),
             "set StandardLigatures"
