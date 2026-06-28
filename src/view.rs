@@ -34,6 +34,7 @@ use crate::ffi::{
     dm_noesis_view_scroll, dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix,
     dm_noesis_view_set_scale, dm_noesis_view_set_size, dm_noesis_view_touch_down,
     dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
+    dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
 
@@ -232,6 +233,34 @@ impl FrameworkElement {
         // StreamGeometry before returning.
         unsafe {
             dm_noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count)
+        }
+    }
+
+    /// Transition this control to the visual state named `state`, via
+    /// `VisualStateManager::GoToState`. Pass `use_transitions = true` to run
+    /// the state's `VisualTransition` (animated change), or `false` to snap
+    /// straight to the new state.
+    ///
+    /// This targets a templated control: GoToState resolves `state` against
+    /// the `VisualStateGroup`s declared in the element's `ControlTemplate`
+    /// (e.g. a `Button`'s `CommonStates` — `Normal` / `MouseOver` / `Pressed`
+    /// / `Disabled`). Returns `false` if this element is not such a control,
+    /// or if `state` names no group/state the control knows about.
+    ///
+    /// Like the other accessors here this has `View`-thread affinity (no
+    /// `VerifyAccess()`); call it on the thread driving the `View`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `state` contains an interior NUL byte.
+    pub fn go_to_state(&self, state: &str, use_transitions: bool) -> bool {
+        let c = CString::new(state).expect("state contained interior NUL");
+        // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call;
+        // the C side DynamicCasts to FrameworkElement*, interns the Symbol, and
+        // calls VisualStateManager::GoToState, returning false on null / wrong
+        // type / unknown state.
+        unsafe {
+            dm_noesis_visual_state_go_to_state(self.ptr.as_ptr(), c.as_ptr(), use_transitions)
         }
     }
 

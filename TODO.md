@@ -18,7 +18,8 @@ projection/flags/update + renderer init/update/render/offscreen; full input pump
 visibility, margin; routed `Click` + `KeyDown` subscriptions; TextBox text get/set + caret;
 focus; `Path` points; generic name-keyed `DependencyProperty` get/set on any
 `DependencyObject` (all 10 FFI value types, with type-tag validation + read-only guard);
-custom classes (`ContentControl` base) + custom markup extensions.
+`VisualStateManager::GoToState`; custom classes (`ContentControl` base) + custom markup
+extensions.
 
 ---
 
@@ -38,16 +39,7 @@ Most of `IView` is unexposed beyond the basics. From `NsGui/IView.h`:
 
 ## 2. Element tree access (DependencyObject / generic properties)
 
-Generic name-keyed property access now exists:
-`dm_noesis_dependency_object_{set,get}_property` resolves a `DependencyProperty` by name
-(`FindDependencyProperty`) on any `DependencyObject`, validates the caller's type tag against
-the property's real reflected type, honours read-only, and marshals all 10 FFI value types.
-The safe Rust surface is `FrameworkElement::{set,get}_{i32,f32,f64,bool,string,thickness,color,rect}`
-plus `get_component` (borrowed `BaseComponent*`). `Width`/`Height`/`Opacity` etc. are
-reachable by name through these. Common typed accessors (text, visibility, margin, path
-points) remain as ergonomic shortcuts.
-
-Still open:
+Building on the generic name-keyed property accessors, the remaining tree-access surface:
 
 - **Attached properties.** Same `FindDependencyProperty` mechanism but needs owner-type-qualified name resolution (e.g. `Grid.Row`, `Canvas.Left`).
 - **`ClearValue` / `SetCurrentValue` / `GetBaseValue`** and animation/expression destinations — the generic path only does plain local `SetValue`/`GetValue`.
@@ -93,7 +85,6 @@ We wrap only `Click` and `KeyDown`. The general mechanism and most events are mi
 Nothing in this area is exposed.
 
 - **`Storyboard`** Begin/Pause/Resume/Stop/Seek (+ `BeginStoryboard` and the controllable actions).
-- **`VisualStateManager::GoToState`** / `GoToElementState` — common for control state transitions from code.
 - **Animation classes** (Double/Color/Point/Thickness/Rect/Size/Object/Matrix/Int*, plus `*UsingKeyFrames`, easing functions, key splines, repeat/handoff behaviors).
 - **`Clock` / `AnimationClock` / `Timeline`** control and `ApplyAnimationClock`.
 
@@ -209,5 +200,4 @@ If we wrap nothing else, the two changes that unlock the most are:
 2. **A binding bridge** (§3) — `INotifyPropertyChanged` + `ObservableCollection` from Rust,
    so XAML can be data-driven instead of poked imperatively.
 
-`VisualStateManager::GoToState` (§6) and generic `AddHandler` routed events (§5) are the next
-most broadly useful, low-surface-area wins.
+Generic `AddHandler` routed events (§5) are the next most broadly useful, low-surface-area win.
