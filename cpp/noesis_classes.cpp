@@ -559,6 +559,161 @@ const PropEntry* instance_prop(void* instance, uint32_t prop_index, ClassData** 
     return &cd->properties[prop_index];
 }
 
+// Shared per-`dm_noesis_prop_type` boxing switch for writes. Reused by both
+// the instance path (`dm_noesis_instance_set_property`) and the generic
+// DependencyObject path (`dm_noesis_dependency_object_set_property`). The
+// caller is responsible for any type validation; this just marshals the FFI
+// buffer into a typed `SetValue`, matching the value-buffer layouts documented
+// in noesis_shim.h verbatim (note the Rect (x,y,w,h)->(x,y,x+w,y+h) convention).
+void apply_set(
+    Noesis::DependencyObject* obj,
+    const Noesis::DependencyProperty* dp,
+    dm_noesis_prop_type type,
+    const void* value_ptr) {
+    using namespace Noesis;
+    switch (type) {
+        case DM_NOESIS_PROP_INT32:
+            obj->SetValue<int32_t>(dp,
+                value_ptr ? *static_cast<const int32_t*>(value_ptr) : 0);
+            return;
+        case DM_NOESIS_PROP_FLOAT:
+            obj->SetValue<float>(dp,
+                value_ptr ? *static_cast<const float*>(value_ptr) : 0.0f);
+            return;
+        case DM_NOESIS_PROP_DOUBLE:
+            obj->SetValue<double>(dp,
+                value_ptr ? *static_cast<const double*>(value_ptr) : 0.0);
+            return;
+        case DM_NOESIS_PROP_BOOL:
+            obj->SetValue<bool>(dp,
+                value_ptr ? *static_cast<const bool*>(value_ptr) : false);
+            return;
+        case DM_NOESIS_PROP_STRING: {
+            // SetValueType<String>::Type is `const char*` — pass the C string
+            // directly. Noesis copies into its own String storage.
+            const char* s = value_ptr ? *static_cast<const char* const*>(value_ptr)
+                                      : nullptr;
+            obj->SetValue<String>(dp, s ? s : "");
+            return;
+        }
+        case DM_NOESIS_PROP_THICKNESS: {
+            Thickness t;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                t = Thickness(f[0], f[1], f[2], f[3]);
+            }
+            obj->SetValue<Thickness>(dp, t);
+            return;
+        }
+        case DM_NOESIS_PROP_COLOR: {
+            Color c;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                c = Color(f[0], f[1], f[2], f[3]);
+            }
+            obj->SetValue<Color>(dp, c);
+            return;
+        }
+        case DM_NOESIS_PROP_RECT: {
+            Rect r;
+            if (value_ptr) {
+                const auto* f = static_cast<const float*>(value_ptr);
+                r = Rect(f[0], f[1], f[0] + f[2], f[1] + f[3]);
+            }
+            obj->SetValue<Rect>(dp, r);
+            return;
+        }
+        case DM_NOESIS_PROP_IMAGE_SOURCE:
+        case DM_NOESIS_PROP_BASE_COMPONENT: {
+            BaseComponent* b = value_ptr ? *static_cast<BaseComponent* const*>(value_ptr)
+                                         : nullptr;
+            obj->SetValueObject(dp, b);
+            return;
+        }
+    }
+}
+
+// Shared per-`dm_noesis_prop_type` unboxing switch for reads. Mirror of
+// `apply_set`. `out_value` must already be non-null. Reference / string
+// returns borrow Noesis-owned storage (no +1 ref / no copy) — the caller
+// must copy immediately, per the noesis_shim.h ownership contract.
+bool apply_get(
+    Noesis::DependencyObject* obj,
+    const Noesis::DependencyProperty* dp,
+    dm_noesis_prop_type type,
+    void* out_value) {
+    using namespace Noesis;
+    switch (type) {
+        case DM_NOESIS_PROP_INT32:
+            *static_cast<int32_t*>(out_value) = obj->GetValue<int32_t>(dp);
+            return true;
+        case DM_NOESIS_PROP_FLOAT:
+            *static_cast<float*>(out_value) = obj->GetValue<float>(dp);
+            return true;
+        case DM_NOESIS_PROP_DOUBLE:
+            *static_cast<double*>(out_value) = obj->GetValue<double>(dp);
+            return true;
+        case DM_NOESIS_PROP_BOOL:
+            *static_cast<bool*>(out_value) = obj->GetValue<bool>(dp);
+            return true;
+        case DM_NOESIS_PROP_STRING: {
+            const String& s = obj->GetValue<String>(dp);
+            *static_cast<const char**>(out_value) = s.Str();
+            return true;
+        }
+        case DM_NOESIS_PROP_THICKNESS: {
+            const Thickness& t = obj->GetValue<Thickness>(dp);
+            auto* f = static_cast<float*>(out_value);
+            f[0] = t.left; f[1] = t.top; f[2] = t.right; f[3] = t.bottom;
+            return true;
+        }
+        case DM_NOESIS_PROP_COLOR: {
+            const Color& c = obj->GetValue<Color>(dp);
+            auto* f = static_cast<float*>(out_value);
+            f[0] = c.r; f[1] = c.g; f[2] = c.b; f[3] = c.a;
+            return true;
+        }
+        case DM_NOESIS_PROP_RECT: {
+            const Rect& r = obj->GetValue<Rect>(dp);
+            auto* f = static_cast<float*>(out_value);
+            f[0] = r.x; f[1] = r.y; f[2] = r.width; f[3] = r.height;
+            return true;
+        }
+        case DM_NOESIS_PROP_IMAGE_SOURCE:
+        case DM_NOESIS_PROP_BASE_COMPONENT: {
+            Ptr<BaseComponent> v = obj->GetValueObject(dp);
+            *static_cast<BaseComponent**>(out_value) = v.GetPtr();
+            return true;
+        }
+    }
+    return false;
+}
+
+// Validate that a caller-supplied `dm_noesis_prop_type` tag matches the real
+// `Type*` of a resolved DependencyProperty. The generic name-keyed path must
+// not trust the caller's tag blindly — a wrong tag would drive a wrong cast
+// (UB). Value / struct types compare against the exact reflected `Type*`;
+// reference types use `IsAssignableFrom` so a base tag accepts any subclass.
+bool prop_type_matches(const Noesis::Type* t, dm_noesis_prop_type tag) {
+    using namespace Noesis;
+    if (!t) return false;
+    switch (tag) {
+        case DM_NOESIS_PROP_INT32:     return t == TypeOf<int32_t>();
+        case DM_NOESIS_PROP_FLOAT:     return t == TypeOf<float>();
+        case DM_NOESIS_PROP_DOUBLE:    return t == TypeOf<double>();
+        case DM_NOESIS_PROP_BOOL:      return t == TypeOf<bool>();
+        case DM_NOESIS_PROP_STRING:    return t == TypeOf<String>();
+        case DM_NOESIS_PROP_THICKNESS: return t == TypeOf<Thickness>();
+        case DM_NOESIS_PROP_COLOR:     return t == TypeOf<Color>();
+        case DM_NOESIS_PROP_RECT:      return t == TypeOf<Rect>();
+        case DM_NOESIS_PROP_IMAGE_SOURCE:
+            return TypeOf<ImageSource>()->IsAssignableFrom(t);
+        case DM_NOESIS_PROP_BASE_COMPONENT:
+            return TypeOf<BaseComponent>()->IsAssignableFrom(t);
+    }
+    return false;
+}
+
 }  // namespace
 
 extern "C" void dm_noesis_instance_set_property(
@@ -568,68 +723,7 @@ extern "C" void dm_noesis_instance_set_property(
     const PropEntry* pe = instance_prop(instance, prop_index, nullptr);
     if (!pe) return;
     auto* obj = static_cast<Noesis::DependencyObject*>(static_cast<RustContentControl*>(instance));
-
-    using namespace Noesis;
-    switch (pe->type) {
-        case DM_NOESIS_PROP_INT32:
-            obj->SetValue<int32_t>(pe->dp,
-                value_ptr ? *static_cast<const int32_t*>(value_ptr) : 0);
-            return;
-        case DM_NOESIS_PROP_FLOAT:
-            obj->SetValue<float>(pe->dp,
-                value_ptr ? *static_cast<const float*>(value_ptr) : 0.0f);
-            return;
-        case DM_NOESIS_PROP_DOUBLE:
-            obj->SetValue<double>(pe->dp,
-                value_ptr ? *static_cast<const double*>(value_ptr) : 0.0);
-            return;
-        case DM_NOESIS_PROP_BOOL:
-            obj->SetValue<bool>(pe->dp,
-                value_ptr ? *static_cast<const bool*>(value_ptr) : false);
-            return;
-        case DM_NOESIS_PROP_STRING: {
-            // SetValueType<String>::Type is `const char*` — pass the C string
-            // directly. Noesis copies into its own String storage.
-            const char* s = value_ptr ? *static_cast<const char* const*>(value_ptr)
-                                      : nullptr;
-            obj->SetValue<String>(pe->dp, s ? s : "");
-            return;
-        }
-        case DM_NOESIS_PROP_THICKNESS: {
-            Thickness t;
-            if (value_ptr) {
-                const auto* f = static_cast<const float*>(value_ptr);
-                t = Thickness(f[0], f[1], f[2], f[3]);
-            }
-            obj->SetValue<Thickness>(pe->dp, t);
-            return;
-        }
-        case DM_NOESIS_PROP_COLOR: {
-            Color c;
-            if (value_ptr) {
-                const auto* f = static_cast<const float*>(value_ptr);
-                c = Color(f[0], f[1], f[2], f[3]);
-            }
-            obj->SetValue<Color>(pe->dp, c);
-            return;
-        }
-        case DM_NOESIS_PROP_RECT: {
-            Rect r;
-            if (value_ptr) {
-                const auto* f = static_cast<const float*>(value_ptr);
-                r = Rect(f[0], f[1], f[0] + f[2], f[1] + f[3]);
-            }
-            obj->SetValue<Rect>(pe->dp, r);
-            return;
-        }
-        case DM_NOESIS_PROP_IMAGE_SOURCE:
-        case DM_NOESIS_PROP_BASE_COMPONENT: {
-            BaseComponent* b = value_ptr ? *static_cast<BaseComponent* const*>(value_ptr)
-                                         : nullptr;
-            obj->SetValueObject(pe->dp, b);
-            return;
-        }
-    }
+    apply_set(obj, pe->dp, pe->type, value_ptr);
 }
 
 extern "C" bool dm_noesis_image_source_get_size(
@@ -652,50 +746,60 @@ extern "C" bool dm_noesis_instance_get_property(
     const PropEntry* pe = instance_prop(instance, prop_index, nullptr);
     if (!pe || !out_value) return false;
     auto* obj = static_cast<Noesis::DependencyObject*>(static_cast<RustContentControl*>(instance));
+    return apply_get(obj, pe->dp, pe->type, out_value);
+}
 
-    using namespace Noesis;
-    switch (pe->type) {
-        case DM_NOESIS_PROP_INT32:
-            *static_cast<int32_t*>(out_value) = obj->GetValue<int32_t>(pe->dp);
-            return true;
-        case DM_NOESIS_PROP_FLOAT:
-            *static_cast<float*>(out_value) = obj->GetValue<float>(pe->dp);
-            return true;
-        case DM_NOESIS_PROP_DOUBLE:
-            *static_cast<double*>(out_value) = obj->GetValue<double>(pe->dp);
-            return true;
-        case DM_NOESIS_PROP_BOOL:
-            *static_cast<bool*>(out_value) = obj->GetValue<bool>(pe->dp);
-            return true;
-        case DM_NOESIS_PROP_STRING: {
-            const String& s = obj->GetValue<String>(pe->dp);
-            *static_cast<const char**>(out_value) = s.Str();
-            return true;
-        }
-        case DM_NOESIS_PROP_THICKNESS: {
-            const Thickness& t = obj->GetValue<Thickness>(pe->dp);
-            auto* f = static_cast<float*>(out_value);
-            f[0] = t.left; f[1] = t.top; f[2] = t.right; f[3] = t.bottom;
-            return true;
-        }
-        case DM_NOESIS_PROP_COLOR: {
-            const Color& c = obj->GetValue<Color>(pe->dp);
-            auto* f = static_cast<float*>(out_value);
-            f[0] = c.r; f[1] = c.g; f[2] = c.b; f[3] = c.a;
-            return true;
-        }
-        case DM_NOESIS_PROP_RECT: {
-            const Rect& r = obj->GetValue<Rect>(pe->dp);
-            auto* f = static_cast<float*>(out_value);
-            f[0] = r.x; f[1] = r.y; f[2] = r.width; f[3] = r.height;
-            return true;
-        }
-        case DM_NOESIS_PROP_IMAGE_SOURCE:
-        case DM_NOESIS_PROP_BASE_COMPONENT: {
-            Ptr<BaseComponent> v = obj->GetValueObject(pe->dp);
-            *static_cast<BaseComponent**>(out_value) = v.GetPtr();
-            return true;
-        }
-    }
-    return false;
+// ── Generic name-keyed DependencyProperty access ───────────────────────────
+//
+// Unlike the instance path above (which trusts a dense index into a
+// Rust-registered class), these resolve a DependencyProperty by *name* on an
+// arbitrary DependencyObject, then marshal through the same per-type switch.
+// Because the caller supplies the type tag, we validate it against the
+// property's real reflected type before casting — a mismatch returns false
+// rather than risking a bad cast.
+//
+// No VerifyAccess() — these must never throw across the C ABI (mirrors the
+// text_get/set accessors). Single-thread (View) affinity is the caller's
+// responsibility.
+
+extern "C" bool dm_noesis_dependency_object_set_property(
+    void* obj,
+    const char* name,
+    uint32_t prop_type,
+    const void* value_ptr) {
+    if (!obj || !name) return false;
+    auto* base = static_cast<Noesis::BaseComponent*>(obj);
+    auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(base);
+    if (!d) return false;
+
+    const Noesis::DependencyProperty* dp =
+        Noesis::FindDependencyProperty(d->GetClassType(), Noesis::Symbol(name));
+    if (!dp) return false;
+
+    auto type = static_cast<dm_noesis_prop_type>(prop_type);
+    if (!prop_type_matches(dp->GetType(), type)) return false;
+    if (dp->IsReadOnly()) return false;
+
+    apply_set(d, dp, type, value_ptr);
+    return true;
+}
+
+extern "C" bool dm_noesis_dependency_object_get_property(
+    void* obj,
+    const char* name,
+    uint32_t prop_type,
+    void* out_value) {
+    if (!obj || !name || !out_value) return false;
+    auto* base = static_cast<Noesis::BaseComponent*>(obj);
+    auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(base);
+    if (!d) return false;
+
+    const Noesis::DependencyProperty* dp =
+        Noesis::FindDependencyProperty(d->GetClassType(), Noesis::Symbol(name));
+    if (!dp) return false;
+
+    auto type = static_cast<dm_noesis_prop_type>(prop_type);
+    if (!prop_type_matches(dp->GetType(), type)) return false;
+
+    return apply_get(d, dp, type, out_value);
 }

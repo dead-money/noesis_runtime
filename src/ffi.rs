@@ -239,6 +239,19 @@ unsafe extern "C" {
         out_height: *mut f32,
     ) -> bool;
 
+    pub fn dm_noesis_dependency_object_set_property(
+        obj: *mut c_void,
+        name: *const c_char,
+        prop_type: PropType,
+        value_ptr: *const c_void,
+    ) -> bool;
+    pub fn dm_noesis_dependency_object_get_property(
+        obj: *mut c_void,
+        name: *const c_char,
+        prop_type: PropType,
+        out_value: *mut c_void,
+    ) -> bool;
+
     pub fn dm_noesis_markup_extension_register(
         name: *const c_char,
         cb: MarkupProvideFn,
