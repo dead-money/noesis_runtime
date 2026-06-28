@@ -35,7 +35,10 @@
 #include <NsCore/Delegate.h>
 #include <NsCore/DynamicCast.h>
 #include <NsGui/BaseButton.h>
+#include <NsGui/DataObject.h>
 #include <NsGui/DependencyObject.h>
+#include <NsGui/DragDrop.h>
+#include <NsGui/Enums.h>
 #include <NsGui/Events.h>
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/Path.h>
@@ -365,6 +368,12 @@ enum DmArgKind : int32_t {
     DM_ARG_KEY          = 4,  // KeyEventArgs (key)
     DM_ARG_SIZE_CHANGED = 5,  // SizeChangedEventArgs (new/previous size)
     DM_ARG_TEXT_INPUT   = 6,  // TextCompositionEventArgs (ch)
+    DM_ARG_FOCUS_CHANGED = 7, // KeyboardFocusChangedEventArgs (old/new focus)
+    DM_ARG_DRAG          = 8, // DragEventArgs (effects/allowed/keyStates/data/position)
+    DM_ARG_MANIP_STARTED   = 9,  // ManipulationStartedEventArgs (origin)
+    DM_ARG_MANIP_DELTA     = 10, // ManipulationDeltaEventArgs (delta/cumulative/velocities)
+    DM_ARG_MANIP_COMPLETED = 11, // ManipulationCompletedEventArgs (total/finalVelocities)
+    DM_ARG_MANIP_INERTIA   = 12, // ManipulationInertiaStartingEventArgs (initialVelocities)
 };
 
 // The opaque payload the callback receives. `args` always points at the live
@@ -419,19 +428,19 @@ const EventEntry kEvents[] = {
     // Text input (ch)
     {"TextInput",        &Noesis::UIElement::TextInputEvent,        DM_ARG_TEXT_INPUT},
     {"PreviewTextInput", &Noesis::UIElement::PreviewTextInputEvent, DM_ARG_TEXT_INPUT},
-    // Focus (base routed args; KeyboardFocus variants carry old/new focus we
-    // don't surface yet — source + handled still apply)
+    // Focus — GotFocus/LostFocus carry base routed args; the keyboard-focus
+    // variants downcast to KeyboardFocusChangedEventArgs (old/new focus).
     {"GotFocus",                 &Noesis::UIElement::GotFocusEvent,                 DM_ARG_ROUTED},
     {"LostFocus",                &Noesis::UIElement::LostFocusEvent,                DM_ARG_ROUTED},
-    {"GotKeyboardFocus",         &Noesis::UIElement::GotKeyboardFocusEvent,         DM_ARG_ROUTED},
-    {"LostKeyboardFocus",        &Noesis::UIElement::LostKeyboardFocusEvent,        DM_ARG_ROUTED},
-    {"PreviewGotKeyboardFocus",  &Noesis::UIElement::PreviewGotKeyboardFocusEvent,  DM_ARG_ROUTED},
-    {"PreviewLostKeyboardFocus", &Noesis::UIElement::PreviewLostKeyboardFocusEvent, DM_ARG_ROUTED},
+    {"GotKeyboardFocus",         &Noesis::UIElement::GotKeyboardFocusEvent,         DM_ARG_FOCUS_CHANGED},
+    {"LostKeyboardFocus",        &Noesis::UIElement::LostKeyboardFocusEvent,        DM_ARG_FOCUS_CHANGED},
+    {"PreviewGotKeyboardFocus",  &Noesis::UIElement::PreviewGotKeyboardFocusEvent,  DM_ARG_FOCUS_CHANGED},
+    {"PreviewLostKeyboardFocus", &Noesis::UIElement::PreviewLostKeyboardFocusEvent, DM_ARG_FOCUS_CHANGED},
     // Lifecycle
     {"Loaded",      &Noesis::FrameworkElement::LoadedEvent,      DM_ARG_ROUTED},
     {"Unloaded",    &Noesis::FrameworkElement::UnloadedEvent,    DM_ARG_ROUTED},
     {"SizeChanged", &Noesis::FrameworkElement::SizeChangedEvent, DM_ARG_SIZE_CHANGED},
-    // Touch / manipulation (base routed args)
+    // Touch (base routed args)
     {"TouchDown",             &Noesis::UIElement::TouchDownEvent,             DM_ARG_ROUTED},
     {"TouchMove",             &Noesis::UIElement::TouchMoveEvent,             DM_ARG_ROUTED},
     {"TouchUp",               &Noesis::UIElement::TouchUpEvent,               DM_ARG_ROUTED},
@@ -441,19 +450,24 @@ const EventEntry kEvents[] = {
     {"DoubleTapped",          &Noesis::UIElement::DoubleTappedEvent,          DM_ARG_ROUTED},
     {"Holding",               &Noesis::UIElement::HoldingEvent,               DM_ARG_ROUTED},
     {"RightTapped",           &Noesis::UIElement::RightTappedEvent,           DM_ARG_ROUTED},
-    {"ManipulationStarting",  &Noesis::UIElement::ManipulationStartingEvent,  DM_ARG_ROUTED},
-    {"ManipulationStarted",   &Noesis::UIElement::ManipulationStartedEvent,   DM_ARG_ROUTED},
-    {"ManipulationDelta",     &Noesis::UIElement::ManipulationDeltaEvent,     DM_ARG_ROUTED},
-    {"ManipulationCompleted", &Noesis::UIElement::ManipulationCompletedEvent, DM_ARG_ROUTED},
-    // Drag/drop (base routed args)
-    {"DragEnter",        &Noesis::UIElement::DragEnterEvent,        DM_ARG_ROUTED},
-    {"DragOver",         &Noesis::UIElement::DragOverEvent,         DM_ARG_ROUTED},
-    {"DragLeave",        &Noesis::UIElement::DragLeaveEvent,        DM_ARG_ROUTED},
-    {"Drop",             &Noesis::UIElement::DropEvent,             DM_ARG_ROUTED},
-    {"PreviewDragEnter", &Noesis::UIElement::PreviewDragEnterEvent, DM_ARG_ROUTED},
-    {"PreviewDragOver",  &Noesis::UIElement::PreviewDragOverEvent,  DM_ARG_ROUTED},
-    {"PreviewDragLeave", &Noesis::UIElement::PreviewDragLeaveEvent, DM_ARG_ROUTED},
-    {"PreviewDrop",      &Noesis::UIElement::PreviewDropEvent,      DM_ARG_ROUTED},
+    // Manipulation — Starting carries only mode/container (base args); the rest
+    // downcast to their typed args (origin / delta / velocities / inertia).
+    {"ManipulationStarting",         &Noesis::UIElement::ManipulationStartingEvent,         DM_ARG_ROUTED},
+    {"ManipulationStarted",          &Noesis::UIElement::ManipulationStartedEvent,          DM_ARG_MANIP_STARTED},
+    {"ManipulationDelta",            &Noesis::UIElement::ManipulationDeltaEvent,            DM_ARG_MANIP_DELTA},
+    {"ManipulationInertiaStarting",  &Noesis::UIElement::ManipulationInertiaStartingEvent,  DM_ARG_MANIP_INERTIA},
+    {"ManipulationCompleted",        &Noesis::UIElement::ManipulationCompletedEvent,        DM_ARG_MANIP_COMPLETED},
+    // Drag/drop — DragEventArgs (data / effects / allowedEffects / keyStates /
+    // position). Leave/QueryContinueDrag/GiveFeedback carry different args; the
+    // enter/over/drop family all use DragEventArgs.
+    {"DragEnter",        &Noesis::UIElement::DragEnterEvent,        DM_ARG_DRAG},
+    {"DragOver",         &Noesis::UIElement::DragOverEvent,         DM_ARG_DRAG},
+    {"DragLeave",        &Noesis::UIElement::DragLeaveEvent,        DM_ARG_DRAG},
+    {"Drop",             &Noesis::UIElement::DropEvent,             DM_ARG_DRAG},
+    {"PreviewDragEnter", &Noesis::UIElement::PreviewDragEnterEvent, DM_ARG_DRAG},
+    {"PreviewDragOver",  &Noesis::UIElement::PreviewDragOverEvent,  DM_ARG_DRAG},
+    {"PreviewDragLeave", &Noesis::UIElement::PreviewDragLeaveEvent, DM_ARG_DRAG},
+    {"PreviewDrop",      &Noesis::UIElement::PreviewDropEvent,      DM_ARG_DRAG},
 };
 
 // Resolve `name` to a RoutedEvent + arg kind. Tries the curated table first
@@ -635,6 +649,321 @@ extern "C" void* dm_noesis_routed_args_source(const void* args) {
     return w->args ? w->args->source : nullptr;
 }
 
+// ── Typed arg accessors: focus / drag / manipulation (TODO §5) ──────────────
+//
+// Same contract as the mouse/key accessors above: each gates on the carried
+// `kind` and `static_cast`s the borrowed `RoutedEventArgs*` to the concrete
+// derived struct (single, non-virtual inheritance → zero pointer offset).
+// Borrowed element pointers are NOT ref-counted; values are valid only for the
+// callback's duration. A `kind` mismatch yields a sentinel so a generic
+// callback can safely probe whichever args arrived.
+
+// KeyboardFocusChangedEventArgs::oldFocus — element that previously had focus.
+// Borrowed UIElement* (may be null even on a real focus event). Returns null
+// when the args are not a keyboard-focus event.
+extern "C" void* dm_noesis_routed_events_focus_old(const void* args) {
+    if (!args) return nullptr;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind != DM_ARG_FOCUS_CHANGED) return nullptr;
+    auto* f = static_cast<const Noesis::KeyboardFocusChangedEventArgs*>(w->args);
+    return f->oldFocus;
+}
+
+// KeyboardFocusChangedEventArgs::newFocus — element focus moved to. Borrowed
+// UIElement*. Returns null when the args are not a keyboard-focus event.
+extern "C" void* dm_noesis_routed_events_focus_new(const void* args) {
+    if (!args) return nullptr;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind != DM_ARG_FOCUS_CHANGED) return nullptr;
+    auto* f = static_cast<const Noesis::KeyboardFocusChangedEventArgs*>(w->args);
+    return f->newFocus;
+}
+
+// DragEventArgs effects/allowedEffects/keyStates bitmasks (DragDropEffects /
+// DragDropKeyStates). Writes only the non-null out params. Returns false when
+// the args are not a drag event.
+extern "C" bool dm_noesis_routed_events_drag_effects(
+    const void* args, uint32_t* effects, uint32_t* allowed, uint32_t* key_states)
+{
+    if (!args) return false;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind != DM_ARG_DRAG) return false;
+    auto* d = static_cast<const Noesis::DragEventArgs*>(w->args);
+    if (effects) *effects = d->effects;
+    if (allowed) *allowed = d->allowedEffects;
+    if (key_states) *key_states = d->keyStates;
+    return true;
+}
+
+// Set DragEventArgs::effects — the chosen drop effect a Drop/DragOver handler
+// reports back to the drag source (`effects` is `mutable`). Returns false when
+// the args are not a drag event.
+extern "C" bool dm_noesis_routed_events_drag_set_effects(const void* args, uint32_t effects) {
+    if (!args) return false;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind != DM_ARG_DRAG) return false;
+    auto* d = static_cast<const Noesis::DragEventArgs*>(w->args);
+    d->effects = effects;
+    return true;
+}
+
+// Borrowed pointer to the dragged data object (DragEventArgs::data,
+// BaseComponent*). Not ref-counted. Returns null when the args are not a drag
+// event or carry no data.
+extern "C" void* dm_noesis_routed_events_drag_data(const void* args) {
+    if (!args) return nullptr;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind != DM_ARG_DRAG) return nullptr;
+    auto* d = static_cast<const Noesis::DragEventArgs*>(w->args);
+    return d->data;
+}
+
+// DragEventArgs::GetPosition(relativeTo) — drop point in `relative_to`'s
+// coordinate space. `relative_to` must be a live UIElement*. Returns false when
+// the args are not a drag event or `relative_to` is null.
+extern "C" bool dm_noesis_routed_events_drag_position(
+    const void* args, void* relative_to, float* x, float* y)
+{
+    if (!args || !relative_to) return false;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind != DM_ARG_DRAG) return false;
+    auto* d = static_cast<const Noesis::DragEventArgs*>(w->args);
+    Noesis::Point p = d->GetPosition(static_cast<Noesis::UIElement*>(relative_to));
+    if (x) *x = p.x;
+    if (y) *y = p.y;
+    return true;
+}
+
+// Manipulation origin (manipulationOrigin) — present on Started/Delta/
+// Completed/InertiaStarting. Returns false for other kinds.
+extern "C" bool dm_noesis_routed_events_manip_origin(const void* args, float* x, float* y) {
+    if (!args) return false;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    Noesis::Point origin;
+    switch (w->kind) {
+        case DM_ARG_MANIP_STARTED:
+            origin = static_cast<const Noesis::ManipulationStartedEventArgs*>(w->args)->manipulationOrigin;
+            break;
+        case DM_ARG_MANIP_DELTA:
+            origin = static_cast<const Noesis::ManipulationDeltaEventArgs*>(w->args)->manipulationOrigin;
+            break;
+        case DM_ARG_MANIP_COMPLETED:
+            origin = static_cast<const Noesis::ManipulationCompletedEventArgs*>(w->args)->manipulationOrigin;
+            break;
+        case DM_ARG_MANIP_INERTIA:
+            origin = static_cast<const Noesis::ManipulationInertiaStartingEventArgs*>(w->args)->manipulationOrigin;
+            break;
+        default:
+            return false;
+    }
+    if (x) *x = origin.x;
+    if (y) *y = origin.y;
+    return true;
+}
+
+// The primary ManipulationDelta transform — `deltaManipulation` for a Delta
+// event, `totalManipulation` for a Completed event. translation (tx,ty), scale,
+// rotation (degrees), expansion (ex,ey). Returns false for other kinds.
+extern "C" bool dm_noesis_routed_events_manip_delta(
+    const void* args, float* tx, float* ty, float* scale, float* rotation, float* ex, float* ey)
+{
+    if (!args) return false;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    const Noesis::ManipulationDelta* m = nullptr;
+    if (w->kind == DM_ARG_MANIP_DELTA) {
+        m = &static_cast<const Noesis::ManipulationDeltaEventArgs*>(w->args)->deltaManipulation;
+    } else if (w->kind == DM_ARG_MANIP_COMPLETED) {
+        m = &static_cast<const Noesis::ManipulationCompletedEventArgs*>(w->args)->totalManipulation;
+    } else {
+        return false;
+    }
+    if (tx) *tx = m->translation.x;
+    if (ty) *ty = m->translation.y;
+    if (scale) *scale = m->scale;
+    if (rotation) *rotation = m->rotation;
+    if (ex) *ex = m->expansion.x;
+    if (ey) *ey = m->expansion.y;
+    return true;
+}
+
+// The cumulative ManipulationDelta transform for a Delta event
+// (`cumulativeManipulation`). Returns false for other kinds.
+extern "C" bool dm_noesis_routed_events_manip_cumulative(
+    const void* args, float* tx, float* ty, float* scale, float* rotation, float* ex, float* ey)
+{
+    if (!args) return false;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind != DM_ARG_MANIP_DELTA) return false;
+    const Noesis::ManipulationDelta& m =
+        static_cast<const Noesis::ManipulationDeltaEventArgs*>(w->args)->cumulativeManipulation;
+    if (tx) *tx = m.translation.x;
+    if (ty) *ty = m.translation.y;
+    if (scale) *scale = m.scale;
+    if (rotation) *rotation = m.rotation;
+    if (ex) *ex = m.expansion.x;
+    if (ey) *ey = m.expansion.y;
+    return true;
+}
+
+// ManipulationVelocities — `velocities` (Delta), `finalVelocities` (Completed)
+// or `initialVelocities` (InertiaStarting). angular (deg/ms), linear (lx,ly)
+// and expansion (ex,ey) in px/ms. Returns false for other kinds.
+extern "C" bool dm_noesis_routed_events_manip_velocities(
+    const void* args, float* angular, float* lx, float* ly, float* ex, float* ey)
+{
+    if (!args) return false;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    const Noesis::ManipulationVelocities* v = nullptr;
+    switch (w->kind) {
+        case DM_ARG_MANIP_DELTA:
+            v = &static_cast<const Noesis::ManipulationDeltaEventArgs*>(w->args)->velocities;
+            break;
+        case DM_ARG_MANIP_COMPLETED:
+            v = &static_cast<const Noesis::ManipulationCompletedEventArgs*>(w->args)->finalVelocities;
+            break;
+        case DM_ARG_MANIP_INERTIA:
+            v = &static_cast<const Noesis::ManipulationInertiaStartingEventArgs*>(w->args)->initialVelocities;
+            break;
+        default:
+            return false;
+    }
+    if (angular) *angular = v->angularVelocity;
+    if (lx) *lx = v->linearVelocity.x;
+    if (ly) *ly = v->linearVelocity.y;
+    if (ex) *ex = v->expansionVelocity.x;
+    if (ey) *ey = v->expansionVelocity.y;
+    return true;
+}
+
+// isInertial flag — 1 (inertia phase), 0, or -1 when not a Delta/Completed
+// manipulation event.
+extern "C" int32_t dm_noesis_routed_events_manip_is_inertial(const void* args) {
+    if (!args) return -1;
+    auto* w = static_cast<const DmEventArgs*>(args);
+    if (w->kind == DM_ARG_MANIP_DELTA) {
+        return static_cast<const Noesis::ManipulationDeltaEventArgs*>(w->args)->isInertial ? 1 : 0;
+    }
+    if (w->kind == DM_ARG_MANIP_COMPLETED) {
+        return static_cast<const Noesis::ManipulationCompletedEventArgs*>(w->args)->isInertial ? 1 : 0;
+    }
+    return -1;
+}
+
+// ── DragDrop source side + DataObject copy/paste handlers (TODO §5) ──────────
+
+// Noesis::DragDrop::DoDragDrop — initiates a drag from `source` carrying
+// `data`, advertising `allowed_effects` (DragDropEffects bitmask). The drag is
+// then driven by the host's pointer input; there is no headless completion.
+// Returns false if `source` or `data` is null.
+extern "C" bool dm_noesis_routed_events_do_drag_drop(
+    void* source, void* data, uint32_t allowed_effects)
+{
+    if (!source || !data) return false;
+    auto* dep = Noesis::DynamicCast<Noesis::DependencyObject*>(
+        static_cast<Noesis::BaseComponent*>(source));
+    if (!dep) return false;
+    Noesis::DragDrop::DoDragDrop(dep, static_cast<Noesis::BaseComponent*>(data), allowed_effects);
+    return true;
+}
+
+namespace {
+
+// Adapter for a DataObject.Copying / .Pasting handler. Owns a +1 ref on the
+// element and remembers which event it attached so teardown is exact. The
+// callback receives the data object pointer (borrowed), the isDragDrop flag,
+// and a writable cancel flag (Copying cancels the copy; Pasting cancels the
+// paste).
+class RustDataObjectHandler {
+public:
+    enum Kind { Copying, Pasting };
+
+    RustDataObjectHandler(dm_noesis_data_object_fn cb, void* userdata,
+        Noesis::UIElement* element, Kind kind)
+        : mCb(cb), mUserdata(userdata), mElement(element), mKind(kind)
+    {
+        if (mElement) {
+            mElement->AddReference();
+        }
+    }
+
+    ~RustDataObjectHandler() {
+        if (mElement) {
+            mElement->Release();
+        }
+    }
+
+    RustDataObjectHandler(const RustDataObjectHandler&) = delete;
+    RustDataObjectHandler& operator=(const RustDataObjectHandler&) = delete;
+
+    void OnCopying(Noesis::BaseComponent* /*sender*/,
+        const Noesis::DataObjectCopyingEventArgs& e) {
+        if (!mCb) return;
+        bool cancel = e.commandCancelled;
+        mCb(mUserdata, e.dataObject.GetPtr(), e.isDragDrop, &cancel);
+        e.commandCancelled = cancel;
+    }
+
+    void OnPasting(Noesis::BaseComponent* /*sender*/,
+        const Noesis::DataObjectPastingEventArgs& e) {
+        if (!mCb) return;
+        bool cancel = e.commandCancelled;
+        mCb(mUserdata, e.dataObject.GetPtr(), e.isDragDrop, &cancel);
+        e.commandCancelled = cancel;
+    }
+
+    Noesis::UIElement* element() const { return mElement; }
+    Kind kind() const { return mKind; }
+
+private:
+    dm_noesis_data_object_fn mCb;
+    void* mUserdata;
+    Noesis::UIElement* mElement;  // raw + manual AddRef/Release.
+    Kind mKind;
+};
+
+}  // namespace
+
+extern "C" void* dm_noesis_routed_events_add_copying_handler(
+    void* element, dm_noesis_data_object_fn cb, void* userdata)
+{
+    if (!element || !cb) return nullptr;
+    auto* uie = Noesis::DynamicCast<Noesis::UIElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!uie) return nullptr;
+    auto* handler = new RustDataObjectHandler(cb, userdata, uie, RustDataObjectHandler::Copying);
+    Noesis::DataObject::AddCopyingHandler(
+        uie, Noesis::MakeDelegate(handler, &RustDataObjectHandler::OnCopying));
+    return handler;
+}
+
+extern "C" void* dm_noesis_routed_events_add_pasting_handler(
+    void* element, dm_noesis_data_object_fn cb, void* userdata)
+{
+    if (!element || !cb) return nullptr;
+    auto* uie = Noesis::DynamicCast<Noesis::UIElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!uie) return nullptr;
+    auto* handler = new RustDataObjectHandler(cb, userdata, uie, RustDataObjectHandler::Pasting);
+    Noesis::DataObject::AddPastingHandler(
+        uie, Noesis::MakeDelegate(handler, &RustDataObjectHandler::OnPasting));
+    return handler;
+}
+
+extern "C" void dm_noesis_routed_events_remove_data_object_handler(void* token) {
+    if (!token) return;
+    auto* handler = static_cast<RustDataObjectHandler*>(token);
+    if (auto* uie = handler->element()) {
+        if (handler->kind() == RustDataObjectHandler::Copying) {
+            Noesis::DataObject::RemoveCopyingHandler(
+                uie, Noesis::MakeDelegate(handler, &RustDataObjectHandler::OnCopying));
+        } else {
+            Noesis::DataObject::RemovePastingHandler(
+                uie, Noesis::MakeDelegate(handler, &RustDataObjectHandler::OnPasting));
+        }
+    }
+    delete handler;
+}
+
 // ── Non-routed lifecycle events (TODO §5) ───────────────────────────────────
 //
 // `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
@@ -763,3 +1092,79 @@ extern "C" void dm_noesis_unsubscribe_lifecycle(void* token) {
     }
     delete handler;
 }
+
+// ─── Test-only entrypoints ─────────────────────────────────────────────────
+//
+// Gated by the `test-utils` Cargo feature (which sets DM_NOESIS_TEST_UTILS).
+// Production builds omit them entirely.
+//
+// Drag and manipulation events cannot be synthesized in a headless harness:
+// a real drag is driven by an OS pointer/drag loop, and manipulation events
+// are promoted from a multi-frame touch stream against a live render/layout
+// pass. To prove the typed-arg accessors genuinely read the live Noesis arg
+// fields (a stub returning 0 must fail), these helpers construct the real
+// `DragEventArgs` / `Manipulation*EventArgs` with known field values, wrap them
+// in the same `DmEventArgs` the live dispatcher uses, and invoke the supplied
+// callback — exactly mirroring `RustRoutedHandler::OnEvent`. The Rust test then
+// reads the values back through the production accessors.
+
+#ifdef DM_NOESIS_TEST_UTILS
+
+// Build a DragEventArgs with deterministic fields and dispatch it. `element`
+// (a live UIElement*) is used as source / data / target so GetPosition has a
+// valid `relativeTo` to resolve against. effects=Copy, allowedEffects=All,
+// keyStates=Control, dropPoint=(12, 34).
+extern "C" void dm_noesis_routed_events_test_raise_drag(
+    void* element, dm_noesis_routed_event_fn cb, void* userdata)
+{
+    if (!element || !cb) return;
+    auto* uie = static_cast<Noesis::UIElement*>(element);
+    Noesis::DragEventArgs args(uie, Noesis::UIElement::DropEvent, uie,
+        Noesis::DragDropKeyStates_ControlKey,
+        Noesis::DragDropEffects_All, uie, Noesis::Point(12.0f, 34.0f));
+    args.effects = Noesis::DragDropEffects_Copy;
+    DmEventArgs wrap{DM_ARG_DRAG, &args};
+    bool handled = false;
+    cb(userdata, &wrap, &handled);
+}
+
+// Build a ManipulationDeltaEventArgs with deterministic fields and dispatch it.
+// origin=(100,200); delta translation=(5,7) scale=2 rotation=15 expansion=(3,4);
+// cumulative translation=(50,70) scale=4 rotation=30 expansion=(6,8);
+// velocities angular=1.5 linear=(0.5,0.6) expansion=(0.1,0.2); isInertial=true.
+extern "C" void dm_noesis_routed_events_test_raise_manip_delta(
+    void* element, dm_noesis_routed_event_fn cb, void* userdata)
+{
+    if (!element || !cb) return;
+    auto* uie = static_cast<Noesis::UIElement*>(element);
+    Noesis::ManipulationDelta delta{Noesis::Point(3.0f, 4.0f), 15.0f, 2.0f, Noesis::Point(5.0f, 7.0f)};
+    Noesis::ManipulationDelta cumulative{Noesis::Point(6.0f, 8.0f), 30.0f, 4.0f, Noesis::Point(50.0f, 70.0f)};
+    Noesis::ManipulationVelocities velocities{1.5f, Noesis::Point(0.1f, 0.2f), Noesis::Point(0.5f, 0.6f)};
+    Noesis::ManipulationDeltaEventArgs args(uie, Noesis::UIElement::ManipulationDeltaEvent,
+        nullptr, Noesis::Point(100.0f, 200.0f), delta, cumulative, velocities,
+        true, Noesis::ArrayRef<Noesis::Manipulator>());
+    DmEventArgs wrap{DM_ARG_MANIP_DELTA, &args};
+    bool handled = false;
+    cb(userdata, &wrap, &handled);
+}
+
+// Build a ManipulationCompletedEventArgs with deterministic fields and dispatch
+// it. origin=(100,200); total translation=(11,13) scale=3 rotation=45
+// expansion=(1,2); finalVelocities angular=2.5 linear=(1.5,1.6)
+// expansion=(1.1,1.2); isInertial=false.
+extern "C" void dm_noesis_routed_events_test_raise_manip_completed(
+    void* element, dm_noesis_routed_event_fn cb, void* userdata)
+{
+    if (!element || !cb) return;
+    auto* uie = static_cast<Noesis::UIElement*>(element);
+    Noesis::ManipulationDelta total{Noesis::Point(1.0f, 2.0f), 45.0f, 3.0f, Noesis::Point(11.0f, 13.0f)};
+    Noesis::ManipulationVelocities velocities{2.5f, Noesis::Point(1.1f, 1.2f), Noesis::Point(1.5f, 1.6f)};
+    Noesis::ManipulationCompletedEventArgs args(uie, Noesis::UIElement::ManipulationCompletedEvent,
+        nullptr, Noesis::Point(100.0f, 200.0f), velocities, total, false,
+        Noesis::ArrayRef<Noesis::Manipulator>());
+    DmEventArgs wrap{DM_ARG_MANIP_COMPLETED, &args};
+    bool handled = false;
+    cb(userdata, &wrap, &handled);
+}
+
+#endif  // DM_NOESIS_TEST_UTILS

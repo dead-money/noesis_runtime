@@ -300,6 +300,74 @@ unsafe extern "C" {
     ) -> bool;
     pub fn dm_noesis_routed_args_source(args: *const c_void) -> *mut c_void;
 
+    // ── Typed arg accessors: focus / drag / manipulation (TODO §5) ────────────
+    pub fn dm_noesis_routed_events_focus_old(args: *const c_void) -> *mut c_void;
+    pub fn dm_noesis_routed_events_focus_new(args: *const c_void) -> *mut c_void;
+    pub fn dm_noesis_routed_events_drag_effects(
+        args: *const c_void,
+        effects: *mut u32,
+        allowed: *mut u32,
+        key_states: *mut u32,
+    ) -> bool;
+    pub fn dm_noesis_routed_events_drag_set_effects(args: *const c_void, effects: u32) -> bool;
+    pub fn dm_noesis_routed_events_drag_data(args: *const c_void) -> *mut c_void;
+    pub fn dm_noesis_routed_events_drag_position(
+        args: *const c_void,
+        relative_to: *mut c_void,
+        x: *mut f32,
+        y: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_routed_events_manip_origin(
+        args: *const c_void,
+        x: *mut f32,
+        y: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_routed_events_manip_delta(
+        args: *const c_void,
+        tx: *mut f32,
+        ty: *mut f32,
+        scale: *mut f32,
+        rotation: *mut f32,
+        ex: *mut f32,
+        ey: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_routed_events_manip_cumulative(
+        args: *const c_void,
+        tx: *mut f32,
+        ty: *mut f32,
+        scale: *mut f32,
+        rotation: *mut f32,
+        ex: *mut f32,
+        ey: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_routed_events_manip_velocities(
+        args: *const c_void,
+        angular: *mut f32,
+        lx: *mut f32,
+        ly: *mut f32,
+        ex: *mut f32,
+        ey: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_routed_events_manip_is_inertial(args: *const c_void) -> i32;
+
+    // ── DragDrop source side + DataObject copy/paste handlers (TODO §5) ────────
+    pub fn dm_noesis_routed_events_do_drag_drop(
+        source: *mut c_void,
+        data: *mut c_void,
+        allowed_effects: u32,
+    ) -> bool;
+    pub fn dm_noesis_routed_events_add_copying_handler(
+        element: *mut c_void,
+        cb: DataObjectFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_routed_events_add_pasting_handler(
+        element: *mut c_void,
+        cb: DataObjectFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_routed_events_remove_data_object_handler(token: *mut c_void);
+
     pub fn dm_noesis_text_get(element: *mut c_void) -> *const c_char;
     pub fn dm_noesis_text_set(element: *mut c_void, text: *const c_char) -> bool;
     pub fn dm_noesis_text_caret_to_end(element: *mut c_void) -> bool;
@@ -1600,6 +1668,21 @@ pub type KeyDownFn = unsafe extern "C" fn(userdata: *mut c_void, key: i32, out_h
 pub type RoutedEventFn =
     unsafe extern "C" fn(userdata: *mut c_void, args: *const c_void, out_handled: *mut bool);
 
+/// C callback invoked when a subscribed `DataObject.Copying` / `.Pasting`
+/// event fires (the `dm_noesis_routed_events_add_*_handler` path).
+///
+/// `data_object` is a borrowed `BaseComponent*` (the clipboard data object,
+/// may be null). `is_drag_drop` is true when the copy/paste originates from a
+/// drag-drop rather than the clipboard. `out_cancel` is pre-seeded with the
+/// current cancel state; writing `true` cancels the copy/paste. Same threading
+/// contract as [`ClickFn`].
+pub type DataObjectFn = unsafe extern "C" fn(
+    userdata: *mut c_void,
+    data_object: *mut c_void,
+    is_drag_drop: bool,
+    out_cancel: *mut bool,
+);
+
 /// C callback fired on each view-timer tick (the `dm_noesis_view_create_timer`
 /// path). Returns the next interval in milliseconds, or `0` to stop the timer.
 /// Fires from inside `IView::Update` on the view-driving thread — same
@@ -2030,3 +2113,31 @@ pub type RenderFn =
 
 /// Free callback for a donated render `userdata` box. Mirrors [`ClassFreeFn`].
 pub type RenderFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+// ── Test-only routed-event raisers (TODO §5) ────────────────────────────────
+//
+// Gated by the `test-utils` Cargo feature. Drag and manipulation events cannot
+// be synthesized headlessly (a drag needs an OS pointer/drag loop; manipulation
+// is promoted from a multi-frame touch stream under a live render pass). These
+// helpers construct the real `DragEventArgs` / `Manipulation*EventArgs` with
+// known field values and invoke `cb` exactly as the live dispatcher would, so
+// the typed-arg accessors can be round-trip tested. `element` must be a live
+// `UIElement*` (used as source/target so `GetPosition` resolves).
+#[cfg(feature = "test-utils")]
+unsafe extern "C" {
+    pub fn dm_noesis_routed_events_test_raise_drag(
+        element: *mut c_void,
+        cb: RoutedEventFn,
+        userdata: *mut c_void,
+    );
+    pub fn dm_noesis_routed_events_test_raise_manip_delta(
+        element: *mut c_void,
+        cb: RoutedEventFn,
+        userdata: *mut c_void,
+    );
+    pub fn dm_noesis_routed_events_test_raise_manip_completed(
+        element: *mut c_void,
+        cb: RoutedEventFn,
+        userdata: *mut c_void,
+    );
+}

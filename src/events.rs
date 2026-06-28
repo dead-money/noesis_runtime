@@ -34,10 +34,17 @@ use std::ffi::{CString, c_void};
 use crate::ffi::{
     dm_noesis_key_args_key, dm_noesis_mouse_args_position, dm_noesis_mouse_button_args_button,
     dm_noesis_mouse_wheel_args_delta, dm_noesis_routed_args_source,
-    dm_noesis_size_changed_args_new_size, dm_noesis_subscribe_click, dm_noesis_subscribe_event,
-    dm_noesis_subscribe_keydown, dm_noesis_subscribe_lifecycle, dm_noesis_text_args_ch,
-    dm_noesis_unsubscribe_click, dm_noesis_unsubscribe_event, dm_noesis_unsubscribe_keydown,
-    dm_noesis_unsubscribe_lifecycle,
+    dm_noesis_routed_events_add_copying_handler, dm_noesis_routed_events_add_pasting_handler,
+    dm_noesis_routed_events_do_drag_drop, dm_noesis_routed_events_drag_data,
+    dm_noesis_routed_events_drag_effects, dm_noesis_routed_events_drag_position,
+    dm_noesis_routed_events_drag_set_effects, dm_noesis_routed_events_focus_new,
+    dm_noesis_routed_events_focus_old, dm_noesis_routed_events_manip_cumulative,
+    dm_noesis_routed_events_manip_delta, dm_noesis_routed_events_manip_is_inertial,
+    dm_noesis_routed_events_manip_origin, dm_noesis_routed_events_manip_velocities,
+    dm_noesis_routed_events_remove_data_object_handler, dm_noesis_size_changed_args_new_size,
+    dm_noesis_subscribe_click, dm_noesis_subscribe_event, dm_noesis_subscribe_keydown,
+    dm_noesis_subscribe_lifecycle, dm_noesis_text_args_ch, dm_noesis_unsubscribe_click,
+    dm_noesis_unsubscribe_event, dm_noesis_unsubscribe_keydown, dm_noesis_unsubscribe_lifecycle,
 };
 use crate::view::{FrameworkElement, Key, MouseButton};
 
@@ -407,6 +414,25 @@ pub struct EventArgs {
 }
 
 impl EventArgs {
+    /// Wrap a borrowed live-args pointer (the opaque handle a
+    /// [`RoutedEventHandler`] receives) in an [`EventArgs`] view. Hidden from
+    /// the public docs: it exists so test harnesses and advanced callers that
+    /// dispatch through a custom C trampoline can reuse the typed accessors.
+    ///
+    /// # Safety
+    ///
+    /// `raw` must be a valid args handle produced by the C++ shim and alive for
+    /// the lifetime of the returned value (i.e. only for the duration of the
+    /// callback that handed it over). The returned `EventArgs` must not outlive
+    /// that callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(raw: *const c_void) -> Self {
+        EventArgs {
+            raw,
+            _not_send: PhantomData,
+        }
+    }
+
     /// Pointer position in the source element's coordinate space, for mouse,
     /// mouse-button and mouse-wheel events. `None` for other event kinds.
     pub fn position(&self) -> Option<(f32, f32)> {
@@ -493,6 +519,237 @@ impl EventArgs {
         let p = unsafe { dm_noesis_routed_args_source(self.raw) };
         (!p.is_null()).then_some(p)
     }
+
+    // ── Focus-changed accessors ────────────────────────────────────────────
+
+    /// Borrowed pointer to the element that previously had focus
+    /// (`KeyboardFocusChangedEventArgs::oldFocus`), for the `GotKeyboardFocus` /
+    /// `LostKeyboardFocus` events (and their `Preview*` variants). `None` for
+    /// other event kinds, or when there was no previously-focused element.
+    ///
+    /// Not reference-counted; valid only for the callback duration (same
+    /// contract as [`source_ptr`](Self::source_ptr)).
+    pub fn focus_old_ptr(&self) -> Option<*mut c_void> {
+        // SAFETY: opaque handle; returns a borrowed pointer or null.
+        let p = unsafe { dm_noesis_routed_events_focus_old(self.raw) };
+        (!p.is_null()).then_some(p)
+    }
+
+    /// Borrowed pointer to the element focus moved to
+    /// (`KeyboardFocusChangedEventArgs::newFocus`), for the keyboard-focus
+    /// events. `None` for other kinds / when there is no new focus. Not
+    /// reference-counted; valid only for the callback duration.
+    pub fn focus_new_ptr(&self) -> Option<*mut c_void> {
+        // SAFETY: opaque handle; returns a borrowed pointer or null.
+        let p = unsafe { dm_noesis_routed_events_focus_new(self.raw) };
+        (!p.is_null()).then_some(p)
+    }
+
+    // ── Drag accessors ─────────────────────────────────────────────────────
+
+    /// Drag effect / allowed-effect / key-state bitmasks for a drag event
+    /// (`DragEnter` / `DragOver` / `DragLeave` / `Drop` and their `Preview*`
+    /// variants). `None` for non-drag events. The bitmask values mirror
+    /// [`drag_effects`] and [`drag_key_states`].
+    pub fn drag(&self) -> Option<DragInfo> {
+        let mut effects = 0u32;
+        let mut allowed = 0u32;
+        let mut key_states = 0u32;
+        // SAFETY: opaque handle; accessor validates the kind and writes on match.
+        let ok = unsafe {
+            dm_noesis_routed_events_drag_effects(
+                self.raw,
+                &mut effects,
+                &mut allowed,
+                &mut key_states,
+            )
+        };
+        ok.then_some(DragInfo {
+            effects,
+            allowed_effects: allowed,
+            key_states,
+        })
+    }
+
+    /// Set the drop result (`DragEventArgs::effects`) a `Drop` / `DragOver`
+    /// handler reports back to the drag source. `effects` is a [`drag_effects`]
+    /// bitmask. Returns `true` if written (i.e. the live args are a drag event).
+    pub fn set_drag_effects(&self, effects: u32) -> bool {
+        // SAFETY: opaque handle; accessor validates the kind before writing.
+        unsafe { dm_noesis_routed_events_drag_set_effects(self.raw, effects) }
+    }
+
+    /// Borrowed pointer to the dragged data object (`DragEventArgs::data`).
+    /// `None` for non-drag events or when no data is carried. Not
+    /// reference-counted; valid only for the callback duration.
+    pub fn drag_data_ptr(&self) -> Option<*mut c_void> {
+        // SAFETY: opaque handle; returns a borrowed pointer or null.
+        let p = unsafe { dm_noesis_routed_events_drag_data(self.raw) };
+        (!p.is_null()).then_some(p)
+    }
+
+    /// Drop point in `relative_to`'s coordinate space
+    /// (`DragEventArgs::GetPosition`). `None` for non-drag events. `relative_to`
+    /// must be a live element.
+    pub fn drag_position(&self, relative_to: &FrameworkElement) -> Option<(f32, f32)> {
+        let mut x = 0.0f32;
+        let mut y = 0.0f32;
+        // SAFETY: opaque handle + a borrowed live element pointer; accessor
+        // validates the kind and writes on match.
+        let ok = unsafe {
+            dm_noesis_routed_events_drag_position(self.raw, relative_to.raw(), &mut x, &mut y)
+        };
+        ok.then_some((x, y))
+    }
+
+    // ── Manipulation accessors ─────────────────────────────────────────────
+
+    /// Manipulation origin point (`manipulationOrigin`), present on the
+    /// `ManipulationStarted` / `Delta` / `Completed` / `InertiaStarting`
+    /// events. `None` for other kinds.
+    pub fn manip_origin(&self) -> Option<(f32, f32)> {
+        let mut x = 0.0f32;
+        let mut y = 0.0f32;
+        // SAFETY: opaque handle; accessor validates the kind and writes on match.
+        let ok = unsafe { dm_noesis_routed_events_manip_origin(self.raw, &mut x, &mut y) };
+        ok.then_some((x, y))
+    }
+
+    /// The most-recent manipulation transform — `deltaManipulation` on a
+    /// `ManipulationDelta` event, `totalManipulation` on a
+    /// `ManipulationCompleted` event. `None` for other kinds.
+    pub fn manip_delta(&self) -> Option<ManipulationDelta> {
+        let mut d = ManipulationDelta::default();
+        // SAFETY: opaque handle; accessor validates the kind and writes on match.
+        let ok = unsafe {
+            dm_noesis_routed_events_manip_delta(
+                self.raw,
+                &mut d.translation.0,
+                &mut d.translation.1,
+                &mut d.scale,
+                &mut d.rotation,
+                &mut d.expansion.0,
+                &mut d.expansion.1,
+            )
+        };
+        ok.then_some(d)
+    }
+
+    /// The cumulative manipulation transform (`cumulativeManipulation`) on a
+    /// `ManipulationDelta` event. `None` for other kinds.
+    pub fn manip_cumulative(&self) -> Option<ManipulationDelta> {
+        let mut d = ManipulationDelta::default();
+        // SAFETY: opaque handle; accessor validates the kind and writes on match.
+        let ok = unsafe {
+            dm_noesis_routed_events_manip_cumulative(
+                self.raw,
+                &mut d.translation.0,
+                &mut d.translation.1,
+                &mut d.scale,
+                &mut d.rotation,
+                &mut d.expansion.0,
+                &mut d.expansion.1,
+            )
+        };
+        ok.then_some(d)
+    }
+
+    /// Manipulation velocities — `velocities` (Delta), `finalVelocities`
+    /// (Completed) or `initialVelocities` (`InertiaStarting`). `None` for other
+    /// kinds.
+    pub fn manip_velocities(&self) -> Option<ManipulationVelocities> {
+        let mut v = ManipulationVelocities::default();
+        // SAFETY: opaque handle; accessor validates the kind and writes on match.
+        let ok = unsafe {
+            dm_noesis_routed_events_manip_velocities(
+                self.raw,
+                &mut v.angular,
+                &mut v.linear.0,
+                &mut v.linear.1,
+                &mut v.expansion.0,
+                &mut v.expansion.1,
+            )
+        };
+        ok.then_some(v)
+    }
+
+    /// Whether a `ManipulationDelta` / `ManipulationCompleted` event occurred
+    /// during the inertia phase (`isInertial`). `None` for other kinds.
+    pub fn manip_is_inertial(&self) -> Option<bool> {
+        // SAFETY: opaque handle; accessor returns -1 unless it's a delta/completed event.
+        match unsafe { dm_noesis_routed_events_manip_is_inertial(self.raw) } {
+            0 => Some(false),
+            1 => Some(true),
+            _ => None,
+        }
+    }
+}
+
+/// `DragDropEffects` bitmask values (`DragEventArgs` effects / allowed-effects).
+/// Mirror of `Noesis::DragDropEffects`.
+pub mod drag_effects {
+    /// The drag-and-drop operation transfers no data.
+    pub const NONE: u32 = 0;
+    /// The data is copied.
+    pub const COPY: u32 = 1;
+    /// The data is moved.
+    pub const MOVE: u32 = 2;
+    /// The data is linked.
+    pub const LINK: u32 = 4;
+    /// Scrolling is about to start or is occurring in the target.
+    pub const SCROLL: u32 = 0x8000_0000;
+    /// Copy | Move | Scroll.
+    pub const ALL: u32 = COPY | MOVE | SCROLL;
+}
+
+/// `DragDropKeyStates` bitmask values (`DragEventArgs::keyStates`). Mirror of
+/// `Noesis::DragDropKeyStates`.
+pub mod drag_key_states {
+    /// No modifier keys or mouse buttons are pressed.
+    pub const NONE: u32 = 0;
+    /// The left mouse button is pressed.
+    pub const LEFT_MOUSE_BUTTON: u32 = 1;
+    /// The right mouse button is pressed.
+    pub const RIGHT_MOUSE_BUTTON: u32 = 2;
+    /// The Shift key is pressed.
+    pub const SHIFT_KEY: u32 = 4;
+    /// The Ctrl key is pressed.
+    pub const CONTROL_KEY: u32 = 8;
+    /// The middle mouse button is pressed.
+    pub const MIDDLE_MOUSE_BUTTON: u32 = 16;
+    /// The Alt key is pressed.
+    pub const ALT_KEY: u32 = 32;
+}
+
+/// Drag bitmask snapshot read from a [`DragEventArgs`](EventArgs::drag).
+/// `effects` is the current/result effect, `allowed_effects` the operations the
+/// source permits, `key_states` the modifier/button state ([`drag_effects`] /
+/// [`drag_key_states`] bitmasks).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DragInfo {
+    pub effects: u32,
+    pub allowed_effects: u32,
+    pub key_states: u32,
+}
+
+/// Accumulated manipulation transform (`Noesis::ManipulationDelta`). Translation
+/// in pixels, `scale` as a multiplier, `rotation` in degrees, `expansion` in
+/// pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ManipulationDelta {
+    pub translation: (f32, f32),
+    pub scale: f32,
+    pub rotation: f32,
+    pub expansion: (f32, f32),
+}
+
+/// Manipulation velocities (`Noesis::ManipulationVelocities`). `angular` in
+/// degrees/ms, `linear` and `expansion` in pixels/ms.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ManipulationVelocities {
+    pub angular: f32,
+    pub linear: (f32, f32),
+    pub expansion: (f32, f32),
 }
 
 /// Rust-side handler for the generic routed-event path. Receives a borrowed
@@ -721,6 +978,153 @@ pub fn subscribe_lifecycle<H: LifecycleHandler>(
     } else {
         // Subscription failed (unknown name / not a FrameworkElement). Free the
         // userdata we leaked above so we don't leak the handler.
+        // SAFETY: userdata came from Box::into_raw moments ago; nothing else
+        // ever saw the pointer.
+        unsafe { drop(Box::from_raw(userdata)) };
+        None
+    }
+}
+
+// ── DragDrop source side (TODO §5) ──────────────────────────────────────────
+
+/// Initiate a drag-and-drop operation from `source`, carrying `data` as the
+/// drag payload and advertising `allowed_effects` (a [`drag_effects`] bitmask).
+///
+/// Wraps `Noesis::DragDrop::DoDragDrop`. The drag is subsequently driven by the
+/// host's pointer/drag input; there is no synchronous result and no headless
+/// completion (see the §5 operational note). `data` may be any element used as
+/// the transferred payload (this SDK exposes no `DataObject` *builder*, so an
+/// element stands in for the data object).
+///
+/// Returns `false` if `source` is not a `DependencyObject` (it always is for a
+/// `FrameworkElement`, so this is effectively infallible for live elements).
+pub fn do_drag_drop(
+    source: &FrameworkElement,
+    data: &FrameworkElement,
+    allowed_effects: u32,
+) -> bool {
+    // SAFETY: both pointers are borrowed live elements; DoDragDrop copies what
+    // it needs and does not retain the raw pointers past the call we make here.
+    unsafe { dm_noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects) }
+}
+
+// ── DataObject copy/paste handlers (TODO §5) ────────────────────────────────
+
+/// Rust-side handler for the `DataObject.Copying` / `.Pasting` attached events.
+/// Receives a borrowed pointer to the clipboard data object (`None` when none
+/// is carried), whether the operation originates from a drag-drop, and returns
+/// `true` to cancel the copy/paste.
+///
+/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
+/// or be moved onto the render thread.
+pub trait DataObjectHandler: Send + 'static {
+    /// Called when the copy/paste fires. `data_object` is borrowed (valid only
+    /// for the call); `is_drag_drop` distinguishes a drag-drop transfer from a
+    /// clipboard one. Return `true` to cancel.
+    fn on_data_object(&mut self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool;
+}
+
+impl<F: FnMut(Option<*mut c_void>, bool) -> bool + Send + 'static> DataObjectHandler for F {
+    fn on_data_object(&mut self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool {
+        self(data_object, is_drag_drop)
+    }
+}
+
+/// SAFETY: `userdata` must be a pointer produced by a `subscribe_data_object_*`
+/// call and still alive (its [`DataObjectSubscription`] hasn't been dropped).
+/// `out_cancel` must be a non-null pointer to a writable bool.
+unsafe extern "C" fn data_object_trampoline(
+    userdata: *mut c_void,
+    data_object: *mut c_void,
+    is_drag_drop: bool,
+    out_cancel: *mut bool,
+) {
+    let handler = &mut *userdata.cast::<Box<dyn DataObjectHandler>>();
+    let data = (!data_object.is_null()).then_some(data_object);
+    let cancel = handler.on_data_object(data, is_drag_drop);
+    if !out_cancel.is_null() {
+        *out_cancel = cancel;
+    }
+}
+
+/// RAII subscription token for a `DataObject.Copying` / `.Pasting` handler.
+/// Drop to detach the handler and free the boxed closure. Mirrors
+/// [`EventSubscription`]; holds a `+1` ref on the element.
+pub struct DataObjectSubscription {
+    token: NonNull<c_void>,
+    userdata: NonNull<Box<dyn DataObjectHandler>>,
+}
+
+// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
+// Box<dyn DataObjectHandler> is `Send`, and the C++ subscription is bound to a
+// single element whose access is serialised by Noesis.
+unsafe impl Send for DataObjectSubscription {}
+unsafe impl Sync for DataObjectSubscription {}
+
+impl Drop for DataObjectSubscription {
+    fn drop(&mut self) {
+        // SAFETY: token + userdata produced together by a subscribe call; freed
+        // exactly once here.
+        unsafe {
+            dm_noesis_routed_events_remove_data_object_handler(self.token.as_ptr());
+            drop(Box::from_raw(self.userdata.as_ptr()));
+        }
+    }
+}
+
+/// Which `DataObject` attached event a [`subscribe_data_object`] call targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataObjectEvent {
+    /// `DataObject.Copying` — raised before data is placed on the clipboard
+    /// (e.g. by `Ctrl+C` in a `TextBox`).
+    Copying,
+    /// `DataObject.Pasting` — raised before clipboard data is consumed (e.g. by
+    /// `Ctrl+V`).
+    Pasting,
+}
+
+/// Attach `handler` to the `DataObject.Copying` or `.Pasting` attached event on
+/// `element`. Returns `None` if `element` is not a `UIElement` or the C++
+/// subscription fails. The returned [`DataObjectSubscription`] keeps the handler
+/// installed until dropped.
+///
+/// # Panics
+///
+/// Panics only on internal logic errors — specifically if `Box::into_raw`
+/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
+/// explicit at the type level).
+pub fn subscribe_data_object<H: DataObjectHandler>(
+    element: &FrameworkElement,
+    event: DataObjectEvent,
+    handler: H,
+) -> Option<DataObjectSubscription> {
+    let outer: Box<Box<dyn DataObjectHandler>> = Box::new(Box::new(handler));
+    let userdata = Box::into_raw(outer);
+
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
+    // element pointer is borrowed for the call duration only.
+    let token = unsafe {
+        match event {
+            DataObjectEvent::Copying => dm_noesis_routed_events_add_copying_handler(
+                element.raw(),
+                data_object_trampoline,
+                userdata.cast(),
+            ),
+            DataObjectEvent::Pasting => dm_noesis_routed_events_add_pasting_handler(
+                element.raw(),
+                data_object_trampoline,
+                userdata.cast(),
+            ),
+        }
+    };
+
+    if let Some(token) = NonNull::new(token) {
+        Some(DataObjectSubscription {
+            token,
+            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
+        })
+    } else {
+        // Subscription failed (not a UIElement). Free the userdata we leaked.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
