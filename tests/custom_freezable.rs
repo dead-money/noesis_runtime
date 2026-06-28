@@ -21,7 +21,7 @@ use dm_noesis_runtime::ffi::{ClassBase, PropType};
 
 struct Noop;
 impl PropertyChangeHandler for Noop {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
 #[test]

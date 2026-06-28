@@ -24,10 +24,8 @@ pub struct NameScope {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same per-object thread affinity as the
-// other owning wrappers in this crate (Noesis serialises per-object access).
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for NameScope {}
-unsafe impl Sync for NameScope {}
 
 impl NameScope {
     /// Create a new, empty namescope.
@@ -58,6 +56,7 @@ impl NameScope {
     /// Attach `scope` to `element` as its namescope (`NameScope::SetNameScope`),
     /// or pass `None` to clear it. Returns `false` if `element` is not a
     /// `DependencyObject`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_on(element: &mut FrameworkElement, scope: Option<&NameScope>) -> bool {
         let scope_ptr = scope.map_or(core::ptr::null_mut(), NameScope::raw);
         // SAFETY: both pointers are live (or null to clear); Noesis stores its
@@ -142,23 +141,26 @@ impl NameScope {
         let mut callback: &mut dyn FnMut(&str, &FrameworkElement) = &mut f;
 
         unsafe extern "C" fn tramp(ud: *mut c_void, name: *const c_char, obj: *mut c_void) {
-            // SAFETY: ud is the &mut &mut dyn FnMut passed below.
-            let f = unsafe { &mut *ud.cast::<&mut dyn FnMut(&str, &FrameworkElement)>() };
-            let name = if name.is_null() {
-                ""
-            } else {
-                // SAFETY: name is a live, NUL-terminated C string for this call.
-                match unsafe { CStr::from_ptr(name) }.to_str() {
-                    Ok(s) => s,
-                    Err(_) => return,
+            crate::panic_guard::guard(|| {
+                // SAFETY: ud is the &mut &mut dyn FnMut passed below.
+                let f = unsafe { &mut *ud.cast::<&mut dyn FnMut(&str, &FrameworkElement)>() };
+                let name = if name.is_null() {
+                    ""
+                } else {
+                    // SAFETY: name is a live, NUL-terminated C string for this call.
+                    match unsafe { CStr::from_ptr(name) }.to_str() {
+                        Ok(s) => s,
+                        Err(_) => return,
+                    }
+                };
+                if let Some(p) = NonNull::new(obj) {
+                    // SAFETY: from_owned just stores the ptr; ManuallyDrop keeps the
+                    // borrowed object from being Released here.
+                    let elem =
+                        core::mem::ManuallyDrop::new(unsafe { FrameworkElement::from_owned(p) });
+                    f(name, &elem);
                 }
-            };
-            if let Some(p) = NonNull::new(obj) {
-                // SAFETY: from_owned just stores the ptr; ManuallyDrop keeps the
-                // borrowed object from being Released here.
-                let elem = core::mem::ManuallyDrop::new(unsafe { FrameworkElement::from_owned(p) });
-                f(name, &elem);
-            }
+            })
         }
 
         // SAFETY: tramp matches the C ABI; `callback` outlives the synchronous

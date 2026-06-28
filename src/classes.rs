@@ -38,7 +38,7 @@
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
-use core::ffi::CStr;
+use core::ffi::{CStr, c_char};
 use core::ptr::{self, NonNull};
 use std::ffi::{CString, c_void};
 use std::sync::Mutex;
@@ -65,18 +65,20 @@ use crate::ffi::{
 /// transferred to C++ at registration time, and clears the prop-types
 /// scratch slot keyed on the same userdata pointer.
 unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    forget_prop_types(userdata);
-    // SAFETY: `userdata` is `Box::into_raw(Box<Box<dyn PropertyChangeHandler>>)`
-    // produced by `ClassBuilder::register`. The C++ ClassData holds the
-    // unique ownership; this is the matching `Box::from_raw` that ends it.
-    unsafe {
-        drop(Box::from_raw(
-            userdata.cast::<Box<dyn PropertyChangeHandler>>(),
-        ))
-    };
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        forget_prop_types(userdata);
+        // SAFETY: `userdata` is `Box::into_raw(Box<Box<dyn PropertyChangeHandler>>)`
+        // produced by `ClassBuilder::register`. The C++ ClassData holds the
+        // unique ownership; this is the matching `Box::from_raw` that ends it.
+        unsafe {
+            drop(Box::from_raw(
+                userdata.cast::<Box<dyn PropertyChangeHandler>>(),
+            ))
+        };
+    })
 }
 
 /// Read width / height of an `ImageSource` value (or any `BaseComponent*`
@@ -103,8 +105,21 @@ pub unsafe fn image_source_size(image_source: NonNull<c_void>) -> Option<(f32, f
 /// Per-instance Rust callback. Implementations receive a stable instance
 /// pointer (see [`Instance`]) and the index of the changed property — index
 /// matches the order in which DPs were added to the class.
+///
+/// # Re-entrancy
+///
+/// `on_changed` takes `&self`, not `&mut self`, because it is *re-entrant*: a
+/// single handler box is shared by every instance of the class, and the
+/// documented "computed property" pattern has a handler write *another* DP from
+/// inside `on_changed` (e.g. `SliceThickness` changes → recompute viewboxes →
+/// `instance.set_rect(...)`). That synchronous write re-enters Noesis, which
+/// re-invokes this same handler before the outer call has returned. Holding a
+/// `&mut self` across the user callback would alias on re-entry — undefined
+/// behaviour. Handlers that need mutable state must use interior mutability
+/// (`Cell` / `RefCell` / `Mutex` / atomics); re-entering a `RefCell` borrow is a
+/// controlled panic, never UB.
 pub trait PropertyChangeHandler: Send + 'static {
-    fn on_changed(&mut self, instance: Instance, prop_index: u32, value: PropertyValue<'_>);
+    fn on_changed(&self, instance: Instance, prop_index: u32, value: PropertyValue<'_>);
 }
 
 /// Property value as observed by the change callback. Variant matches the
@@ -192,7 +207,7 @@ enum OwnedDefault {
     Float(f32),
     Double(f64),
     Bool(bool),
-    String(Option<CString>),
+    String(Option<StringDefault>),
     Thickness([f32; 4]),
     Color([f32; 4]),
     Rect([f32; 4]),
@@ -200,6 +215,19 @@ enum OwnedDefault {
     Size([f32; 2]),
     Vector([f32; 2]),
     Enum(i32),
+}
+
+/// Owned storage for a `DM_NOESIS_PROP_STRING` default. The FFI expects a
+/// `const char* const*` (a pointer *to* a c-string pointer), so we keep both
+/// the NUL-terminated bytes (`_bytes`) and a stable slot (`ptr`) holding the
+/// pointer into them. `ptr` is computed from the heap-allocated `CString`
+/// buffer, which is move-stable, so `&self.ptr` stays valid for the synchronous
+/// registration call regardless of where the enclosing `PropSpec` lives.
+struct StringDefault {
+    /// Owns the bytes that `ptr` points into; never read directly.
+    _bytes: CString,
+    /// `_bytes.as_ptr()`, stored so its address can be handed to the FFI.
+    ptr: *const c_char,
 }
 
 impl<H: PropertyChangeHandler> ClassBuilder<H> {
@@ -530,8 +558,11 @@ impl PropertyDefault<'_> {
             PropertyDefault::Double(v) => OwnedDefault::Double(v),
             PropertyDefault::Bool(v) => OwnedDefault::Bool(v),
             PropertyDefault::String(s) => {
-                let c = CString::new(s).ok();
-                OwnedDefault::String(c)
+                let slot = CString::new(s).ok().map(|bytes| {
+                    let ptr = bytes.as_ptr();
+                    StringDefault { _bytes: bytes, ptr }
+                });
+                OwnedDefault::String(slot)
             }
             PropertyDefault::Thickness {
                 left,
@@ -564,25 +595,14 @@ impl OwnedDefault {
             OwnedDefault::Float(v) => (v as *const f32).cast(),
             OwnedDefault::Double(v) => (v as *const f64).cast(),
             OwnedDefault::Bool(v) => (v as *const bool).cast(),
-            OwnedDefault::String(c) => match c {
-                Some(cs) => {
-                    // FFI expects const char* const* — pointer to a c-string pointer.
-                    // We need stable storage; Box<*const c_char> would work but
-                    // we sidestep by writing the pointer into a slot the caller
-                    // owns. Here, return the pointer to the inner pointer of
-                    // the CString box.
-                    let p: *const i8 = cs.as_ptr();
-                    // SAFETY: we leak this slot for the duration of the
-                    // registration call. ClassBuilder::register takes &props
-                    // by ref, so &p is valid for the call site only — the
-                    // pointer is dereferenced synchronously by the C++ side.
-                    // The returned pointer is to a stack temporary; we
-                    // sidestep by NOT supporting String defaults via the
-                    // borrow path. Use SetValue from Rust after construction.
-                    // Returning null causes the C++ default ("") to apply.
-                    let _ = p;
-                    ptr::null()
-                }
+            OwnedDefault::String(slot) => match slot {
+                // FFI expects `const char* const*` — a pointer to a c-string
+                // pointer. `slot.ptr` is that c-string pointer, held in stable
+                // storage owned by this `OwnedDefault`; we hand the FFI the
+                // address of that slot. It is dereferenced synchronously by the
+                // C++ side during the registration call, while `self` is alive.
+                Some(slot) => (&slot.ptr as *const *const c_char).cast(),
+                // Interior NUL (or no default): fall back to the C++ "" default.
                 None => ptr::null(),
             },
             OwnedDefault::Thickness(arr) | OwnedDefault::Color(arr) | OwnedDefault::Rect(arr) => {
@@ -607,10 +627,8 @@ pub struct ClassRegistration {
     num_props: u32,
 }
 
-// SAFETY: the Boxed handler is `Send`; the C++ side only touches the token
-// via the C ABI surface, which is thread-safe per the registry mutex.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ClassRegistration {}
-unsafe impl Sync for ClassRegistration {}
 
 impl ClassRegistration {
     /// Number of dependency properties registered against this class.
@@ -656,11 +674,8 @@ pub struct ClassInstance {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: same rationale as [`Instance`] / `FrameworkElement` — the underlying
-// object is a Noesis BaseComponent whose per-object calls Noesis serialises to
-// one thread; moving the owning handle between threads is sound.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ClassInstance {}
-unsafe impl Sync for ClassInstance {}
 
 impl ClassInstance {
     /// A non-owning [`Instance`] handle for driving the DPs (`set_*` / `get_*`).
@@ -895,6 +910,25 @@ impl Instance {
         };
         ok.then_some(out)
     }
+    /// Read back a `String` DP. Returns `None` on bad input (instance pointer /
+    /// index mismatch / type mismatch) or a null string pointer.
+    pub fn get_string(self, prop_index: u32) -> Option<String> {
+        let mut p: *const c_char = ptr::null();
+        let ok = unsafe {
+            dm_noesis_instance_get_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&mut p as *mut *const c_char).cast(),
+            )
+        };
+        if !ok || p.is_null() {
+            return None;
+        }
+        // SAFETY: p is a live NUL-terminated UTF-8 string borrowed from
+        // Noesis-owned storage while we hold our instance reference; copy out
+        // before yielding control.
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+    }
     pub fn get_thickness(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
@@ -976,11 +1010,8 @@ impl Instance {
     }
 }
 
-// SAFETY: Instance is just a raw pointer; the underlying object is owned by
-// Noesis's visual tree and is safe to reference from any thread that respects
-// the View's main-thread invariant.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Instance {}
-unsafe impl Sync for Instance {}
 
 // ── Trampoline ─────────────────────────────────────────────────────────────
 
@@ -990,17 +1021,22 @@ unsafe extern "C" fn prop_changed_trampoline(
     prop_index: u32,
     value_ptr: *const c_void,
 ) {
-    let handler = &mut *userdata.cast::<Box<dyn PropertyChangeHandler>>();
-    let Some(instance) = NonNull::new(instance) else {
-        return;
-    };
+    crate::panic_guard::guard(|| {
+        // Shared `&`, never `&mut`: the handler is re-entrant (a `set_*` inside
+        // `on_changed` re-invokes this trampoline with the same `userdata`
+        // box). See `PropertyChangeHandler` docs.
+        let handler = &*userdata.cast::<Box<dyn PropertyChangeHandler>>();
+        let Some(instance) = NonNull::new(instance) else {
+            return;
+        };
 
-    // We need the prop type to decode the value. The C++ side knows the type
-    // tag for the prop but doesn't pass it across the FFI on the changed
-    // callback (to keep the surface narrow). We recover it via a side table
-    // populated at registration: see `with_class_props`.
-    let value = decode_value(userdata, prop_index, value_ptr);
-    handler.on_changed(Instance(instance), prop_index, value);
+        // We need the prop type to decode the value. The C++ side knows the type
+        // tag for the prop but doesn't pass it across the FFI on the changed
+        // callback (to keep the surface narrow). We recover it via a side table
+        // populated at registration: see `with_class_props`.
+        let value = decode_value(userdata, prop_index, value_ptr);
+        handler.on_changed(Instance(instance), prop_index, value);
+    })
 }
 
 // Side table from (handler userdata pointer) → property type list, populated
@@ -1249,8 +1285,12 @@ pub enum Coerced {
 /// value, or [`Coerced::Unchanged`] to pass it through. A no-op coerce yields
 /// the input verbatim, so a clamp to `[0, 100]` that returns `100` for an input
 /// of `999` is observable through a read-back.
+///
+/// Takes `&self` (re-entrant: coercion runs inside the value pipeline and a
+/// handler that reads or writes other coerced DPs can re-enter this same
+/// per-class handler box; use interior mutability for handler state).
 pub trait CoerceHandler: Send + 'static {
-    fn coerce(&mut self, instance: Instance, prop_index: u32, value: PropertyValue<'_>) -> Coerced;
+    fn coerce(&self, instance: Instance, prop_index: u32, value: PropertyValue<'_>) -> Coerced;
 }
 
 /// A width/height pair in DIPs, used by [`LayoutHandler`].
@@ -1282,15 +1322,20 @@ impl Size {
 ///
 /// Default impls make the element take zero space (measure) and accept the
 /// final size (arrange) — override the half you need.
+///
+/// Methods take `&self` (re-entrant: a single handler box is shared by every
+/// instance of the class, so a panel that lays out children of its own type
+/// re-enters `measure`/`arrange` on the same box synchronously; use interior
+/// mutability for handler state).
 pub trait LayoutHandler: Send + 'static {
     /// Return the element's desired size given the available size.
-    fn measure(&mut self, instance: Instance, available: Size) -> Size {
+    fn measure(&self, instance: Instance, available: Size) -> Size {
         let _ = (instance, available);
         Size::ZERO
     }
 
     /// Position children within `final_size` and return the size actually used.
-    fn arrange(&mut self, instance: Instance, final_size: Size) -> Size {
+    fn arrange(&self, instance: Instance, final_size: Size) -> Size {
         let _ = instance;
         final_size
     }
@@ -1354,6 +1399,7 @@ impl Instance {
     /// Set a read-only `Int32` DP via the privileged path (the analogue of a
     /// WPF `DependencyPropertyKey`). Ordinary [`Self::set_int32`] is a no-op on
     /// a read-only DP. Returns `false` on a bad instance / index.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_int32(self, prop_index: u32, value: i32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1365,6 +1411,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `UInt32` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_uint32(self, prop_index: u32, value: u32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1376,6 +1423,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Float` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_float(self, prop_index: u32, value: f32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1387,6 +1435,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Double` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_double(self, prop_index: u32, value: f64) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1398,6 +1447,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Bool` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_bool(self, prop_index: u32, value: bool) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1413,6 +1463,7 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `value` contains an interior NUL.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_string(self, prop_index: u32, value: &str) -> bool {
         let cstr = CString::new(value).expect("string contained NUL");
         let ptr: *const i8 = cstr.as_ptr();
@@ -1426,6 +1477,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Point` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_point(self, prop_index: u32, x: f32, y: f32) -> bool {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
@@ -1438,6 +1490,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Size` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_size(self, prop_index: u32, width: f32, height: f32) -> bool {
         let arr = [width, height];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
@@ -1450,6 +1503,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Vector` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_vector(self, prop_index: u32, x: f32, y: f32) -> bool {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
@@ -1463,6 +1517,7 @@ impl Instance {
     }
     /// Read-only setter for an enum DP (underlying `int32` member value). See
     /// [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_enum(self, prop_index: u32, value: i32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1482,26 +1537,31 @@ unsafe extern "C" fn coerce_trampoline(
     in_value: *const c_void,
     out_value: *mut c_void,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn CoerceHandler>>();
-    let Some(inst) = NonNull::new(instance) else {
-        return;
-    };
-    let value = decode_value(userdata, prop_index, in_value);
-    let coerced = handler.coerce(Instance(inst), prop_index, value);
-    encode_coerced(userdata, prop_index, coerced, out_value);
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // Shared `&`: re-entrant per-class handler box (see `CoerceHandler`).
+        let handler = &*userdata.cast::<Box<dyn CoerceHandler>>();
+        let Some(inst) = NonNull::new(instance) else {
+            return;
+        };
+        let value = decode_value(userdata, prop_index, in_value);
+        let coerced = handler.coerce(Instance(inst), prop_index, value);
+        encode_coerced(userdata, prop_index, coerced, out_value);
+    })
 }
 
 /// Free trampoline for the donated coerce handler box. Mirrors
 /// [`class_handler_free_trampoline`].
 unsafe extern "C" fn coerce_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    forget_prop_types(userdata);
-    drop(Box::from_raw(userdata.cast::<Box<dyn CoerceHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        forget_prop_types(userdata);
+        drop(Box::from_raw(userdata.cast::<Box<dyn CoerceHandler>>()));
+    })
 }
 
 unsafe fn encode_coerced(
@@ -1588,20 +1648,23 @@ unsafe extern "C" fn layout_measure_trampoline(
     out_w: *mut f32,
     out_h: *mut f32,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
-    let size = match NonNull::new(instance) {
-        Some(inst) => handler.measure(Instance(inst), Size::new(avail_w, avail_h)),
-        None => Size::ZERO,
-    };
-    if !out_w.is_null() {
-        *out_w = size.width;
-    }
-    if !out_h.is_null() {
-        *out_h = size.height;
-    }
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // Shared `&`: re-entrant per-class handler box (see `LayoutHandler`).
+        let handler = &*userdata.cast::<Box<dyn LayoutHandler>>();
+        let size = match NonNull::new(instance) {
+            Some(inst) => handler.measure(Instance(inst), Size::new(avail_w, avail_h)),
+            None => Size::ZERO,
+        };
+        if !out_w.is_null() {
+            *out_w = size.width;
+        }
+        if !out_h.is_null() {
+            *out_h = size.height;
+        }
+    })
 }
 
 unsafe extern "C" fn layout_arrange_trampoline(
@@ -1612,29 +1675,34 @@ unsafe extern "C" fn layout_arrange_trampoline(
     out_w: *mut f32,
     out_h: *mut f32,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
-    let size = match NonNull::new(instance) {
-        Some(inst) => handler.arrange(Instance(inst), Size::new(final_w, final_h)),
-        None => Size::new(final_w, final_h),
-    };
-    if !out_w.is_null() {
-        *out_w = size.width;
-    }
-    if !out_h.is_null() {
-        *out_h = size.height;
-    }
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // Shared `&`: re-entrant per-class handler box (see `LayoutHandler`).
+        let handler = &*userdata.cast::<Box<dyn LayoutHandler>>();
+        let size = match NonNull::new(instance) {
+            Some(inst) => handler.arrange(Instance(inst), Size::new(final_w, final_h)),
+            None => Size::new(final_w, final_h),
+        };
+        if !out_w.is_null() {
+            *out_w = size.width;
+        }
+        if !out_h.is_null() {
+            *out_h = size.height;
+        }
+    })
 }
 
 /// Free trampoline for the donated layout handler box. Mirrors
 /// [`class_handler_free_trampoline`].
 unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn LayoutHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn LayoutHandler>>()));
+    })
 }
 
 // ── Immediate-mode rendering (TODO §10) ──────────────────────────────────────
@@ -1648,12 +1716,16 @@ unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
 /// [`View`](crate::view::View) + [`Renderer`](crate::view::Renderer) bound to a
 /// [`RenderDevice`](crate::render_device::RenderDevice) — see `tests/drawing.rs`).
 /// Like the layout callbacks it runs on the view-driving thread; keep work small.
+///
+/// Takes `&self` (re-entrant: one handler box is shared by every instance of
+/// the class, so rendering a nested element of the same type re-enters `render`
+/// on the same box; use interior mutability for handler state).
 pub trait RenderHandler: Send + 'static {
     /// Record this element's visual content into `ctx`. The element's render
     /// size is available via [`Instance::layout_child`] / the element's own
     /// `ActualWidth`/`ActualHeight` (read through a
     /// [`FrameworkElement`](crate::view::FrameworkElement)).
-    fn render(&mut self, instance: Instance, ctx: DrawingContext<'_>);
+    fn render(&self, instance: Instance, ctx: DrawingContext<'_>);
 }
 
 unsafe extern "C" fn render_trampoline(
@@ -1661,24 +1733,29 @@ unsafe extern "C" fn render_trampoline(
     instance: *mut c_void,
     context: *mut c_void,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn RenderHandler>>();
-    let (Some(inst), Some(ctx)) = (NonNull::new(instance), NonNull::new(context)) else {
-        return;
-    };
-    // SAFETY: `ctx` is the borrowed DrawingContext* delivered to OnRender, valid
-    // only for this call — the `DrawingContext<'_>` lifetime keeps it scoped.
-    let ctx = DrawingContext::from_raw(ctx);
-    handler.render(Instance(inst), ctx);
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // Shared `&`: re-entrant per-class handler box (see `RenderHandler`).
+        let handler = &*userdata.cast::<Box<dyn RenderHandler>>();
+        let (Some(inst), Some(ctx)) = (NonNull::new(instance), NonNull::new(context)) else {
+            return;
+        };
+        // SAFETY: `ctx` is the borrowed DrawingContext* delivered to OnRender, valid
+        // only for this call — the `DrawingContext<'_>` lifetime keeps it scoped.
+        let ctx = DrawingContext::from_raw(ctx);
+        handler.render(Instance(inst), ctx);
+    })
 }
 
 /// Free trampoline for the donated render handler box. Mirrors
 /// [`class_handler_free_trampoline`].
 unsafe extern "C" fn render_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn RenderHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn RenderHandler>>()));
+    })
 }

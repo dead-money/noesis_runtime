@@ -62,7 +62,7 @@ struct ClassDropProbe {
     drop_count: Arc<AtomicU32>,
 }
 impl PropertyChangeHandler for ClassDropProbe {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 impl Drop for ClassDropProbe {
     fn drop(&mut self) {

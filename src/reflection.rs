@@ -313,10 +313,8 @@ pub struct BoxedValue {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for BoxedValue {}
-unsafe impl Sync for BoxedValue {}
 
 impl BoxedValue {
     /// Raw borrowed `Noesis::BaseComponent*`.

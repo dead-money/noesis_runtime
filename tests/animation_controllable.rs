@@ -36,8 +36,8 @@ fn controllable_storyboard_pause_resume_stop() {
         let box_el = content.find_name("Box").expect("Box");
 
         let mut anim = DoubleAnimation::new();
-        anim.set_from(Some(0.0));
-        anim.set_to(Some(1.0));
+        assert!(anim.set_from(Some(0.0)), "setter should succeed");
+        assert!(anim.set_to(Some(1.0)), "setter should succeed");
         anim.set_duration_secs(1.0);
         anim.set_target_name("Box");
         anim.set_target_property("Opacity");

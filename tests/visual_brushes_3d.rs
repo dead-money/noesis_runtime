@@ -70,7 +70,7 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
         // clear_visual unsets it.
         assert!(vb.clear_visual(), "clear_visual");
         assert!(vb.visual().is_none(), "visual cleared");
-        vb.set_visual(&source);
+        assert!(vb.set_visual(&source), "setter should succeed");
 
         // Assign the VisualBrush to a target's Background; pointer identity.
         let target_xaml = format!("<Border {NS}/>");

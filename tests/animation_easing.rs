@@ -40,15 +40,15 @@ fn easing_changes_interpolation_curve() {
         let eased = content.find_name("Eased").expect("Eased");
 
         let mut a_lin = DoubleAnimation::new();
-        a_lin.set_from(Some(0.0));
-        a_lin.set_to(Some(100.0));
+        assert!(a_lin.set_from(Some(0.0)), "setter should succeed");
+        assert!(a_lin.set_to(Some(100.0)), "setter should succeed");
         a_lin.set_duration_secs(1.0);
         a_lin.set_target_name("Lin");
         a_lin.set_target_property("Width");
 
         let mut a_eased = DoubleAnimation::new();
-        a_eased.set_from(Some(0.0));
-        a_eased.set_to(Some(100.0));
+        assert!(a_eased.set_from(Some(0.0)), "setter should succeed");
+        assert!(a_eased.set_to(Some(100.0)), "setter should succeed");
         a_eased.set_duration_secs(1.0);
         a_eased.set_target_name("Eased");
         a_eased.set_target_property("Width");

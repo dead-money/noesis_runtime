@@ -77,19 +77,9 @@ pub enum PenLineJoin {
     Round = 2,
 }
 
-/// How a shape fills its allocated space. Ordinals mirror `Noesis::Stretch`.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(i32)]
-pub enum Stretch {
-    /// Preserve the original size.
-    None = 0,
-    /// Resize to fill, ignoring aspect ratio.
-    Fill = 1,
-    /// Resize to fit, preserving aspect ratio.
-    Uniform = 2,
-    /// Resize to fill, preserving aspect ratio and clipping the overflow.
-    UniformToFill = 3,
-}
+/// How a shape fills its allocated space. Re-exported from [`crate::brushes`]
+/// so the crate has a single `Stretch` type (ordinals mirror `Noesis::Stretch`).
+pub use crate::brushes::Stretch;
 
 impl PenLineCap {
     fn from_ordinal(v: i32) -> Option<Self> {
@@ -109,18 +99,6 @@ impl PenLineJoin {
             0 => Some(Self::Miter),
             1 => Some(Self::Bevel),
             2 => Some(Self::Round),
-            _ => None,
-        }
-    }
-}
-
-impl Stretch {
-    fn from_ordinal(v: i32) -> Option<Self> {
-        match v {
-            0 => Some(Self::None),
-            1 => Some(Self::Fill),
-            2 => Some(Self::Uniform),
-            3 => Some(Self::UniformToFill),
             _ => None,
         }
     }
@@ -407,10 +385,8 @@ macro_rules! shape_handle {
             ptr: NonNull<c_void>,
         }
 
-        // SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-        // affinity as the other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Create the shape with default property values.

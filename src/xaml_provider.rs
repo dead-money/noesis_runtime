@@ -33,8 +33,10 @@ use crate::ffi::{
 ///
 /// [`load_xaml`]: Self::load_xaml
 ///
-/// `Send + Sync` supertraits let the [`Registered`] guard live inside a
-/// regular Bevy `Resource`; safety rationale identical to
+/// `Send + Sync` supertraits make the boxed impl `Send` (so the
+/// [`Registered`] guard can be *moved* across threads); the guard is `Send`
+/// but **not** `Sync` (it has `&self` Noesis accessors). Store it in a
+/// `NonSend` resource. Safety rationale identical to
 /// [`crate::render_device::RenderDevice`].
 ///
 /// [`Registered`]: Registered
@@ -67,21 +69,26 @@ unsafe extern "C" fn t_load_xaml(
     out_data: *mut *const u8,
     out_len: *mut u32,
 ) -> bool {
-    let uri_str = if uri.is_null() {
-        ""
-    } else {
-        // Noesis URIs are always ASCII / UTF-8; a non-UTF-8 URI is a bug on
-        // their end that should surface loudly.
-        CStr::from_ptr(uri)
-            .to_str()
-            .expect("noesis passed non-UTF-8 URI to XamlProvider")
-    };
-    let Some(bytes) = provider(userdata).load_xaml(uri_str) else {
-        return false;
-    };
-    out_data.write(bytes.as_ptr());
-    out_len.write(u32::try_from(bytes.len()).expect("XAML > 4 GiB"));
-    true
+    crate::panic_guard::guard(|| {
+        // Noesis URIs are normally ASCII/UTF-8; decode lossily so a stray
+        // non-UTF-8 URI can't panic across the C ABI (it just won't match).
+        let uri_str = if uri.is_null() {
+            std::borrow::Cow::Borrowed("")
+        } else {
+            CStr::from_ptr(uri).to_string_lossy()
+        };
+        let Some(bytes) = provider(userdata).load_xaml(&uri_str) else {
+            return false;
+        };
+        // A >4 GiB document can't be represented to the shim — treat as failure
+        // rather than panicking inside the trampoline.
+        let Ok(len) = u32::try_from(bytes.len()) else {
+            return false;
+        };
+        out_data.write(bytes.as_ptr());
+        out_len.write(len);
+        true
+    })
 }
 
 static VTABLE: XamlProviderVTable = XamlProviderVTable {
@@ -104,12 +111,8 @@ pub struct Registered {
     userdata: NonNull<Box<dyn XamlProvider>>,
 }
 
-// SAFETY: matches the rationale on `crate::render_device::Registered` —
-// XamlProvider: Send + Sync, Noesis's per-object call-serialization
-// contract tolerates owner-thread handoffs, and there are no useful
-// `&Registered` methods that touch Noesis state.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Registered {}
-unsafe impl Sync for Registered {}
 
 impl Registered {
     /// Raw `Noesis::XamlProvider*` — useful for passing to other Noesis APIs

@@ -20,7 +20,7 @@ use dm_noesis_runtime::ffi::{ClassBase, PropType};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
 #[derive(Clone, Default)]
@@ -31,12 +31,7 @@ struct Clamp {
     log: CoerceLog,
 }
 impl CoerceHandler for Clamp {
-    fn coerce(
-        &mut self,
-        _instance: Instance,
-        prop_index: u32,
-        value: PropertyValue<'_>,
-    ) -> Coerced {
+    fn coerce(&self, _instance: Instance, prop_index: u32, value: PropertyValue<'_>) -> Coerced {
         *self.log.calls.lock().unwrap() += 1;
         // Only the "Clamped" property (index 0) is routed through coercion.
         if prop_index == 0

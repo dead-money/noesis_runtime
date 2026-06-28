@@ -212,7 +212,12 @@ pub trait Geometry {
     /// Apply a `Transform` to the geometry. Noesis takes its own reference, so
     /// `transform` may be dropped afterwards. Returns `false` only on an
     /// internal type mismatch.
-    fn set_transform<T: Transform>(&mut self, transform: &T) -> bool {
+    ///
+    /// Takes `&dyn Transform` (rather than a generic) so this trait stays
+    /// object-safe — `&dyn Geometry` is the shape argument of
+    /// [`DrawingContext::draw_geometry`](crate::drawing::DrawingContext::draw_geometry)
+    /// / [`push_clip`](crate::drawing::DrawingContext::push_clip).
+    fn set_transform(&mut self, transform: &dyn Transform) -> bool {
         // SAFETY: geometry_raw() is a live Geometry*; transform_raw() is a live
         // Transform* borrowed for the duration of the call.
         unsafe { dm_noesis_geometry_set_transform(self.geometry_raw(), transform.transform_raw()) }
@@ -236,10 +241,8 @@ pub trait PathSegment {
 
 macro_rules! base_component_handle {
     ($name:ident) => {
-        // SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-        // affinity as the other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -386,9 +389,8 @@ pub struct StreamGeometryContext {
     ctx: NonNull<c_void>,
 }
 
-// SAFETY: an opaque heap StreamGeometryContext*; single-threaded-per-object.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for StreamGeometryContext {}
-unsafe impl Sync for StreamGeometryContext {}
 
 impl StreamGeometryContext {
     /// Start a new figure at `(x, y)`. `is_closed` joins the first and last

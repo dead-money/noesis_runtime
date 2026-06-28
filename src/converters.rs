@@ -189,18 +189,20 @@ unsafe extern "C" fn convert_trampoline(
     parameter: *mut c_void,
     out_result: *mut *mut c_void,
 ) -> bool {
-    let handler = &*userdata.cast::<Box<dyn ValueConverter>>();
-    let v = ConvertArg::new(value);
-    let p = ConvertArg::new(parameter);
-    match handler.convert(&v, &p) {
-        Some(result) => {
-            if !out_result.is_null() {
-                *out_result = result.into_boxed();
+    crate::panic_guard::guard(|| {
+        let handler = &*userdata.cast::<Box<dyn ValueConverter>>();
+        let v = ConvertArg::new(value);
+        let p = ConvertArg::new(parameter);
+        match handler.convert(&v, &p) {
+            Some(result) => {
+                if !out_result.is_null() {
+                    *out_result = result.into_boxed();
+                }
+                true
             }
-            true
+            None => false,
         }
-        None => false,
-    }
+    })
 }
 
 /// SAFETY: see [`convert_trampoline`].
@@ -211,27 +213,31 @@ unsafe extern "C" fn convert_back_trampoline(
     parameter: *mut c_void,
     out_result: *mut *mut c_void,
 ) -> bool {
-    let handler = &*userdata.cast::<Box<dyn ValueConverter>>();
-    let v = ConvertArg::new(value);
-    let p = ConvertArg::new(parameter);
-    match handler.convert_back(&v, &p) {
-        Some(result) => {
-            if !out_result.is_null() {
-                *out_result = result.into_boxed();
+    crate::panic_guard::guard(|| {
+        let handler = &*userdata.cast::<Box<dyn ValueConverter>>();
+        let v = ConvertArg::new(value);
+        let p = ConvertArg::new(parameter);
+        match handler.convert_back(&v, &p) {
+            Some(result) => {
+                if !out_result.is_null() {
+                    *out_result = result.into_boxed();
+                }
+                true
             }
-            true
+            None => false,
         }
-        None => false,
-    }
+    })
 }
 
 /// SAFETY: `userdata` was produced by [`Converter::new`] and C++ owns it; this
 /// is the matching `Box::from_raw` that ends that ownership, run exactly once.
 unsafe extern "C" fn converter_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn ValueConverter>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn ValueConverter>>()));
+    })
 }
 
 /// A Rust-backed `IValueConverter`. Owns a `+1` reference released on drop.
@@ -242,10 +248,8 @@ pub struct Converter {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate (per-object calls serialised by the caller).
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Converter {}
-unsafe impl Sync for Converter {}
 
 impl Converter {
     /// Build a converter from a [`ValueConverter`]. A bare

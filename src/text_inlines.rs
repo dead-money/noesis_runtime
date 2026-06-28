@@ -106,10 +106,8 @@ macro_rules! inline_handle {
             ptr: NonNull<c_void>,
         }
 
-        // SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-        // affinity as the other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -197,6 +195,7 @@ impl Run {
     /// # Panics
     ///
     /// Panics if `text` contains an interior NUL.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_text(&mut self, text: &str) -> bool {
         let c = CString::new(text).expect("run text contained interior NUL");
         // SAFETY: self.ptr is a live Run*; `c` outlives the call.
@@ -308,6 +307,7 @@ impl Hyperlink {
     /// # Panics
     ///
     /// Panics if `uri` contains an interior NUL.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_navigate_uri(&mut self, uri: &str) -> bool {
         let c = CString::new(uri).expect("navigate uri contained interior NUL");
         // SAFETY: self.ptr is a live Hyperlink*; `c` outlives the call.
@@ -369,6 +369,7 @@ impl InlineUIContainer {
     /// Host `child` (any `UIElement`, e.g. a `Button`) inside the container.
     /// The container takes its own reference, so `child` may be dropped after.
     /// Returns `false` if `child` is not a `UIElement`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_child(&mut self, child: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InlineUIContainer*; child.raw() is a live
         // UIElement* (FrameworkElement derives from UIElement).
@@ -406,9 +407,8 @@ pub struct InlineCollection {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: same single-threaded-per-object affinity as the other handles here.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for InlineCollection {}
-unsafe impl Sync for InlineCollection {}
 
 impl InlineCollection {
     fn from_raw(ptr: *mut c_void) -> Option<Self> {

@@ -52,7 +52,7 @@ impl CommandBindingHandler for Probe {
     fn can_execute(&self, _param: CommandParameter) -> bool {
         self.can.load(Ordering::SeqCst)
     }
-    fn execute(&mut self, param: CommandParameter) {
+    fn execute(&self, param: CommandParameter) {
         self.saw_param.store(param.is_some(), Ordering::SeqCst);
         self.executed.fetch_add(1, Ordering::SeqCst);
     }

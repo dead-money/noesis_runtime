@@ -65,22 +65,24 @@ pub struct XamlDependency {
 /// `dm_noesis_get_xaml_dependencies`, once per dependency; `user` is the
 /// `&mut Vec<XamlDependency>` we passed in, valid for that whole call.
 unsafe extern "C" fn collect(user: *mut c_void, uri: *const c_char, kind: i32) {
-    // SAFETY: `user` is the &mut Vec we handed to the FFI; the borrow is scoped
-    // to this synchronous callback and never aliased on the Rust side.
-    let out = unsafe { &mut *user.cast::<Vec<XamlDependency>>() };
-    let Some(kind) = XamlDependencyKind::from_raw(kind) else {
-        return;
-    };
-    // Borrowed string from Noesis — copy into an owned String immediately.
-    let uri = if uri.is_null() {
-        String::new()
-    } else {
-        // SAFETY: `uri` is a NUL-terminated string valid for this call.
-        unsafe { CStr::from_ptr(uri) }
-            .to_string_lossy()
-            .into_owned()
-    };
-    out.push(XamlDependency { uri, kind });
+    crate::panic_guard::guard(|| {
+        // SAFETY: `user` is the &mut Vec we handed to the FFI; the borrow is scoped
+        // to this synchronous callback and never aliased on the Rust side.
+        let out = unsafe { &mut *user.cast::<Vec<XamlDependency>>() };
+        let Some(kind) = XamlDependencyKind::from_raw(kind) else {
+            return;
+        };
+        // Borrowed string from Noesis — copy into an owned String immediately.
+        let uri = if uri.is_null() {
+            String::new()
+        } else {
+            // SAFETY: `uri` is a NUL-terminated string valid for this call.
+            unsafe { CStr::from_ptr(uri) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        out.push(XamlDependency { uri, kind });
+    })
 }
 
 /// Walk `xaml`'s referenced resources without instantiating the object tree,

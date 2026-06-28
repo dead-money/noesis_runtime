@@ -32,6 +32,7 @@
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
 use core::ptr::NonNull;
+use std::borrow::Cow;
 use std::ffi::{CStr, c_void};
 use std::os::raw::c_char;
 
@@ -109,13 +110,13 @@ unsafe fn provider<'a>(userdata: *mut c_void) -> &'a mut Box<dyn TextureProvider
     &mut *userdata.cast::<Box<dyn TextureProvider>>()
 }
 
-fn cstr_to_str<'a>(p: *const c_char) -> &'a str {
+/// Decode a Noesis-supplied URI lossily — odd/non-UTF-8 engine input must not
+/// panic across the C ABI, so invalid bytes become U+FFFD rather than aborting.
+fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {
-        ""
+        Cow::Borrowed("")
     } else {
-        unsafe { CStr::from_ptr(p) }
-            .to_str()
-            .expect("noesis passed non-UTF-8 string to TextureProvider")
+        unsafe { CStr::from_ptr(p) }.to_string_lossy()
     }
 }
 
@@ -124,18 +125,20 @@ unsafe extern "C" fn t_get_info(
     uri: *const c_char,
     out: *mut TextureInfoFfi,
 ) -> bool {
-    let uri = cstr_to_str(uri);
-    let Some(info) = provider(userdata).info(uri) else {
-        return false;
-    };
-    out.write(TextureInfoFfi {
-        width: info.width,
-        height: info.height,
-        x: info.x,
-        y: info.y,
-        dpi_scale: info.dpi_scale,
-    });
-    true
+    crate::panic_guard::guard(|| {
+        let uri = cstr_to_str(uri);
+        let Some(info) = provider(userdata).info(&uri) else {
+            return false;
+        };
+        out.write(TextureInfoFfi {
+            width: info.width,
+            height: info.height,
+            x: info.x,
+            y: info.y,
+            dpi_scale: info.dpi_scale,
+        });
+        true
+    })
 }
 
 unsafe extern "C" fn t_load_texture(
@@ -146,21 +149,28 @@ unsafe extern "C" fn t_load_texture(
     out_data: *mut *const u8,
     out_len: *mut u32,
 ) -> bool {
-    let uri = cstr_to_str(uri);
-    let Some(img) = provider(userdata).load(uri) else {
-        return false;
-    };
-    // Sanity: keep the expected-bytes contract enforced here so the C++
-    // shim can trust `len == w * h * 4` when it calls CreateTexture.
-    let expected = img.width.saturating_mul(img.height).saturating_mul(4) as usize;
-    if img.bytes.len() != expected {
-        return false;
-    }
-    out_width.write(img.width);
-    out_height.write(img.height);
-    out_data.write(img.bytes.as_ptr());
-    out_len.write(u32::try_from(img.bytes.len()).expect("image > 4 GiB"));
-    true
+    crate::panic_guard::guard(|| {
+        let uri = cstr_to_str(uri);
+        let Some(img) = provider(userdata).load(&uri) else {
+            return false;
+        };
+        // Sanity: keep the expected-bytes contract enforced here so the C++
+        // shim can trust `len == w * h * 4` when it calls CreateTexture.
+        let expected = img.width.saturating_mul(img.height).saturating_mul(4) as usize;
+        if img.bytes.len() != expected {
+            return false;
+        }
+        // A >4 GiB buffer can't be represented to the shim — treat as failure
+        // rather than panicking inside the trampoline.
+        let Ok(len) = u32::try_from(img.bytes.len()) else {
+            return false;
+        };
+        out_width.write(img.width);
+        out_height.write(img.height);
+        out_data.write(img.bytes.as_ptr());
+        out_len.write(len);
+        true
+    })
 }
 
 static VTABLE: TextureProviderVTable = TextureProviderVTable {
@@ -180,11 +190,8 @@ pub struct Registered {
     userdata: NonNull<Box<dyn TextureProvider>>,
 }
 
-// SAFETY: matches the XAML / Font provider `Registered` wrappers —
-// supertrait bound makes the boxed impl Send + Sync, Noesis serialises
-// per-object calls.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Registered {}
-unsafe impl Sync for Registered {}
 
 impl Registered {
     /// Raw `Noesis::TextureProvider*`.

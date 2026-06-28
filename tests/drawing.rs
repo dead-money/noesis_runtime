@@ -31,6 +31,9 @@ use dm_noesis_runtime::drawing::{
     BlendingMode, DrawingContext, Pen, PenLineCap, PenLineJoin, RectangleGeometry,
 };
 use dm_noesis_runtime::ffi::ClassBase;
+use dm_noesis_runtime::geometry::{
+    EllipseGeometry, Geometry, LineSegment, PathFigure, PathGeometry,
+};
 use dm_noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
 use dm_noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,
@@ -41,7 +44,7 @@ use dm_noesis_runtime::view::{FrameworkElement, View};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
 #[derive(Clone, Default)]
@@ -61,11 +64,16 @@ struct PainterRender {
     brush: SolidColorBrush,
     pen: Pen,
     geometry: RectangleGeometry,
+    // Rich code-built geometries from `crate::geometry`, drawn / clipped through
+    // the unified `geometry::Geometry` trait — proving `draw_geometry` /
+    // `push_clip` accept real built geometry, not just a drawing-local rect.
+    path: PathGeometry,
+    ellipse: EllipseGeometry,
     transform: TranslateTransform,
 }
 
 impl RenderHandler for PainterRender {
-    fn render(&mut self, _instance: Instance, ctx: DrawingContext<'_>) {
+    fn render(&self, _instance: Instance, ctx: DrawingContext<'_>) {
         self.signals.renders.fetch_add(1, Ordering::SeqCst);
         if !self.draw {
             return;
@@ -84,6 +92,16 @@ impl RenderHandler for PainterRender {
         );
         ok &= ctx.draw_ellipse(Some(&self.brush), Some(&self.pen), (50.0, 40.0), 20.0, 15.0);
         ok &= ctx.draw_geometry(Some(&self.brush), Some(&self.pen), &self.geometry);
+
+        // Draw real built geometry via the unified `geometry::Geometry` trait:
+        // a `PathGeometry` (triangle figure) and an `EllipseGeometry`.
+        ok &= ctx.draw_geometry(Some(&self.brush), Some(&self.pen), &self.path);
+        ok &= ctx.draw_geometry(Some(&self.brush), Some(&self.pen), &self.ellipse);
+
+        // Clip with the `EllipseGeometry`, draw inside it, then pop.
+        ok &= ctx.push_clip(&self.ellipse);
+        ok &= ctx.draw_geometry(Some(&self.brush), None, &self.path);
+        ok &= ctx.pop(); // ellipse clip
 
         // Push / draw / pop a transformed + clipped + blended layer.
         ok &= ctx.push_transform(&self.transform);
@@ -120,12 +138,27 @@ fn xaml(ns_class: &str) -> String {
 /// Register `class_name`, mount it in a View, drive a full render pass with a
 /// fresh counting device, and return the number of `draw_batch` calls recorded.
 fn render_batches(class_name: &str, draw: bool, signals: Signals) -> u32 {
+    // Build a real PathGeometry: a closed triangle figure.
+    let mut path = PathGeometry::new();
+    let mut figure = PathFigure::new();
+    figure.set_start_point(0.0, 0.0);
+    figure.add_segment(&LineSegment::new(80.0, 0.0));
+    figure.add_segment(&LineSegment::new(40.0, 60.0));
+    figure.set_is_closed(true);
+    path.add_figure(&figure);
+    assert!(path.figure_count() >= 1, "path figure not added");
+    assert!(!path.is_empty(), "path geometry built empty");
+
+    let ellipse = EllipseGeometry::new(50.0, 40.0, 30.0, 20.0);
+
     let painter = PainterRender {
         draw,
         signals,
         brush: SolidColorBrush::new([0.2, 0.6, 0.9, 1.0]),
         pen: Pen::new(&SolidColorBrush::new([1.0, 1.0, 1.0, 1.0]), 1.5),
         geometry: RectangleGeometry::new(0.0, 0.0, 100.0, 80.0, 0.0, 0.0),
+        path,
+        ellipse,
         transform: TranslateTransform::new(5.0, 5.0),
     };
 
@@ -181,7 +214,7 @@ fn on_render_fires_and_draws() {
             (pen.thickness() - 3.5).abs() < 1.0e-4,
             "pen thickness round-trip"
         );
-        pen.set_thickness(2.0);
+        assert!(pen.set_thickness(2.0), "setter should succeed");
         assert!(
             (pen.thickness() - 2.0).abs() < 1.0e-4,
             "pen set_thickness round-trip"

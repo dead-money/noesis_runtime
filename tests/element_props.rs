@@ -272,17 +272,21 @@ fn element_props_round_trip() {
             "two elements from the same view should share a thread id",
         );
 
-        // FrameworkElement is Send + Sync, so a scoped thread may borrow it and
-        // call the read-only check_access(); it must observe a DIFFERENT owner
-        // thread and return false.
-        std::thread::scope(|s| {
-            let r = &root;
-            let off_thread = s.spawn(move || r.check_access());
-            assert!(
-                !off_thread.join().unwrap(),
-                "check_access() must be false on a non-owner thread",
-            );
-        });
+        // FrameworkElement is Send but NOT Sync (Noesis objects are
+        // thread-affine — see the crate-level "Thread affinity" docs). So we
+        // *move* ownership to another thread (not share `&root`), call the
+        // owner-query check_access() there — it must observe a DIFFERENT owner
+        // thread and return false — then move the element back for teardown.
+        let (root, off_access) = std::thread::spawn(move || {
+            let access = root.check_access();
+            (root, access)
+        })
+        .join()
+        .unwrap();
+        assert!(
+            !off_access,
+            "check_access() must be false on a non-owner thread",
+        );
 
         // ORDERED teardown — drop every handle before shutdown.
         drop(anchor);

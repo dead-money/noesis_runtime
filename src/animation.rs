@@ -223,10 +223,8 @@ pub trait AsComponent {
 
 macro_rules! base_component_handle {
     ($name:ident) => {
-        // SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-        // affinity as the other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -545,18 +543,21 @@ impl EasingFunction {
 
     /// Set `BackEase.Amplitude` (the retraction amount). No-op (returns `false`)
     /// on other easing kinds.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_amplitude(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
         unsafe { dm_noesis_easing_function_set_amplitude(self.raw(), value) }
     }
 
     /// Set `PowerEase.Power`. No-op on other kinds.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_power(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
         unsafe { dm_noesis_easing_function_set_power(self.raw(), value) }
     }
 
     /// Set `ExponentialEase.Exponent`. No-op on other kinds.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_exponent(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
         unsafe { dm_noesis_easing_function_set_exponent(self.raw(), value) }
@@ -564,6 +565,7 @@ impl EasingFunction {
 
     /// Set `ElasticEase.Oscillations` / `BounceEase.Bounces`. No-op on other
     /// kinds.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_oscillations(&mut self, value: i32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
         unsafe { dm_noesis_easing_function_set_oscillations(self.raw(), value) }
@@ -571,6 +573,7 @@ impl EasingFunction {
 
     /// Set `ElasticEase.Springiness` / `BounceEase.Bounciness`. No-op on other
     /// kinds.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_springiness(&mut self, value: f32) -> bool {
         // SAFETY: self.raw() is a live easing function for the call.
         unsafe { dm_noesis_easing_function_set_springiness(self.raw(), value) }
@@ -627,6 +630,7 @@ impl DoubleAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<f32>) -> bool {
         // SAFETY: self.raw() is a live DoubleAnimation* for the call.
         unsafe {
@@ -635,6 +639,7 @@ impl DoubleAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<f32>) -> bool {
         // SAFETY: self.raw() is a live DoubleAnimation* for the call.
         unsafe {
@@ -643,6 +648,7 @@ impl DoubleAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<f32>) -> bool {
         // SAFETY: self.raw() is a live DoubleAnimation* for the call.
         unsafe {
@@ -681,6 +687,7 @@ impl ColorAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting color.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, rgba: Option<[f32; 4]>) -> bool {
         let v = rgba.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ColorAnimation*; `v` outlives the call.
@@ -688,6 +695,7 @@ impl ColorAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending color.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, rgba: Option<[f32; 4]>) -> bool {
         let v = rgba.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ColorAnimation*; `v` outlives the call.
@@ -695,6 +703,7 @@ impl ColorAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative color offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, rgba: Option<[f32; 4]>) -> bool {
         let v = rgba.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ColorAnimation*; `v` outlives the call.
@@ -732,6 +741,7 @@ impl ThicknessAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting thickness.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ThicknessAnimation*; `v` outlives the call.
@@ -739,6 +749,7 @@ impl ThicknessAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending thickness.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ThicknessAnimation*; `v` outlives the call.
@@ -746,6 +757,7 @@ impl ThicknessAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative thickness offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live ThicknessAnimation*; `v` outlives the call.
@@ -782,6 +794,7 @@ impl PointAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting point.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<(f32, f32)>) -> bool {
         let (x, y) = value.unwrap_or((0.0, 0.0));
         // SAFETY: self.raw() is a live PointAnimation* for the call.
@@ -789,6 +802,7 @@ impl PointAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending point.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<(f32, f32)>) -> bool {
         let (x, y) = value.unwrap_or((0.0, 0.0));
         // SAFETY: self.raw() is a live PointAnimation* for the call.
@@ -796,6 +810,7 @@ impl PointAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative point offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<(f32, f32)>) -> bool {
         let (x, y) = value.unwrap_or((0.0, 0.0));
         // SAFETY: self.raw() is a live PointAnimation* for the call.
@@ -946,6 +961,7 @@ impl RectAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting rect.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
@@ -955,6 +971,7 @@ impl RectAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending rect.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
@@ -964,6 +981,7 @@ impl RectAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative rect offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<[f32; 4]>) -> bool {
         let v = value.unwrap_or([0.0; 4]);
         // SAFETY: self.raw() is a live RectAnimation*; `v` outlives the call.
@@ -1034,6 +1052,7 @@ impl SizeAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting size.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<[f32; 2]>) -> bool {
         let v = value.unwrap_or([0.0; 2]);
         // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
@@ -1043,6 +1062,7 @@ impl SizeAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending size.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<[f32; 2]>) -> bool {
         let v = value.unwrap_or([0.0; 2]);
         // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
@@ -1052,6 +1072,7 @@ impl SizeAnimation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative size offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<[f32; 2]>) -> bool {
         let v = value.unwrap_or([0.0; 2]);
         // SAFETY: self.raw() is a live SizeAnimation*; `v` outlives the call.
@@ -1124,6 +1145,7 @@ impl Int16Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<i16>) -> bool {
         // SAFETY: self.raw() is a live Int16Animation* for the call.
         unsafe {
@@ -1136,6 +1158,7 @@ impl Int16Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<i16>) -> bool {
         // SAFETY: self.raw() is a live Int16Animation* for the call.
         unsafe {
@@ -1148,6 +1171,7 @@ impl Int16Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<i16>) -> bool {
         // SAFETY: self.raw() is a live Int16Animation* for the call.
         unsafe {
@@ -1218,6 +1242,7 @@ impl Int32Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<i32>) -> bool {
         // SAFETY: self.raw() is a live Int32Animation* for the call.
         unsafe {
@@ -1230,6 +1255,7 @@ impl Int32Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<i32>) -> bool {
         // SAFETY: self.raw() is a live Int32Animation* for the call.
         unsafe {
@@ -1242,6 +1268,7 @@ impl Int32Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<i32>) -> bool {
         // SAFETY: self.raw() is a live Int32Animation* for the call.
         unsafe {
@@ -1312,6 +1339,7 @@ impl Int64Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the starting value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_from(&mut self, value: Option<i64>) -> bool {
         // SAFETY: self.raw() is a live Int64Animation* for the call.
         unsafe {
@@ -1324,6 +1352,7 @@ impl Int64Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the ending value.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_to(&mut self, value: Option<i64>) -> bool {
         // SAFETY: self.raw() is a live Int64Animation* for the call.
         unsafe {
@@ -1336,6 +1365,7 @@ impl Int64Animation {
     }
 
     /// Set (`Some`) or clear (`None`) the relative offset (`By`).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_by(&mut self, value: Option<i64>) -> bool {
         // SAFETY: self.raw() is a live Int64Animation* for the call.
         unsafe {
@@ -1409,12 +1439,14 @@ impl KeySpline {
     }
 
     /// Set the first control point `(x, y)`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_point1(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.raw() is a live KeySpline* for the call.
         unsafe { dm_noesis_animation_keyspline_set_control_point1(self.raw(), x, y) }
     }
 
     /// Set the second control point `(x, y)`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_point2(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.raw() is a live KeySpline* for the call.
         unsafe { dm_noesis_animation_keyspline_set_control_point2(self.raw(), x, y) }
@@ -2050,6 +2082,7 @@ impl BeginStoryboard {
 
     /// Set the storyboard this action begins. Noesis takes its own reference, so
     /// `storyboard` may be dropped afterwards.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_storyboard(&mut self, storyboard: &Storyboard) -> bool {
         // SAFETY: both pointers are live for the call.
         unsafe { dm_noesis_animation_begin_storyboard_set_storyboard(self.raw(), storyboard.raw()) }
@@ -2071,6 +2104,7 @@ impl BeginStoryboard {
     }
 
     /// Set the hand-off behavior used when starting the storyboard's clocks.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_handoff(&mut self, handoff: HandoffBehavior) -> bool {
         // SAFETY: self.raw() is live for the call.
         unsafe { dm_noesis_animation_begin_storyboard_set_handoff(self.raw(), handoff as i32) }
@@ -2092,6 +2126,7 @@ impl BeginStoryboard {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_name(&mut self, name: &str) -> bool {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: self.raw() is live; `c` outlives the call.

@@ -52,7 +52,7 @@ struct Handler {
     recorder: Recorder,
 }
 impl PropertyChangeHandler for Handler {
-    fn on_changed(&mut self, _instance: Instance, prop_index: u32, value: PropertyValue<'_>) {
+    fn on_changed(&self, _instance: Instance, prop_index: u32, value: PropertyValue<'_>) {
         let v = match value {
             PropertyValue::Thickness {
                 left,

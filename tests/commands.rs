@@ -50,7 +50,7 @@ impl XamlProvider for InMem {
 // VM class registration needs a property-change handler; this one is inert.
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
-    fn on_changed(&mut self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
+    fn on_changed(&self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
 }
 
 // A controllable command: counts executes, records whether a parameter
@@ -64,7 +64,7 @@ impl CommandHandler for Counting {
     fn can_execute(&self, _param: CommandParameter) -> bool {
         self.enabled.load(Ordering::SeqCst) != 0
     }
-    fn execute(&mut self, param: CommandParameter) {
+    fn execute(&self, param: CommandParameter) {
         if param.is_some() {
             self.saw_param.fetch_add(1, Ordering::SeqCst);
         }
@@ -82,7 +82,7 @@ impl Drop for DropProbe {
     }
 }
 impl CommandHandler for DropProbe {
-    fn execute(&mut self, _param: CommandParameter) {}
+    fn execute(&self, _param: CommandParameter) {}
 }
 
 #[test]

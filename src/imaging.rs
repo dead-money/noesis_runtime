@@ -120,10 +120,8 @@ pub trait BitmapSource {
 
 macro_rules! base_component_handle {
     ($name:ident) => {
-        // SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-        // affinity as the other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -363,6 +361,7 @@ impl BitmapImage {
     /// # Panics
     ///
     /// Panics if `uri` contains an interior NUL.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_uri_source(&mut self, uri: &str) -> bool {
         let c = CString::new(uri).expect("BitmapImage uri contains interior NUL");
         // SAFETY: self.ptr is a live BitmapImage*; `c` outlives the call.

@@ -44,7 +44,7 @@ impl XamlProvider for InMem {
 // registration requires a handler; this one just records nothing.
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
 #[test]

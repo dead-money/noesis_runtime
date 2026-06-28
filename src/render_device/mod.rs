@@ -13,8 +13,12 @@
 //!   that owns the boxed impl and the C++ `RustRenderDevice` handle.
 
 pub mod device;
+// Not part of the stable API; no semver guarantees.
+#[doc(hidden)]
 pub mod ffi;
 pub mod types;
+// Not part of the stable API; no semver guarantees.
+#[doc(hidden)]
 pub mod vtable;
 
 pub use device::{

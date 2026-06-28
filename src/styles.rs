@@ -85,10 +85,8 @@ pub struct Style {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Style {}
-unsafe impl Sync for Style {}
 
 impl Default for Style {
     fn default() -> Self {
@@ -137,6 +135,7 @@ impl Style {
     /// (leaving the target type unset) if the name is unknown or contains an
     /// interior NUL byte. Setting the target type is a prerequisite for
     /// [`add_setter`](Self::add_setter), which resolves DPs on it.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_target_type(&mut self, type_name: &str) -> bool {
         let Ok(c) = CString::new(type_name) else {
             return false;
@@ -228,9 +227,8 @@ pub struct ControlTemplate {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ControlTemplate {}
-unsafe impl Sync for ControlTemplate {}
 
 impl ControlTemplate {
     /// Parse a bare `<ControlTemplate>` from an in-memory XAML string. Returns
@@ -311,9 +309,8 @@ pub struct DataTemplate {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for DataTemplate {}
-unsafe impl Sync for DataTemplate {}
 
 impl DataTemplate {
     /// Parse a bare `<DataTemplate>` from an in-memory XAML string. Returns
@@ -382,9 +379,8 @@ pub struct OwnedValue {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for OwnedValue {}
-unsafe impl Sync for OwnedValue {}
 
 impl OwnedValue {
     /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -455,9 +451,8 @@ macro_rules! owned_trigger {
             ptr: NonNull<c_void>,
         }
 
-        // SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl Default for $name {
             fn default() -> Self {
@@ -529,6 +524,7 @@ impl Trigger {
     /// reflection-registered `type_name` (e.g. `("ToggleButton", "IsChecked")`).
     /// Returns `false` if the type or DP name is unknown, or either string has
     /// an interior NUL.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_property(&mut self, type_name: &str, dp_name: &str) -> bool {
         let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
             return false;
@@ -548,6 +544,7 @@ impl Trigger {
 
     /// Set the `Value` the property is compared against (Noesis stores its own
     /// reference to the boxed value).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_value(&mut self, value: &Boxed) -> bool {
         // SAFETY: self.ptr live; value.raw() is a live boxed BaseComponent*.
         unsafe { dm_noesis_templates_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
@@ -587,6 +584,7 @@ impl DataTrigger {
     /// Set the `Binding` whose produced value is compared against the trigger
     /// `Value`. Noesis stores its own reference. Returns `false` only on invalid
     /// handles.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_binding(&mut self, binding: &Binding) -> bool {
         // SAFETY: self.ptr live; binding.raw() is a live BaseBinding*.
         unsafe { dm_noesis_templates_data_trigger_set_binding(self.ptr.as_ptr(), binding.raw()) }
@@ -608,6 +606,7 @@ impl DataTrigger {
     }
 
     /// Set the `Value` the bound value is compared against.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_value(&mut self, value: &Boxed) -> bool {
         // SAFETY: self.ptr live; value.raw() is a live boxed BaseComponent*.
         unsafe { dm_noesis_templates_data_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
@@ -712,6 +711,7 @@ impl EventTrigger {
     /// Set the `RoutedEvent` that fires this trigger, resolved by `event_name`
     /// registered on `owner_type` (e.g. `("Button", "Click")`). Returns `false`
     /// if the type or event name is unknown.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_routed_event(&mut self, owner_type: &str, event_name: &str) -> bool {
         let (Ok(o), Ok(e)) = (CString::new(owner_type), CString::new(event_name)) else {
             return false;
@@ -736,6 +736,7 @@ impl EventTrigger {
 
     /// Set the `SourceName` (the named element whose event activates this
     /// trigger).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_source_name(&mut self, name: &str) -> bool {
         let Ok(n) = CString::new(name) else {
             return false;
@@ -767,9 +768,8 @@ pub struct TriggerReadback {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for TriggerReadback {}
-unsafe impl Sync for TriggerReadback {}
 
 impl TriggerReadback {
     /// Raw `Noesis::BaseTrigger*`. Borrowed for the lifetime of `self`.
@@ -845,13 +845,15 @@ pub trait SelectTemplate: Send + 'static {
     /// `container` is the borrowed item container (`DependencyObject*`, may be
     /// null). Return the chosen template (its reference is **borrowed** — the
     /// selector keeps its candidate templates alive).
-    fn select(&mut self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void>;
+    ///
+    /// Takes `&self` (re-entrant: selecting a template for an item that itself
+    /// hosts items routed through the same selector re-enters this box; use
+    /// interior mutability for handler state).
+    fn select(&self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void>;
 }
 
-impl<F: FnMut(*mut c_void, *mut c_void) -> Option<*mut c_void> + Send + 'static> SelectTemplate
-    for F
-{
-    fn select(&mut self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void> {
+impl<F: Fn(*mut c_void, *mut c_void) -> Option<*mut c_void> + Send + 'static> SelectTemplate for F {
+    fn select(&self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void> {
         self(item, container)
     }
 }
@@ -864,10 +866,8 @@ pub struct TemplateSelector {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: the boxed handler is Send; per-object calls are serialised by the
-// caller as with the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for TemplateSelector {}
-unsafe impl Sync for TemplateSelector {}
 
 impl TemplateSelector {
     /// Build a selector backed by `handler`. The handler box is owned by the
@@ -939,22 +939,27 @@ unsafe extern "C" fn selector_select_trampoline(
     item: *mut c_void,
     container: *mut c_void,
 ) -> *mut c_void {
-    if userdata.is_null() {
-        return core::ptr::null_mut();
-    }
-    // SAFETY: userdata is the Box<Box<dyn SelectTemplate>> leaked in `new`, alive
-    // until selector_free_trampoline runs.
-    let handler = unsafe { &mut *userdata.cast::<Box<dyn SelectTemplate>>() };
-    handler
-        .select(item, container)
-        .unwrap_or(core::ptr::null_mut())
+    crate::panic_guard::guard_or(core::ptr::null_mut(), || {
+        if userdata.is_null() {
+            return core::ptr::null_mut();
+        }
+        // SAFETY: userdata is the Box<Box<dyn SelectTemplate>> leaked in `new`, alive
+        // until selector_free_trampoline runs. Shared `&`: re-entrant handler box
+        // (see `SelectTemplate::select`).
+        let handler = unsafe { &*userdata.cast::<Box<dyn SelectTemplate>>() };
+        handler
+            .select(item, container)
+            .unwrap_or(core::ptr::null_mut())
+    })
 }
 
 unsafe extern "C" fn selector_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    // SAFETY: called exactly once when the native object is destroyed; reclaims
-    // the leaked handler box.
-    drop(unsafe { Box::from_raw(userdata.cast::<Box<dyn SelectTemplate>>()) });
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // SAFETY: called exactly once when the native object is destroyed; reclaims
+        // the leaked handler box.
+        drop(unsafe { Box::from_raw(userdata.cast::<Box<dyn SelectTemplate>>()) });
+    })
 }

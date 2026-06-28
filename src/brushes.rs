@@ -62,10 +62,8 @@ pub trait Effect {
 
 macro_rules! base_component_handle {
     ($name:ident) => {
-        // SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-        // affinity as the other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -397,8 +395,11 @@ impl AlignmentY {
     }
 }
 
-/// `Noesis::Stretch` (`NsGui/Enums.h`): how a tile's content is resized to fill
-/// its tile. Ordinals match the C++ enum.
+/// `Noesis::Stretch` (`NsGui/Enums.h`): how content is resized to fill its
+/// allocated space. Ordinals match the C++ enum.
+///
+/// This is the crate's single `Stretch` type — used both by tile brushes here
+/// and by [shapes](crate::shapes::Shape::set_stretch), which re-exports it.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Stretch {
@@ -413,7 +414,7 @@ pub enum Stretch {
 }
 
 impl Stretch {
-    fn from_ordinal(v: i32) -> Option<Self> {
+    pub(crate) fn from_ordinal(v: i32) -> Option<Self> {
         match v {
             0 => Some(Self::None),
             1 => Some(Self::Fill),
@@ -724,6 +725,7 @@ impl VisualBrush {
     /// reference, so `element` may outlive or be dropped after the call (the
     /// brush holds the live element alive). Returns `false` only if `self` is
     /// somehow not a `VisualBrush` (not expected).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_visual(&mut self, element: &crate::view::FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live VisualBrush*; element.raw() is a live
         // Visual* borrowed for the call.

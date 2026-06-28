@@ -34,13 +34,11 @@ use crate::ffi::{
 };
 
 /// The fill (winding) rule used by [`SvgPath::fill_contains`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum FillRule {
-    /// Even-odd rule (`Noesis::SVGPath::Fill_EvenOdd`). The default.
-    EvenOdd = 0,
-    /// Non-zero winding rule (`Noesis::SVGPath::Fill_NonZero`).
-    NonZero = 1,
-}
+///
+/// Re-exported from [`crate::geometry`] so the crate has a single `FillRule`
+/// type. Its ordinals (`EvenOdd` = 0, `Nonzero` = 1) match
+/// `Noesis::SVGPath::Fill_EvenOdd` / `Fill_NonZero`.
+pub use crate::geometry::FillRule;
 
 /// Stroke join style for [`Pen`] (`Noesis::SVGPath::StrokeJoinStyle`).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -101,10 +99,8 @@ pub struct SvgPath {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: an owned plain heap SVGPath with no shared interior mutability; the
-// same per-object affinity as the crate's other owning wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for SvgPath {}
-unsafe impl Sync for SvgPath {}
 
 impl SvgPath {
     /// Parse an SVG *path data* string (e.g. `"M0 0 L100 0 L100 50 Z"`).
@@ -257,9 +253,8 @@ pub struct SvgImage {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: an owned plain heap SVG::Image with no shared interior mutability.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for SvgImage {}
-unsafe impl Sync for SvgImage {}
 
 impl SvgImage {
     /// Parse a full `<svg>...</svg>` document string into a path collection.

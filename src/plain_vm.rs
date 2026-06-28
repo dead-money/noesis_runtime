@@ -190,22 +190,26 @@ unsafe extern "C" fn plain_set_trampoline(
     prop_index: u32,
     boxed_value: *mut c_void,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &*userdata.cast::<Box<dyn PlainSetHandler>>();
-    let value = PlainValueRef::new(boxed_value);
-    handler.on_set(prop_index, &value);
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        let handler = &*userdata.cast::<Box<dyn PlainSetHandler>>();
+        let value = PlainValueRef::new(boxed_value);
+        handler.on_set(prop_index, &value);
+    })
 }
 
 /// SAFETY: `userdata` was produced by [`PlainVmBuilder::register`] and C++ owns
 /// it; this is the matching `Box::from_raw` that ends that ownership, run
 /// exactly once when the registration refcount hits zero.
 unsafe extern "C" fn plain_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn PlainSetHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn PlainSetHandler>>()));
+    })
 }
 
 /// Builder for a plain-VM type registration.
@@ -323,10 +327,8 @@ pub struct PlainVmClass {
     prop_count: u32,
 }
 
-// SAFETY: the token is an opaque registration handle; per-object calls are
-// serialised by the caller, matching the other owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for PlainVmClass {}
-unsafe impl Sync for PlainVmClass {}
 
 impl PlainVmClass {
     /// Create an instance of this type. Returns `None` only on an impossible
@@ -366,10 +368,8 @@ pub struct PlainInstance {
     prop_count: u32,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other owning
-// wrappers — per-object calls serialised by the caller.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for PlainInstance {}
-unsafe impl Sync for PlainInstance {}
 
 impl PlainInstance {
     /// Raw `Noesis::BaseComponent*`, borrowed for the lifetime of `self`.
@@ -416,6 +416,7 @@ impl PlainInstance {
     /// # Panics
     ///
     /// Panics if `prop_name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_and_notify(&self, prop_index: u32, prop_name: &str, value: PlainValue) -> bool {
         self.set(prop_index, value) && self.notify(prop_name)
     }
@@ -459,6 +460,7 @@ impl PlainInstance {
 
     /// Set this instance as `element`'s `DataContext`. Noesis takes its own
     /// reference. Returns `false` if `element` is not a `FrameworkElement`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_data_context(&self, element: &mut FrameworkElement) -> bool {
         // SAFETY: self.raw() is a live BaseComponent* valid for the call;
         // Noesis stores its own reference.

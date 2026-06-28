@@ -19,7 +19,7 @@ use dm_noesis_runtime::reflection::{
 
 struct Noop;
 impl PropertyChangeHandler for Noop {
-    fn on_changed(&mut self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
+    fn on_changed(&self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
 }
 
 #[test]

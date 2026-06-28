@@ -45,8 +45,8 @@ fn double_animation_drives_opacity() {
 
         // Opacity 0 -> 1 over 0.5s, linear.
         let mut anim = DoubleAnimation::new();
-        anim.set_from(Some(0.0));
-        anim.set_to(Some(1.0));
+        assert!(anim.set_from(Some(0.0)), "setter should succeed");
+        assert!(anim.set_to(Some(1.0)), "setter should succeed");
         anim.set_duration_secs(0.5);
         assert_eq!(anim.duration_secs(), Some(0.5));
         assert!(anim.set_target_name("Box"));

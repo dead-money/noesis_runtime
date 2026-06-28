@@ -84,15 +84,20 @@ pub trait CommandHandler: Send + 'static {
 
     /// Invoke the command. Called when the bound control is activated (e.g. a
     /// `Button` click) — but only if [`Self::can_execute`] returned `true`.
-    fn execute(&mut self, param: CommandParameter);
+    ///
+    /// Takes `&self`: a single handler box backs the command, and `execute` may
+    /// re-enter the same box (it can trigger a synchronous `can_execute` requery,
+    /// or activate another control bound to the same command). Use interior
+    /// mutability for handler state.
+    fn execute(&self, param: CommandParameter);
 }
 
 /// Adapter so a bare `FnMut` closure is a fire-always [`CommandHandler`]
 /// (`can_execute` is always `true`). Use [`Command::new`] with a struct
 /// implementing [`CommandHandler`] when you need a controllable
 /// `can_execute`.
-impl<F: FnMut(CommandParameter) + Send + 'static> CommandHandler for F {
-    fn execute(&mut self, param: CommandParameter) {
+impl<F: Fn(CommandParameter) + Send + 'static> CommandHandler for F {
+    fn execute(&self, param: CommandParameter) {
         self(param);
     }
 }
@@ -110,23 +115,30 @@ unsafe extern "C" fn command_can_execute_trampoline(
     userdata: *mut c_void,
     param: *mut c_void,
 ) -> bool {
-    let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
-    handler.can_execute(NonNull::new(param))
+    crate::panic_guard::guard(|| {
+        let handler = &*userdata.cast::<Box<dyn CommandHandler>>();
+        handler.can_execute(NonNull::new(param))
+    })
 }
 
 /// SAFETY: see [`command_can_execute_trampoline`].
 unsafe extern "C" fn command_execute_trampoline(userdata: *mut c_void, param: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
-    handler.execute(NonNull::new(param));
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `CommandHandler::execute`).
+        let handler = &*userdata.cast::<Box<dyn CommandHandler>>();
+        handler.execute(NonNull::new(param));
+    })
 }
 
 /// SAFETY: `userdata` was produced by [`Command::new`] and C++ owns it; this
 /// is the matching `Box::from_raw` that ends that ownership, run exactly once.
 unsafe extern "C" fn command_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn CommandHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn CommandHandler>>()));
+    })
 }
 
 /// A Rust-backed `ICommand`. Owns a `+1` reference released on drop. Hand
@@ -136,10 +148,8 @@ pub struct Command {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate (per-object calls serialised by the caller).
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Command {}
-unsafe impl Sync for Command {}
 
 impl Command {
     /// Build a command from a [`CommandHandler`]. A bare
@@ -232,10 +242,8 @@ pub struct RoutedCommand {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for RoutedCommand {}
-unsafe impl Sync for RoutedCommand {}
 
 impl RoutedCommand {
     /// Create a routed command named `name`, owned by the type `owner_type`
@@ -308,9 +316,8 @@ pub struct RoutedUICommand {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: see [`RoutedCommand`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for RoutedUICommand {}
-unsafe impl Sync for RoutedUICommand {}
 
 impl RoutedUICommand {
     /// Create a routed UI command. `text` is the display label; see
@@ -410,10 +417,8 @@ pub struct BorrowedCommand {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a process-lifetime framework singleton; sharing the borrowed pointer
-// across threads is sound under the same per-object-serialisation contract.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for BorrowedCommand {}
-unsafe impl Sync for BorrowedCommand {}
 
 impl BorrowedCommand {
     /// Raw `Noesis::ICommand*`, valid for the process lifetime.
@@ -575,11 +580,14 @@ pub trait CommandBindingHandler: Send + 'static {
     }
 
     /// Run the command's action.
-    fn execute(&mut self, param: CommandParameter);
+    ///
+    /// Takes `&self` (re-entrant per the same reasoning as
+    /// [`CommandHandler::execute`]; use interior mutability for handler state).
+    fn execute(&self, param: CommandParameter);
 }
 
-impl<F: FnMut(CommandParameter) + Send + 'static> CommandBindingHandler for F {
-    fn execute(&mut self, param: CommandParameter) {
+impl<F: Fn(CommandParameter) + Send + 'static> CommandBindingHandler for F {
+    fn execute(&self, param: CommandParameter) {
         self(param);
     }
 }
@@ -587,25 +595,32 @@ impl<F: FnMut(CommandParameter) + Send + 'static> CommandBindingHandler for F {
 /// SAFETY: `userdata` is the double-boxed handler leaked in
 /// [`CommandBinding::new`], alive until the free trampoline runs.
 unsafe extern "C" fn cb_executed_trampoline(userdata: *mut c_void, param: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
-    handler.execute(NonNull::new(param));
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `CommandBindingHandler`).
+        let handler = &*userdata.cast::<Box<dyn CommandBindingHandler>>();
+        handler.execute(NonNull::new(param));
+    })
 }
 
 /// SAFETY: see [`cb_executed_trampoline`].
 unsafe extern "C" fn cb_can_execute_trampoline(userdata: *mut c_void, param: *mut c_void) -> bool {
-    let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
-    handler.can_execute(NonNull::new(param))
+    crate::panic_guard::guard(|| {
+        let handler = &*userdata.cast::<Box<dyn CommandBindingHandler>>();
+        handler.can_execute(NonNull::new(param))
+    })
 }
 
 /// SAFETY: matching `Box::from_raw` for the leak in [`CommandBinding::new`],
 /// run exactly once by the C++ destructor.
 unsafe extern "C" fn cb_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(
-        userdata.cast::<Box<dyn CommandBindingHandler>>(),
-    ));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(
+            userdata.cast::<Box<dyn CommandBindingHandler>>(),
+        ));
+    })
 }
 
 /// Binds a command to Rust handlers and (once [`attached`](Self::attach)) makes
@@ -615,10 +630,8 @@ pub struct CommandBinding {
     token: NonNull<c_void>,
 }
 
-// SAFETY: the boxed handler is `Send`; the C++ bridge is bound to one binding
-// whose access Noesis serialises — mirrors the event subscriptions.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for CommandBinding {}
-unsafe impl Sync for CommandBinding {}
 
 impl CommandBinding {
     /// Build a binding for `command` (any [`AsCommand`] — a [`RoutedCommand`],

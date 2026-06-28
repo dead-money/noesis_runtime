@@ -54,12 +54,15 @@ use crate::view::{FrameworkElement, Key, MouseButton};
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy
 /// `Resource` or be moved onto the render thread.
+/// Takes `&self` (re-entrant: a handler may re-raise the subscribed event on
+/// the same element via [`crate::reflection::raise_event`], re-entering this
+/// same box; use interior mutability for handler state).
 pub trait ClickHandler: Send + 'static {
-    fn on_click(&mut self);
+    fn on_click(&self);
 }
 
-impl<F: FnMut() + Send + 'static> ClickHandler for F {
-    fn on_click(&mut self) {
+impl<F: Fn() + Send + 'static> ClickHandler for F {
+    fn on_click(&self) {
         self();
     }
 }
@@ -67,8 +70,11 @@ impl<F: FnMut() + Send + 'static> ClickHandler for F {
 /// SAFETY: `userdata` must be a pointer produced by [`subscribe_click`] and
 /// still alive (the [`ClickSubscription`] hasn't been dropped).
 unsafe extern "C" fn click_trampoline(userdata: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn ClickHandler>>();
-    handler.on_click();
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `ClickHandler`).
+        let handler = &*userdata.cast::<Box<dyn ClickHandler>>();
+        handler.on_click();
+    })
 }
 
 /// RAII subscription token. Drop to unsubscribe and free the boxed handler.
@@ -82,12 +88,8 @@ pub struct ClickSubscription {
     userdata: NonNull<Box<dyn ClickHandler>>,
 }
 
-// SAFETY: matches the Registered guards on the providers — every Box<dyn
-// ClickHandler> is `Send`, and the C++ subscription is bound to a single
-// button whose access is serialized by Noesis. Sync is safe for the same
-// reason: there are no `&self` methods that touch Noesis state.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ClickSubscription {}
-unsafe impl Sync for ClickSubscription {}
 
 impl Drop for ClickSubscription {
     fn drop(&mut self) {
@@ -155,11 +157,14 @@ pub trait KeyDownHandler: Send + 'static {
     /// Called once per `KeyDown` event on the subscribed element. Return
     /// value: `true` to mark the routed event handled, `false` to let it
     /// continue propagating.
-    fn on_keydown(&mut self, key: Key) -> bool;
+    ///
+    /// Takes `&self` (re-entrant per [`ClickHandler`]; use interior mutability
+    /// for handler state).
+    fn on_keydown(&self, key: Key) -> bool;
 }
 
-impl<F: FnMut(Key) -> bool + Send + 'static> KeyDownHandler for F {
-    fn on_keydown(&mut self, key: Key) -> bool {
+impl<F: Fn(Key) -> bool + Send + 'static> KeyDownHandler for F {
+    fn on_keydown(&self, key: Key) -> bool {
         self(key)
     }
 }
@@ -169,15 +174,18 @@ impl<F: FnMut(Key) -> bool + Send + 'static> KeyDownHandler for F {
 /// `out_handled` must be a non-null pointer to a writable bool (the C++
 /// shim guarantees this).
 unsafe extern "C" fn keydown_trampoline(userdata: *mut c_void, key: i32, out_handled: *mut bool) {
-    let handler = &mut *userdata.cast::<Box<dyn KeyDownHandler>>();
-    // Best-effort map of the raw ordinal back to our safe `Key` mirror.
-    // Anything outside the mirrored set arrives as `Key::None` — callers
-    // can still observe the event and choose to ignore unmapped keys.
-    let mapped = key_from_raw(key);
-    let handled = handler.on_keydown(mapped);
-    if !out_handled.is_null() {
-        *out_handled = handled;
-    }
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `KeyDownHandler`).
+        let handler = &*userdata.cast::<Box<dyn KeyDownHandler>>();
+        // Best-effort map of the raw ordinal back to our safe `Key` mirror.
+        // Anything outside the mirrored set arrives as `Key::None` — callers
+        // can still observe the event and choose to ignore unmapped keys.
+        let mapped = key_from_raw(key);
+        let handled = handler.on_keydown(mapped);
+        if !out_handled.is_null() {
+            *out_handled = handled;
+        }
+    })
 }
 
 /// Convert a raw `Noesis::Key` ordinal back into the safe [`Key`] mirror.
@@ -332,11 +340,8 @@ pub struct KeyDownSubscription {
     userdata: NonNull<Box<dyn KeyDownHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] —
-// every Box<dyn KeyDownHandler> is `Send`, and the C++ subscription is
-// bound to a single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for KeyDownSubscription {}
-unsafe impl Sync for KeyDownSubscription {}
 
 impl Drop for KeyDownSubscription {
     fn drop(&mut self) {
@@ -574,6 +579,7 @@ impl EventArgs {
     /// Set the drop result (`DragEventArgs::effects`) a `Drop` / `DragOver`
     /// handler reports back to the drag source. `effects` is a [`drag_effects`]
     /// bitmask. Returns `true` if written (i.e. the live args are a drag event).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_drag_effects(&self, effects: u32) -> bool {
         // SAFETY: opaque handle; accessor validates the kind before writing.
         unsafe { dm_noesis_routed_events_drag_set_effects(self.raw, effects) }
@@ -759,12 +765,15 @@ pub struct ManipulationVelocities {
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
 /// or be moved onto the render thread.
+/// Takes `&self` (re-entrant: a handler may re-raise the same event via
+/// [`crate::reflection::raise_event`], re-entering this box; use interior
+/// mutability for handler state).
 pub trait RoutedEventHandler: Send + 'static {
-    fn on_event(&mut self, args: &EventArgs) -> bool;
+    fn on_event(&self, args: &EventArgs) -> bool;
 }
 
-impl<F: FnMut(&EventArgs) -> bool + Send + 'static> RoutedEventHandler for F {
-    fn on_event(&mut self, args: &EventArgs) -> bool {
+impl<F: Fn(&EventArgs) -> bool + Send + 'static> RoutedEventHandler for F {
+    fn on_event(&self, args: &EventArgs) -> bool {
         self(args)
     }
 }
@@ -778,15 +787,18 @@ unsafe extern "C" fn event_trampoline(
     args: *const c_void,
     out_handled: *mut bool,
 ) {
-    let handler = &mut *userdata.cast::<Box<dyn RoutedEventHandler>>();
-    let ev = EventArgs {
-        raw: args,
-        _not_send: PhantomData,
-    };
-    let handled = handler.on_event(&ev);
-    if !out_handled.is_null() {
-        *out_handled = handled;
-    }
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `RoutedEventHandler`).
+        let handler = &*userdata.cast::<Box<dyn RoutedEventHandler>>();
+        let ev = EventArgs {
+            raw: args,
+            _not_send: PhantomData,
+        };
+        let handled = handler.on_event(&ev);
+        if !out_handled.is_null() {
+            *out_handled = handled;
+        }
+    })
 }
 
 /// RAII subscription token for [`subscribe_event`]. Drop to unsubscribe and
@@ -796,11 +808,8 @@ pub struct EventSubscription {
     userdata: NonNull<Box<dyn RoutedEventHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
-// Box<dyn RoutedEventHandler> is `Send`, and the C++ subscription is bound to a
-// single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for EventSubscription {}
-unsafe impl Sync for EventSubscription {}
 
 impl Drop for EventSubscription {
     fn drop(&mut self) {
@@ -888,12 +897,15 @@ pub fn subscribe_event<H: RoutedEventHandler>(
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
 /// or be moved onto the render thread.
+/// Takes `&self` (re-entrant: a lifecycle handler that re-parents its element
+/// can trigger another lifecycle event synchronously on the same box; use
+/// interior mutability for handler state).
 pub trait LifecycleHandler: Send + 'static {
-    fn on_event(&mut self);
+    fn on_event(&self);
 }
 
-impl<F: FnMut() + Send + 'static> LifecycleHandler for F {
-    fn on_event(&mut self) {
+impl<F: Fn() + Send + 'static> LifecycleHandler for F {
+    fn on_event(&self) {
         self();
     }
 }
@@ -901,8 +913,11 @@ impl<F: FnMut() + Send + 'static> LifecycleHandler for F {
 /// SAFETY: `userdata` must be a pointer produced by [`subscribe_lifecycle`] and
 /// still alive (the [`LifecycleSubscription`] hasn't been dropped).
 unsafe extern "C" fn lifecycle_trampoline(userdata: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn LifecycleHandler>>();
-    handler.on_event();
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `LifecycleHandler`).
+        let handler = &*userdata.cast::<Box<dyn LifecycleHandler>>();
+        handler.on_event();
+    })
 }
 
 /// RAII subscription token for [`subscribe_lifecycle`]. Drop to unsubscribe and
@@ -912,11 +927,8 @@ pub struct LifecycleSubscription {
     userdata: NonNull<Box<dyn LifecycleHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
-// Box<dyn LifecycleHandler> is `Send`, and the C++ subscription is bound to a
-// single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for LifecycleSubscription {}
-unsafe impl Sync for LifecycleSubscription {}
 
 impl Drop for LifecycleSubscription {
     fn drop(&mut self) {
@@ -1021,11 +1033,14 @@ pub trait DataObjectHandler: Send + 'static {
     /// Called when the copy/paste fires. `data_object` is borrowed (valid only
     /// for the call); `is_drag_drop` distinguishes a drag-drop transfer from a
     /// clipboard one. Return `true` to cancel.
-    fn on_data_object(&mut self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool;
+    ///
+    /// Takes `&self` (re-entrant per [`ClickHandler`]; use interior mutability
+    /// for handler state).
+    fn on_data_object(&self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool;
 }
 
-impl<F: FnMut(Option<*mut c_void>, bool) -> bool + Send + 'static> DataObjectHandler for F {
-    fn on_data_object(&mut self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool {
+impl<F: Fn(Option<*mut c_void>, bool) -> bool + Send + 'static> DataObjectHandler for F {
+    fn on_data_object(&self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool {
         self(data_object, is_drag_drop)
     }
 }
@@ -1039,12 +1054,15 @@ unsafe extern "C" fn data_object_trampoline(
     is_drag_drop: bool,
     out_cancel: *mut bool,
 ) {
-    let handler = &mut *userdata.cast::<Box<dyn DataObjectHandler>>();
-    let data = (!data_object.is_null()).then_some(data_object);
-    let cancel = handler.on_data_object(data, is_drag_drop);
-    if !out_cancel.is_null() {
-        *out_cancel = cancel;
-    }
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `DataObjectHandler`).
+        let handler = &*userdata.cast::<Box<dyn DataObjectHandler>>();
+        let data = (!data_object.is_null()).then_some(data_object);
+        let cancel = handler.on_data_object(data, is_drag_drop);
+        if !out_cancel.is_null() {
+            *out_cancel = cancel;
+        }
+    })
 }
 
 /// RAII subscription token for a `DataObject.Copying` / `.Pasting` handler.
@@ -1055,11 +1073,8 @@ pub struct DataObjectSubscription {
     userdata: NonNull<Box<dyn DataObjectHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
-// Box<dyn DataObjectHandler> is `Send`, and the C++ subscription is bound to a
-// single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for DataObjectSubscription {}
-unsafe impl Sync for DataObjectSubscription {}
 
 impl Drop for DataObjectSubscription {
     fn drop(&mut self) {

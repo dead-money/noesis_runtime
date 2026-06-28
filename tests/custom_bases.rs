@@ -24,7 +24,7 @@ struct Handler {
     rec: Recorder,
 }
 impl PropertyChangeHandler for Handler {
-    fn on_changed(&mut self, _instance: Instance, prop_index: u32, value: PropertyValue<'_>) {
+    fn on_changed(&self, _instance: Instance, prop_index: u32, value: PropertyValue<'_>) {
         if let PropertyValue::Int32(v) = value {
             self.rec.inner.lock().unwrap().push((prop_index, v));
         }

@@ -76,7 +76,7 @@ impl XamlProvider for InMem {
 // instantiate; we don't assert on property changes here.
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
 /// Resolve an `x:Name` directly against a borrowed `BaseComponent*` (a live

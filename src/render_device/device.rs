@@ -145,14 +145,17 @@ pub struct RenderTargetBinding {
 /// Noesis calls every method on a single thread (the render thread). `&mut`
 /// receivers reflect that; impls do not need internal locking.
 ///
-/// The `Send + Sync` supertrait bounds let the [`Registered`] guard live
-/// inside a regular Bevy `Resource` instead of a `NonSend` resource. All
-/// mutating methods take `&mut self`, so `Sync` is trivially safe (there
-/// are no useful `&self` methods to race on); `Send` is safe because
-/// Noesis's single-threaded contract is about serialized calls, not about
-/// pinning objects to a particular thread for their lifetime.
+/// The `Send + Sync` supertrait bounds make the boxed impl behind the
+/// [`Registered`] guard `Send` (so the guard can be *moved* to the thread
+/// that owns the Noesis view) and let Noesis invoke the device trampolines
+/// from its render thread. The guard itself is `Send` but **not** `Sync` —
+/// it exposes `&self` accessors (e.g. [`Registered::offscreen_width`]) that
+/// read live Noesis state, so it must not be shared across threads. See the
+/// crate-level "Thread affinity" docs; store it in a `NonSend` resource, not
+/// a plain `Send + Sync` Bevy `Resource`.
 ///
 /// [`Registered`]: crate::render_device::Registered
+/// [`Registered::offscreen_width`]: crate::render_device::Registered::offscreen_width
 pub trait RenderDevice: Send + Sync + 'static {
     /// Downcast escape hatch used by [`Registered::device_mut`] so callers
     /// can reach back into their concrete impl after registration. Standard
