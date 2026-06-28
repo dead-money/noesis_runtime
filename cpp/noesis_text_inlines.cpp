@@ -1,4 +1,4 @@
-// TextBlock inline content model (TODO §13): the Inline element family that
+// TextBlock inline content model: the Inline element family that
 // ships in 3.2.13 — Run, Span, Bold, Italic, Underline, Hyperlink, LineBreak,
 // and InlineUIContainer — plus the InlineCollection (UICollection<Inline>) that
 // TextBlock and Span expose so inlines can be assembled from Rust.

@@ -1,4 +1,4 @@
-// C++ wrappers for the XAML loading variants surface (TODO §15):
+// C++ wrappers for the XAML loading variants surface:
 //
 //   * GetXamlDependencies — walk an in-memory XAML buffer's referenced
 //     resources (other XAMLs, fonts, textures, prefixed UserControl nodes,

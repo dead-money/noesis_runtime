@@ -1,5 +1,5 @@
 // Data-binding bridge: ObservableCollection + boxing + DataContext / ItemsSource
-// wiring (TODO §3).
+// wiring.
 //
 // This is the "drive XAML from Rust data" surface. Three cooperating pieces:
 //
@@ -206,7 +206,7 @@ extern "C" int32_t noesis_items_control_realized_count(void* element) {
     return realized;
 }
 
-// ── Visual / logical tree traversal (TODO §2.A) ─────────────────────────────
+// ── Visual / logical tree traversal ─────────────────────────────────────────
 //
 // VisualTreeHelper operates on `Visual*` — children may be plain Visuals, not
 // FrameworkElements, so these return raw +1 BaseComponent* handles without
@@ -305,7 +305,7 @@ extern "C" void* noesis_framework_element_logical_parent(void* element) {
     return static_cast<Noesis::BaseComponent*>(parent);
 }
 
-// ── RenderTransform origin (TODO §2) ────────────────────────────────────────
+// ── RenderTransform origin ──────────────────────────────────────────────────
 // UIElement::Get/SetRenderTransformOrigin — the (0..1, 0..1) relative pivot the
 // RenderTransform rotates/scales around. `out_x`/`out_y` are written 0 when the
 // element is not a UIElement; the setter is a no-op then.
@@ -335,7 +335,7 @@ extern "C" bool noesis_ui_element_set_render_transform_origin(
     return true;
 }
 
-// ── Standalone NameScope (TODO §2) ──────────────────────────────────────────
+// ── Standalone NameScope ────────────────────────────────────────────────────
 // The freestanding NameScope object, distinct from the per-FrameworkElement
 // RegisterName path. All component pointers handed back are +1 (release via
 // noesis_base_component_release).
@@ -458,7 +458,7 @@ extern "C" void* noesis_framework_element_template_child(void* element, const ch
     return child;
 }
 
-// ── HorizontalAlignment / VerticalAlignment (TODO §2.E) ─────────────────────
+// ── HorizontalAlignment / VerticalAlignment ─────────────────────────────────
 //
 // A bespoke path: the generic INT32 tag won't match the enum's reflected Type,
 // so go through the FrameworkElement accessors directly. Values mirror
@@ -498,10 +498,10 @@ extern "C" int32_t noesis_framework_element_get_valign(void* element) {
     return static_cast<int32_t>(fe->GetVerticalAlignment());
 }
 
-// ── Thread affinity / DispatcherObject (TODO §2.G) ──────────────────────────
+// ── Thread affinity / DispatcherObject ──────────────────────────────────────
 //
 // Only the affinity queries are exposed: NsGui has no public BeginInvoke
-// surface (cross-thread marshalling would need IView timers — TODO §1).
+// surface (cross-thread marshalling would need IView timers).
 
 extern "C" bool noesis_dependency_object_check_access(void* obj) {
     if (!obj) return false;
@@ -519,7 +519,7 @@ extern "C" uint32_t noesis_dependency_object_thread_id(void* obj) {
     return d->GetThreadId();
 }
 
-// ── ICollectionView current-item navigation (Phase 6) ────────────────────────
+// ── ICollectionView current-item navigation ──────────────────────────────────
 //
 // A CollectionViewSource wraps a source list and lazily produces a
 // CollectionView (an ICollectionView) over it. The view tracks a *current item*
@@ -536,9 +536,8 @@ Noesis::CollectionView* as_collection_view(void* p) {
 
 // Adapter between CollectionView::CurrentChanged() (an EventHandler, i.e.
 // Delegate<void(BaseComponent*, const EventArgs&)>) and the C ABI callback.
-// Holds a +1 ref on the view (like RustClickHandler in noesis_events.cpp) so the
-// subscription stays valid; `+=` in subscribe is balanced by `-=` in
-// unsubscribe.
+// Holds a +1 ref on the view so the subscription stays valid; `+=` in subscribe
+// is balanced by `-=` in unsubscribe.
 class RustCurrentChangedHandler {
 public:
     RustCurrentChangedHandler(noesis_collection_view_changed_fn cb, void* userdata,

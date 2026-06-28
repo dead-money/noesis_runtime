@@ -1,4 +1,4 @@
-// Code-built Geometry object model (TODO §10).
+// Code-built Geometry object model.
 //
 // These entrypoints construct Geometry objects (and their PathFigure / PathSegment
 // building blocks) from Rust and hand them out across the C ABI with a single

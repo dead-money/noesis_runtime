@@ -1,4 +1,4 @@
-// Immediate-mode drawing: Pen + DrawingContext (TODO §10).
+// Immediate-mode drawing: Pen + DrawingContext.
 //
 // Two surfaces live here:
 //
@@ -19,7 +19,7 @@
 //
 // A minimal RectangleGeometry create is also exposed so the DrawGeometry /
 // PushClip context entrypoints are reachable (a Geometry argument is otherwise
-// unconstructable from this crate; full geometry construction is TODO §10).
+// unconstructable from this crate).
 
 #include "noesis_shim.h"
 
@@ -286,7 +286,7 @@ extern "C" bool noesis_drawing_draw_image(void* context, void* image_source, flo
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* img = cast<Noesis::ImageSource>(image_source);
     // DrawImage requires a real source; reject null rather than asserting inside
-    // Noesis (building an ImageSource headless is TODO §12).
+    // Noesis.
     if (!dc || !img) return false;
     dc->DrawImage(img, rect_xywh(x, y, w, h));
     return true;

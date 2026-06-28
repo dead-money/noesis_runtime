@@ -1,4 +1,4 @@
-// Programmatic control access (TODO §8 / Phase B).
+// Programmatic control access.
 //
 // Typed sugar + genuinely-new entrypoints over the standard Noesis controls,
 // each guarded by a DynamicCast to the right control type so a type mismatch
@@ -373,7 +373,7 @@ extern "C" bool noesis_passwordbox_set_password(void* element, const char* passw
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// §8 remainder (prefix noesis_controls_): SelectedValue/Path, TreeView
+// Additional controls (prefix noesis_controls_): SelectedValue/Path, TreeView
 // selection, ItemContainerGenerator mapping, GridView columns, ToolTip /
 // ContextMenu, line/page scrolling + IScrollInfo, Image source.
 // ════════════════════════════════════════════════════════════════════════════

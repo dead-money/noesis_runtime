@@ -1,4 +1,4 @@
-// Code-built bindings + Rust value converters (TODO §3).
+// Code-built bindings + Rust value converters.
 //
 // Two cooperating pieces that close the gap between "bindings authored in
 // XAML" and "bindings + conversion logic driven from Rust":
@@ -8,8 +8,8 @@
 //     cross the FFI as boxed `BaseComponent*` (the same boxing the rest of the
 //     data-binding bridge uses); the Rust side unboxes the input with the
 //     noesis_unbox_* helpers below and boxes its result with noesis_box_*.
-//     Lifetime is modelled on RustCommand (noesis_commands.cpp): the converter
-//     is an ordinary BaseComponent, so Noesis's intrusive refcount runs the
+//     Lifetime: the converter is an ordinary BaseComponent, so Noesis's
+//     intrusive refcount runs the
 //     destructor — and the donated Rust free handler — exactly once after the
 //     last reference drops (which may be a Binding holding the converter alive
 //     well past the Rust handle being dropped).
@@ -54,8 +54,7 @@
 namespace {
 
 // Hand a freshly-created (or borrowed) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller. Mirrors the helper in
-// noesis_collections.cpp. Safe on a refcount-1 `new`'d object (bumps to 2,
+// exactly one reference owned by the caller. Safe on a refcount-1 `new`'d object (bumps to 2,
 // balanced when the local Ptr that produced it releases) or a borrowed object.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
@@ -308,7 +307,7 @@ extern "C" void noesis_binding_set_relative_source_templated_parent(void* bindin
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetTemplatedParent());
 }
 
-// ── BindingExpression inspection (TODO §3) ───────────────────────────────────
+// ── BindingExpression inspection ─────────────────────────────────────────────
 
 // Borrowed BindingExpression* for the binding on `element`'s `dp_name` property,
 // via BindingOperations::GetBindingExpression. The expression is OWNED by the

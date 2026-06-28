@@ -1,4 +1,4 @@
-// Code-side element-tree construction (Phase 1): build and mutate panel trees,
+// Code-side element-tree construction: build and mutate panel trees,
 // Border/Decorator children, and Grid row/column definitions from Rust. The
 // relevant collections (Panel::Children, Grid::Row/ColumnDefinitions) and the
 // Decorator Child are NOT DependencyProperties, so they cannot be reached by the

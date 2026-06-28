@@ -1,4 +1,4 @@
-// Code-built Shape elements (TODO §10): construct Rectangle / Ellipse / Line
+// Code-built Shape elements: construct Rectangle / Ellipse / Line
 // from Rust and set their drawing properties without authoring XAML.
 //
 // These entrypoints construct shape elements and hand them out across the C ABI

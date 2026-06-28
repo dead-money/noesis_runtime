@@ -1,4 +1,4 @@
-// FrameworkElement traversal + event subscription FFI (Phase 5.B).
+// FrameworkElement traversal + event subscription FFI.
 //
 // Pieces:
 //   * `noesis_framework_element_find_name` — wraps Noesis's `FindName`.
@@ -115,7 +115,7 @@ extern "C" void* noesis_framework_element_find_name(void* element, const char* n
     return result;
 }
 
-// Register / unregister an x:Name in the namescope hosting `element` (TODO §2.F).
+// Register / unregister an x:Name in the namescope hosting `element`.
 // `object` is borrowed — the scope takes its own reference. Returns false if
 // `element` is not a FrameworkElement. The element must live within a namescope
 // (the XAML root hosts one); registering a name already present updates it.
@@ -327,7 +327,7 @@ extern "C" bool noesis_path_set_points(void* element, const float* xy, uint32_t 
     return true;
 }
 
-// ── Generic routed-event subscription (TODO §5) ─────────────────────────────
+// ── Generic routed-event subscription ───────────────────────────────────────
 //
 // One mechanism replaces the bespoke Click/KeyDown wrappers for the whole
 // routed-event surface. Two facts about this SDK make it work:
@@ -649,7 +649,7 @@ extern "C" void* noesis_routed_args_source(const void* args) {
     return w->args ? w->args->source : nullptr;
 }
 
-// ── Typed arg accessors: focus / drag / manipulation (TODO §5) ──────────────
+// ── Typed arg accessors: focus / drag / manipulation ────────────────────────
 //
 // Same contract as the mouse/key accessors above: each gates on the carried
 // `kind` and `static_cast`s the borrowed `RoutedEventArgs*` to the concrete
@@ -849,7 +849,7 @@ extern "C" int32_t noesis_routed_events_manip_is_inertial(const void* args) {
     return -1;
 }
 
-// ── DragDrop source side + DataObject copy/paste handlers (TODO §5) ──────────
+// ── DragDrop source side + DataObject copy/paste handlers ────────────────────
 
 // Noesis::DragDrop::DoDragDrop — initiates a drag from `source` carrying
 // `data`, advertising `allowed_effects` (DragDropEffects bitmask). The drag is
@@ -964,7 +964,7 @@ extern "C" void noesis_routed_events_remove_data_object_handler(void* token) {
     delete handler;
 }
 
-// ── Non-routed lifecycle events (TODO §5) ───────────────────────────────────
+// ── Non-routed lifecycle events ─────────────────────────────────────────────
 //
 // `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
 // notifications are NOT routed events — they ride the `Event_<T>` mechanism

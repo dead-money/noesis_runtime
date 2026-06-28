@@ -1,5 +1,5 @@
 // Reflection meta registration: custom enums, routed events, factory metadata,
-// and string->value conversion (TODO §9 "register other reflected entities").
+// and string->value conversion.
 //
 // Everything here registers / queries a runtime entity against Noesis's
 // reflection database so the XAML parser / bindings resolve it the same way they
@@ -14,13 +14,13 @@
 //     already-registered type, keyed only by its reflected name. So none of this
 //     needs the opaque ClassData token from noesis_classes.cpp.
 //
-// NOTE (TODO §9 D, deferred): custom *reflection TypeConverter* registration is
-// NOT exposed in 3.2.13. TypeConverter::Get resolves converters through an
-// internal registry that TypeConverterMetaData + Factory::RegisterComponent do
-// not drive at runtime (verified empirically: a synthetic converter type
-// registers in the Factory yet Get still returns null). The consumption side
+// NOTE: custom *reflection TypeConverter* registration is NOT exposed in
+// 3.2.13. TypeConverter::Get resolves converters through an internal registry
+// that TypeConverterMetaData + Factory::RegisterComponent do not drive at
+// runtime (verified empirically: a synthetic converter type registers in the
+// Factory yet Get still returns null). The consumption side
 // (noesis_type_converter_from_string) works for any built-in / reflected
-// type. See TODO.md "Known SDK limitations".
+// type. See LIMITATIONS.md "Known SDK limitations".
 
 #include "noesis_shim.h"
 

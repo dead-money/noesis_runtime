@@ -1,4 +1,4 @@
-// C++ wrappers for the XamlProvider / IView / IRenderer surface (Phase 4.C).
+// C++ wrappers for the XamlProvider / IView / IRenderer surface.
 //
 // Mirrors the RustRenderDevice pattern in noesis_render_device.cpp:
 //   * `RustXamlProvider` subclasses `Noesis::XamlProvider` and trampolines
@@ -6,7 +6,7 @@
 //     wraps them in a `Noesis::MemoryStream` whose `const void*` buffer is
 //     the Rust-owned storage.
 //   * Thin extern "C" entrypoints over `GUI::LoadXaml`, `GUI::CreateView`,
-//     and the `IView` / `IRenderer` methods Phase 4.D will drive.
+//     and the `IView` / `IRenderer` methods.
 //
 // No Rust callback fires on XamlProvider teardown — the Rust side manages
 // the boxed trait object's lifetime via its `Drop` impl (mirrors the
@@ -170,8 +170,7 @@ extern "C" bool noesis_gui_load_application_resources(const char* uri) {
 // internal `{StaticResource SiblingKey}` lookups can't see siblings that
 // haven't been parsed yet (or even the ones that already have, if the
 // resolver only walks the leaf's own logical tree). This is the
-// hommlet-side "Brushes.xaml self-merges Colors.xaml" workaround
-// territory.
+// "Brushes.xaml self-merges Colors.xaml" workaround territory.
 //
 // This variant takes the list of leaf URIs explicitly (in dependency
 // order). It constructs an empty parent `ResourceDictionary`, installs
@@ -289,7 +288,7 @@ extern "C" void noesis_renderer_render(void* renderer, bool flip_y, bool clear) 
     static_cast<Noesis::IRenderer*>(renderer)->Render(flip_y, clear);
 }
 
-// ── Stereo / VR rendering (TODO §1) ─────────────────────────────────────────
+// ── Stereo / VR rendering ───────────────────────────────────────────────────
 // `RenderStereo` overloads (the non-deprecated VR path). Each eye matrix is a
 // row-major 4×4 read straight from 16 Rust floats, same layout convention as
 // noesis_view_set_projection_matrix. Culling always uses the view's
@@ -452,7 +451,7 @@ extern "C" bool noesis_view_mouse_hwheel(void* view, int32_t x, int32_t y, int32
     return static_cast<Noesis::IView*>(view)->MouseHWheel(x, y, delta);
 }
 
-// ── View flags / quality / stats (TODO §1) ─────────────────────────────────
+// ── View flags / quality / stats ────────────────────────────────────────────
 
 extern "C" uint32_t noesis_view_get_flags(void* view) {
     if (!view) return 0;
@@ -470,7 +469,7 @@ extern "C" float noesis_view_get_tessellation_max_pixel_error(void* view) {
     return static_cast<Noesis::IView*>(view)->GetTessellationMaxPixelError().error;
 }
 
-// ── Gesture / touch thresholds (TODO §1) ───────────────────────────────────
+// ── Gesture / touch thresholds ──────────────────────────────────────────────
 // Pure pass-through setters; all are no-ops on a null view.
 
 extern "C" void noesis_view_set_holding_time_threshold(void* view, uint32_t ms) {
@@ -503,7 +502,7 @@ extern "C" void noesis_view_set_emulate_touch(void* view, bool emulate) {
     static_cast<Noesis::IView*>(view)->SetEmulateTouch(emulate);
 }
 
-// ── Stereo / VR (TODO §1) ──────────────────────────────────────────────────
+// ── Stereo / VR ─────────────────────────────────────────────────────────────
 // Adjusts the offscreen-phase scale used when stereo eye matrices differ from
 // the view projection. Must be 1.0 for non-VR; 2–3 is recommended for VR.
 
@@ -537,7 +536,7 @@ extern "C" void noesis_view_get_stats(void* view, noesis_view_stats* out) {
     out->discarded_glyph_tiles = s.discardedGlyphTiles;
 }
 
-// ── View-driven timers (TODO §1) ───────────────────────────────────────────
+// ── View-driven timers ──────────────────────────────────────────────────────
 
 namespace {
 
@@ -629,7 +628,7 @@ extern "C" void noesis_view_cancel_timer(void* token) {
     delete timer;  // dtor frees the donated userdata + releases the view ref.
 }
 
-// ── Rendering event (TODO §1) ──────────────────────────────────────────────
+// ── Rendering event ─────────────────────────────────────────────────────────
 
 namespace {
 

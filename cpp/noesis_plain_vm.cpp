@@ -1,6 +1,6 @@
-// Plain (non-DependencyObject) view models + MultiBinding (TODO §9 + §3).
+// Plain (non-DependencyObject) view models + MultiBinding.
 //
-// The bevy-bridge unblocker. Three cooperating pieces:
+// Three cooperating pieces:
 //
 //   * RustPlainVm — a plain `Noesis::BaseComponent` (NOT a DependencyObject)
 //     that implements `INotifyPropertyChanged` and reports a per-registration

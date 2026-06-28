@@ -1,4 +1,4 @@
-// Code-built FormattedText measurement / layout (TODO §13).
+// Code-built FormattedText measurement / layout.
 //
 // FormattedText (NsGui/FormattedText.h) is a BaseComponent that computes glyph
 // metrics and a text layout for a string + font properties at construction time

@@ -1,4 +1,4 @@
-// C ABI shim for Noesis's system integration callbacks (Section 14).
+// C ABI shim for Noesis's system integration callbacks.
 //
 //   `NsGui/IntegrationAPI.h` (namespace Noesis::GUI) exposes a handful of
 //   process-global host hooks, each registered as a `(void* user, callback)`

@@ -1,17 +1,11 @@
-// Code-built brushes, transforms, effects, and RenderOptions (TODO §11).
+// Code-built brushes, transforms, effects, and RenderOptions.
 //
 // These entrypoints construct presentation objects from Rust and hand them out
-// across the C ABI with a single owned reference, mirroring the ownership
-// idioms already used by cpp/noesis_binding.cpp (handout() + `*new T` adopt) and
-// cpp/noesis_collections.cpp. The Rust side (src/brushes.rs / src/transforms.rs)
-// wraps each pointer in an owning handle whose Drop calls
+// across the C ABI with a single owned reference. The Rust side (src/brushes.rs
+// / src/transforms.rs) wraps each pointer in an owning handle whose Drop calls
 // noesis_base_component_release; assigning the object to an element (via the
 // generic FrameworkElement::set_component) makes Noesis take its own reference,
 // so the Rust builder handle can be dropped afterwards.
-//
-// Read-back getters (GetColor / GetRadius / GetAngle / …) exist so tests can
-// prove a value actually crossed into the live Noesis object rather than being
-// cached Rust-side: a stubbed constructor/setter fails the round-trip.
 
 #include "noesis_shim.h"
 
@@ -281,8 +275,7 @@ extern "C" void* noesis_image_brush_get_image_source(void* brush) {
 // Create a VisualBrush, optionally pointing at a borrowed Visual (any element is
 // a Visual; pass null to wire the source later). Noesis takes its own reference
 // to the visual. NOTE: VisualBrush only renders when the visual is part of the
-// logical tree (header comment), but the property assignment + read-back is
-// fully headless-verifiable via GetVisual pointer identity.
+// logical tree, but the property assignment is still observable via GetVisual.
 extern "C" void* noesis_visual_brush_create(void* visual) {
     Noesis::Ptr<Noesis::VisualBrush> brush = *new Noesis::VisualBrush();
     if (visual) {

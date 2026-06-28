@@ -1,4 +1,4 @@
-// Custom MarkupExtension registration FFI (Phase 5.D).
+// Custom MarkupExtension registration FFI.
 //
 // Same architectural pattern as noesis_classes.cpp: a per-base C++
 // trampoline subclass + synthetic per-name TypeClassBuilder + Factory
@@ -7,12 +7,10 @@
 // dispatches to the Rust callback with the current `Key` value the XAML
 // parser set via the ContentProperty mechanism.
 //
-// v1 scope: a single positional `Key` string argument. Returns either a
+// Takes a single positional `Key` string argument. Returns either a
 // borrowed C string (most common — wrapped into a BoxedValue<String>) or
 // a borrowed BaseComponent* (for value types that can't be expressed as
-// text, e.g. an existing resource lookup). Reactive bindings (locale
-// switch updates UI in place) are deferred to a later PR — they need a
-// LocalizationManager-style indexer + Binding, which is its own design.
+// text, e.g. an existing resource lookup).
 
 #include "noesis_shim.h"
 
@@ -154,7 +152,7 @@ private:
 
     static void StaticFillClassType(Noesis::TypeClassCreator& helper) {
         // Register `Key` as a reflection property so XAML's parser can
-        // populate it from `{aor:Localize SOME_KEY}`. Marking it as the
+        // populate it from `{my:Localize SOME_KEY}`. Marking it as the
         // ContentProperty makes the positional argument syntax work
         // without callers having to write `Key=...` explicitly.
         helper.Prop("Key", &RustMarkupExtension::Key);

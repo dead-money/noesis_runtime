@@ -1,6 +1,6 @@
-// Diagnostics shim: error / assert handlers (TODO §18), memory-usage queries
-// (TODO §17). All of these are NsCore kernel functions — the kernel must be up
-// (GUI::Init / noesis_init has run) before they do anything meaningful.
+// Diagnostics shim: error / assert handlers, memory-usage queries. All of these
+// are NsCore kernel functions — the kernel must be up (GUI::Init / noesis_init
+// has run) before they do anything meaningful.
 //
 // Two handler shapes:
 //
@@ -155,7 +155,7 @@ extern "C" bool noesis_invoke_assert_handler(const char* file, uint32_t line, co
     return Noesis::InvokeAssertHandler(file, line, expr);
 }
 
-// ── Memory-usage queries (TODO §17) ──────────────────────────────────────────
+// ── Memory-usage queries ─────────────────────────────────────────────────────
 
 extern "C" uint32_t noesis_get_allocated_memory(void)
 {

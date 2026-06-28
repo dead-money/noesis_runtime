@@ -1,11 +1,11 @@
-// Code-built animation & timing (TODO §6 / Phase C): Storyboard, the common
+// Code-built animation & timing: Storyboard, the common
 // animation classes (Double/Color/Thickness/Point), their key-frame variants
 // (Discrete/Linear/Easing for Double and Color), the easing-function family,
 // and a storyboard-less BeginAnimation path off the view's TimeManager.
 //
-// Ownership mirrors cpp/noesis_binding.cpp / cpp/noesis_brushes.cpp: every
-// `*_create` hands out exactly one owned reference (the owning Rust handle in
-// src/animation.rs releases it on Drop via noesis_base_component_release).
+// Ownership: every `*_create` hands out exactly one owned reference (the owning
+// Rust handle in src/animation.rs releases it on Drop via
+// noesis_base_component_release).
 // Adding a timeline to a Storyboard's TimelineCollection, or assigning a key
 // frame / easing function to its parent, makes Noesis take its own reference,
 // so the Rust builder handle can be dropped after wiring.
@@ -139,7 +139,7 @@ namespace {
 
 // Hand a freshly-created (refcount-1) BaseComponent out across the C ABI with
 // exactly one reference owned by the caller; the local Ptr releases its own on
-// scope exit, leaving the caller's +1. Same idiom as cpp/noesis_brushes.cpp.
+// scope exit, leaving the caller's +1.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
