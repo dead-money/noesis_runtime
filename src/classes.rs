@@ -43,14 +43,16 @@ use core::ptr::{self, NonNull};
 use std::ffi::{CString, c_void};
 use std::sync::Mutex;
 
+use crate::drawing::DrawingContext;
 use crate::ffi::{
     ClassBase, LayoutVtable, PropType, dm_noesis_base_component_release,
     dm_noesis_class_create_instance, dm_noesis_class_register,
     dm_noesis_class_register_property_ex, dm_noesis_class_set_coerce, dm_noesis_class_set_layout,
-    dm_noesis_class_unregister, dm_noesis_image_source_get_size, dm_noesis_instance_get_property,
-    dm_noesis_instance_set_property, dm_noesis_instance_set_readonly_property,
-    dm_noesis_uielement_arrange, dm_noesis_uielement_desired_size, dm_noesis_uielement_measure,
-    dm_noesis_visual_child, dm_noesis_visual_children_count,
+    dm_noesis_class_set_render, dm_noesis_class_unregister, dm_noesis_image_source_get_size,
+    dm_noesis_instance_get_property, dm_noesis_instance_set_property,
+    dm_noesis_instance_set_readonly_property, dm_noesis_uielement_arrange,
+    dm_noesis_uielement_desired_size, dm_noesis_uielement_measure, dm_noesis_visual_child,
+    dm_noesis_visual_children_count,
 };
 
 /// Free trampoline matching [`crate::ffi::ClassFreeFn`]. The C++ side holds a
@@ -157,6 +159,7 @@ pub struct ClassBuilder<H: PropertyChangeHandler> {
     props: Vec<PropSpec>,
     coerce: Option<Box<dyn CoerceHandler>>,
     layout: Option<Box<dyn LayoutHandler>>,
+    render: Option<Box<dyn RenderHandler>>,
 }
 
 enum OwnedDefault {
@@ -188,6 +191,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             props: Vec::new(),
             coerce: None,
             layout: None,
+            render: None,
         }
     }
 
@@ -256,6 +260,15 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         self.layout = Some(Box::new(handler));
     }
 
+    /// Install a render handler so the class draws immediate-mode content via
+    /// `OnRender`. Without a handler the base class renders normally. The
+    /// handler's [`RenderHandler::render`] receives a borrowed
+    /// [`DrawingContext`] for the duration of the call; issue draw / push / pop
+    /// commands through it. See [`RenderHandler`].
+    pub fn set_render(&mut self, handler: impl RenderHandler) {
+        self.render = Some(Box::new(handler));
+    }
+
     /// Finalize the registration. Returns `None` if the C++ side rejected
     /// the registration (most commonly: name already registered, or a
     /// property had a type the v1 FFI doesn't yet support).
@@ -267,6 +280,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             props,
             coerce,
             layout,
+            render,
         } = self;
         let prop_types: Vec<PropType> = props.iter().map(|p| p.kind).collect();
 
@@ -318,6 +332,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
                 unsafe { dm_noesis_class_unregister(token.as_ptr()) };
                 drop(coerce);
                 drop(layout);
+                drop(render);
                 return None;
             }
         }
@@ -354,6 +369,20 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
                     &vtable,
                     layout_ud.cast(),
                     layout_handler_free_trampoline,
+                );
+            }
+        }
+
+        // Donate the render handler (if any).
+        if let Some(handler) = render {
+            let boxed: Box<Box<dyn RenderHandler>> = Box::new(handler);
+            let render_ud = Box::into_raw(boxed);
+            unsafe {
+                dm_noesis_class_set_render(
+                    token.as_ptr(),
+                    render_trampoline,
+                    render_ud.cast(),
+                    render_handler_free_trampoline,
                 );
             }
         }
@@ -1305,4 +1334,50 @@ unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
         return;
     }
     drop(Box::from_raw(userdata.cast::<Box<dyn LayoutHandler>>()));
+}
+
+// ── Immediate-mode rendering (TODO §10) ──────────────────────────────────────
+
+/// Custom immediate-mode rendering, installed via [`ClassBuilder::set_render`].
+/// The trampoline subclass's `OnRender` forwards here after the base
+/// `OnRender` runs. Issue draw / push / pop commands through the borrowed
+/// [`DrawingContext`]; it is valid only for the duration of the call.
+///
+/// `OnRender` fires during the renderer's render-tree update (drive it with a
+/// [`View`](crate::view::View) + [`Renderer`](crate::view::Renderer) bound to a
+/// [`RenderDevice`](crate::render_device::RenderDevice) — see `tests/drawing.rs`).
+/// Like the layout callbacks it runs on the view-driving thread; keep work small.
+pub trait RenderHandler: Send + 'static {
+    /// Record this element's visual content into `ctx`. The element's render
+    /// size is available via [`Instance::layout_child`] / the element's own
+    /// `ActualWidth`/`ActualHeight` (read through a
+    /// [`FrameworkElement`](crate::view::FrameworkElement)).
+    fn render(&mut self, instance: Instance, ctx: DrawingContext<'_>);
+}
+
+unsafe extern "C" fn render_trampoline(
+    userdata: *mut c_void,
+    instance: *mut c_void,
+    context: *mut c_void,
+) {
+    if userdata.is_null() {
+        return;
+    }
+    let handler = &mut *userdata.cast::<Box<dyn RenderHandler>>();
+    let (Some(inst), Some(ctx)) = (NonNull::new(instance), NonNull::new(context)) else {
+        return;
+    };
+    // SAFETY: `ctx` is the borrowed DrawingContext* delivered to OnRender, valid
+    // only for this call — the `DrawingContext<'_>` lifetime keeps it scoped.
+    let ctx = DrawingContext::from_raw(ctx);
+    handler.render(Instance(inst), ctx);
+}
+
+/// Free trampoline for the donated render handler box. Mirrors
+/// [`class_handler_free_trampoline`].
+unsafe extern "C" fn render_handler_free_trampoline(userdata: *mut c_void) {
+    if userdata.is_null() {
+        return;
+    }
+    drop(Box::from_raw(userdata.cast::<Box<dyn RenderHandler>>()));
 }

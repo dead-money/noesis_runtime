@@ -206,3 +206,445 @@ impl Drop for Command {
         unsafe { dm_noesis_command_destroy(self.ptr.as_ptr()) }
     }
 }
+
+// ── Routed commands (TODO §4) ────────────────────────────────────────────────
+
+/// Anything that can be referenced as a `Noesis::ICommand*` — a [`Command`],
+/// [`RoutedCommand`], [`RoutedUICommand`], or a built-in [`BorrowedCommand`].
+/// Lets a [`CommandBinding`] (and any `Command` DP) accept any of them.
+pub trait AsCommand {
+    /// Borrowed `Noesis::ICommand*` (`BaseComponent*`), valid for `self`.
+    fn command_ptr(&self) -> *mut c_void;
+}
+
+impl AsCommand for Command {
+    fn command_ptr(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+/// A `Noesis::RoutedCommand` built in code. Unlike [`Command`] (a Rust-backed
+/// `ICommand` whose logic lives in the handler), a routed command carries no
+/// logic itself — invoking it routes `Execute` / `CanExecute` through the
+/// element tree to the first matching [`CommandBinding`]. Owns a `+1` reference
+/// released on drop.
+pub struct RoutedCommand {
+    ptr: NonNull<c_void>,
+}
+
+// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
+// owning wrappers in this crate.
+unsafe impl Send for RoutedCommand {}
+unsafe impl Sync for RoutedCommand {}
+
+impl RoutedCommand {
+    /// Create a routed command named `name`, owned by the type `owner_type`
+    /// (resolved through the reflection registry — a built-in like `"UIElement"`
+    /// or a [`ClassBuilder`](crate::classes)-registered custom class). Returns
+    /// `None` if `owner_type` can't be resolved to a class.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` / `owner_type` contain an interior NUL byte.
+    #[must_use]
+    pub fn new(name: &str, owner_type: &str) -> Option<Self> {
+        let cn = CString::new(name).expect("name contained interior NUL");
+        let co = CString::new(owner_type).expect("owner_type contained interior NUL");
+        // SAFETY: both C strings live for the call; C returns +1 or NULL.
+        let ptr = unsafe { dm_noesis_routed_command_create(cn.as_ptr(), co.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Execute the command against `target` (a `UIElement`), routing to its
+    /// `CommandBinding`s. `param` is an optional borrowed command parameter.
+    pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
+        // SAFETY: self.ptr is a live RoutedCommand*; target.raw() a live element.
+        unsafe {
+            dm_noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+        }
+    }
+
+    /// Whether the command can currently execute against `target` (queries its
+    /// `CommandBinding`s' `CanExecute`). `false` if nothing handles it.
+    #[must_use]
+    pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
+        // SAFETY: as above.
+        unsafe {
+            dm_noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+        }
+    }
+
+    /// The command's registered name (`RoutedCommand::GetName`).
+    #[must_use]
+    pub fn name(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live RoutedCommand*; returns a borrowed interned
+        // string we copy immediately.
+        unsafe { cstr_opt(dm_noesis_routed_command_get_name(self.ptr.as_ptr())) }
+    }
+
+    /// Raw `Noesis::ICommand*`, borrowed for the lifetime of `self`.
+    #[must_use]
+    pub fn raw(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+impl AsCommand for RoutedCommand {
+    fn command_ptr(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+impl Drop for RoutedCommand {
+    fn drop(&mut self) {
+        // SAFETY: +1 from create, released exactly once here.
+        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+    }
+}
+
+/// A `Noesis::RoutedUICommand` — a [`RoutedCommand`] plus localizable display
+/// `Text` (e.g. for menu items). Owns a `+1` reference released on drop.
+pub struct RoutedUICommand {
+    ptr: NonNull<c_void>,
+}
+
+// SAFETY: see [`RoutedCommand`].
+unsafe impl Send for RoutedUICommand {}
+unsafe impl Sync for RoutedUICommand {}
+
+impl RoutedUICommand {
+    /// Create a routed UI command. `text` is the display label; see
+    /// [`RoutedCommand::new`] for `name` / `owner_type`. Returns `None` if the
+    /// owner type can't be resolved.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any argument contains an interior NUL byte.
+    #[must_use]
+    pub fn new(name: &str, text: &str, owner_type: &str) -> Option<Self> {
+        let cn = CString::new(name).expect("name contained interior NUL");
+        let ct = CString::new(text).expect("text contained interior NUL");
+        let co = CString::new(owner_type).expect("owner_type contained interior NUL");
+        // SAFETY: all C strings live for the call; C returns +1 or NULL.
+        let ptr =
+            unsafe { dm_noesis_routed_ui_command_create(cn.as_ptr(), ct.as_ptr(), co.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// See [`RoutedCommand::execute`].
+    pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
+        // SAFETY: self.ptr is a live RoutedUICommand* (a RoutedCommand).
+        unsafe {
+            dm_noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+        }
+    }
+
+    /// See [`RoutedCommand::can_execute`].
+    #[must_use]
+    pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
+        // SAFETY: as above.
+        unsafe {
+            dm_noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+        }
+    }
+
+    /// The display text (`RoutedUICommand::GetText`).
+    #[must_use]
+    pub fn text(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live RoutedUICommand*; borrowed string copied.
+        unsafe { cstr_opt(dm_noesis_routed_ui_command_get_text(self.ptr.as_ptr())) }
+    }
+
+    /// Set the display text.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `text` contains an interior NUL byte.
+    pub fn set_text(&mut self, text: &str) {
+        let c = CString::new(text).expect("text contained interior NUL");
+        // SAFETY: self.ptr is a live RoutedUICommand*; c lives for the call.
+        unsafe { dm_noesis_routed_ui_command_set_text(self.ptr.as_ptr(), c.as_ptr()) };
+    }
+
+    /// The command's registered name (`RoutedCommand::GetName`).
+    #[must_use]
+    pub fn name(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live RoutedCommand*; borrowed string copied.
+        unsafe { cstr_opt(dm_noesis_routed_command_get_name(self.ptr.as_ptr())) }
+    }
+
+    /// Raw `Noesis::ICommand*`, borrowed for the lifetime of `self`.
+    #[must_use]
+    pub fn raw(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+impl AsCommand for RoutedUICommand {
+    fn command_ptr(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+impl Drop for RoutedUICommand {
+    fn drop(&mut self) {
+        // SAFETY: +1 from create, released exactly once here.
+        unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
+    }
+}
+
+/// `CommandParameter` → raw pointer for the C ABI (NULL when `None`).
+fn param_ptr(param: CommandParameter) -> *mut c_void {
+    param.map_or(core::ptr::null_mut(), NonNull::as_ptr)
+}
+
+// ── Built-in command libraries (TODO §4) ─────────────────────────────────────
+
+/// A borrowed reference to a framework-owned `RoutedUICommand` singleton (the
+/// built-in [`ApplicationCommand`] / [`ComponentCommand`] libraries). It holds
+/// no reference and runs no `Drop` — the framework owns these for the process
+/// lifetime — so it is `Copy`. Use it as a [`CommandBinding`] command or assign
+/// it to a control's `Command` property.
+#[derive(Copy, Clone)]
+pub struct BorrowedCommand {
+    ptr: NonNull<c_void>,
+}
+
+// SAFETY: a process-lifetime framework singleton; sharing the borrowed pointer
+// across threads is sound under the same per-object-serialisation contract.
+unsafe impl Send for BorrowedCommand {}
+unsafe impl Sync for BorrowedCommand {}
+
+impl BorrowedCommand {
+    /// Raw `Noesis::ICommand*`, valid for the process lifetime.
+    #[must_use]
+    pub fn raw(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+
+    /// The command's display text (these built-ins are `RoutedUICommand`s).
+    #[must_use]
+    pub fn text(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live RoutedUICommand*; borrowed string copied.
+        unsafe { cstr_opt(dm_noesis_routed_ui_command_get_text(self.ptr.as_ptr())) }
+    }
+
+    /// The command's registered name.
+    #[must_use]
+    pub fn name(&self) -> Option<String> {
+        // SAFETY: self.ptr is a live RoutedCommand*; borrowed string copied.
+        unsafe { cstr_opt(dm_noesis_routed_command_get_name(self.ptr.as_ptr())) }
+    }
+}
+
+impl AsCommand for BorrowedCommand {
+    fn command_ptr(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+}
+
+/// The `ApplicationCommands` library — common application-level commands
+/// (clipboard, document, edit). [`Self::command`] returns the framework
+/// singleton.
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ApplicationCommand {
+    CancelPrint = 0,
+    Close = 1,
+    ContextMenu = 2,
+    Copy = 3,
+    CorrectionList = 4,
+    Cut = 5,
+    Delete = 6,
+    Find = 7,
+    Help = 8,
+    New = 9,
+    Open = 10,
+    Paste = 11,
+    Print = 12,
+    PrintPreview = 13,
+    Properties = 14,
+    Redo = 15,
+    Replace = 16,
+    Save = 17,
+    SaveAs = 18,
+    SelectAll = 19,
+    Stop = 20,
+    Undo = 21,
+}
+
+impl ApplicationCommand {
+    /// The framework's `RoutedUICommand` singleton for this command.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the Noesis runtime is not initialized (the singletons are set
+    /// up during [`crate::init`]).
+    #[must_use]
+    pub fn command(self) -> BorrowedCommand {
+        // SAFETY: returns a borrowed framework singleton (valid after init()).
+        let ptr = unsafe { dm_noesis_application_command(self as u32) };
+        BorrowedCommand {
+            ptr: NonNull::new(ptr.cast_mut())
+                .expect("ApplicationCommands singleton was null (runtime not initialized?)"),
+        }
+    }
+}
+
+/// The `ComponentCommands` library — control-internal navigation / selection /
+/// scrolling commands. [`Self::command`] returns the framework singleton.
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ComponentCommand {
+    ExtendSelectionDown = 0,
+    ExtendSelectionLeft = 1,
+    ExtendSelectionRight = 2,
+    ExtendSelectionUp = 3,
+    MoveDown = 4,
+    MoveFocusBack = 5,
+    MoveFocusDown = 6,
+    MoveFocusForward = 7,
+    MoveFocusPageDown = 8,
+    MoveFocusPageUp = 9,
+    MoveFocusUp = 10,
+    MoveLeft = 11,
+    MoveRight = 12,
+    MoveToEnd = 13,
+    MoveToHome = 14,
+    MoveToPageDown = 15,
+    MoveToPageUp = 16,
+    MoveUp = 17,
+    ScrollByLine = 18,
+    ScrollPageDown = 19,
+    ScrollPageLeft = 20,
+    ScrollPageRight = 21,
+    ScrollPageUp = 22,
+    SelectToEnd = 23,
+    SelectToHome = 24,
+    SelectToPageDown = 25,
+    SelectToPageUp = 26,
+}
+
+impl ComponentCommand {
+    /// The framework's `RoutedUICommand` singleton for this command.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the Noesis runtime is not initialized.
+    #[must_use]
+    pub fn command(self) -> BorrowedCommand {
+        // SAFETY: returns a borrowed framework singleton (valid after init()).
+        let ptr = unsafe { dm_noesis_component_command(self as u32) };
+        BorrowedCommand {
+            ptr: NonNull::new(ptr.cast_mut())
+                .expect("ComponentCommands singleton was null (runtime not initialized?)"),
+        }
+    }
+}
+
+// ── CommandBinding (TODO §4) ─────────────────────────────────────────────────
+
+/// Rust handlers for a [`CommandBinding`]: `execute` runs the action when a
+/// bound command is invoked through the attached element; `can_execute` gates
+/// it (default always-`true`). A bare `FnMut(CommandParameter)` closure works as
+/// a fire-always handler.
+pub trait CommandBindingHandler: Send + 'static {
+    /// Whether the command may run now. Default `true`.
+    fn can_execute(&self, _param: CommandParameter) -> bool {
+        true
+    }
+
+    /// Run the command's action.
+    fn execute(&mut self, param: CommandParameter);
+}
+
+impl<F: FnMut(CommandParameter) + Send + 'static> CommandBindingHandler for F {
+    fn execute(&mut self, param: CommandParameter) {
+        self(param);
+    }
+}
+
+/// SAFETY: `userdata` is the double-boxed handler leaked in
+/// [`CommandBinding::new`], alive until the free trampoline runs.
+unsafe extern "C" fn cb_executed_trampoline(userdata: *mut c_void, param: *mut c_void) {
+    let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
+    handler.execute(NonNull::new(param));
+}
+
+/// SAFETY: see [`cb_executed_trampoline`].
+unsafe extern "C" fn cb_can_execute_trampoline(userdata: *mut c_void, param: *mut c_void) -> bool {
+    let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
+    handler.can_execute(NonNull::new(param))
+}
+
+/// SAFETY: matching `Box::from_raw` for the leak in [`CommandBinding::new`],
+/// run exactly once by the C++ destructor.
+unsafe extern "C" fn cb_free_trampoline(userdata: *mut c_void) {
+    if userdata.is_null() {
+        return;
+    }
+    drop(Box::from_raw(userdata.cast::<Box<dyn CommandBindingHandler>>()));
+}
+
+/// Binds a command to Rust handlers and (once [`attached`](Self::attach)) makes
+/// an element respond to that command when it's invoked and routes through the
+/// element. RAII: drop it to detach the handlers and free them.
+pub struct CommandBinding {
+    token: NonNull<c_void>,
+}
+
+// SAFETY: the boxed handler is `Send`; the C++ bridge is bound to one binding
+// whose access Noesis serialises — mirrors the event subscriptions.
+unsafe impl Send for CommandBinding {}
+unsafe impl Sync for CommandBinding {}
+
+impl CommandBinding {
+    /// Build a binding for `command` (any [`AsCommand`] — a [`RoutedCommand`],
+    /// [`RoutedUICommand`], built-in [`BorrowedCommand`], or [`Command`]) with
+    /// the given [`CommandBindingHandler`]. Attach it to an element with
+    /// [`Self::attach`]. Returns `None` only if the C entrypoint fails (e.g. a
+    /// non-command pointer).
+    #[must_use]
+    pub fn new<C: AsCommand, H: CommandBindingHandler>(command: &C, handler: H) -> Option<Self> {
+        let boxed: Box<Box<dyn CommandBindingHandler>> = Box::new(Box::new(handler));
+        let userdata = Box::into_raw(boxed);
+
+        // SAFETY: trampolines are extern "C"; userdata is freshly leaked and
+        // donated to the C++ bridge (freed via cb_free on destroy); the command
+        // pointer is borrowed for the call only.
+        let token = unsafe {
+            dm_noesis_command_binding_create(
+                command.command_ptr(),
+                cb_executed_trampoline,
+                Some(cb_can_execute_trampoline),
+                userdata.cast(),
+                cb_free_trampoline,
+            )
+        };
+
+        match NonNull::new(token) {
+            Some(token) => Some(Self { token }),
+            None => {
+                // SAFETY: userdata came from Box::into_raw above; nothing took it.
+                unsafe { drop(Box::from_raw(userdata)) };
+                None
+            }
+        }
+    }
+
+    /// Attach this binding to `element`'s `CommandBindings` so commands invoked
+    /// on (or routing through) the element reach these handlers. Returns `false`
+    /// if `element` is not a `UIElement`.
+    pub fn attach(&self, element: &FrameworkElement) -> bool {
+        // SAFETY: token is a live bridge; element.raw() a live element.
+        unsafe { dm_noesis_command_binding_attach(self.token.as_ptr(), element.raw()) }
+    }
+}
+
+impl Drop for CommandBinding {
+    fn drop(&mut self) {
+        // SAFETY: token from new(); destroy detaches the delegates and frees the
+        // donated handler box exactly once.
+        unsafe { dm_noesis_command_binding_destroy(self.token.as_ptr()) }
+    }
+}

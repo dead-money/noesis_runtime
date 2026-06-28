@@ -1138,6 +1138,27 @@ void dm_noesis_class_set_layout(
     void* userdata,
     dm_noesis_layout_free_fn free_handler);
 
+// Render callback (TODO §10). The trampoline subclass's `OnRender` override
+// forwards here after the base `OnRender` runs. `instance` is the owning
+// object's BaseComponent*; `context` is a BORROWED Noesis::DrawingContext*
+// (do not release) valid ONLY for the duration of the call — issue immediate
+// mode draw commands through the dm_noesis_drawing_* entrypoints. OnRender
+// fires from inside the renderer's render-tree update (typically the view
+// thread); keep work small.
+typedef void (*dm_noesis_render_fn)(void* userdata, void* instance, void* context);
+
+typedef void (*dm_noesis_render_free_fn)(void* userdata);
+
+// Install a render handler on a registered class. Meaningful for any base (all
+// current bases derive from UIElement). Pass a null `cb` to detach. `userdata`
+// ownership transfers; released via `free_handler` at ClassData teardown (same
+// lifetime contract as the change / coerce / layout callbacks).
+void dm_noesis_class_set_render(
+    void* class_token,
+    dm_noesis_render_fn cb,
+    void* userdata,
+    dm_noesis_render_free_fn free_handler);
+
 // UIElement layout primitives for custom MeasureOverride / ArrangeOverride
 // implementations. `element` is a borrowed UIElement* (e.g. from
 // dm_noesis_visual_child). measure/arrange return false if `element` is null
@@ -2023,6 +2044,62 @@ bool dm_noesis_typography_text_box_get_composition_underline(void* element, uint
                                                              uint32_t* out_start, uint32_t* out_end,
                                                              int32_t* out_style, bool* out_bold);
 bool dm_noesis_typography_text_box_clear_composition_underlines(void* element);
+// ── Immediate-mode drawing: Pen + DrawingContext (TODO §10) ─────────────────
+//
+// Implemented in cpp/noesis_drawing.cpp. The `Pen` is a code-built
+// BaseComponent built/owned like the brushes above (handout +1, released via
+// dm_noesis_base_component_release). The DrawingContext entrypoints take the
+// BORROWED context handed to a class render callback (dm_noesis_render_fn);
+// they DynamicCast it to a Noesis::DrawingContext* and fail gracefully (false)
+// on a null / wrong-type context. Brush / Pen / Geometry / Transform /
+// ImageSource arguments are borrowed BaseComponent* (or null for "none").
+
+// Pen (NsGui/Pen.h). `brush` is a borrowed Brush* (or null); Noesis takes its
+// own reference. Line-cap / join ordinals match Noesis::PenLineCap (0 Flat,
+// 1 Square, 2 Round, 3 Triangle) / Noesis::PenLineJoin (0 Miter, 1 Bevel,
+// 2 Round).
+void* dm_noesis_pen_create(void* brush, float thickness);
+bool dm_noesis_pen_set_brush(void* pen, void* brush);
+void* dm_noesis_pen_get_brush(void* pen);
+bool dm_noesis_pen_set_thickness(void* pen, float thickness);
+bool dm_noesis_pen_get_thickness(void* pen, float* out);
+bool dm_noesis_pen_set_line_caps(void* pen, int32_t start_cap, int32_t end_cap, int32_t dash_cap);
+// out = {startCap, endCap, dashCap} ordinals.
+bool dm_noesis_pen_get_line_caps(void* pen, int32_t out[3]);
+bool dm_noesis_pen_set_line_join(void* pen, int32_t join, float miter_limit);
+bool dm_noesis_pen_get_line_join(void* pen, int32_t* out_join, float* out_miter_limit);
+
+// RectangleGeometry (NsGui/RectangleGeometry.h). A minimal Geometry primitive so
+// the DrawGeometry / PushClip context entrypoints are reachable; rect is
+// (x, y, w, h) with optional corner radii rX / rY. get reads the rect back as
+// {x, y, w, h}.
+void* dm_noesis_rectangle_geometry_create(float x, float y, float w, float h, float rX, float rY);
+bool dm_noesis_rectangle_geometry_get_rect(void* geometry, float out[4]);
+
+// DrawingContext draw / push / pop commands (NsGui/DrawingContext.h). `context`
+// is the borrowed pointer from the render callback. Each returns false if the
+// context is null / not a DrawingContext. Coordinates are in DIPs in the
+// element's local space. A null brush / pen draws only the part the non-null
+// argument covers (matching Noesis's own behaviour).
+bool dm_noesis_drawing_draw_line(void* context, void* pen, float x0, float y0, float x1, float y1);
+bool dm_noesis_drawing_draw_rectangle(void* context, void* brush, void* pen,
+                                      float x, float y, float w, float h);
+bool dm_noesis_drawing_draw_rounded_rectangle(void* context, void* brush, void* pen,
+                                              float x, float y, float w, float h,
+                                              float rX, float rY);
+bool dm_noesis_drawing_draw_ellipse(void* context, void* brush, void* pen,
+                                    float cx, float cy, float rX, float rY);
+bool dm_noesis_drawing_draw_geometry(void* context, void* brush, void* pen, void* geometry);
+// Returns false if `image_source` is null / not an ImageSource (DrawImage
+// requires a real source — see Known SDK limitations re: building one headless).
+bool dm_noesis_drawing_draw_image(void* context, void* image_source,
+                                  float x, float y, float w, float h);
+bool dm_noesis_drawing_pop(void* context);
+bool dm_noesis_drawing_push_clip(void* context, void* geometry);
+bool dm_noesis_drawing_push_transform(void* context, void* transform);
+// `mode` ordinal matches Noesis::BlendingMode (0 Normal, 1 Multiply, 2 Screen,
+// 3 Additive).
+bool dm_noesis_drawing_push_blending_mode(void* context, int32_t mode);
 
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //
@@ -2602,8 +2679,8 @@ void* dm_noesis_ellipse_geometry_create(float cx, float cy, float rx, float ry);
 bool dm_noesis_ellipse_geometry_get(void* geometry, float out[4]);
 
 // RectangleGeometry. rx / ry round the corners.
-void* dm_noesis_rectangle_geometry_create(float x, float y, float width, float height, float rx,
-                                          float ry);
+void* dm_noesis_drawing_rect_geometry_create(float x, float y, float width, float height, float rx,
+                                             float ry);
 // out_rect = {x, y, width, height}; out_radii = {radiusX, radiusY}; either may
 // be null.
 bool dm_noesis_rectangle_geometry_get(void* geometry, float out_rect[4], float out_radii[2]);

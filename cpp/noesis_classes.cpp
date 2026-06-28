@@ -53,6 +53,7 @@
 #include <NsGui/Control.h>
 #include <NsGui/Decorator.h>
 #include <NsGui/DependencyObject.h>
+#include <NsGui/DrawingContext.h>
 #include <NsGui/DependencyProperty.h>
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/FrameworkPropertyMetadata.h>
@@ -121,6 +122,10 @@ struct ClassData {
     dm_noesis_layout_vtable             layout;
     void*                               layout_userdata;
     dm_noesis_layout_free_fn            layout_free;
+    // Optional render callback (OnRender trampoline, TODO §10).
+    dm_noesis_render_fn                 render_cb;
+    void*                               render_userdata;
+    dm_noesis_render_free_fn            render_free;
     std::atomic<int>                    ref_count;
 
     ClassData()
@@ -136,6 +141,9 @@ struct ClassData {
         , layout{}
         , layout_userdata(nullptr)
         , layout_free(nullptr)
+        , render_cb(nullptr)
+        , render_userdata(nullptr)
+        , render_free(nullptr)
         , ref_count(1) {}
 
     void AddRef() noexcept {
@@ -157,6 +165,10 @@ struct ClassData {
         void* lu = layout_userdata;
         layout_userdata = nullptr;
         if (layout_free && lu) layout_free(lu);
+
+        void* ru = render_userdata;
+        render_userdata = nullptr;
+        if (render_free && ru) render_free(ru);
     }
 
     void Release() {
@@ -428,6 +440,16 @@ bool rust_run_arrange(RustClassInstance* self, const Noesis::Size& final_, Noesi
     return true;
 }
 
+// Forward an OnRender to the Rust render callback when installed. The
+// DrawingContext is handed out as an opaque borrowed BaseComponent*; the Rust
+// side reaches DrawingContext methods through the dm_noesis_drawing_* FFI.
+void rust_run_render(RustClassInstance* self, Noesis::DrawingContext* dc) {
+    ClassData* cd = self->GetClassData();
+    if (!cd || !cd->render_cb) return;
+    cd->render_cb(cd->render_userdata, self->GetCanonical(),
+                  static_cast<Noesis::BaseComponent*>(dc));
+}
+
 // ── Trampoline subclasses ───────────────────────────────────────────────────
 //
 // Hand-rolled reflection: we cannot use NS_DECLARE_REFLECTION /
@@ -473,6 +495,10 @@ protected:                                                                      
         Noesis::Size out;                                                                      \
         if (rust_run_arrange(this, finalSize, &out)) return out;                               \
         return NsBase::ArrangeOverride(finalSize);                                             \
+    }                                                                                          \
+    void OnRender(Noesis::DrawingContext* drawingContext) override {                            \
+        NsBase::OnRender(drawingContext);                                                      \
+        rust_run_render(this, drawingContext);                                                \
     }                                                                                          \
 private:                                                                                       \
     typedef ClassName SelfClass;                                                               \
@@ -908,6 +934,29 @@ extern "C" void dm_noesis_class_set_layout(
         cd->has_layout = true;
     } else if (free_handler && userdata) {
         free_handler(userdata);
+    }
+}
+
+extern "C" void dm_noesis_class_set_render(
+    void* class_token,
+    dm_noesis_render_fn cb,
+    void* userdata,
+    dm_noesis_render_free_fn free_handler) {
+    if (!class_token) {
+        if (free_handler && userdata) free_handler(userdata);
+        return;
+    }
+    auto* cd = static_cast<ClassData*>(class_token);
+    // Drop any previously-installed render box.
+    if (cd->render_free && cd->render_userdata) cd->render_free(cd->render_userdata);
+    cd->render_cb = cb;
+    cd->render_userdata = userdata;
+    cd->render_free = free_handler;
+    if (!cb && free_handler && userdata) {
+        // Detaching but a box was donated — free it now to avoid a leak.
+        free_handler(userdata);
+        cd->render_userdata = nullptr;
+        cd->render_free = nullptr;
     }
 }
 

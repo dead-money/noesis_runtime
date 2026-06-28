@@ -351,6 +351,12 @@ unsafe extern "C" {
         userdata: *mut c_void,
         free_handler: LayoutFreeFn,
     );
+    pub fn dm_noesis_class_set_render(
+        class_token: *mut c_void,
+        cb: RenderFn,
+        userdata: *mut c_void,
+        free_handler: RenderFreeFn,
+    );
     pub fn dm_noesis_uielement_measure(element: *mut c_void, avail_w: f32, avail_h: f32) -> bool;
     pub fn dm_noesis_uielement_arrange(
         element: *mut c_void,
@@ -1322,6 +1328,103 @@ unsafe extern "C" {
     -> bool;
 }
 
+// ── Immediate-mode drawing: Pen + DrawingContext (TODO §10) ──────────────────
+//
+// `Pen` / `RectangleGeometry` are code-built like the brushes above (each
+// `*_create` returns a `+1`-owned `BaseComponent*` released on the owning
+// wrapper's Drop). The `dm_noesis_drawing_*` entrypoints take the borrowed
+// `DrawingContext*` delivered to a class render callback; all return `false`
+// on a null / wrong-type context.
+unsafe extern "C" {
+    // Pen
+    pub fn dm_noesis_pen_create(brush: *mut c_void, thickness: f32) -> *mut c_void;
+    pub fn dm_noesis_pen_set_brush(pen: *mut c_void, brush: *mut c_void) -> bool;
+    pub fn dm_noesis_pen_get_brush(pen: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_pen_set_thickness(pen: *mut c_void, thickness: f32) -> bool;
+    pub fn dm_noesis_pen_get_thickness(pen: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_pen_set_line_caps(
+        pen: *mut c_void,
+        start_cap: i32,
+        end_cap: i32,
+        dash_cap: i32,
+    ) -> bool;
+    pub fn dm_noesis_pen_get_line_caps(pen: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_pen_set_line_join(pen: *mut c_void, join: i32, miter_limit: f32) -> bool;
+    pub fn dm_noesis_pen_get_line_join(
+        pen: *mut c_void,
+        out_join: *mut i32,
+        out_miter_limit: *mut f32,
+    ) -> bool;
+
+    // RectangleGeometry
+    pub fn dm_noesis_drawing_rect_geometry_create(
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        r_x: f32,
+        r_y: f32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_rectangle_geometry_get_rect(geometry: *mut c_void, out: *mut f32) -> bool;
+
+    // DrawingContext commands (context is the borrowed render-callback pointer).
+    pub fn dm_noesis_drawing_draw_line(
+        context: *mut c_void,
+        pen: *mut c_void,
+        x0: f32,
+        y0: f32,
+        x1: f32,
+        y1: f32,
+    ) -> bool;
+    pub fn dm_noesis_drawing_draw_rectangle(
+        context: *mut c_void,
+        brush: *mut c_void,
+        pen: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_drawing_draw_rounded_rectangle(
+        context: *mut c_void,
+        brush: *mut c_void,
+        pen: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        r_x: f32,
+        r_y: f32,
+    ) -> bool;
+    pub fn dm_noesis_drawing_draw_ellipse(
+        context: *mut c_void,
+        brush: *mut c_void,
+        pen: *mut c_void,
+        cx: f32,
+        cy: f32,
+        r_x: f32,
+        r_y: f32,
+    ) -> bool;
+    pub fn dm_noesis_drawing_draw_geometry(
+        context: *mut c_void,
+        brush: *mut c_void,
+        pen: *mut c_void,
+        geometry: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_drawing_draw_image(
+        context: *mut c_void,
+        image_source: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_drawing_pop(context: *mut c_void) -> bool;
+    pub fn dm_noesis_drawing_push_clip(context: *mut c_void, geometry: *mut c_void) -> bool;
+    pub fn dm_noesis_drawing_push_transform(context: *mut c_void, transform: *mut c_void) -> bool;
+    pub fn dm_noesis_drawing_push_blending_mode(context: *mut c_void, mode: i32) -> bool;
+}
+
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
 /// pointers receive the `userdata` passed to [`dm_noesis_value_converter_create`],
 /// the borrowed boxed `value` / `parameter` (`BaseComponent*`, may be null), an
@@ -1865,3 +1968,13 @@ pub struct LayoutVtable {
 
 /// Free callback for a donated layout `userdata` box. Mirrors [`ClassFreeFn`].
 pub type LayoutFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+/// Render callback (TODO §10). The trampoline subclass's `OnRender` override
+/// forwards into this. `instance` is the owning object's `BaseComponent*`;
+/// `context` is a borrowed `Noesis::DrawingContext*` valid only for the call —
+/// issue draw commands through the `dm_noesis_drawing_*` entrypoints.
+pub type RenderFn =
+    unsafe extern "C" fn(userdata: *mut c_void, instance: *mut c_void, context: *mut c_void);
+
+/// Free callback for a donated render `userdata` box. Mirrors [`ClassFreeFn`].
+pub type RenderFreeFn = unsafe extern "C" fn(userdata: *mut c_void);

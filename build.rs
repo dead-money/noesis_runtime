@@ -22,6 +22,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_texture_provider.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_brushes.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_imaging.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_drawing.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_animation.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_geometry.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_shapes.cpp");
@@ -101,6 +102,7 @@ fn main() {
         .file("cpp/noesis_texture_provider.cpp")
         .file("cpp/noesis_brushes.cpp")
         .file("cpp/noesis_imaging.cpp")
+        .file("cpp/noesis_drawing.cpp")
         .file("cpp/noesis_animation.cpp")
         .file("cpp/noesis_geometry.cpp")
         .file("cpp/noesis_shapes.cpp")

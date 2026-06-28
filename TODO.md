@@ -84,6 +84,13 @@ Remaining:
 ## 10. Geometry, shapes, drawing
 
 - **`DrawingContext`** immediate-mode drawing.
+`Path.set_points` is exposed, plus immediate-mode `DrawingContext` (via an
+`OnRender` override on the custom-element trampolines — `src/drawing.rs`,
+`cpp/noesis_drawing.cpp`) with a code-built `Pen` and a minimal
+`RectangleGeometry`.
+
+- **Geometry construction.** `StreamGeometry`/`StreamGeometryContext`, `PathGeometry` + figures/segments (Line/Bezier/Arc/Poly*), `EllipseGeometry`/`LineGeometry`, `CombinedGeometry`, `GeometryGroup` (only `RectangleGeometry` ships, as the `DrawGeometry`/`PushClip` argument).
+- **Shapes.** `Rectangle`/`Ellipse`/`Line`/`Polygon`/`Polyline` property access; `Shape` stroke/fill/`Pen`/`DashStyle`.
 
 ## 11. Brushes, transforms, visual properties
 
@@ -182,3 +189,5 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **`FormattedText` glyph positions & standalone `Measure` width (§13).** `GetGlyphPosition` returns `(-10,-10)` and `Measure(...)` reports `0` width for an unconstrained `NoWrap` pass on a `FormattedText` built via the metrics-only ctors — those paths populate measurement/line metrics (`GetBounds`, `GetLineInfo` height/baseline are real) but not the full render layout a `TextBlock` would drive. Glyph-hit geometry needs the object attached to a rendered `TextBlock`; the standalone wrapper exposes the calls but cannot guarantee non-zero render coordinates.
 - **`FormattedText` font resolution (§13).** Metrics are only non-zero when the named `FontFamily` resolves to a real face: register a `FontProvider` (or set font fallbacks) before measuring. With no font system configured Noesis cannot shape glyphs and all metrics collapse to zero — this is a configuration dependency, not a stub. `tests/formatted_text.rs` drives the SDK's bundled `Bitter-Regular.ttf` to get genuine metrics.
 - **Font-family enumeration (§13).** No SDK API enumerates the set of *available family names* from the font system. `FontFamily` offers per-family enumeration only (`GetNumFonts`/`GetFontName`/`GetFontPath`, resolved through the registered provider — wrapped as `FontFamily::num_fonts`/`font_name`), and `Fonts::GetTypefaces(Stream*, cb)` enumerates the faces inside *one supplied font file*, not the registry. Workaround: the host font provider (`scan_folder` / `register_font`, already wrapped) is the authority on which families it serves, so the host can enumerate its own families.
+- **No public Drawing object model / `DrawingVisual::RenderOpen` (§10).** In 3.2.13 `DrawingContext` has a private constructor (`friend UIElement`) and is delivered ONLY to `UIElement::OnRender(DrawingContext*)`; there is no public `DrawingVisual`/`RenderOpen` and no `Drawing`/`DrawingGroup`/`GeometryDrawing`/`ImageDrawing`/`DrawingImage`/`DrawingBrush` headers. So immediate-mode drawing is reachable only by overriding `OnRender` — which the §10 PR wires through a `render` callback on the custom-element trampolines (`ClassBuilder::set_render` → a borrowed `DrawingContext`). Retained/recorded drawings and drawing-as-a-brush are not expressible.
+- **`DrawingContext::DrawImage` source (§10).** `DrawImage` needs a live `ImageSource`, which this crate cannot build headlessly yet (TODO §12 imaging); the wrapper accepts a borrowed `ImageSource*` but rejects null. `DrawText`/`DrawMesh` are likewise un-exercisable without a `FormattedText` / `MeshData` builder and are not wrapped.
