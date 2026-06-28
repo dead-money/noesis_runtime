@@ -121,7 +121,6 @@ Only `Path.set_points` is exposed.
 
 - **`TextBlock` inlines.** `Run`/`Span`/`Bold`/`Italic`/`Underline`/`Hyperlink`/`LineBreak`/`InlineUIContainer`.
 - **`FormattedText`** measurement/layout.
-- **Typography** properties, `FontFamily` enumeration, `TextElement` props, `CompositionUnderline` (IME).
 
 ## 14. System integration callbacks
 
@@ -191,3 +190,4 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
 - **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.
+- **Font-family enumeration (§13).** No SDK API enumerates the set of *available family names* from the font system. `FontFamily` offers per-family enumeration only (`GetNumFonts`/`GetFontName`/`GetFontPath`, resolved through the registered provider — wrapped as `FontFamily::num_fonts`/`font_name`), and `Fonts::GetTypefaces(Stream*, cb)` enumerates the faces inside *one supplied font file*, not the registry. Workaround: the host font provider (`scan_folder` / `register_font`, already wrapped) is the authority on which families it serves, so the host can enumerate its own families.

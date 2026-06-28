@@ -31,6 +31,7 @@ pub mod resources;
 pub mod styles;
 pub mod texture_provider;
 pub mod transforms;
+pub mod typography;
 pub mod view;
 pub mod xaml_provider;
 
