@@ -369,7 +369,30 @@ unsafe extern "C" {
     // G. Thread affinity.
     pub fn dm_noesis_dependency_object_check_access(obj: *mut c_void) -> bool;
     pub fn dm_noesis_dependency_object_thread_id(obj: *mut c_void) -> u32;
+
+    // ── Commands: ICommand from Rust (TODO §4) ───────────────────────────────
+    pub fn dm_noesis_command_create(
+        vt: *const CommandVTable,
+        userdata: *mut c_void,
+        free_handler: CommandFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_command_destroy(command: *mut c_void);
+    pub fn dm_noesis_command_raise_can_execute_changed(command: *mut c_void);
 }
+
+/// Mirror of `dm_noesis_command_vtable` in `cpp/noesis_shim.h`. Both fn
+/// pointers receive the `userdata` passed to [`dm_noesis_command_create`] and
+/// the borrowed command-parameter `BaseComponent*` (`param`, may be null).
+#[repr(C)]
+pub struct CommandVTable {
+    pub can_execute: unsafe extern "C" fn(userdata: *mut c_void, param: *mut c_void) -> bool,
+    pub execute: unsafe extern "C" fn(userdata: *mut c_void, param: *mut c_void),
+}
+
+/// Free callback invoked exactly once when the underlying `RustCommand` is
+/// finally destroyed (last reference released). Drops the boxed handler whose
+/// ownership transferred to C++ at [`dm_noesis_command_create`].
+pub type CommandFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 /// Free callback invoked exactly once per registered markup extension
 /// when its underlying C++ `MarkupClassData` is finally freed. Same shape

@@ -1021,6 +1021,55 @@ int32_t dm_noesis_items_control_items_count(void* element);
 // passes through regardless). -1 if `element` is not an ItemsControl.
 int32_t dm_noesis_items_control_realized_count(void* element);
 
+// ── Commands: ICommand from Rust (TODO §4) ─────────────────────────────────
+//
+// Expose Rust logic to XAML `Command="{Binding ...}"`. The C++ side wraps a
+// Rust vtable in a `RustCommand : Noesis::BaseCommand` (which implements the
+// `ICommand` interface), so the returned object is a `BaseComponent*` that a
+// Button / MenuItem can bind its `Command` to. Reach XAML by storing the
+// command as a `BASE_COMPONENT` property on a Rust view-model instance (set
+// via dm_noesis_instance_set_property) and exposing that instance as a
+// DataContext; XAML then binds `Command="{Binding TheProperty}"`.
+//
+// `CanExecute` / `Execute` forward into the vtable. `param` is the borrowed
+// command-parameter `BaseComponent*` the control passes (CommandParameter),
+// and may be NULL. Keep work small — these fire from inside Noesis's input
+// pump on whatever thread drives the view.
+
+typedef struct dm_noesis_command_vtable {
+    // Whether the command can run now. Drives Button.IsEnabled when the
+    // button is bound to this command. `param` is borrowed; may be NULL.
+    bool (*can_execute)(void* userdata, void* param);
+    // Invoke the command. `param` is borrowed; may be NULL.
+    void (*execute)(void* userdata, void* param);
+} dm_noesis_command_vtable;
+
+// Free callback invoked exactly once when the underlying RustCommand is
+// finally destroyed (last reference released — which may be the binding
+// long after dm_noesis_command_destroy). Receives the `userdata` passed to
+// dm_noesis_command_create; ownership of `userdata` transfers to the C++
+// side at creation. Optional (may be NULL).
+typedef void (*dm_noesis_command_free_fn)(void* userdata);
+
+// Create a Rust-backed ICommand. Returns a `BaseComponent*` (an ICommand)
+// with +1 ref for the caller; release via dm_noesis_command_destroy. The
+// `vtable` is copied (need not outlive the call). Returns NULL if `vt` is
+// NULL.
+void* dm_noesis_command_create(
+    const dm_noesis_command_vtable* vt,
+    void* userdata,
+    dm_noesis_command_free_fn free_handler);
+
+// Release the caller's +1 reference from dm_noesis_command_create. If a
+// binding still references the command it stays alive (and the free handler
+// is deferred) until that reference also drops. Safe to call with NULL.
+void dm_noesis_command_destroy(void* command);
+
+// Fire `CanExecuteChanged` so any control bound to this command re-queries
+// `CanExecute` (e.g. a Button re-evaluates IsEnabled on the next update).
+// Safe to call with NULL or a non-command pointer (no-op).
+void dm_noesis_command_raise_can_execute_changed(void* command);
+
 #ifdef __cplusplus
 }
 #endif
