@@ -1145,6 +1145,123 @@ void dm_noesis_command_destroy(void* command);
 // Safe to call with NULL or a non-command pointer (no-op).
 void dm_noesis_command_raise_can_execute_changed(void* command);
 
+// ── Value boxing / unboxing primitives (TODO §3) ───────────────────────────
+//
+// Binding values cross the FFI as `Noesis::BaseComponent*` (boxed). These wrap
+// primitives so Rust can produce / read binding values — the currency a
+// converter speaks. `dm_noesis_box_string` (above) handles strings; its unbox
+// peer lives here. Each `box_*` returns a BaseComponent* with +1 ref (release
+// via dm_noesis_base_component_release). Each `unbox_*` returns false / NULL if
+// the boxed runtime type doesn't match the requested type.
+
+void* dm_noesis_box_bool(bool value);
+void* dm_noesis_box_int32(int32_t value);
+void* dm_noesis_box_double(double value);
+
+bool dm_noesis_unbox_bool(void* boxed, bool* out);
+bool dm_noesis_unbox_int32(void* boxed, int32_t* out);
+bool dm_noesis_unbox_double(void* boxed, double* out);
+
+// Borrowed (no +1) view of a boxed string's bytes, valid only while `boxed` is
+// alive (copy if you need to keep it). NULL if `boxed` is not a
+// BoxedValue<String>.
+const char* dm_noesis_unbox_string(void* boxed);
+
+// ── Value converters: IValueConverter from Rust (TODO §3) ──────────────────
+//
+// A `RustValueConverter : Noesis::BaseValueConverter` forwards TryConvert /
+// TryConvertBack into a Rust vtable. The returned object is a `BaseComponent*`
+// (and an `IValueConverter`); set it on a code-built binding
+// (`dm_noesis_binding_set_converter`) or insert it into an element's resources
+// (`dm_noesis_framework_element_add_resource`) so XAML
+// `{Binding ..., Converter={StaticResource Key}}` can reach it.
+//
+// `value` / `parameter` are borrowed boxed `BaseComponent*` (may be NULL) —
+// unbox with the helpers above. `target_type` is an opaque `const Noesis::Type*`
+// (forward-compatible; ignore it for simple converters). Write a +1-owned
+// `BaseComponent*` into `*out_result` (ownership transfers to Noesis) and
+// return `true`; return `false` to signal UnsetValue (Noesis uses the
+// FallbackValue / property default). Returning `true` with `*out_result == NULL`
+// yields a null value. Same threading contract as the command vtable — fires
+// from inside Noesis's binding pump.
+
+typedef struct dm_noesis_value_converter_vtable {
+    bool (*convert)(
+        void* userdata, void* value, const void* target_type,
+        void* parameter, void** out_result);
+    bool (*convert_back)(
+        void* userdata, void* value, const void* target_type,
+        void* parameter, void** out_result);
+} dm_noesis_value_converter_vtable;
+
+// Free callback invoked exactly once when the underlying RustValueConverter is
+// finally destroyed (last reference released — which may be a Binding long
+// after dm_noesis_value_converter_destroy). Ownership of `userdata` transfers
+// to C++ at creation. Optional (may be NULL).
+typedef void (*dm_noesis_value_converter_free_fn)(void* userdata);
+
+// Create a Rust-backed IValueConverter. Returns a `BaseComponent*` with +1 ref
+// for the caller; release via dm_noesis_value_converter_destroy. The `vtable`
+// is copied (need not outlive the call). Returns NULL if `vt` is NULL.
+void* dm_noesis_value_converter_create(
+    const dm_noesis_value_converter_vtable* vt,
+    void* userdata,
+    dm_noesis_value_converter_free_fn free_handler);
+
+// Release the caller's +1 reference from dm_noesis_value_converter_create. If a
+// binding still references the converter it stays alive (and the free handler
+// is deferred) until that reference also drops. Safe to call with NULL.
+void dm_noesis_value_converter_destroy(void* converter);
+
+// ── Code-built Binding + SetBinding (TODO §3) ──────────────────────────────
+//
+// `new Binding(path)` plus setters for the common knobs, then wire it onto a
+// target DP with `dm_noesis_set_binding` — the code path that mirrors XAML
+// `{Binding ...}` authoring. The Binding is a `BaseComponent*` with +1 ref;
+// release via dm_noesis_binding_destroy. SetBinding takes its own reference, so
+// the Binding may be destroyed right after wiring. All setters no-op on a NULL
+// / non-Binding pointer. Pointer-valued setters take a borrowed BaseComponent*
+// (the Binding stores its own reference; pass NULL to clear).
+
+// Create a Binding with an initial property path (NULL → empty path / bind to
+// the whole DataContext). +1 ref for the caller.
+void* dm_noesis_binding_create(const char* path);
+void dm_noesis_binding_destroy(void* binding);
+
+// Source object (an explicit binding source, e.g. a Rust view model). Setting
+// this overrides the inherited DataContext for this binding.
+void dm_noesis_binding_set_source(void* binding, void* source);
+// Bind against another element resolved by its x:Name in the same namescope.
+void dm_noesis_binding_set_element_name(void* binding, const char* name);
+// BindingMode ordinal: 0 Default, 1 TwoWay, 2 OneWay, 3 OneTime, 4 OneWayToSource.
+void dm_noesis_binding_set_mode(void* binding, int32_t mode);
+// IValueConverter (a dm_noesis_value_converter_create result, or any Noesis
+// converter BaseComponent*). NULL clears.
+void dm_noesis_binding_set_converter(void* binding, void* converter);
+// Borrowed parameter passed to the converter on every Convert / ConvertBack.
+void dm_noesis_binding_set_converter_parameter(void* binding, void* parameter);
+// .NET-style composite format string (e.g. "F2", "Value is {0:F2}").
+void dm_noesis_binding_set_string_format(void* binding, const char* format);
+// Borrowed value used when the binding can't produce one.
+void dm_noesis_binding_set_fallback_value(void* binding, void* value);
+// UpdateSourceTrigger ordinal: 0 Default, 1 PropertyChanged, 2 LostFocus, 3 Explicit.
+void dm_noesis_binding_set_update_source_trigger(void* binding, int32_t trigger);
+// Bind relative to the target element itself (RelativeSource Self) — e.g. bind
+// one property of an element to another on the same element.
+void dm_noesis_binding_set_relative_source_self(void* binding);
+
+// Resolve `dp_name` on `element`'s class hierarchy and wire `binding` onto it
+// via BindingOperations::SetBinding. Returns false if `element` is not a
+// DependencyObject, `binding` is not a Binding, or the DP name is unknown.
+bool dm_noesis_set_binding(void* element, const char* dp_name, void* binding);
+
+// Insert `object` into `element`'s ResourceDictionary under `key` (creating the
+// dictionary if the element has none). Makes a Rust-built converter / value
+// reachable from XAML via `{StaticResource Key}`. The dictionary stores its own
+// reference to `object`. Returns false if `element` is not a FrameworkElement.
+bool dm_noesis_framework_element_add_resource(
+    void* element, const char* key, void* object);
+
 #ifdef __cplusplus
 }
 #endif
