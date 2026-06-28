@@ -108,6 +108,8 @@ let _registration = MarkupExtensionRegistration::from_closure(
 - **Custom classes via synthetic types.** The C++ shim ships trampoline subclasses (`RustContentControl`, `RustMarkupExtension`) that report a per-name synthetic `TypeClass` and forward virtuals like `OnPropertyChanged` and `ProvideValue` to a Rust callback. This is the same shape Noesis's own C# and Unity bindings use.
 - **Threading.** Noesis is not thread-safe. The view, renderer, and input pump all run on a single rendering thread. The RAII guards are `Send` so you can move resources between threads, but the underlying calls stay single-threaded.
 
+Custom pixel shaders (`BrushShader` / `ShaderEffect`) are intentionally out of scope. They need compiled shader bytecode and a live render device to do anything, which is beyond this crate's headless FFI surface; the `Batch::pixel_shader` pointer is round-tripped through the render device but the crate exposes no way to author one.
+
 ## Building
 
 ```sh

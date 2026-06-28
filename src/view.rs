@@ -53,7 +53,8 @@ use crate::ffi::{
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
     dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
-    dm_noesis_dependency_object_thread_id, dm_noesis_expander_get_is_expanded,
+    dm_noesis_dependency_object_thread_id, dm_noesis_element_get_transform3d,
+    dm_noesis_element_set_transform3d, dm_noesis_expander_get_is_expanded,
     dm_noesis_expander_set_is_expanded, dm_noesis_focus_element,
     dm_noesis_framework_element_find_name, dm_noesis_framework_element_find_resource,
     dm_noesis_framework_element_get_data_context, dm_noesis_framework_element_get_halign,
@@ -117,7 +118,7 @@ use crate::ffi::{
     dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
-use crate::transforms::Transform;
+use crate::transforms::{Transform, Transform3D};
 
 /// A loaded XAML root. Holds a +1 refcount on the underlying
 /// `Noesis::FrameworkElement`; [`View::create`] consumes it and forwards the
@@ -897,6 +898,95 @@ impl FrameworkElement {
             .then_some(out)
     }
 
+    /// Set a `Point` dependency property (`[x, y]`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_point(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_prop(name, PropType::Point, value.as_ptr().cast())
+    }
+
+    /// Read a `Point` dependency property as `[x, y]`. `None` on unknown name or
+    /// type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_point(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_prop(name, PropType::Point, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Set a `Size` dependency property (`[width, height]`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_size(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_prop(name, PropType::Size, value.as_ptr().cast())
+    }
+
+    /// Read a `Size` dependency property as `[width, height]`. `None` on unknown
+    /// name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_size(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_prop(name, PropType::Size, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Set a `Vector` dependency property (`Noesis::Vector2`, `[x, y]`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_vector(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_prop(name, PropType::Vector, value.as_ptr().cast())
+    }
+
+    /// Read a `Vector` (`Noesis::Vector2`) dependency property as `[x, y]`.
+    /// `None` on unknown name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_vector(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_prop(name, PropType::Vector, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Set an enum-typed dependency property by its underlying `int32` member
+    /// value. The DP's reflected type must be a runtime enum.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_enum(&mut self, name: &str, value: i32) -> bool {
+        self.set_prop(name, PropType::Enum, (&value as *const i32).cast())
+    }
+
+    /// Read an enum-typed dependency property as its underlying `int32` member
+    /// value. `None` on unknown name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_enum(&self, name: &str) -> Option<i32> {
+        let mut out: i32 = 0;
+        self.get_prop(name, PropType::Enum, (&mut out as *mut i32).cast())
+            .then_some(out)
+    }
+
     /// Read a reference-typed dependency property (any `BaseComponent`
     /// subclass — `Brush`, `ImageSource`, `Style`, …) as a borrowed opaque
     /// pointer. `None` on unknown name, type mismatch, or a null value.
@@ -1469,6 +1559,47 @@ impl FrameworkElement {
         self.set_current(name, PropType::String, (&ptr as *const *const i8).cast())
     }
 
+    /// Set the current value of a `Point` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_point(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_current(name, PropType::Point, value.as_ptr().cast())
+    }
+
+    /// Set the current value of a `Size` dependency property. See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_size(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_current(name, PropType::Size, value.as_ptr().cast())
+    }
+
+    /// Set the current value of a `Vector` (`Noesis::Vector2`) dependency
+    /// property. See [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_vector(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_current(name, PropType::Vector, value.as_ptr().cast())
+    }
+
+    /// Set the current value of a runtime-enum-typed dependency property (the
+    /// underlying `int32` member value). See
+    /// [`set_current_i32`](Self::set_current_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_current_enum(&mut self, name: &str, value: i32) -> bool {
+        self.set_current(name, PropType::Enum, (&value as *const i32).cast())
+    }
+
     /// Read the base value (pre-animation / pre-coerce) of an `Int32`
     /// dependency property (`GetBaseValue`). `None` on unknown name or tag
     /// mismatch.
@@ -1557,6 +1688,58 @@ impl FrameworkElement {
         Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
     }
 
+    /// Read the base value of a `Point` dependency property as `[x, y]`. See
+    /// [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_point(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_base(name, PropType::Point, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `Size` dependency property as `[width, height]`.
+    /// See [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_size(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_base(name, PropType::Size, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a `Vector` (`Noesis::Vector2`) dependency property
+    /// as `[x, y]`. See [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_vector(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_base(name, PropType::Vector, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read the base value of a runtime-enum-typed dependency property as its
+    /// underlying `int32` member value. See [`get_base_i32`](Self::get_base_i32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_base_enum(&self, name: &str) -> Option<i32> {
+        let mut out: i32 = 0;
+        self.get_base(name, PropType::Enum, (&mut out as *mut i32).cast())
+            .then_some(out)
+    }
+
     // ── Dynamic tag inference (TODO §2.D) ───────────────────────────────────
 
     /// The [`PropType`] tag of the named dependency property, or `None` if this
@@ -1586,6 +1769,10 @@ impl FrameworkElement {
             8 => Some(PropType::ImageSource),
             9 => Some(PropType::BaseComponent),
             10 => Some(PropType::UInt32),
+            11 => Some(PropType::Point),
+            12 => Some(PropType::Size),
+            13 => Some(PropType::Vector),
+            14 => Some(PropType::Enum),
             _ => None,
         }
     }
@@ -1610,6 +1797,10 @@ impl FrameworkElement {
             PropType::Thickness => self.get_thickness(name).map(DynValue::Thickness),
             PropType::Color => self.get_color(name).map(DynValue::Color),
             PropType::Rect => self.get_rect(name).map(DynValue::Rect),
+            PropType::Point => self.get_point(name).map(DynValue::Point),
+            PropType::Size => self.get_size(name).map(DynValue::Size),
+            PropType::Vector => self.get_vector(name).map(DynValue::Vector),
+            PropType::Enum => self.get_enum(name).map(DynValue::Enum),
             PropType::ImageSource | PropType::BaseComponent => {
                 self.get_component(name).map(DynValue::Component)
             }
@@ -1897,6 +2088,38 @@ impl FrameworkElement {
     pub fn set_render_transform_origin(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; thin pass-through.
         unsafe { dm_noesis_ui_element_set_render_transform_origin(self.ptr.as_ptr(), x, y) }
+    }
+
+    /// Set this element's 3D transform (`UIElement::SetTransform3D`, the
+    /// `Transform3DProperty`) to `transform`. This is the WinUI/Noesis
+    /// `Element.Transform3D` attached behaviour, distinct from `RenderTransform`.
+    /// Returns `false` if this element is not a `UIElement`.
+    pub fn set_transform3d<T: Transform3D>(&mut self, transform: &T) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; transform.transform3d_raw()
+        // is a live Transform3D* borrowed for the call; Noesis stores its own ref.
+        unsafe { dm_noesis_element_set_transform3d(self.ptr.as_ptr(), transform.transform3d_raw()) }
+    }
+
+    /// Clear this element's 3D transform. Returns `false` if this is not a
+    /// `UIElement`.
+    pub fn clear_transform3d(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; null clears the property.
+        unsafe { dm_noesis_element_set_transform3d(self.ptr.as_ptr(), core::ptr::null_mut()) }
+    }
+
+    /// This element's current 3D transform (`UIElement::GetTransform3D`) as an
+    /// owning, type-erased [`AnyTransform3D`](crate::transforms::AnyTransform3D),
+    /// or `None` if none is set / this is not a `UIElement`. The handle can be
+    /// re-applied to another element via [`Self::set_transform3d`].
+    #[must_use]
+    pub fn transform3d(&self) -> Option<crate::transforms::AnyTransform3D> {
+        // SAFETY: self.ptr is a live BaseComponent*; returns a borrowed pointer.
+        let borrowed = unsafe { dm_noesis_element_get_transform3d(self.ptr.as_ptr()) };
+        let borrowed = NonNull::new(borrowed)?;
+        // AddRef so the returned handle owns its reference (released on Drop).
+        // SAFETY: borrowed is a live Transform3D* (BaseComponent*).
+        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        NonNull::new(owned).map(|p| unsafe { crate::transforms::AnyTransform3D::from_owned(p) })
     }
 
     /// Set this element's `Effect` to `effect` (e.g. a blur or drop shadow).
@@ -2947,6 +3170,14 @@ pub enum DynValue {
     Color([f32; 4]),
     /// `Rect` as `[x, y, width, height]`.
     Rect([f32; 4]),
+    /// `Point` as `[x, y]`.
+    Point([f32; 2]),
+    /// `Size` as `[width, height]`.
+    Size([f32; 2]),
+    /// `Vector` (`Noesis::Vector2`) as `[x, y]`.
+    Vector([f32; 2]),
+    /// Runtime-enum-typed DP value (the underlying `int32` member value).
+    Enum(i32),
     /// A reference-typed value (`ImageSource` / `BaseComponent` subclass) as a
     /// borrowed opaque pointer (no `+1` ref — see
     /// [`FrameworkElement::get_component`]).

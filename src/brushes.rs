@@ -31,6 +31,16 @@ use crate::ffi::{
     dm_noesis_radial_gradient_brush_set_gradient_origin,
     dm_noesis_radial_gradient_brush_set_radius, dm_noesis_solid_color_brush_create,
     dm_noesis_solid_color_brush_get_color, dm_noesis_solid_color_brush_set_color,
+    dm_noesis_tile_brush_get_alignment_x, dm_noesis_tile_brush_get_alignment_y,
+    dm_noesis_tile_brush_get_stretch, dm_noesis_tile_brush_get_tile_mode,
+    dm_noesis_tile_brush_get_viewbox, dm_noesis_tile_brush_get_viewbox_units,
+    dm_noesis_tile_brush_get_viewport, dm_noesis_tile_brush_get_viewport_units,
+    dm_noesis_tile_brush_set_alignment_x, dm_noesis_tile_brush_set_alignment_y,
+    dm_noesis_tile_brush_set_stretch, dm_noesis_tile_brush_set_tile_mode,
+    dm_noesis_tile_brush_set_viewbox, dm_noesis_tile_brush_set_viewbox_units,
+    dm_noesis_tile_brush_set_viewport, dm_noesis_tile_brush_set_viewport_units,
+    dm_noesis_visual_brush_create, dm_noesis_visual_brush_get_visual,
+    dm_noesis_visual_brush_set_visual,
 };
 
 /// A handle to a Noesis `Brush`. Implemented by every brush type in this module
@@ -337,6 +347,244 @@ impl Brush for RadialGradientBrush {
     }
 }
 
+// ── TileBrush tiling knobs (shared by ImageBrush + VisualBrush) ──────────────
+
+/// `Noesis::AlignmentX` (`NsGui/Enums.h`): horizontal alignment of a tile's
+/// content within its base tile. Ordinals match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AlignmentX {
+    /// Align toward the left edge.
+    Left = 0,
+    /// Align toward the center.
+    Center = 1,
+    /// Align toward the right edge.
+    Right = 2,
+}
+
+impl AlignmentX {
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Left),
+            1 => Some(Self::Center),
+            2 => Some(Self::Right),
+            _ => None,
+        }
+    }
+}
+
+/// `Noesis::AlignmentY` (`NsGui/Enums.h`): vertical alignment of a tile's content
+/// within its base tile. Ordinals match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AlignmentY {
+    /// Align toward the upper edge.
+    Top = 0,
+    /// Align toward the center.
+    Center = 1,
+    /// Align toward the lower edge.
+    Bottom = 2,
+}
+
+impl AlignmentY {
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Top),
+            1 => Some(Self::Center),
+            2 => Some(Self::Bottom),
+            _ => None,
+        }
+    }
+}
+
+/// `Noesis::Stretch` (`NsGui/Enums.h`): how a tile's content is resized to fill
+/// its tile. Ordinals match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Stretch {
+    /// Preserve original size.
+    None = 0,
+    /// Resize to fill, ignoring aspect ratio.
+    Fill = 1,
+    /// Resize to fit while preserving aspect ratio.
+    Uniform = 2,
+    /// Resize to fill while preserving aspect ratio (clips overflow).
+    UniformToFill = 3,
+}
+
+impl Stretch {
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::None),
+            1 => Some(Self::Fill),
+            2 => Some(Self::Uniform),
+            3 => Some(Self::UniformToFill),
+            _ => None,
+        }
+    }
+}
+
+/// `Noesis::TileMode` (`NsGui/Enums.h`): how a base tile repeats to fill the
+/// painted area. Ordinals match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TileMode {
+    /// Draw the base tile once; the rest is transparent.
+    None = 0,
+    /// Repeat the base tile edge-to-edge.
+    Tile = 1,
+    /// Like `Tile`, flipping alternate columns horizontally.
+    FlipX = 2,
+    /// Like `Tile`, flipping alternate rows vertically.
+    FlipY = 3,
+    /// Combination of `FlipX` and `FlipY`.
+    FlipXY = 4,
+}
+
+impl TileMode {
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::None),
+            1 => Some(Self::Tile),
+            2 => Some(Self::FlipX),
+            3 => Some(Self::FlipY),
+            4 => Some(Self::FlipXY),
+            _ => None,
+        }
+    }
+}
+
+/// `Noesis::BrushMappingMode` (`NsGui/Enums.h`): whether a `Viewport`/`Viewbox`
+/// Rect is in absolute coordinates or relative to the bounding box. Ordinals
+/// match the C++ enum.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum BrushMappingMode {
+    /// Coordinates are absolute (local space).
+    Absolute = 0,
+    /// Coordinates are relative to the bounding box (`0..=1`).
+    RelativeToBoundingBox = 1,
+}
+
+impl BrushMappingMode {
+    fn from_ordinal(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Absolute),
+            1 => Some(Self::RelativeToBoundingBox),
+            _ => None,
+        }
+    }
+}
+
+/// The tiling knobs common to every `TileBrush` (the base of both
+/// [`ImageBrush`] and [`VisualBrush`]): content alignment, stretch, tile mode,
+/// and the `Viewport`/`Viewbox` Rects with their mapping units.
+///
+/// Each `Viewport`/`Viewbox` Rect is expressed as `[x, y, width, height]`.
+/// Getters re-read from the live Noesis object so they prove a value crossed the
+/// FFI rather than echoing a Rust cache.
+pub trait TileBrush: Brush {
+    /// Set the horizontal alignment of content within the base tile.
+    fn set_alignment_x(&mut self, value: AlignmentX) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe { dm_noesis_tile_brush_set_alignment_x(self.brush_raw(), value as i32) };
+    }
+    /// Read the horizontal alignment back from the live object.
+    fn alignment_x(&self) -> Option<AlignmentX> {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        AlignmentX::from_ordinal(unsafe { dm_noesis_tile_brush_get_alignment_x(self.brush_raw()) })
+    }
+
+    /// Set the vertical alignment of content within the base tile.
+    fn set_alignment_y(&mut self, value: AlignmentY) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe { dm_noesis_tile_brush_set_alignment_y(self.brush_raw(), value as i32) };
+    }
+    /// Read the vertical alignment back from the live object.
+    fn alignment_y(&self) -> Option<AlignmentY> {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        AlignmentY::from_ordinal(unsafe { dm_noesis_tile_brush_get_alignment_y(self.brush_raw()) })
+    }
+
+    /// Set how content stretches to fit its tile.
+    fn set_stretch(&mut self, value: Stretch) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe { dm_noesis_tile_brush_set_stretch(self.brush_raw(), value as i32) };
+    }
+    /// Read the stretch mode back from the live object.
+    fn stretch(&self) -> Option<Stretch> {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        Stretch::from_ordinal(unsafe { dm_noesis_tile_brush_get_stretch(self.brush_raw()) })
+    }
+
+    /// Set how the base tile repeats to fill the painted area.
+    fn set_tile_mode(&mut self, value: TileMode) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe { dm_noesis_tile_brush_set_tile_mode(self.brush_raw(), value as i32) };
+    }
+    /// Read the tile mode back from the live object.
+    fn tile_mode(&self) -> Option<TileMode> {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        TileMode::from_ordinal(unsafe { dm_noesis_tile_brush_get_tile_mode(self.brush_raw()) })
+    }
+
+    /// Set the base-tile rectangle as `[x, y, width, height]`.
+    fn set_viewport(&mut self, rect: [f32; 4]) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe {
+            dm_noesis_tile_brush_set_viewport(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
+        };
+    }
+    /// Read the `Viewport` Rect back as `[x, y, width, height]`.
+    fn viewport(&self) -> [f32; 4] {
+        let mut out = [0.0f32; 4];
+        // SAFETY: brush_raw() is a live TileBrush*; `out` is 4 floats.
+        unsafe { dm_noesis_tile_brush_get_viewport(self.brush_raw(), out.as_mut_ptr()) };
+        out
+    }
+
+    /// Set the mapping mode of the `Viewport` Rect.
+    fn set_viewport_units(&mut self, value: BrushMappingMode) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe { dm_noesis_tile_brush_set_viewport_units(self.brush_raw(), value as i32) };
+    }
+    /// Read the `Viewport` mapping mode back from the live object.
+    fn viewport_units(&self) -> Option<BrushMappingMode> {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        BrushMappingMode::from_ordinal(unsafe {
+            dm_noesis_tile_brush_get_viewport_units(self.brush_raw())
+        })
+    }
+
+    /// Set the content rectangle as `[x, y, width, height]`.
+    fn set_viewbox(&mut self, rect: [f32; 4]) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe {
+            dm_noesis_tile_brush_set_viewbox(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
+        };
+    }
+    /// Read the `Viewbox` Rect back as `[x, y, width, height]`.
+    fn viewbox(&self) -> [f32; 4] {
+        let mut out = [0.0f32; 4];
+        // SAFETY: brush_raw() is a live TileBrush*; `out` is 4 floats.
+        unsafe { dm_noesis_tile_brush_get_viewbox(self.brush_raw(), out.as_mut_ptr()) };
+        out
+    }
+
+    /// Set the mapping mode of the `Viewbox` Rect.
+    fn set_viewbox_units(&mut self, value: BrushMappingMode) {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        unsafe { dm_noesis_tile_brush_set_viewbox_units(self.brush_raw(), value as i32) };
+    }
+    /// Read the `Viewbox` mapping mode back from the live object.
+    fn viewbox_units(&self) -> Option<BrushMappingMode> {
+        // SAFETY: brush_raw() is a live TileBrush*.
+        BrushMappingMode::from_ordinal(unsafe {
+            dm_noesis_tile_brush_get_viewbox_units(self.brush_raw())
+        })
+    }
+}
+
 // ── ImageBrush ───────────────────────────────────────────────────────────────
 
 /// An `ImageBrush` tiling/stretching an `ImageSource` over the painted area.
@@ -413,6 +661,98 @@ impl Brush for ImageBrush {
         self.raw()
     }
 }
+
+impl TileBrush for ImageBrush {}
+
+// ── VisualBrush ──────────────────────────────────────────────────────────────
+
+/// A `VisualBrush` (NsGui/VisualBrush.h) painting an area with a `Visual` — any
+/// element (a [`FrameworkElement`](crate::view::FrameworkElement)) is a Visual.
+///
+/// It derives from [`TileBrush`], so the tiling knobs (alignment / stretch /
+/// tile mode / viewport / viewbox) apply here too.
+///
+/// NOTE (SDK): the Noesis header states a `VisualBrush` only *renders* when its
+/// visual is part of the logical tree. The property assignment is nonetheless
+/// fully headless-verifiable: [`VisualBrush::visual`] reads the visual pointer
+/// back from the live brush, and assigning the brush to an element round-trips
+/// via `get_component` pointer identity.
+pub struct VisualBrush {
+    ptr: NonNull<c_void>,
+}
+
+base_component_handle!(VisualBrush);
+
+impl Default for VisualBrush {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VisualBrush {
+    /// Create a visual brush with no source set.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate the brush.
+    #[must_use]
+    pub fn new() -> Self {
+        // SAFETY: null visual is allowed (source wired later).
+        let ptr = unsafe { dm_noesis_visual_brush_create(core::ptr::null_mut()) };
+        Self {
+            ptr: NonNull::new(ptr).expect("dm_noesis_visual_brush_create returned null"),
+        }
+    }
+
+    /// Create a visual brush painting `element` (its content). Noesis takes its
+    /// own reference to the visual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if Noesis fails to allocate the brush.
+    #[must_use]
+    pub fn from_element(element: &crate::view::FrameworkElement) -> Self {
+        // SAFETY: element.raw() is a live Visual* (every element is a Visual),
+        // borrowed for the call; Noesis stores its own reference.
+        let ptr = unsafe { dm_noesis_visual_brush_create(element.raw()) };
+        Self {
+            ptr: NonNull::new(ptr).expect("dm_noesis_visual_brush_create returned null"),
+        }
+    }
+
+    /// Point the brush at `element` as its visual source. Noesis takes its own
+    /// reference, so `element` may outlive or be dropped after the call (the
+    /// brush holds the live element alive). Returns `false` only if `self` is
+    /// somehow not a `VisualBrush` (not expected).
+    pub fn set_visual(&mut self, element: &crate::view::FrameworkElement) -> bool {
+        // SAFETY: self.ptr is a live VisualBrush*; element.raw() is a live
+        // Visual* borrowed for the call.
+        unsafe { dm_noesis_visual_brush_set_visual(self.ptr.as_ptr(), element.raw()) }
+    }
+
+    /// Clear the brush's visual source.
+    pub fn clear_visual(&mut self) -> bool {
+        // SAFETY: self.ptr is a live VisualBrush*; null clears the source.
+        unsafe { dm_noesis_visual_brush_set_visual(self.ptr.as_ptr(), core::ptr::null_mut()) }
+    }
+
+    /// Borrowed `Visual*` currently set on the brush, or `None`. The pointer has
+    /// no `+1` reference; do not release it.
+    #[must_use]
+    pub fn visual(&self) -> Option<NonNull<c_void>> {
+        // SAFETY: self.ptr is a live VisualBrush*; the returned pointer is borrowed.
+        let p = unsafe { dm_noesis_visual_brush_get_visual(self.ptr.as_ptr()) };
+        NonNull::new(p)
+    }
+}
+
+impl Brush for VisualBrush {
+    fn brush_raw(&self) -> *mut c_void {
+        self.raw()
+    }
+}
+
+impl TileBrush for VisualBrush {}
 
 // ── BlurEffect ───────────────────────────────────────────────────────────────
 

@@ -60,6 +60,15 @@ pub struct XamlProviderVTable {
 /// Rust — pass it back verbatim.
 pub type RegisterFontFn = unsafe extern "C" fn(register_cx: *mut c_void, filename: *const c_char);
 
+// System integration callback function pointers (Section 14). Each matches a
+// `dm_noesis_*_cb` typedef in `cpp/noesis_shim.h`. `view` / `focused` are
+// borrowed opaque `Noesis::IView*` / `Noesis::UIElement*` pointers.
+pub type CursorCb = unsafe extern "C" fn(user: *mut c_void, view: *mut c_void, cursor_type: i32);
+pub type SoftwareKeyboardCb =
+    unsafe extern "C" fn(user: *mut c_void, focused: *mut c_void, open: bool);
+pub type OpenUrlCb = unsafe extern "C" fn(user: *mut c_void, url: *const c_char);
+pub type PlayAudioCb = unsafe extern "C" fn(user: *mut c_void, uri: *const c_char, volume: f32);
+
 #[repr(C)]
 pub struct FontProviderVTable {
     pub scan_folder: unsafe extern "C" fn(
@@ -175,6 +184,19 @@ unsafe extern "C" {
         assembly: *const c_char,
         provider: *mut c_void,
     );
+
+    // System integration callbacks (Section 14).
+    pub fn dm_noesis_set_cursor_callback(user: *mut c_void, cb: Option<CursorCb>);
+    pub fn dm_noesis_set_software_keyboard_callback(
+        user: *mut c_void,
+        cb: Option<SoftwareKeyboardCb>,
+    );
+    pub fn dm_noesis_set_open_url_callback(user: *mut c_void, cb: Option<OpenUrlCb>);
+    pub fn dm_noesis_open_url(url: *const c_char);
+    pub fn dm_noesis_set_play_audio_callback(user: *mut c_void, cb: Option<PlayAudioCb>);
+    pub fn dm_noesis_play_audio(uri: *const c_char, volume: f32);
+    pub fn dm_noesis_set_culture(name: *const c_char);
+    pub fn dm_noesis_get_culture() -> *const c_char;
 
     pub fn dm_noesis_gui_load_xaml(uri: *const c_char) -> *mut c_void;
     pub fn dm_noesis_gui_parse_xaml(text: *const c_char) -> *mut c_void;
@@ -445,11 +467,22 @@ unsafe extern "C" {
         read_only: bool,
         coerce: bool,
     ) -> u32;
+    pub fn dm_noesis_class_register_enum_property(
+        class_token: *mut c_void,
+        prop_name: *const c_char,
+        enum_type_name: *const c_char,
+        default_value: i32,
+        fpm_options: u32,
+        read_only: bool,
+    ) -> u32;
     pub fn dm_noesis_instance_set_readonly_property(
         instance: *mut c_void,
         prop_index: u32,
         value_ptr: *const c_void,
     ) -> bool;
+    pub fn dm_noesis_freezable_freeze(freezable: *mut c_void) -> bool;
+    pub fn dm_noesis_freezable_is_frozen(freezable: *mut c_void) -> bool;
+    pub fn dm_noesis_freezable_can_freeze(freezable: *mut c_void) -> bool;
     pub fn dm_noesis_class_set_coerce(
         class_token: *mut c_void,
         cb: CoerceFn,
@@ -1204,6 +1237,41 @@ unsafe extern "C" {
     ) -> bool;
     pub fn dm_noesis_image_brush_get_image_source(brush: *mut c_void) -> *mut c_void;
 
+    // VisualBrush
+    pub fn dm_noesis_visual_brush_create(visual: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_visual_brush_set_visual(brush: *mut c_void, visual: *mut c_void) -> bool;
+    pub fn dm_noesis_visual_brush_get_visual(brush: *mut c_void) -> *mut c_void;
+
+    // TileBrush tiling knobs (ImageBrush + VisualBrush)
+    pub fn dm_noesis_tile_brush_set_alignment_x(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_alignment_x(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_alignment_y(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_alignment_y(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_stretch(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_stretch(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_tile_mode(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_tile_mode(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_viewport_units(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewport_units(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_viewbox_units(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewbox_units(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_viewport(
+        brush: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewport(brush: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_tile_brush_set_viewbox(
+        brush: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewbox(brush: *mut c_void, out: *mut f32) -> bool;
+
     // Transforms
     pub fn dm_noesis_translate_transform_create(x: f32, y: f32) -> *mut c_void;
     pub fn dm_noesis_translate_transform_set(transform: *mut c_void, x: f32, y: f32) -> bool;
@@ -1240,6 +1308,18 @@ unsafe extern "C" {
 
     pub fn dm_noesis_composite_transform_create(fields: *const f32) -> *mut c_void;
     pub fn dm_noesis_composite_transform_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    // 3D transforms
+    pub fn dm_noesis_composite_transform3d_create(fields: *const f32) -> *mut c_void;
+    pub fn dm_noesis_composite_transform3d_set(transform: *mut c_void, fields: *const f32) -> bool;
+    pub fn dm_noesis_composite_transform3d_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_matrix_transform3d_create(matrix: *const f32) -> *mut c_void;
+    pub fn dm_noesis_matrix_transform3d_set(transform: *mut c_void, matrix: *const f32) -> bool;
+    pub fn dm_noesis_matrix_transform3d_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_element_set_transform3d(element: *mut c_void, transform: *mut c_void) -> bool;
+    pub fn dm_noesis_element_get_transform3d(element: *mut c_void) -> *mut c_void;
 
     // Effects
     pub fn dm_noesis_blur_effect_create(radius: f32) -> *mut c_void;
@@ -2018,6 +2098,11 @@ pub enum ClassBase {
     UserControl = 3,
     Panel = 4,
     Decorator = 5,
+    /// A custom `Noesis::Freezable` (a `DependencyObject` with freeze/clone
+    /// semantics, NOT a `UIElement`): custom DPs work, but there is no layout /
+    /// render / routed-event surface. The other `Animatable` subtrees
+    /// (`Brush`/`Geometry`/`Transform`/`Effect`) are not subclassable this way.
+    Freezable = 6,
 }
 
 /// FFI value-type tag. The buffer layout for `value_ptr` / `default_ptr` /
@@ -2037,6 +2122,15 @@ pub enum PropType {
     ImageSource = 8,
     BaseComponent = 9,
     UInt32 = 10,
+    /// `Noesis::Point` value DP — `value_ptr` is `const float[2]` (x, y).
+    Point = 11,
+    /// `Noesis::Size` value DP — `value_ptr` is `const float[2]` (width, height).
+    Size = 12,
+    /// `Noesis::Vector2` value DP — `value_ptr` is `const float[2]` (x, y).
+    Vector = 13,
+    /// Runtime-enum-typed DP — int32 storage; register via
+    /// `dm_noesis_class_register_enum_property` (it needs the enum type name).
+    Enum = 14,
 }
 
 /// Property-changed callback. Fired from inside Noesis's property pump
@@ -2535,6 +2629,18 @@ unsafe extern "C" {
     pub fn dm_noesis_type_set_content_property(
         type_name: *const c_char,
         prop_name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_type_get_content_property(
+        type_name: *const c_char,
+        out_name: *mut *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_type_add_depends_on(
+        type_name: *const c_char,
+        prop_name: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_type_get_depends_on(
+        type_name: *const c_char,
+        out_name: *mut *const c_char,
     ) -> bool;
 
     // TextBlock inline content model (TODO §13). Constructors hand out a +1

@@ -412,6 +412,47 @@ void dm_noesis_set_font_provider_assembly(const char* assembly, void* provider);
 void dm_noesis_set_font_provider_scheme_assembly(
     const char* scheme, const char* assembly, void* provider);
 
+// ── System integration callbacks (Section 14) ──────────────────────────────
+//
+// Process-global host integration hooks from `NsGui/IntegrationAPI.h`
+// (namespace Noesis::GUI). Each `set_*` stores `(user, cb)` in a C++ static
+// slot and registers a C++ trampoline with Noesis; passing a NULL `cb`
+// unregisters (clears the underlying Noesis callback). The trampolines
+// convert the Noesis-typed arguments (Cursor*, const Uri&) into the plain
+// C ABI types passed to `cb`. `user` is forwarded verbatim.
+
+// Cursor: fires when a view needs to update the OS mouse cursor. `view` is a
+// borrowed `Noesis::IView*` (opaque; do not release). `cursor_type` is the
+// `Noesis::CursorType` enum value (see NsGui/Cursor.h: 0=None, 1=No,
+// 2=Arrow, ...); a NULL cursor maps to CursorType_None (0).
+typedef void (*dm_noesis_cursor_cb)(void* user, void* view, int32_t cursor_type);
+void dm_noesis_set_cursor_callback(void* user, dm_noesis_cursor_cb cb);
+
+// Software keyboard: fires when an element requests opening/closing the
+// on-screen keyboard. `focused` is a borrowed `Noesis::UIElement*` (opaque).
+typedef void (*dm_noesis_software_keyboard_cb)(void* user, void* focused, bool open);
+void dm_noesis_set_software_keyboard_callback(void* user, dm_noesis_software_keyboard_cb cb);
+
+// Open URL: host opens `url` in a browser. `dm_noesis_open_url` invokes the
+// registered callback synchronously.
+typedef void (*dm_noesis_open_url_cb)(void* user, const char* url);
+void dm_noesis_set_open_url_callback(void* user, dm_noesis_open_url_cb cb);
+void dm_noesis_open_url(const char* url);
+
+// Play audio: host plays the sound at `uri` (canonicalized Uri string) at
+// `volume` [0..1]. `dm_noesis_play_audio` invokes the callback synchronously.
+typedef void (*dm_noesis_play_audio_cb)(void* user, const char* uri, float volume);
+void dm_noesis_set_play_audio_callback(void* user, dm_noesis_play_audio_cb cb);
+void dm_noesis_play_audio(const char* uri, float volume);
+
+// Default culture (BCP-47 name, e.g. "en-US"). `dm_noesis_set_culture` keeps
+// the name alive in a process-static buffer (Noesis stores the CultureInfo's
+// `name` pointer by value). `dm_noesis_get_culture` returns a borrowed,
+// NUL-terminated pointer to the active culture name (never NULL; defaults to
+// "en-US" before any set). Copy it out; do not free.
+void dm_noesis_set_culture(const char* name);
+const char* dm_noesis_get_culture(void);
+
 // ── XAML loading + View + Renderer (Phase 4.C) ─────────────────────────────
 //
 // Opaque pointer contracts:
@@ -1048,6 +1089,12 @@ typedef enum dm_noesis_class_base {
     DM_NOESIS_BASE_USER_CONTROL      = 3,
     DM_NOESIS_BASE_PANEL             = 4,
     DM_NOESIS_BASE_DECORATOR         = 5,
+    // Non-UIElement base: a custom Noesis::Freezable (DependencyObject with
+    // freeze/clone semantics). DPs register against DependencyData (not
+    // UIElementData); there is no layout / render / routed-event surface. The
+    // other Animatable subtrees (Brush / Geometry / Transform / Effect) are NOT
+    // subclassable this way — see TODO.md "Known SDK limitations".
+    DM_NOESIS_BASE_FREEZABLE         = 6,
 } dm_noesis_class_base;
 
 // Property value-type tag. Determines the layout of `value_ptr` /
@@ -1067,6 +1114,12 @@ typedef enum dm_noesis_class_base {
 //                   Noesis::Thickness layout)
 //   COLOR         → const float[4]: r, g, b, a (matches Noesis::Color layout)
 //   RECT          → const float[4]: x, y, width, height (matches Noesis::Rect)
+//   POINT         → const float[2]: x, y (matches Noesis::Point / Vector2 layout)
+//   SIZE          → const float[2]: width, height (matches Noesis::Size layout)
+//   VECTOR        → const float[2]: x, y (matches Noesis::Vector2 layout)
+//   ENUM          → const int32_t* (storage is int32; the DP's reflected Type is
+//                   a runtime TypeEnum registered via dm_noesis_register_enum and
+//                   bound at registration via dm_noesis_class_register_enum_property)
 //   IMAGE_SOURCE  → BaseComponent* (a Noesis::ImageSource subclass; ownership
 //                   convention matches dm_noesis_base_component_release — the
 //                   `set` path does NOT consume the caller's ref; the `get`
@@ -1084,7 +1137,11 @@ typedef enum dm_noesis_prop_type {
     DM_NOESIS_PROP_RECT           = 7,
     DM_NOESIS_PROP_IMAGE_SOURCE   = 8,
     DM_NOESIS_PROP_BASE_COMPONENT = 9,
-    DM_NOESIS_PROP_UINT32         = 10
+    DM_NOESIS_PROP_UINT32         = 10,
+    DM_NOESIS_PROP_POINT          = 11,
+    DM_NOESIS_PROP_SIZE           = 12,
+    DM_NOESIS_PROP_VECTOR         = 13,
+    DM_NOESIS_PROP_ENUM           = 14
 } dm_noesis_prop_type;
 
 // Callback fired by the trampoline subclass's `OnPropertyChanged` override.
@@ -1212,6 +1269,30 @@ uint32_t dm_noesis_class_register_property_ex(
     uint32_t fpm_options,
     bool read_only,
     bool coerce);
+
+// Add a DependencyProperty whose value type is a runtime enum (registered via
+// dm_noesis_register_enum). `enum_type_name` must name an already-registered
+// runtime TypeEnum; the DP stores an int32 but reports the enum as its reflected
+// Type, so XAML enum-string parsing / EnumConverter / Style setters resolve it.
+// `default_value` is the initial int32 member value. `fpm_options` / `read_only`
+// match dm_noesis_class_register_property_ex (coercion is not offered for enums).
+// Returns the dense property index, or UINT32_MAX on failure (null token / name,
+// unknown enum type, duplicate property name).
+uint32_t dm_noesis_class_register_enum_property(
+    void* class_token,
+    const char* prop_name,
+    const char* enum_type_name,
+    int32_t default_value,
+    uint32_t fpm_options,
+    bool read_only);
+
+// Freezable freeze/clone state, for instances of a DM_NOESIS_BASE_FREEZABLE
+// class. `freezable` is a BaseComponent* (e.g. from dm_noesis_class_create_instance).
+// freeze() makes the object immutable; is_frozen()/can_freeze() query state.
+// All return false if the object is not a Freezable.
+bool dm_noesis_freezable_freeze(void* freezable);
+bool dm_noesis_freezable_is_frozen(void* freezable);
+bool dm_noesis_freezable_can_freeze(void* freezable);
 
 // Set a read-only DP on an instance via the privileged path (the analogue of
 // setting through a WPF DependencyPropertyKey). `value_ptr` follows the
@@ -1934,6 +2015,37 @@ void* dm_noesis_image_brush_create(void* image_source);
 bool dm_noesis_image_brush_set_image_source(void* brush, void* image_source);
 void* dm_noesis_image_brush_get_image_source(void* brush);
 
+// VisualBrush. `visual` is a borrowed Visual* (any element is a Visual; or null);
+// Noesis takes its own reference. get returns a borrowed Visual* (no +1) or null.
+// VisualBrush only renders when the visual is in the logical tree, but the
+// property assignment is headless-verifiable through GetVisual pointer identity.
+void* dm_noesis_visual_brush_create(void* visual);
+bool dm_noesis_visual_brush_set_visual(void* brush, void* visual);
+void* dm_noesis_visual_brush_get_visual(void* brush);
+
+// TileBrush tiling knobs (base of ImageBrush AND VisualBrush). Enum ordinals
+// match NsGui/Enums.h: AlignmentX {Left,Center,Right}, AlignmentY {Top,Center,
+// Bottom}, Stretch {None,Fill,Uniform,UniformToFill}, TileMode {None,Tile,FlipX,
+// FlipY,FlipXY}, BrushMappingMode {Absolute,RelativeToBoundingBox}. The enum
+// getters return -1 if `brush` is not a TileBrush. Viewport/Viewbox are Rects
+// expressed as {x, y, width, height}.
+bool dm_noesis_tile_brush_set_alignment_x(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_alignment_x(void* brush);
+bool dm_noesis_tile_brush_set_alignment_y(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_alignment_y(void* brush);
+bool dm_noesis_tile_brush_set_stretch(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_stretch(void* brush);
+bool dm_noesis_tile_brush_set_tile_mode(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_tile_mode(void* brush);
+bool dm_noesis_tile_brush_set_viewport_units(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_viewport_units(void* brush);
+bool dm_noesis_tile_brush_set_viewbox_units(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_viewbox_units(void* brush);
+bool dm_noesis_tile_brush_set_viewport(void* brush, float x, float y, float w, float h);
+bool dm_noesis_tile_brush_get_viewport(void* brush, float out[4]);
+bool dm_noesis_tile_brush_set_viewbox(void* brush, float x, float y, float w, float h);
+bool dm_noesis_tile_brush_get_viewbox(void* brush, float out[4]);
+
 // Transforms (NsGui/*Transform.h). Assign via set_component("RenderTransform").
 void* dm_noesis_translate_transform_create(float x, float y);
 bool dm_noesis_translate_transform_set(void* transform, float x, float y);
@@ -1966,6 +2078,29 @@ int32_t dm_noesis_transform_group_child_count(void* group);
 //           translateX, translateY}
 void* dm_noesis_composite_transform_create(const float fields[9]);
 bool dm_noesis_composite_transform_get(void* transform, float out[9]);
+
+// 3D transforms (NsGui/CompositeTransform3D.h, MatrixTransform3D.h). Assigned to
+// an element via dm_noesis_element_set_transform3d (UIElement::SetTransform3D),
+// NOT via RenderTransform.
+//
+// fields = {centerX, centerY, centerZ, rotationX, rotationY, rotationZ,
+//           scaleX, scaleY, scaleZ, translateX, translateY, translateZ}
+void* dm_noesis_composite_transform3d_create(const float fields[12]);
+bool dm_noesis_composite_transform3d_set(void* transform, const float fields[12]);
+bool dm_noesis_composite_transform3d_get(void* transform, float out[12]);
+
+// matrix = 12 floats = Noesis::Transform3 (4 rows of Vector3, row-major).
+void* dm_noesis_matrix_transform3d_create(const float matrix[12]);
+bool dm_noesis_matrix_transform3d_set(void* transform, const float matrix[12]);
+bool dm_noesis_matrix_transform3d_get(void* transform, float out[12]);
+
+// Element Transform3D assignment (UIElement::SetTransform3D / GetTransform3D).
+// `transform` is a borrowed Transform3D* (or null to clear); Noesis takes its
+// own reference. set returns false if `element` is not a UIElement (or the
+// non-null `transform` is not a Transform3D). get returns a borrowed Transform3D*
+// (no +1) or null.
+bool dm_noesis_element_set_transform3d(void* element, void* transform);
+void* dm_noesis_element_get_transform3d(void* element);
 
 // Effects (NsGui/BlurEffect.h, DropShadowEffect.h). Assign via
 // set_component("Effect").
@@ -2696,6 +2831,21 @@ bool dm_noesis_factory_is_registered(const char* name);
 // if the type is unknown.
 bool dm_noesis_type_set_content_property(
     const char* type_name, const char* prop_name);
+
+// Attach DependsOnMetaData(prop_name) to the registered type `type_name`. This
+// is the type-level metadata Noesis exposes for "this attributed property
+// depends on the value of another property" (NsGui/DependsOnMetaData.h). Returns
+// false if the type is unknown. NOTE (per the SDK header): a class cannot carry
+// both ContentPropertyMetaData and DependsOnMetaData.
+bool dm_noesis_type_add_depends_on(
+    const char* type_name, const char* prop_name);
+
+// Read back the property name recorded by DependsOnMetaData on `type_name` (via
+// TypeMeta::FindMeta + DependsOnMetaData::GetDependsOnProperty). `out_name`
+// receives a borrowed interned Symbol string (valid while Noesis lives). Returns
+// false if the type is unknown or carries no DependsOnMetaData.
+bool dm_noesis_type_get_depends_on(
+    const char* type_name, const char** out_name);
 
 // (D) Custom reflection TypeConverter registration is DEFERRED — not exposed in
 // 3.2.13. TypeConverter::Get resolves converters via an internal registry that

@@ -32,6 +32,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_formatted_text.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_typography.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_xaml.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_integration.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_diagnostics.cpp");
 
     let sdk_dir = env::var("NOESIS_SDK_DIR").unwrap_or_else(|_| {
@@ -115,6 +116,7 @@ fn main() {
         .file("cpp/noesis_formatted_text.cpp")
         .file("cpp/noesis_typography.cpp")
         .file("cpp/noesis_xaml.cpp")
+        .file("cpp/noesis_integration.cpp")
         .file("cpp/noesis_diagnostics.cpp")
         .include(&include)
         .flag_if_supported("-Wno-unused-parameter");

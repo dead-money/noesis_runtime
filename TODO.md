@@ -9,42 +9,16 @@ list only outstanding work (finished work is removed, not annotated). Things 3.2
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
-## 9. Custom types / reflection registration
-
-The runtime type system is broadly wired: element base classes (`Control`/`FrameworkElement`/
-`UserControl`/`Panel`/`Decorator`, each a `Rust*` trampoline on a synthetic `TypeClass`), custom DPs
-with coercion / `FrameworkPropertyMetadataOptions` / read-only keys / attached registration,
-`MeasureOverride`/`ArrangeOverride` layout, custom enums, custom routed events, `Factory` +
-`ContentProperty` metadata, custom `IValueConverter`, and reflected plain (non-DO) properties (which
-unblocked §3 plain-VM INPC) all ship (`src/classes.rs`, `src/reflection.rs`, `src/plain_vm.rs`).
-Remaining:
-
-- **More base classes.** `Freezable` + custom `Brush`/`Effect`/`Geometry`/`Transform` (different lifetime model than the element bases).
-- **More custom-DP value types.** Enum / `Point`/`Vector`/`Size`-struct property types.
-- **`DependsOn` metadata** attribution (the `ContentProperty` path ships).
-
-## 11. Brushes, transforms, visual properties
-
-- **Brushes.** Remaining: `VisualBrush` (needs a visual source), full `TileBrush` tiling knobs, and `BrushShader`/custom shaders (out-of-scope per README). Done: `SolidColorBrush`, `LinearGradientBrush`/`RadialGradientBrush` + `GradientStop`s, `ImageBrush` (source wiring via an existing `ImageSource*`; building one from pixels needs §12).
-- **Transforms.** Remaining: 3D transforms (`Transform3D`, `CompositeTransform3D`, `MatrixTransform3D`). Done: `TranslateTransform`/`ScaleTransform`/`RotateTransform`/`SkewTransform`/`MatrixTransform`/`TransformGroup`/`CompositeTransform` (code-built in `src/transforms.rs`, assigned via `FrameworkElement::set_render_transform`).
-- **Effects.** Remaining: custom `ShaderEffect` (`Batch.pixelShader` path — out-of-scope per README). Done: `BlurEffect`, `DropShadowEffect` (in `src/brushes.rs`, assigned via `set_effect`).
-
-## 14. System integration callbacks
-
-From `IntegrationAPI.h`, none are wired:
-
-- **`SetCursorCallback`** (host updates the OS cursor).
-- **`SetSoftwareKeyboardCallback`** (show/hide on-screen keyboard — important on console/mobile).
-- **`SetOpenUrlCallback`** / `OpenUrl` (hyperlink navigation).
-- **`SetPlayAudioCallback`** / `PlayAudio` (UI sound effects).
-- **`SetClipboard`**-style data object exchange (via `DataObject`).
-- **`SetCulture` / `GetCulture`** (`CultureInfo`) for localization/formatting.
-
 ---
 
 ## Known SDK limitations
 
 Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workaround is noted.
+
+- **Custom `Brush`/`Geometry`/`Transform`/`Effect` subclasses (§9).** These all derive from `Animatable` and implement `IRenderProxyCreator` (NsGui/IRenderProxyCreator.h), whose three pure virtuals — `CreateRenderProxy`, `UpdateRenderProxy`, `UnregisterRenderer` — serialize the object into Noesis's GPU `RenderTreeUpdater`, which is not reachable across the C ABI and is meaningless headlessly. A synthetic-`TypeClass` trampoline cannot implement them usefully, so these are not runtime-subclassable. (Additionally `Transform::GetTransform()` is non-virtual — it returns a protected `mTransform` member, NsGui/Transform.h — so a custom transform could not even override its matrix.) The one tractable non-`UIElement` base IS wrapped: a custom `Freezable` (`ClassBase::Freezable`) — `Freezable`'s only pure virtual is `CreateInstanceCore`, and its DPs register against `DependencyData` instead of `UIElementData`. Custom DPs round-trip and `Freeze`/`IsFrozen`/`CanFreeze` work (`tests/custom_freezable.rs`). Property-change callbacks on a code-created (un-parsed, tree-detached) instance do not fire — that requires `OnInit` during XAML parse / tree attach, same as the element bases.
+- **`DependsOn` is type-level metadata (§9).** Noesis exposes `DependsOnMetaData` (NsGui/DependsOnMetaData.h) attached at the *type* level via `TypeMeta::AddMeta` (the same mechanism as `ContentPropertyMetaData`), not per-property as in WPF. `reflection::add_depends_on` / `get_depends_on` attach and read it back (`FindMeta<DependsOnMetaData>` → `GetDependsOnProperty`); `FindMeta` returns the first entry, so multiple `DependsOn` records on one type are not individually retrievable. (The stale comment in `ContentPropertyMetaData.h` — "A class can't have both ContentPropertyMetaData and DependsOnAttributeMetaData" — refers to a `DependsOnAttributeMetaData` type that does not exist in 3.2.13; since `FindMeta` is keyed by the metadata `TypeClass` and `AddMeta` merely appends, a `ContentPropertyMetaData` and a `DependsOnMetaData` record DO coexist on one type and each reads back independently — proven in `tests/reflection_depends_on.rs`.)
+
+- **Clipboard / `DataObject` data exchange (§14).** 3.2.13 ships no process-global clipboard API: there is no `Clipboard` class and no `SetClipboard`/`GetClipboard` in `NsGui/IntegrationAPI.h` (verified — the only integration callbacks are cursor / software-keyboard / open-url / play-audio / culture, all wrapped in `src/integration.rs`). `NsGui/DataObject.h` exists but is *only* the WPF `DataObject.Copying`/`DataObject.Pasting` attached-routed-event plumbing (`AddCopyingHandler`/`AddPastingHandler` + the `CopyingEvent`/`PastingEvent` `RoutedEvent`s); the struct exposes **no** `SetData`/`GetData`/`GetFormats` payload accessors (grepped: no `SetData`/`GetData`/`class Clipboard` anywhere under `Include/`). So format-independent clipboard data transfer is not expressible. Workaround: the host owns the OS clipboard and bridges it — hook the `Copying`/`Pasting` routed events (the §5 routed-event surface) to observe copy/paste intent, and read/write the platform clipboard with host code (e.g. `arboard` on desktop).
 
 - **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.13 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
 - **Headless drag / manipulation synthesis (§5).** The typed `DragEventArgs` / `Manipulation*EventArgs` accessors are wrapped and round-trip tested, but the events themselves cannot be *raised* headlessly: a drag needs an OS pointer/drag loop (`DragDrop::DoDragDrop` is exposed and crosses the FFI but has no synchronous/headless completion) and manipulation events are promoted from a multi-frame touch stream under a live render pass. `tests/routed_events_typed_args.rs` drives keyboard-focus events for real and exercises the drag/manipulation accessors by constructing the real arg structs C++-side (under `--features test-utils`). `DataObject.Copying`/`.Pasting` handlers attach/detach but the clipboard copy/paste that fires them is likewise host-driven.
