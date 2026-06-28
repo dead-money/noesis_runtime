@@ -807,9 +807,12 @@ bool dm_noesis_visual_state_go_to_state(
 // (typically: just before dm_noesis_shutdown).
 
 typedef enum dm_noesis_class_base {
-    DM_NOESIS_BASE_CONTENT_CONTROL = 0,
-    // Future bases (Control, UserControl, FrameworkElement, Panel) plug in
-    // by adding sibling trampoline subclasses in noesis_classes.cpp.
+    DM_NOESIS_BASE_CONTENT_CONTROL   = 0,
+    DM_NOESIS_BASE_CONTROL           = 1,
+    DM_NOESIS_BASE_FRAMEWORK_ELEMENT = 2,
+    DM_NOESIS_BASE_USER_CONTROL      = 3,
+    DM_NOESIS_BASE_PANEL             = 4,
+    DM_NOESIS_BASE_DECORATOR         = 5,
 } dm_noesis_class_base;
 
 // Property value-type tag. Determines the layout of `value_ptr` /
@@ -940,6 +943,108 @@ bool dm_noesis_image_source_get_size(
     void* image_source,
     float* out_width,
     float* out_height);
+
+// ── Custom base classes + richer DP metadata + layout (TODO §9) ─────────────
+//
+// `dm_noesis_class_register` accepts any `dm_noesis_class_base` value above —
+// each maps to a sibling trampoline subclass (`RustControl`, `RustPanel`, …)
+// that shares the synthetic-TypeClass + ClassData machinery with
+// `RustContentControl`. The additions below layer richer DP metadata
+// (coercion / FrameworkPropertyMetadataOptions / read-only) and layout
+// participation (MeasureOverride / ArrangeOverride) onto any registered class.
+
+// Richer DependencyProperty registration. Superset of
+// `dm_noesis_class_register_property`:
+//   * `fpm_options` — bitmask of Noesis::FrameworkPropertyMetadataOptions
+//     (AffectsMeasure=0x1, AffectsArrange=0x2, AffectsParentMeasure=0x4,
+//     AffectsParentArrange=0x8, AffectsRender=0x10, Inherits=0x20, …). When
+//     non-zero the DP is created with a FrameworkPropertyMetadata so Noesis
+//     invalidates the matching layout/render pass on change.
+//   * `read_only` — registers the DP with PropertyAccess_ReadOnly. The public
+//     setter paths (dm_noesis_*_set_property / bindings / XAML) then reject
+//     writes; the privileged `dm_noesis_instance_set_readonly_property` is the
+//     only way to mutate it (mirrors a WPF DependencyPropertyKey).
+//   * `coerce` — attaches the class-level coerce callback (installed via
+//     `dm_noesis_class_set_coerce`) to THIS property. Limited to the first 32
+//     properties of a class (the coerce-thunk pool size); registration returns
+//     UINT32_MAX if a 33rd coerced property is requested.
+// Returns the dense property index, or UINT32_MAX on failure.
+uint32_t dm_noesis_class_register_property_ex(
+    void* class_token,
+    const char* prop_name,
+    dm_noesis_prop_type prop_type,
+    const void* default_ptr,
+    uint32_t fpm_options,
+    bool read_only,
+    bool coerce);
+
+// Set a read-only DP on an instance via the privileged path (the analogue of
+// setting through a WPF DependencyPropertyKey). `value_ptr` follows the
+// per-type layout. Returns false on bad input (null/invalid instance, index
+// out of range). Fires the changed callback like any other write.
+bool dm_noesis_instance_set_readonly_property(
+    void* instance,
+    uint32_t prop_index,
+    const void* value_ptr);
+
+// Coerce callback. Invoked synchronously inside Noesis's value pipeline when a
+// coerced DP's effective value is computed. `in_value` is the pre-coercion
+// value (per the DP's prop_type layout); `out_value` is pre-initialized to a
+// copy of `in_value` and the implementation overwrites it with the coerced
+// result. Only scalar / Thickness / Color / Rect tags are coercible; object /
+// string tags pass through unchanged. `instance` is the owning object's
+// BaseComponent*.
+typedef void (*dm_noesis_coerce_fn)(
+    void* userdata,
+    void* instance,
+    uint32_t prop_index,
+    const void* in_value,
+    void* out_value);
+
+// Install a class-level coerce callback. Individual DPs opt in by passing
+// `coerce=true` to dm_noesis_class_register_property_ex. `userdata` ownership
+// transfers to the C++ side and is released via `free_handler` when ClassData
+// is finally torn down (same lifetime contract as the change callback). NULL
+// `cb` detaches.
+void dm_noesis_class_set_coerce(
+    void* class_token,
+    dm_noesis_coerce_fn cb,
+    void* userdata,
+    dm_noesis_class_free_fn free_handler);
+
+// Layout vtable: the trampoline subclass's MeasureOverride / ArrangeOverride
+// forward into these. `instance` is the owning object's BaseComponent* (use it
+// with dm_noesis_visual_children_count / dm_noesis_visual_child +
+// dm_noesis_uielement_measure / _arrange to lay out children). Sizes are in
+// DIPs. Write the desired (measure) / used (arrange) size to out_w/out_h. When
+// no layout handler is installed the base class's default layout runs.
+typedef struct dm_noesis_layout_vtable {
+    void (*measure)(void* userdata, void* instance,
+        float avail_w, float avail_h, float* out_w, float* out_h);
+    void (*arrange)(void* userdata, void* instance,
+        float final_w, float final_h, float* out_w, float* out_h);
+} dm_noesis_layout_vtable;
+
+typedef void (*dm_noesis_layout_free_fn)(void* userdata);
+
+// Install a layout handler on a registered class. Meaningful for any base
+// (all current bases derive from FrameworkElement). Pass a null `vtable` to
+// detach. `userdata` ownership transfers; released via `free_handler` at
+// ClassData teardown. Copies the vtable by value.
+void dm_noesis_class_set_layout(
+    void* class_token,
+    const dm_noesis_layout_vtable* vtable,
+    void* userdata,
+    dm_noesis_layout_free_fn free_handler);
+
+// UIElement layout primitives for custom MeasureOverride / ArrangeOverride
+// implementations. `element` is a borrowed UIElement* (e.g. from
+// dm_noesis_visual_child). measure/arrange return false if `element` is null
+// or not a UIElement; desired_size additionally writes the post-Measure
+// DesiredSize. arrange rect is (x, y, w, h) in the parent's coordinate space.
+bool dm_noesis_uielement_measure(void* element, float avail_w, float avail_h);
+bool dm_noesis_uielement_arrange(void* element, float x, float y, float w, float h);
+bool dm_noesis_uielement_desired_size(void* element, float* out_w, float* out_h);
 
 // ── Generic name-keyed DependencyProperty access ───────────────────────────
 //
@@ -1777,6 +1882,225 @@ bool dm_noesis_color_animation_add_keyframe(void* anim, int32_t kind, double key
 // FrameworkElement connected to a live View. handoff matches
 // Noesis::HandoffBehavior (0 SnapshotAndReplace, 1 Compose).
 bool dm_noesis_animation_begin_on(void* anim, void* target, const char* dp_name, int32_t handoff);
+// ── Plain (non-DependencyObject) view models + MultiBinding (TODO §9 + §3) ──
+//
+// The bevy-bridge unblocker: a binding source that is NOT a DependencyObject.
+// A `RustPlainVm` is a plain `Noesis::BaseComponent` that (a) implements
+// `INotifyPropertyChanged` so a bound UI target refreshes when Rust raises
+// PropertyChanged, and (b) carries a per-registration synthetic `TypeClass`
+// whose properties resolve through reflection (custom `TypeProperty`
+// accessors) — so `{Binding Title}` against this object as a DataContext reads
+// a value Rust pushed in. Each property's current value is stored per-instance
+// as a boxed `BaseComponent*` (use the dm_noesis_box_* helpers to produce one);
+// reflection reads it back through `TypeProperty::GetComponent`.
+//
+// Lifetime mirrors the synthetic-class registry in noesis_classes.cpp: the
+// registration token (`PlainClassData*`) is refcounted — the Rust caller owns
+// the initial +1 (released by dm_noesis_plain_vm_unregister), every live
+// instance holds its own share, and the donated Rust free handler runs exactly
+// once when the last reference drops. A shutdown sweep
+// (dm_noesis_plain_vm_force_free_at_shutdown) defensively frees any handler box
+// whose instances bypassed normal teardown.
+
+// Content-type tag for a plain-VM reflected property. Determines the property's
+// reflected `Type*` (so the binding engine can convert to the target DP type)
+// and which Boxing the stored value is expected to carry.
+typedef enum dm_noesis_plain_type {
+    DM_NOESIS_PLAIN_INT32          = 0,
+    DM_NOESIS_PLAIN_DOUBLE         = 1,
+    DM_NOESIS_PLAIN_BOOL           = 2,
+    DM_NOESIS_PLAIN_STRING         = 3,
+    DM_NOESIS_PLAIN_BASE_COMPONENT = 4
+} dm_noesis_plain_type;
+
+// Invoked when a TwoWay / OneWayToSource binding writes a value BACK to a
+// plain-VM property (the UI mutated the source). `instance` is the borrowed
+// RustPlainVm*, `prop_index` the dense index returned by register_property, and
+// `boxed_value` a borrowed boxed `BaseComponent*` (may be NULL) — copy it
+// immediately (unbox with the dm_noesis_unbox_* helpers). The value is also
+// stored in the instance so a subsequent reflection read returns it. Optional.
+typedef void (*dm_noesis_plain_set_fn)(
+    void* userdata, void* instance, uint32_t prop_index, void* boxed_value);
+
+// Free callback for the donated registration userdata; runs exactly once when
+// the PlainClassData refcount hits zero. Optional (may be NULL).
+typedef void (*dm_noesis_plain_free_fn)(void* userdata);
+
+// Register a plain-VM type named `type_name`. Returns an opaque registration
+// token (owned via the refcount described above) or NULL on a NULL name or a
+// name already registered with Noesis Reflection. `on_set` / `free_handler`
+// may be NULL; `userdata` ownership transfers to C++.
+void* dm_noesis_plain_vm_register(
+    const char* type_name,
+    dm_noesis_plain_set_fn on_set,
+    void* userdata,
+    dm_noesis_plain_free_fn free_handler);
+
+// Add a reflected property `prop_name` of content type `content_type`
+// (dm_noesis_plain_type). Returns the dense property index, or UINT32_MAX on
+// failure (NULL args / bad tag / called after an instance exists). Call before
+// creating instances.
+uint32_t dm_noesis_plain_vm_register_property(
+    void* token, const char* prop_name, uint32_t content_type);
+
+// Create an instance of a registered plain-VM type. Returns a BaseComponent*
+// with +1 ref for the caller (release via dm_noesis_base_component_release).
+// Set it as an element's DataContext (dm_noesis_framework_element_set_data_context)
+// and author `{Binding PropName}` in XAML. NULL on a NULL token.
+void* dm_noesis_plain_vm_create_instance(void* token);
+
+// Store `boxed_value` (a boxed BaseComponent*, e.g. from dm_noesis_box_string;
+// may be NULL to clear) as the current value of property `prop_index`. The
+// instance takes its OWN reference — the caller still owns / must release its
+// boxed value. Does NOT raise PropertyChanged (call dm_noesis_plain_vm_notify).
+// false on a NULL instance or out-of-range index.
+bool dm_noesis_plain_vm_set_value(void* instance, uint32_t prop_index, void* boxed_value);
+
+// +1-owned boxed value currently stored for `prop_index` (AddRef'd; release via
+// dm_noesis_base_component_release), or NULL if unset / out of range. Reads the
+// reflection-visible value back without going through the binding.
+void* dm_noesis_plain_vm_get_value(void* instance, uint32_t prop_index);
+
+// Raise INotifyPropertyChanged.PropertyChanged for `prop_name` on `instance`,
+// so every binding sourced from this property re-reads. false on NULL args.
+bool dm_noesis_plain_vm_notify(void* instance, const char* prop_name);
+
+// Stop new instances being created and release the Rust caller's +1 on the
+// registration token. Live instances keep the registration alive until they die.
+void dm_noesis_plain_vm_unregister(void* token);
+
+// Shutdown sweep — see dm_noesis_classes_force_free_at_shutdown. Called from
+// dm_noesis_shutdown after Noesis::Shutdown.
+void dm_noesis_plain_vm_force_free_at_shutdown(void);
+
+// ── IMultiValueConverter + MultiBinding (TODO §3) ──────────────────────────
+//
+// MultiBinding combines N child Bindings through an IMultiValueConverter into a
+// single target value. RustMultiValueConverter forwards TryConvert into a Rust
+// vtable over an ARRAY of boxed values (one per child binding); the converter
+// boxes its combined result. Lifetime is modelled on RustValueConverter.
+
+// `values` points at `count` borrowed boxed `BaseComponent*` (each may be NULL),
+// one per child Binding in source order. `target_type` is an opaque
+// `const Noesis::Type*` (ignore it for simple converters). Write a +1-owned
+// `BaseComponent*` into `*out_result` (ownership transfers to Noesis) and return
+// true; return false to signal UnsetValue (fallback / default). Same threading
+// contract as the single-value converter — fires from Noesis's binding pump.
+typedef struct dm_noesis_multi_value_converter_vtable {
+    bool (*convert)(
+        void* userdata, void* const* values, uint32_t count,
+        const void* target_type, void* parameter, void** out_result);
+} dm_noesis_multi_value_converter_vtable;
+
+typedef void (*dm_noesis_multi_value_converter_free_fn)(void* userdata);
+
+// Create a Rust-backed IMultiValueConverter. +1 ref for the caller (release via
+// dm_noesis_multi_value_converter_destroy). NULL if `vt` is NULL.
+void* dm_noesis_multi_value_converter_create(
+    const dm_noesis_multi_value_converter_vtable* vt,
+    void* userdata,
+    dm_noesis_multi_value_converter_free_fn free_handler);
+void dm_noesis_multi_value_converter_destroy(void* converter);
+
+// Create an empty MultiBinding (+1 ref for the caller; release via
+// dm_noesis_multi_binding_destroy). SetBinding takes its own reference.
+void* dm_noesis_multi_binding_create(void);
+void dm_noesis_multi_binding_destroy(void* multi_binding);
+// Append a child Binding (a dm_noesis_binding_create result). The MultiBinding
+// takes its own reference. false on NULL/non-MultiBinding/non-Binding args.
+bool dm_noesis_multi_binding_add_binding(void* multi_binding, void* binding);
+// Attach the IMultiValueConverter (NULL clears). No-op on a bad handle.
+void dm_noesis_multi_binding_set_converter(void* multi_binding, void* converter);
+// Borrowed converter parameter (NULL clears).
+void dm_noesis_multi_binding_set_converter_parameter(void* multi_binding, void* parameter);
+// BindingMode ordinal (see dm_noesis_binding_set_mode).
+void dm_noesis_multi_binding_set_mode(void* multi_binding, int32_t mode);
+// Wire the MultiBinding onto `element`'s `dp_name` property. false if `element`
+// is not a DependencyObject, the DP name is unknown, or args are NULL.
+bool dm_noesis_set_multi_binding(void* element, const char* dp_name, void* multi_binding);
+// ── Reflection meta: enums / routed events / factory / type converters (TODO §9) ──
+//
+// Runtime registration of "other reflected entities" against Noesis's
+// reflection database, so XAML / bindings / the parser can resolve them the
+// same way they resolve compile-time NS_REGISTER_* declarations. These reuse
+// the synthetic-type machinery from noesis_classes.cpp (RustContentControl) for
+// the per-type owner; everything here is keyed by the reflected type *name* so
+// it does not need the opaque ClassData token.
+
+// (A) Custom enums ----------------------------------------------------------
+
+// One (string name -> integer value) pair of a runtime enum.
+typedef struct dm_noesis_enum_value {
+    const char* name;
+    int32_t     value;
+} dm_noesis_enum_value;
+
+// Register a named runtime enum (a Noesis::TypeEnum) with `count` string<->int
+// pairs, so it is reachable by reflection name (XAML enum-typed values, Style
+// setters, the EnumConverter path). Returns a borrowed `const Noesis::Type*`
+// (owned by the reflection registry; do NOT release) or NULL on a NULL/empty
+// name or if the name is already registered. Idempotent-unsafe: a duplicate
+// name returns NULL rather than shadowing.
+void* dm_noesis_register_enum(
+    const char* name, const dm_noesis_enum_value* values, uint32_t count);
+
+// Resolve `enum_type` (reflected name) and look up the integer value of
+// `value_name`. Returns false if the type is unknown / not an enum / the name
+// is not a member. This reads straight through Noesis::TypeEnum::HasName, so it
+// is the ground truth of what was registered.
+bool dm_noesis_enum_value_from_name(
+    const char* enum_type, const char* value_name, int32_t* out_value);
+
+// Inverse of the above: the member name for an integer value (borrowed string,
+// valid while Noesis lives — it is an interned Symbol). false if unknown.
+bool dm_noesis_enum_name_from_value(
+    const char* enum_type, int32_t value, const char** out_name);
+
+// Resolve the TypeConverter registered for `type_name` (TypeConverter::Get) and
+// convert `str` to a boxed value via TryConvertFromString. Writes a +1-owned
+// boxed `BaseComponent*` to *out_boxed (release via base_component_release).
+// This is the exact string->value path the XAML parser drives for a typed
+// property. Returns false if the type / converter is unknown or the string
+// does not convert.
+bool dm_noesis_type_converter_from_string(
+    const char* type_name, const char* str, void** out_boxed);
+
+// (B) Custom routed events --------------------------------------------------
+
+// Register a routed event named `event_name` on the registered type
+// `type_name` (must own a UIElementData meta — i.e. a Rust-backed
+// ContentControl from dm_noesis_class_register). `strategy`: 0 Tunnel,
+// 1 Bubble, 2 Direct. Returns false if the type is unknown, has no
+// UIElementData, or the name is already registered on it.
+bool dm_noesis_register_routed_event(
+    const char* type_name, const char* event_name, int32_t strategy);
+
+// Raise the routed event `event_name` from `element` (a UIElement), resolving
+// it through the element's class hierarchy (FindRoutedEvent) and dispatching
+// via UIElement::RaiseEvent. Returns false if `element` is not a UIElement or
+// the event is not found. Subscribers wired with dm_noesis_subscribe_event
+// observe it.
+bool dm_noesis_raise_routed_event(void* element, const char* event_name);
+
+// (C) Factory / component metadata ------------------------------------------
+
+// Whether a component named `name` is registered in Noesis::Factory (so
+// `<ns:name/>` can be instantiated by the XAML parser). Rust-backed classes
+// register their factory creator in dm_noesis_class_register.
+bool dm_noesis_factory_is_registered(const char* name);
+
+// Attach ContentPropertyMetaData(prop_name) to the registered type `type_name`,
+// so XAML child content (`<ns:Thing><Child/></ns:Thing>`) is routed into the
+// `prop_name` property instead of the inherited content property. Returns false
+// if the type is unknown.
+bool dm_noesis_type_set_content_property(
+    const char* type_name, const char* prop_name);
+
+// (D) Custom reflection TypeConverter registration is DEFERRED — not exposed in
+// 3.2.13. TypeConverter::Get resolves converters via an internal registry that
+// TypeConverterMetaData + Factory::RegisterComponent do not drive at runtime.
+// The consumption side (dm_noesis_type_converter_from_string above) works for
+// any built-in / reflected type. See TODO.md "Known SDK limitations".
 
 #ifdef __cplusplus
 }
