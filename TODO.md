@@ -63,7 +63,6 @@ values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `Scrol
 
 - **Selection.** `Selector::SelectedValue`/`SelectedValuePath`; `TreeView` selection; `ListView` columns.
 - **Items.** `ItemContainerGenerator` deep access (container ⇄ item ⇄ index mapping).
-- **Text.** `FormattedText` (its own large feature).
 - **Popups/overlays.** `ContextMenu`, `ToolTip`/`ToolTipService`.
 - **Scrolling.** Direct `IScrollInfo` and the line/page-scroll methods (`LineUp`/`PageDown`/…).
 - **`Image` / `MediaElement`-style** source assignment from code.
@@ -101,6 +100,7 @@ Remaining:
 ## 13. Text & fonts (rich)
 
 - **`FormattedText`** measurement/layout.
+- **`TextBlock` inlines.** `Run`/`Span`/`Bold`/`Italic`/`Underline`/`Hyperlink`/`LineBreak`/`InlineUIContainer`.
 - **Typography** properties, `FontFamily` enumeration, `TextElement` props, `CompositionUnderline` (IME).
 
 ## 14. System integration callbacks
@@ -178,3 +178,6 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **`Polygon` / `Polyline` shape elements (§10).** Noesis 3.2.13 ships only `Path`/`Rectangle`/`Ellipse`/`Line` shape elements — there is no `Polygon.h`/`Polyline.h`. Build a polygon/polyline as a `PathGeometry`/`StreamGeometry` (the §10 geometry path) and host it in a `Path`.
 - **Offscreen capture / screenshots (§12).** 3.2.13 ships no Noesis API to read back a rendered view's pixels. `IRenderer::Render`/`RenderOffscreen` draw into whatever render target is currently bound on the host `RenderDevice` — capture is purely a host/RenderDevice concern. Workaround: render the view into a render target your `RenderDevice` owns (the `render_offscreen` pass + the wrapped `RenderDevice` render-target surface already give you this) and read the pixels back from that host-side target. (The `IRenderer::Render`/`RenderStereo` family, `flipY`/`clear` flags, and `RenderOffscreen` are the full Noesis-side surface; there is no `SaveToFile` / `ReadPixels` / screenshot entry point.)
 - **GPU-resolved imaging values (§12).** `TextureSource::GetTexture` is null, and `BitmapSource::GetPixelWidth/Height` / `GetDpiX/Y` read `0` / defaults, until the source is resolved on a live `RenderDevice` render pass: a real `Noesis::Texture*` is only minted by the host `RenderDevice` (`CreateTexture`), and `BitmapImage` pixel dims resolve through a `TextureProvider` during rendering. The constructible imaging objects (`CroppedBitmap` source + crop rect, `TextureSource`, `BitmapImage` `UriSource`, `DynamicTextureSource` dims) all round-trip headless; the GPU-backed read-backs require driving a host render pass. `DynamicTextureSource`'s `TextureRenderCallback` likewise only fires from the render thread under a live pass. (`BitmapSource::Create(pixels…)` from a raw CPU buffer is also available but still needs a `RenderDevice` to upload before the pixels become a usable `Texture`.)
+- **`FormattedText` layout setters (§13).** 3.2.13's `FormattedText` has no `SetMaxTextWidth`/`SetTextAlignment`/`SetFontSize`/… mutators; all constraints (font, size, weight/stretch/style, max width/height, line height, alignment, trimming, flow direction) are *constructor* arguments and metrics are computed once during construction. The wrapper therefore takes them via a builder and rebuilds for a new layout. Getters exposed: `GetBounds`, `GetNumLines`, `GetLineInfo`, `IsEmpty`, `HasVisualBrush`, plus `Measure` and `HitTest`/`GetGlyphPosition`.
+- **`FormattedText` glyph positions & standalone `Measure` width (§13).** `GetGlyphPosition` returns `(-10,-10)` and `Measure(...)` reports `0` width for an unconstrained `NoWrap` pass on a `FormattedText` built via the metrics-only ctors — those paths populate measurement/line metrics (`GetBounds`, `GetLineInfo` height/baseline are real) but not the full render layout a `TextBlock` would drive. Glyph-hit geometry needs the object attached to a rendered `TextBlock`; the standalone wrapper exposes the calls but cannot guarantee non-zero render coordinates.
+- **`FormattedText` font resolution (§13).** Metrics are only non-zero when the named `FontFamily` resolves to a real face: register a `FontProvider` (or set font fallbacks) before measuring. With no font system configured Noesis cannot shape glyphs and all metrics collapse to zero — this is a configuration dependency, not a stub. `tests/formatted_text.rs` drives the SDK's bundled `Bitter-Regular.ttf` to get genuine metrics.

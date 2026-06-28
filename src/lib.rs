@@ -22,6 +22,7 @@ pub mod events;
 pub mod ffi;
 pub mod font_provider;
 pub mod geometry;
+pub mod formatted_text;
 pub mod gui;
 pub mod imaging;
 pub mod markup;
