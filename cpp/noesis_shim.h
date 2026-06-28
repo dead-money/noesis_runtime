@@ -1529,6 +1529,164 @@ bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* o
 // get returns the ordinal or -1 if `obj` is not a DependencyObject.
 bool dm_noesis_render_options_set_bitmap_scaling_mode(void* obj, int32_t mode);
 int32_t dm_noesis_render_options_get_bitmap_scaling_mode(void* obj);
+// ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
+//
+// Implemented in cpp/noesis_controls.cpp. Each entrypoint DynamicCasts to the
+// right control type and fails gracefully (false / null / sentinel) on a type
+// mismatch. `element` is a FrameworkElement* / BaseComponent* (the same opaque
+// handle the rest of the FrameworkElement surface uses).
+
+// Selector — SelectedIndex / SelectedItem (ListBox/ComboBox/TabControl/ListView).
+// get_selected_index writes *out (-1 == empty selection); both return false if
+// `element` is not a Selector. set_selected_index coerces out-of-range to -1.
+// get_selected_item returns a BORROWED (no +1) pointer (the data item for an
+// ItemsSource-bound control, else the container), null if empty / not a Selector.
+// set_selected_item takes a borrowed item (Noesis takes its own ref); null clears.
+bool dm_noesis_selector_get_selected_index(void* element, int32_t* out);
+bool dm_noesis_selector_set_selected_index(void* element, int32_t index);
+void* dm_noesis_selector_get_selected_item(void* element);
+bool dm_noesis_selector_set_selected_item(void* element, void* item);
+
+// ItemsControl.Items direct mutation (NOT ItemsSource — no-op when an external
+// ItemsSource is set, since Items is then read-only). `item` is a borrowed
+// BaseComponent* (typically a boxed value); the collection takes its own ref.
+// items_add returns the new index, or -1 on a non-ItemsControl / rejected add.
+int32_t dm_noesis_items_control_items_add(void* element, void* item);
+bool dm_noesis_items_control_items_insert(void* element, uint32_t index, void* item);
+bool dm_noesis_items_control_items_remove_at(void* element, uint32_t index);
+bool dm_noesis_items_control_items_clear(void* element);
+
+// RangeBase — `which`: 0 = Value, 1 = Minimum, 2 = Maximum (Slider/ProgressBar/
+// ScrollBar). Getter writes *out, returns false on a non-RangeBase / bad `which`.
+// Setter runs Noesis coercion (Value clamped to [Minimum, Maximum]).
+bool dm_noesis_rangebase_get(void* element, int32_t which, float* out);
+bool dm_noesis_rangebase_set(void* element, int32_t which, float value);
+
+// ToggleButton.IsChecked tri-state. `state`: 0 = unchecked, 1 = checked,
+// 2 = indeterminate (null). Getter writes *out_state, returns false on a
+// non-ToggleButton. (CheckBox/RadioButton.)
+bool dm_noesis_toggle_get_is_checked(void* element, int8_t* out_state);
+bool dm_noesis_toggle_set_is_checked(void* element, int8_t state);
+
+// Popup.IsOpen / Expander.IsExpanded. Getter writes *out, returns false on a
+// type mismatch.
+bool dm_noesis_popup_get_is_open(void* element, bool* out);
+bool dm_noesis_popup_set_is_open(void* element, bool open);
+bool dm_noesis_expander_get_is_expanded(void* element, bool* out);
+bool dm_noesis_expander_set_is_expanded(void* element, bool expanded);
+
+// ScrollViewer — `which`: 0 = HorizontalOffset, 1 = VerticalOffset,
+// 2 = ScrollableWidth, 3 = ScrollableHeight, 4 = ExtentHeight,
+// 5 = ViewportHeight (all read-only computed metrics). Getter writes *out,
+// returns false on a non-ScrollViewer / bad `which`. Scrolling is via methods.
+bool dm_noesis_scrollviewer_get(void* element, int32_t which, float* out);
+bool dm_noesis_scrollviewer_scroll_to_horizontal(void* element, float offset);
+bool dm_noesis_scrollviewer_scroll_to_vertical(void* element, float offset);
+bool dm_noesis_scrollviewer_scroll_to_home(void* element);
+bool dm_noesis_scrollviewer_scroll_to_end(void* element);
+
+// TextBox selection / caret. `which` for the int get/set: 0 = SelectionStart,
+// 1 = SelectionLength, 2 = CaretIndex. Getter writes *out, returns false on a
+// non-TextBox. get_selected_text returns a BORROWED pointer (copy immediately),
+// null on a non-TextBox.
+bool dm_noesis_textbox_get_int(void* element, int32_t which, int32_t* out);
+bool dm_noesis_textbox_set_int(void* element, int32_t which, int32_t value);
+bool dm_noesis_textbox_select(void* element, int32_t start, int32_t length);
+bool dm_noesis_textbox_select_all(void* element);
+const char* dm_noesis_textbox_get_selected_text(void* element);
+
+// PasswordBox password. get returns a BORROWED pointer (copy immediately), null
+// on a non-PasswordBox.
+const char* dm_noesis_passwordbox_get_password(void* element);
+bool dm_noesis_passwordbox_set_password(void* element, const char* password);
+// ── ResourceDictionary, Style, templates (TODO §7) ──────────────────────────
+//
+// ResourceDictionary create/own + key→component add + borrowed lookup + merged
+// dictionaries + parse-from-XAML; application resources install/query; Style
+// from code (target type + setters + based-on) with element assign/read-back;
+// ControlTemplate / DataTemplate parse + assign + FrameworkTemplate::FindName.
+//
+// OWNERSHIP: *_create / *_parse return a +1-owned object (release via the
+// matching *_destroy or the generic dm_noesis_base_component_release). The
+// *_get_resources / *_get_style / *_get_template getters AddRef before handing
+// out, so the caller owns a +1 too. *_find / *_find_resource /
+// *_find_name / *_get_application_resources hand out BORROWED pointers (no +1) —
+// do NOT release; valid only transiently.
+
+// Box a float as a BoxedValue<float> (+1 ref). Companion to the bool/int32/
+// double boxers in the binding section — float DPs (FontSize, Opacity, …) need
+// a float box for a Style Setter / resource value to apply.
+void* dm_noesis_box_float(float value);
+
+// Create an empty ResourceDictionary (+1 ref for the caller).
+void* dm_noesis_resource_dictionary_create(void);
+void dm_noesis_resource_dictionary_destroy(void* dict);
+// Parse a bare <ResourceDictionary> from an in-memory XAML string. +1 ref for
+// the caller; NULL if malformed or the root is not a ResourceDictionary.
+void* dm_noesis_resource_dictionary_parse(const char* xaml);
+// Number of base-dictionary entries (excludes merged dictionaries).
+uint32_t dm_noesis_resource_dictionary_count(void* dict);
+// Add a borrowed `value` under `key`; the dictionary stores its own reference.
+// false on a NULL/non-dictionary handle or NULL key/value.
+bool dm_noesis_resource_dictionary_add(void* dict, const char* key, void* value);
+// Whether the dictionary (or a merged one) contains `key`.
+bool dm_noesis_resource_dictionary_contains(void* dict, const char* key);
+// Borrowed (no +1) lookup by key; NULL if absent (non-throwing Find).
+void* dm_noesis_resource_dictionary_find(void* dict, const char* key);
+// Add `merged` to `dict`'s MergedDictionaries collection (takes its own ref).
+bool dm_noesis_resource_dictionary_add_merged(void* dict, void* merged);
+
+// Install `dict` as the process-global application resources (Noesis takes its
+// own reference). NULL clears them.
+void dm_noesis_gui_set_application_resources(void* dict);
+// Borrowed (no +1) application ResourceDictionary*, or NULL if none installed.
+void* dm_noesis_gui_get_application_resources(void);
+// Register `uri`'s dictionary in the internal theme (default styles). false on
+// a NULL/empty uri.
+bool dm_noesis_gui_register_default_styles(const char* uri);
+
+// +1-owned ResourceDictionary* for `element`'s local Resources (AddRef'd), or
+// NULL if none / not a FrameworkElement.
+void* dm_noesis_framework_element_get_resources(void* element);
+// Replace `element`'s local Resources with `dict`. false if `element` is not a
+// FrameworkElement or `dict` not a ResourceDictionary.
+bool dm_noesis_framework_element_set_resources(void* element, void* dict);
+// Non-throwing FindResource walking the logical parent chain + app resources.
+// Borrowed (no +1); NULL if not found / not a FrameworkElement.
+void* dm_noesis_framework_element_find_resource(void* element, const char* key);
+
+// Create an empty Style (+1 ref for the caller).
+void* dm_noesis_style_create(void);
+void dm_noesis_style_destroy(void* style);
+// Resolve `type_name` via reflection and set it as the style's TargetType.
+// false on a NULL/non-Style handle or an unknown type name.
+bool dm_noesis_style_set_target_type(void* style, const char* type_name);
+// Append a Setter: resolve `dp_name` on the style's TargetType, store the boxed
+// `value` (the setter takes its own ref). false if no TargetType, unknown DP,
+// NULL value, or non-Style handle.
+bool dm_noesis_style_add_setter(void* style, const char* dp_name, void* value);
+// Set the BasedOn style (NULL clears). No-op on a NULL/non-Style handle.
+void dm_noesis_style_set_based_on(void* style, void* base);
+
+// Assign `style` to `element` (FrameworkElement::SetStyle). false if `element`
+// is not a FrameworkElement or `style` not a Style.
+bool dm_noesis_framework_element_set_style(void* element, void* style);
+// +1-owned Style* for `element`'s assigned Style (AddRef'd), or NULL.
+void* dm_noesis_framework_element_get_style(void* element);
+
+// Parse a bare <ControlTemplate> / <DataTemplate> from a string. +1 ref for the
+// caller; NULL if malformed or the root is the wrong type.
+void* dm_noesis_control_template_parse(const char* xaml);
+void* dm_noesis_data_template_parse(const char* xaml);
+// Assign a ControlTemplate to a Control (Control::SetTemplate). false if
+// `control` is not a Control or `tmpl` not a ControlTemplate.
+bool dm_noesis_control_set_template(void* control, void* tmpl);
+// +1-owned ControlTemplate* for `control`'s assigned Template, or NULL.
+void* dm_noesis_control_get_template(void* control);
+// FrameworkTemplate::FindName within `tmpl` applied to `templated_parent`.
+// Borrowed (no +1); NULL if not found / wrong types.
+void* dm_noesis_framework_template_find_name(
+    void* tmpl, const char* name, void* templated_parent);
 
 #ifdef __cplusplus
 }

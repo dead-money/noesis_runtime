@@ -491,6 +491,115 @@ unsafe extern "C" {
         key: *const c_char,
         object: *mut c_void,
     ) -> bool;
+
+    // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────
+    // Mirrors cpp/noesis_controls.cpp; see cpp/noesis_shim.h for the borrow /
+    // sentinel contract of each entrypoint.
+
+    // Selector
+    pub fn dm_noesis_selector_get_selected_index(element: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_selector_set_selected_index(element: *mut c_void, index: i32) -> bool;
+    pub fn dm_noesis_selector_get_selected_item(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_selector_set_selected_item(element: *mut c_void, item: *mut c_void) -> bool;
+
+    // ItemsControl.Items
+    pub fn dm_noesis_items_control_items_add(element: *mut c_void, item: *mut c_void) -> i32;
+    pub fn dm_noesis_items_control_items_insert(
+        element: *mut c_void,
+        index: u32,
+        item: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_items_control_items_remove_at(element: *mut c_void, index: u32) -> bool;
+    pub fn dm_noesis_items_control_items_clear(element: *mut c_void) -> bool;
+
+    // RangeBase
+    pub fn dm_noesis_rangebase_get(element: *mut c_void, which: i32, out: *mut f32) -> bool;
+    pub fn dm_noesis_rangebase_set(element: *mut c_void, which: i32, value: f32) -> bool;
+
+    // ToggleButton
+    pub fn dm_noesis_toggle_get_is_checked(element: *mut c_void, out_state: *mut i8) -> bool;
+    pub fn dm_noesis_toggle_set_is_checked(element: *mut c_void, state: i8) -> bool;
+
+    // Popup / Expander
+    pub fn dm_noesis_popup_get_is_open(element: *mut c_void, out: *mut bool) -> bool;
+    pub fn dm_noesis_popup_set_is_open(element: *mut c_void, open: bool) -> bool;
+    pub fn dm_noesis_expander_get_is_expanded(element: *mut c_void, out: *mut bool) -> bool;
+    pub fn dm_noesis_expander_set_is_expanded(element: *mut c_void, expanded: bool) -> bool;
+
+    // ScrollViewer
+    pub fn dm_noesis_scrollviewer_get(element: *mut c_void, which: i32, out: *mut f32) -> bool;
+    pub fn dm_noesis_scrollviewer_scroll_to_horizontal(element: *mut c_void, offset: f32) -> bool;
+    pub fn dm_noesis_scrollviewer_scroll_to_vertical(element: *mut c_void, offset: f32) -> bool;
+    pub fn dm_noesis_scrollviewer_scroll_to_home(element: *mut c_void) -> bool;
+    pub fn dm_noesis_scrollviewer_scroll_to_end(element: *mut c_void) -> bool;
+
+    // TextBox / PasswordBox
+    pub fn dm_noesis_textbox_get_int(element: *mut c_void, which: i32, out: *mut i32) -> bool;
+    pub fn dm_noesis_textbox_set_int(element: *mut c_void, which: i32, value: i32) -> bool;
+    pub fn dm_noesis_textbox_select(element: *mut c_void, start: i32, length: i32) -> bool;
+    pub fn dm_noesis_textbox_select_all(element: *mut c_void) -> bool;
+    pub fn dm_noesis_textbox_get_selected_text(element: *mut c_void) -> *const c_char;
+    pub fn dm_noesis_passwordbox_get_password(element: *mut c_void) -> *const c_char;
+    pub fn dm_noesis_passwordbox_set_password(
+        element: *mut c_void,
+        password: *const c_char,
+    ) -> bool;
+    // ── ResourceDictionary, Style, templates (TODO §7). See cpp/noesis_shim.h
+    //    for the per-function ownership contract (create/parse → +1 owned;
+    //    get_* → AddRef'd +1 owned; find_* / get_application_resources →
+    //    borrowed, do not release). ──────────────────────────────────────────
+    pub fn dm_noesis_box_float(value: f32) -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_create() -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_destroy(dict: *mut c_void);
+    pub fn dm_noesis_resource_dictionary_parse(xaml: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_count(dict: *mut c_void) -> u32;
+    pub fn dm_noesis_resource_dictionary_add(
+        dict: *mut c_void,
+        key: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_resource_dictionary_contains(dict: *mut c_void, key: *const c_char) -> bool;
+    pub fn dm_noesis_resource_dictionary_find(dict: *mut c_void, key: *const c_char)
+    -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_add_merged(dict: *mut c_void, merged: *mut c_void)
+    -> bool;
+
+    pub fn dm_noesis_gui_set_application_resources(dict: *mut c_void);
+    pub fn dm_noesis_gui_get_application_resources() -> *mut c_void;
+    pub fn dm_noesis_gui_register_default_styles(uri: *const c_char) -> bool;
+
+    pub fn dm_noesis_framework_element_get_resources(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_framework_element_set_resources(
+        element: *mut c_void,
+        dict: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_framework_element_find_resource(
+        element: *mut c_void,
+        key: *const c_char,
+    ) -> *mut c_void;
+
+    pub fn dm_noesis_style_create() -> *mut c_void;
+    pub fn dm_noesis_style_destroy(style: *mut c_void);
+    pub fn dm_noesis_style_set_target_type(style: *mut c_void, type_name: *const c_char) -> bool;
+    pub fn dm_noesis_style_add_setter(
+        style: *mut c_void,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_style_set_based_on(style: *mut c_void, base: *mut c_void);
+
+    pub fn dm_noesis_framework_element_set_style(element: *mut c_void, style: *mut c_void) -> bool;
+    pub fn dm_noesis_framework_element_get_style(element: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_control_template_parse(xaml: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_data_template_parse(xaml: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_control_set_template(control: *mut c_void, tmpl: *mut c_void) -> bool;
+    pub fn dm_noesis_control_get_template(control: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_framework_template_find_name(
+        tmpl: *mut c_void,
+        name: *const c_char,
+        templated_parent: *mut c_void,
+    ) -> *mut c_void;
 }
 
 // ── Brushes, transforms, effects, RenderOptions (TODO §11) ──────────────────

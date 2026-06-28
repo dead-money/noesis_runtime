@@ -51,24 +51,38 @@ Nothing here is exposed. Leans on §1 View timers for scheduling.
 
 ## 7. Styles, resources, templates
 
-Only `LoadApplicationResources` is wired.
+`ResourceDictionary` access (create/own, key→component add, borrowed lookup,
+merged dictionaries, parse-from-XAML, app-resources set/get, per-element
+`Resources` + non-throwing `FindResource`, `RegisterDefaultStyles`), `Style`
+from code (target type + setters + `BasedOn`, element assign/read-back), and
+template parse+assign (`ControlTemplate` via `SetTemplate`, `DataTemplate` via
+the component-DP path, `FrameworkTemplate::FindName`) are wired (`src/resources.rs`,
+`src/styles.rs`, `cpp/noesis_resources.cpp`).
 
-- **`ResourceDictionary` access.** `GUI::SetApplicationResources`/`GetApplicationResources`, per-element `Resources`, `FindResource`/`TryFindResource`, merged dictionaries, `RegisterDefaultStyles`.
-- **`Style`** construction/assignment, setters, triggers (`Trigger`, `DataTrigger`, `EventTrigger`, multi-triggers) from code.
-- **Templates.** `ControlTemplate` / `DataTemplate` / `ItemsPanelTemplate` / `HierarchicalDataTemplate` runtime creation; `DataTemplateSelector` from Rust; `FrameworkTemplate::FindName`.
-- **Dynamic resources.** `DynamicResourceExtension`, `StaticResourceExtension` (built-ins; we have custom markup extensions but not these).
+- **`Style` triggers** from code: `Trigger`, `DataTrigger`, `EventTrigger`,
+  `MultiTrigger` (property triggers + their setters/conditions). The
+  `GetTriggers()` collection is reachable; the per-trigger construction surface
+  is not built yet.
+- **Templates — code-built factories.** `ControlTemplate` / `DataTemplate` /
+  `ItemsPanelTemplate` / `HierarchicalDataTemplate` built from a programmatic
+  `VisualTree` (factory trees), and `DataTemplateSelector` from Rust. The
+  parse-from-XAML + assign path covers the common case today.
+- **Dynamic resources.** `DynamicResourceExtension`, `StaticResourceExtension`
+  (built-ins; we have custom markup extensions but not these). Reachable from
+  XAML already; a code path is low priority.
 
 ## 8. Controls — programmatic access
 
-Only TextBox text is touched today. Best done incrementally, per control as a screen needs it.
+`Selector` selection (`SelectedIndex`/`SelectedItem`), `ItemsControl.Items` mutation, `RangeBase`
+values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `ScrollViewer` offsets +
+`ScrollTo*`, and `TextBox`/`PasswordBox` selection/caret are exposed (`src/view.rs` Controls §8 +
+`cpp/noesis_controls.cpp`). Remaining:
 
-- **Selection.** `Selector`/`ListBox`/`ComboBox`/`TabControl` `SelectedIndex`/`SelectedItem`/`SelectedValue`; `ListView`/`TreeView` selection.
-- **Items.** `ItemsControl::GetItems` add/remove/clear, `ItemsSource`, `ItemContainerGenerator`.
-- **Ranges.** `RangeBase` (`Slider`, `ProgressBar`, `ScrollBar`) `Value`/`Minimum`/`Maximum`.
-- **Toggles.** `ToggleButton`/`CheckBox`/`RadioButton` `IsChecked`.
-- **Text.** `PasswordBox`, `TextBox` selection/caret beyond end, `BaseTextBox` selection range, `FormattedText`.
-- **Popups/overlays.** `Popup` IsOpen, `ContextMenu`, `ToolTip`/`ToolTipService`, `Expander` IsExpanded.
-- **Scrolling.** `ScrollViewer` offsets / `IScrollInfo`, `ScrollToHorizontalOffset` etc.
+- **Selection.** `Selector::SelectedValue`/`SelectedValuePath`; `TreeView` selection; `ListView` columns.
+- **Items.** `ItemContainerGenerator` deep access (container ⇄ item ⇄ index mapping).
+- **Text.** `FormattedText` (its own large feature).
+- **Popups/overlays.** `ContextMenu`, `ToolTip`/`ToolTipService`.
+- **Scrolling.** Direct `IScrollInfo` and the line/page-scroll methods (`LineUp`/`PageDown`/…).
 - **`Image` / `MediaElement`-style** source assignment from code.
 
 ## 9. Custom types / reflection registration
@@ -157,10 +171,10 @@ primitives first, big rocks once their prerequisites exist. Each phase is a natu
 `BindingExpression` update, §5 non-routed lifecycle events; §1 View timers + typed `RenderFlags` +
 `ViewStats` + tessellation quality + `MouseHWheel`; §15 `ParseXaml`/`LoadComponent`; §17 inspector).
 
-**Phase B — presentation.**
-4. §7 Styles / resources / templates (`FindResource`, `DataTemplate`/`ControlTemplate` from code) — needed to theme and to render bound collections meaningfully.
-5. §8 Controls programmatic access — incremental, per control as screens need it.
-6. §11 Brushes / transforms — needed to drive styled visuals from code.
+**Phase B — presentation.** Core delivered; advanced remainders tracked in §7/§8/§11 above.
+4. ~~§7 Styles / resources / templates~~ ✅ core done — ResourceDictionary access, `Style` from code, template parse+assign, `FindResource`. Remaining: style triggers, code-built template factories, dynamic-resource code path (see §7).
+5. ~~§8 Controls programmatic access~~ ✅ core done — selection, items mutation, ranges, tri-state toggles, popups/expander, scroll offsets + `ScrollTo*`, text/password selection. Remaining: `SelectedValue`/`TreeView`, `ItemContainerGenerator`, `FormattedText`, `ContextMenu`/`ToolTip`, `IScrollInfo`/line-page scroll, image source (see §8).
+6. ~~§11 Brushes / transforms~~ ✅ core done — solid/gradient/image brushes, 2D transforms + group, blur/drop-shadow effects, `RenderOptions`. Remaining: `VisualBrush`/`TileBrush`/shaders, 3D transforms (see §11).
 
 **Phase C — custom types + motion.**
 7. §9 Custom types / reflection (more base classes, custom DPs/events/enums, `MeasureOverride`/`ArrangeOverride`, and **runtime-reflected plain properties**). Foundational; also unblocks §3 plain-VM INPC.

@@ -83,7 +83,7 @@ fn binding_expression_explicit_update_source() {
         let mut content = view.content().expect("View::content returned None");
         // SAFETY: vm outlives this scope; Noesis stores its own reference.
         assert!(
-            unsafe { content.set_data_context(vm.raw()) },
+            content.set_data_context(&vm),
             "set_data_context returned false"
         );
 
