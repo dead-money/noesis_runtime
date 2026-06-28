@@ -914,6 +914,12 @@ typedef enum dm_noesis_class_base {
     DM_NOESIS_BASE_USER_CONTROL      = 3,
     DM_NOESIS_BASE_PANEL             = 4,
     DM_NOESIS_BASE_DECORATOR         = 5,
+    // Non-UIElement base: a custom Noesis::Freezable (DependencyObject with
+    // freeze/clone semantics). DPs register against DependencyData (not
+    // UIElementData); there is no layout / render / routed-event surface. The
+    // other Animatable subtrees (Brush / Geometry / Transform / Effect) are NOT
+    // subclassable this way — see TODO.md "Known SDK limitations".
+    DM_NOESIS_BASE_FREEZABLE         = 6,
 } dm_noesis_class_base;
 
 // Property value-type tag. Determines the layout of `value_ptr` /
@@ -933,6 +939,12 @@ typedef enum dm_noesis_class_base {
 //                   Noesis::Thickness layout)
 //   COLOR         → const float[4]: r, g, b, a (matches Noesis::Color layout)
 //   RECT          → const float[4]: x, y, width, height (matches Noesis::Rect)
+//   POINT         → const float[2]: x, y (matches Noesis::Point / Vector2 layout)
+//   SIZE          → const float[2]: width, height (matches Noesis::Size layout)
+//   VECTOR        → const float[2]: x, y (matches Noesis::Vector2 layout)
+//   ENUM          → const int32_t* (storage is int32; the DP's reflected Type is
+//                   a runtime TypeEnum registered via dm_noesis_register_enum and
+//                   bound at registration via dm_noesis_class_register_enum_property)
 //   IMAGE_SOURCE  → BaseComponent* (a Noesis::ImageSource subclass; ownership
 //                   convention matches dm_noesis_base_component_release — the
 //                   `set` path does NOT consume the caller's ref; the `get`
@@ -950,7 +962,11 @@ typedef enum dm_noesis_prop_type {
     DM_NOESIS_PROP_RECT           = 7,
     DM_NOESIS_PROP_IMAGE_SOURCE   = 8,
     DM_NOESIS_PROP_BASE_COMPONENT = 9,
-    DM_NOESIS_PROP_UINT32         = 10
+    DM_NOESIS_PROP_UINT32         = 10,
+    DM_NOESIS_PROP_POINT          = 11,
+    DM_NOESIS_PROP_SIZE           = 12,
+    DM_NOESIS_PROP_VECTOR         = 13,
+    DM_NOESIS_PROP_ENUM           = 14
 } dm_noesis_prop_type;
 
 // Callback fired by the trampoline subclass's `OnPropertyChanged` override.
@@ -1078,6 +1094,30 @@ uint32_t dm_noesis_class_register_property_ex(
     uint32_t fpm_options,
     bool read_only,
     bool coerce);
+
+// Add a DependencyProperty whose value type is a runtime enum (registered via
+// dm_noesis_register_enum). `enum_type_name` must name an already-registered
+// runtime TypeEnum; the DP stores an int32 but reports the enum as its reflected
+// Type, so XAML enum-string parsing / EnumConverter / Style setters resolve it.
+// `default_value` is the initial int32 member value. `fpm_options` / `read_only`
+// match dm_noesis_class_register_property_ex (coercion is not offered for enums).
+// Returns the dense property index, or UINT32_MAX on failure (null token / name,
+// unknown enum type, duplicate property name).
+uint32_t dm_noesis_class_register_enum_property(
+    void* class_token,
+    const char* prop_name,
+    const char* enum_type_name,
+    int32_t default_value,
+    uint32_t fpm_options,
+    bool read_only);
+
+// Freezable freeze/clone state, for instances of a DM_NOESIS_BASE_FREEZABLE
+// class. `freezable` is a BaseComponent* (e.g. from dm_noesis_class_create_instance).
+// freeze() makes the object immutable; is_frozen()/can_freeze() query state.
+// All return false if the object is not a Freezable.
+bool dm_noesis_freezable_freeze(void* freezable);
+bool dm_noesis_freezable_is_frozen(void* freezable);
+bool dm_noesis_freezable_can_freeze(void* freezable);
 
 // Set a read-only DP on an instance via the privileged path (the analogue of
 // setting through a WPF DependencyPropertyKey). `value_ptr` follows the
@@ -2504,6 +2544,21 @@ bool dm_noesis_factory_is_registered(const char* name);
 // if the type is unknown.
 bool dm_noesis_type_set_content_property(
     const char* type_name, const char* prop_name);
+
+// Attach DependsOnMetaData(prop_name) to the registered type `type_name`. This
+// is the type-level metadata Noesis exposes for "this attributed property
+// depends on the value of another property" (NsGui/DependsOnMetaData.h). Returns
+// false if the type is unknown. NOTE (per the SDK header): a class cannot carry
+// both ContentPropertyMetaData and DependsOnMetaData.
+bool dm_noesis_type_add_depends_on(
+    const char* type_name, const char* prop_name);
+
+// Read back the property name recorded by DependsOnMetaData on `type_name` (via
+// TypeMeta::FindMeta + DependsOnMetaData::GetDependsOnProperty). `out_name`
+// receives a borrowed interned Symbol string (valid while Noesis lives). Returns
+// false if the type is unknown or carries no DependsOnMetaData.
+bool dm_noesis_type_get_depends_on(
+    const char* type_name, const char** out_name);
 
 // (D) Custom reflection TypeConverter registration is DEFERRED — not exposed in
 // 3.2.13. TypeConverter::Get resolves converters via an internal registry that

@@ -679,6 +679,95 @@ impl FrameworkElement {
             .then_some(out)
     }
 
+    /// Set a `Point` dependency property (`[x, y]`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_point(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_prop(name, PropType::Point, value.as_ptr().cast())
+    }
+
+    /// Read a `Point` dependency property as `[x, y]`. `None` on unknown name or
+    /// type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_point(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_prop(name, PropType::Point, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Set a `Size` dependency property (`[width, height]`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_size(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_prop(name, PropType::Size, value.as_ptr().cast())
+    }
+
+    /// Read a `Size` dependency property as `[width, height]`. `None` on unknown
+    /// name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_size(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_prop(name, PropType::Size, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Set a `Vector` dependency property (`Noesis::Vector2`, `[x, y]`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_vector(&mut self, name: &str, value: [f32; 2]) -> bool {
+        self.set_prop(name, PropType::Vector, value.as_ptr().cast())
+    }
+
+    /// Read a `Vector` (`Noesis::Vector2`) dependency property as `[x, y]`.
+    /// `None` on unknown name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_vector(&self, name: &str) -> Option<[f32; 2]> {
+        let mut out = [0.0f32; 2];
+        self.get_prop(name, PropType::Vector, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Set an enum-typed dependency property by its underlying `int32` member
+    /// value. The DP's reflected type must be a runtime enum.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_enum(&mut self, name: &str, value: i32) -> bool {
+        self.set_prop(name, PropType::Enum, (&value as *const i32).cast())
+    }
+
+    /// Read an enum-typed dependency property as its underlying `int32` member
+    /// value. `None` on unknown name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_enum(&self, name: &str) -> Option<i32> {
+        let mut out: i32 = 0;
+        self.get_prop(name, PropType::Enum, (&mut out as *mut i32).cast())
+            .then_some(out)
+    }
+
     /// Read a reference-typed dependency property (any `BaseComponent`
     /// subclass — `Brush`, `ImageSource`, `Style`, …) as a borrowed opaque
     /// pointer. `None` on unknown name, type mismatch, or a null value.
@@ -1368,6 +1457,10 @@ impl FrameworkElement {
             8 => Some(PropType::ImageSource),
             9 => Some(PropType::BaseComponent),
             10 => Some(PropType::UInt32),
+            11 => Some(PropType::Point),
+            12 => Some(PropType::Size),
+            13 => Some(PropType::Vector),
+            14 => Some(PropType::Enum),
             _ => None,
         }
     }
@@ -1392,6 +1485,10 @@ impl FrameworkElement {
             PropType::Thickness => self.get_thickness(name).map(DynValue::Thickness),
             PropType::Color => self.get_color(name).map(DynValue::Color),
             PropType::Rect => self.get_rect(name).map(DynValue::Rect),
+            PropType::Point => self.get_point(name).map(DynValue::Point),
+            PropType::Size => self.get_size(name).map(DynValue::Size),
+            PropType::Vector => self.get_vector(name).map(DynValue::Vector),
+            PropType::Enum => self.get_enum(name).map(DynValue::Enum),
             PropType::ImageSource | PropType::BaseComponent => {
                 self.get_component(name).map(DynValue::Component)
             }
@@ -2223,6 +2320,14 @@ pub enum DynValue {
     Color([f32; 4]),
     /// `Rect` as `[x, y, width, height]`.
     Rect([f32; 4]),
+    /// `Point` as `[x, y]`.
+    Point([f32; 2]),
+    /// `Size` as `[width, height]`.
+    Size([f32; 2]),
+    /// `Vector` (`Noesis::Vector2`) as `[x, y]`.
+    Vector([f32; 2]),
+    /// Runtime-enum-typed DP value (the underlying `int32` member value).
+    Enum(i32),
     /// A reference-typed value (`ImageSource` / `BaseComponent` subclass) as a
     /// borrowed opaque pointer (no `+1` ref — see
     /// [`FrameworkElement::get_component`]).

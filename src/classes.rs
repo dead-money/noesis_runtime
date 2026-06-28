@@ -47,8 +47,10 @@ use crate::drawing::DrawingContext;
 use crate::ffi::{
     ClassBase, LayoutVtable, PropType, dm_noesis_base_component_release,
     dm_noesis_class_create_instance, dm_noesis_class_register,
-    dm_noesis_class_register_property_ex, dm_noesis_class_set_coerce, dm_noesis_class_set_layout,
-    dm_noesis_class_set_render, dm_noesis_class_unregister, dm_noesis_image_source_get_size,
+    dm_noesis_class_register_enum_property, dm_noesis_class_register_property_ex,
+    dm_noesis_class_set_coerce, dm_noesis_class_set_layout, dm_noesis_class_set_render,
+    dm_noesis_class_unregister, dm_noesis_freezable_can_freeze, dm_noesis_freezable_freeze,
+    dm_noesis_freezable_is_frozen, dm_noesis_image_source_get_size,
     dm_noesis_instance_get_property, dm_noesis_instance_set_property,
     dm_noesis_instance_set_readonly_property, dm_noesis_uielement_arrange,
     dm_noesis_uielement_desired_size, dm_noesis_uielement_measure, dm_noesis_visual_child,
@@ -137,6 +139,23 @@ pub enum PropertyValue<'a> {
         width: f32,
         height: f32,
     },
+    /// `Noesis::Point` (x, y).
+    Point {
+        x: f32,
+        y: f32,
+    },
+    /// `Noesis::Size` (width, height).
+    Size {
+        width: f32,
+        height: f32,
+    },
+    /// `Noesis::Vector2` (x, y).
+    Vector {
+        x: f32,
+        y: f32,
+    },
+    /// Runtime-enum-typed DP value (the underlying `int32` member value).
+    Enum(i32),
     /// Borrowed `Noesis::ImageSource*` (or null). Treat as opaque.
     ImageSource(Option<NonNull<c_void>>),
     /// Borrowed `Noesis::BaseComponent*` (or null). Treat as opaque.
@@ -149,6 +168,10 @@ struct PropSpec {
     kind: PropType,
     default: OwnedDefault,
     options: PropertyOptions,
+    /// For [`PropType::Enum`] DPs: the reflected name of the runtime enum
+    /// (registered via [`crate::reflection::register_enum`]). `None` for all
+    /// other property types.
+    enum_type: Option<CString>,
 }
 
 /// Builder for a single class registration.
@@ -173,6 +196,10 @@ enum OwnedDefault {
     Thickness([f32; 4]),
     Color([f32; 4]),
     Rect([f32; 4]),
+    Point([f32; 2]),
+    Size([f32; 2]),
+    Vector([f32; 2]),
+    Enum(i32),
 }
 
 impl<H: PropertyChangeHandler> ClassBuilder<H> {
@@ -239,6 +266,39 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             kind,
             default: default.into_owned(),
             options,
+            enum_type: None,
+        });
+        self.props.len() as u32 - 1
+    }
+
+    /// Append a dependency property whose value type is a runtime enum
+    /// (registered with [`crate::reflection::register_enum`]). The DP stores an
+    /// `int32` but reports the enum as its reflected type, so XAML enum-string
+    /// parsing, the `EnumConverter`, and `Style` setters resolve it. `default`
+    /// is the initial member value. Coercion is not offered for enum DPs.
+    ///
+    /// Returns the dense property index. The enum type must already be
+    /// registered when the class is [`Self::register`]ed, or registration of
+    /// this property fails (and [`Self::register`] returns `None`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` / `enum_type_name` contain an interior NUL.
+    pub fn add_enum_property(
+        &mut self,
+        name: &str,
+        enum_type_name: &str,
+        default: i32,
+        options: PropertyOptions,
+    ) -> u32 {
+        let cstr = CString::new(name).expect("property name contained NUL");
+        let etype = CString::new(enum_type_name).expect("enum type name contained NUL");
+        self.props.push(PropSpec {
+            name: cstr,
+            kind: PropType::Enum,
+            default: OwnedDefault::Enum(default),
+            options,
+            enum_type: Some(etype),
         });
         self.props.len() as u32 - 1
     }
@@ -313,17 +373,36 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         };
 
         for spec in &props {
-            let default_ptr = spec.default.as_ffi_ptr();
-            let idx = unsafe {
-                dm_noesis_class_register_property_ex(
-                    token.as_ptr(),
-                    spec.name.as_ptr(),
-                    spec.kind,
-                    default_ptr,
-                    spec.options.fpm_options,
-                    spec.options.read_only,
-                    spec.options.coerce,
-                )
+            let idx = if let Some(enum_type) = &spec.enum_type {
+                // Enum DPs need the runtime TypeEnum bound at registration; they
+                // go through the dedicated entry point (coercion not offered).
+                let default = match spec.default {
+                    OwnedDefault::Enum(v) => v,
+                    _ => 0,
+                };
+                unsafe {
+                    dm_noesis_class_register_enum_property(
+                        token.as_ptr(),
+                        spec.name.as_ptr(),
+                        enum_type.as_ptr(),
+                        default,
+                        spec.options.fpm_options,
+                        spec.options.read_only,
+                    )
+                }
+            } else {
+                let default_ptr = spec.default.as_ffi_ptr();
+                unsafe {
+                    dm_noesis_class_register_property_ex(
+                        token.as_ptr(),
+                        spec.name.as_ptr(),
+                        spec.kind,
+                        default_ptr,
+                        spec.options.fpm_options,
+                        spec.options.read_only,
+                        spec.options.coerce,
+                    )
+                }
             };
             if idx == u32::MAX {
                 // C++ owns the property-handler box now; unregister triggers
@@ -423,6 +502,21 @@ pub enum PropertyDefault<'a> {
         width: f32,
         height: f32,
     },
+    Point {
+        x: f32,
+        y: f32,
+    },
+    Size {
+        width: f32,
+        height: f32,
+    },
+    Vector {
+        x: f32,
+        y: f32,
+    },
+    /// Default member value for a runtime-enum-typed DP (set the enum int
+    /// directly, e.g. via [`crate::reflection::EnumType::value_from_name`]).
+    Enum(i32),
 }
 
 impl PropertyDefault<'_> {
@@ -451,6 +545,10 @@ impl PropertyDefault<'_> {
                 width,
                 height,
             } => OwnedDefault::Rect([x, y, width, height]),
+            PropertyDefault::Point { x, y } => OwnedDefault::Point([x, y]),
+            PropertyDefault::Size { width, height } => OwnedDefault::Size([width, height]),
+            PropertyDefault::Vector { x, y } => OwnedDefault::Vector([x, y]),
+            PropertyDefault::Enum(v) => OwnedDefault::Enum(v),
         }
     }
 }
@@ -489,6 +587,10 @@ impl OwnedDefault {
             OwnedDefault::Thickness(arr) | OwnedDefault::Color(arr) | OwnedDefault::Rect(arr) => {
                 arr.as_ptr().cast()
             }
+            OwnedDefault::Point(arr) | OwnedDefault::Size(arr) | OwnedDefault::Vector(arr) => {
+                arr.as_ptr().cast()
+            }
+            OwnedDefault::Enum(v) => (v as *const i32).cast(),
         }
     }
 }
@@ -573,6 +675,31 @@ impl ClassInstance {
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
+    }
+
+    /// Freeze this instance, if it is a [`ClassBase::Freezable`]-based class
+    /// (`Noesis::Freezable::Freeze`). After freezing, the object is immutable
+    /// and [`Self::is_frozen`] reads back `true`. Returns `false` if the object
+    /// is not a `Freezable` or cannot currently be frozen.
+    pub fn freeze(&self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
+        unsafe { dm_noesis_freezable_freeze(self.ptr.as_ptr()) }
+    }
+
+    /// Whether this instance is currently frozen (`Noesis::Freezable::IsFrozen`).
+    /// Always `false` for non-`Freezable` classes.
+    #[must_use]
+    pub fn is_frozen(&self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
+        unsafe { dm_noesis_freezable_is_frozen(self.ptr.as_ptr()) }
+    }
+
+    /// Whether this instance can be frozen (`Noesis::Freezable::CanFreeze`).
+    /// Always `false` for non-`Freezable` classes.
+    #[must_use]
+    pub fn can_freeze(&self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
+        unsafe { dm_noesis_freezable_can_freeze(self.ptr.as_ptr()) }
     }
 }
 
@@ -689,6 +816,38 @@ impl Instance {
             dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
+    /// Set a `Point` DP (`Noesis::Point`).
+    pub fn set_point(self, prop_index: u32, x: f32, y: f32) {
+        let arr = [x, y];
+        unsafe {
+            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+        }
+    }
+    /// Set a `Size` DP (`Noesis::Size`).
+    pub fn set_size(self, prop_index: u32, width: f32, height: f32) {
+        let arr = [width, height];
+        unsafe {
+            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+        }
+    }
+    /// Set a `Vector` DP (`Noesis::Vector2`).
+    pub fn set_vector(self, prop_index: u32, x: f32, y: f32) {
+        let arr = [x, y];
+        unsafe {
+            dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
+        }
+    }
+    /// Set an enum DP (the underlying `int32` member value). Register the DP
+    /// with [`ClassBuilder::add_enum_property`].
+    pub fn set_enum(self, prop_index: u32, value: i32) {
+        unsafe {
+            dm_noesis_instance_set_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const i32).cast(),
+            );
+        }
+    }
     /// Set an `ImageSource` / `BaseComponent` DP to a borrowed
     /// `Noesis::BaseComponent*`. The C++ side stores its own reference, so the
     /// caller keeps ownership of `component` (pass `null` to clear). The
@@ -748,6 +907,42 @@ impl Instance {
             dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
         };
         ok.then_some((out[0], out[1], out[2], out[3]))
+    }
+    /// Read back a `Point` DP as `(x, y)`.
+    pub fn get_point(self, prop_index: u32) -> Option<(f32, f32)> {
+        let mut out = [0.0f32; 2];
+        let ok = unsafe {
+            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+        };
+        ok.then_some((out[0], out[1]))
+    }
+    /// Read back a `Size` DP as `(width, height)`.
+    pub fn get_size(self, prop_index: u32) -> Option<(f32, f32)> {
+        let mut out = [0.0f32; 2];
+        let ok = unsafe {
+            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+        };
+        ok.then_some((out[0], out[1]))
+    }
+    /// Read back a `Vector` DP as `(x, y)`.
+    pub fn get_vector(self, prop_index: u32) -> Option<(f32, f32)> {
+        let mut out = [0.0f32; 2];
+        let ok = unsafe {
+            dm_noesis_instance_get_property(self.0.as_ptr(), prop_index, out.as_mut_ptr().cast())
+        };
+        ok.then_some((out[0], out[1]))
+    }
+    /// Read back an enum DP as its underlying `int32` member value.
+    pub fn get_enum(self, prop_index: u32) -> Option<i32> {
+        let mut out: i32 = 0;
+        let ok = unsafe {
+            dm_noesis_instance_get_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&mut out as *mut i32).cast(),
+            )
+        };
+        ok.then_some(out)
     }
     /// Read back a `Color` DP as `(r, g, b, a)` floats in 0..=1. Returns
     /// `None` on bad input (instance pointer / index mismatch / type
@@ -878,6 +1073,13 @@ unsafe fn decode_value<'a>(
                 width: 0.0,
                 height: 0.0,
             },
+            PropType::Point => PropertyValue::Point { x: 0.0, y: 0.0 },
+            PropType::Size => PropertyValue::Size {
+                width: 0.0,
+                height: 0.0,
+            },
+            PropType::Vector => PropertyValue::Vector { x: 0.0, y: 0.0 },
+            PropType::Enum => PropertyValue::Enum(0),
         };
     }
     match kind {
@@ -923,6 +1125,28 @@ unsafe fn decode_value<'a>(
                 height: *f.add(3),
             }
         }
+        PropType::Point => {
+            let f = value_ptr.cast::<f32>();
+            PropertyValue::Point {
+                x: *f,
+                y: *f.add(1),
+            }
+        }
+        PropType::Size => {
+            let f = value_ptr.cast::<f32>();
+            PropertyValue::Size {
+                width: *f,
+                height: *f.add(1),
+            }
+        }
+        PropType::Vector => {
+            let f = value_ptr.cast::<f32>();
+            PropertyValue::Vector {
+                x: *f,
+                y: *f.add(1),
+            }
+        }
+        PropType::Enum => PropertyValue::Enum(*value_ptr.cast::<i32>()),
         PropType::ImageSource => {
             let p = *value_ptr.cast::<*mut c_void>();
             PropertyValue::ImageSource(NonNull::new(p))

@@ -37,6 +37,7 @@
 #include <NsCore/TypeEnum.h>
 #include <NsCore/TypeMeta.h>
 #include <NsGui/ContentPropertyMetaData.h>
+#include <NsGui/DependsOnMetaData.h>
 #include <NsGui/RoutedEvent.h>
 #include <NsGui/UIElement.h>
 #include <NsGui/UIElementData.h>
@@ -214,5 +215,33 @@ extern "C" bool dm_noesis_type_set_content_property(
     Noesis::Ptr<Noesis::ContentPropertyMetaData> cp =
         Noesis::MakePtr<Noesis::ContentPropertyMetaData>(prop_name);
     meta->AddMeta(cp.GetPtr());
+    return true;
+}
+
+extern "C" bool dm_noesis_type_add_depends_on(
+    const char* type_name, const char* prop_name) {
+    if (!prop_name) return false;
+    const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
+    if (!tc) return false;
+
+    // DependsOnMetaData is type-level metadata in Noesis (NsGui/DependsOnMetaData.h),
+    // attached the same way as ContentPropertyMetaData. The const_cast is sound:
+    // we only attach to our own runtime-registered types and AddMeta only appends.
+    auto* meta = const_cast<Noesis::TypeClass*>(tc);
+    Noesis::Ptr<Noesis::DependsOnMetaData> dep =
+        Noesis::MakePtr<Noesis::DependsOnMetaData>(prop_name);
+    meta->AddMeta(dep.GetPtr());
+    return true;
+}
+
+extern "C" bool dm_noesis_type_get_depends_on(
+    const char* type_name, const char** out_name) {
+    if (!out_name) return false;
+    const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
+    if (!tc) return false;
+
+    const auto* dep = Noesis::FindMeta<Noesis::DependsOnMetaData>(tc);
+    if (!dep) return false;
+    *out_name = dep->GetDependsOnProperty().Str();
     return true;
 }
