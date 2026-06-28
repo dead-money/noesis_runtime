@@ -9,17 +9,6 @@ list only outstanding work (finished work is removed, not annotated). Things 3.2
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
-## 17. Diagnostics & tooling
-
-- **Profiling.** `CpuProfiler`, `ViewStats` debug overlay (the `GetStats` counters are wrapped; the on-screen overlay is not), memory usage queries.
-- **Logging** has a handler; structured log levels / categories could be richer.
-
-## 18. Memory / kernel hooks
-
-- **`SetErrorHandler` / `SetAssertHandler`** (route Noesis fatal errors into our logging/panic path) — `NsCore/Error.h`. Good robustness win.
-- **`MemoryCallbacks`** (custom allocator integration with the engine's allocator).
-- **`Ptr<T>` / `BaseComponent` lifetime helpers** beyond `base_component_release` (AddReference/GetNumReferences for advanced ownership).
-
 ---
 
 ## Known SDK limitations
@@ -34,6 +23,9 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.13 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
 - **Headless drag / manipulation synthesis (§5).** The typed `DragEventArgs` / `Manipulation*EventArgs` accessors are wrapped and round-trip tested, but the events themselves cannot be *raised* headlessly: a drag needs an OS pointer/drag loop (`DragDrop::DoDragDrop` is exposed and crosses the FFI but has no synchronous/headless completion) and manipulation events are promoted from a multi-frame touch stream under a live render pass. `tests/routed_events_typed_args.rs` drives keyboard-focus events for real and exercises the drag/manipulation accessors by constructing the real arg structs C++-side (under `--features test-utils`). `DataObject.Copying`/`.Pasting` handlers attach/detach but the clipboard copy/paste that fires them is likewise host-driven.
 - **`Stylus` events (§16).** Noesis 3.2.13 ships no `Stylus` header — there is no stylus-distinct input device (no `StylusDown`/`StylusMove`/pressure/`InAir` surface). Touch (`UIElement::CaptureTouch`, the view `touch_*` pump) is the ceiling; a pen reaches the UI as a touch/mouse device. No workaround beyond treating stylus input as touch.
+- **`CpuProfiler` is not a runtime API (§17).** `NsCore/CpuProfiler.h` is a header-only macro layer (`NS_PROFILE_CPU…`) that compiles to calls into a third-party profiler (Tracy / Optick / PIX / Razor / Superluminal / NX) only when the SDK itself was built with the matching `NS_PROFILER_*` define. The shipped Indie dylib has them all `0`, so the macros are no-ops with no callable entry point to wrap. Frame profiling is a host concern (instrument around `view.update` / renderer calls yourself); the per-frame `ViewStats` counters (`GetStats`, wrapped) and the visual debug overlays (`RenderFlags` Wireframe/ColorBatches/Overdraw, wrapped via `set_render_flags`) are the Noesis-side surface.
+- **Assert handler is compiled out of the Release dylib (§18).** `Noesis::SetAssertHandler` and both `InvokeAssertHandler` overloads alias a single no-op stub in the Release Indie SDK (verified: all three resolve to the same address via `nm`). `diagnostics::set_assert_handler` ships and matches the header, but the closure only ever fires on a Debug / asserts-enabled SDK; on Release `invoke_assert` returns `false` and the handler is never called. The error path is unaffected — `SetErrorHandler` / `SetThreadErrorHandler` / `InvokeErrorHandler` are real distinct symbols and round-trip `file`/`line`/`message`/`fatal` (+ `ErrorContext{uri,line,column}`) for real.
+- **`MemoryCallbacks` custom allocator — intentionally not wrapped (§18).** `SetMemoryCallbacks` works but must be installed *before* `Init`, is process-global and unchangeable afterward, and routes every Noesis allocation/free/realloc/size query across the FFI into Rust — high blast radius for little gain, and it can't be exercised in-process alongside the rest of the suite (it would hijack allocation for the whole test binary). The read-only memory observability that motivated it ships instead: `diagnostics::allocated_memory` / `allocated_memory_accum` / `allocations_count` (`GetAllocatedMemory*` / `GetAllocationsCount`).
 - **`CollectionView` sort / filter / group (§3).** `ICollectionView` here is current-item navigation only — no `SortDescriptions`, `Filter` delegate, `GroupDescriptions`, or `CollectionViewSource::GetDefaultView` ship. Sort/filter/group in Rust before populating the `ObservableCollection`. (Current-item navigation — `MoveCurrentTo*` — *is* available if ever needed.)
 - **`PriorityBinding` (§3).** Not in 3.2.13 — the class doesn't exist in the SDK (a WPF feature Noesis omits, like `NavigationCommands`). No workaround; restructure so a single binding with a `FallbackValue` covers the priority case.
 - **`TemplateBinding` runtime construction (§3).** `TemplateBindingExtension` exists but is only meaningful inside a `ControlTemplate`; the XAML `{TemplateBinding X}` parse path already works, and the code path is covered by a templated-parent binding (`{Binding RelativeSource={RelativeSource TemplatedParent}}`, already wrapped). A dedicated runtime wrapper would just duplicate that, so it's intentionally not built.

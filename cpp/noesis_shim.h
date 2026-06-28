@@ -521,6 +521,11 @@ void dm_noesis_base_component_release(void* obj);
 // balance with dm_noesis_base_component_release.
 void* dm_noesis_base_component_add_reference(void* obj);
 
+// Current strong reference count of a BaseComponent (BaseRefCounted::
+// GetNumReferences), or 0 on NULL input (TODO §18). The absolute value is an
+// internal detail; reason about deltas (add_reference => +1, release => -1).
+int32_t dm_noesis_base_component_get_num_references(void* obj);
+
 // Create an IView whose root is `framework_element`. The view retains its own
 // reference to the element; the caller's reference is still held by the
 // FrameworkElement wrapper until it's dropped.
@@ -3254,6 +3259,68 @@ void* dm_noesis_key_binding_create(void* command, int32_t key, int32_t modifiers
 void* dm_noesis_mouse_binding_create(void* command, int32_t action, int32_t modifiers);
 void* dm_noesis_input_binding_create(void* command, void* gesture);
 bool dm_noesis_ui_element_add_input_binding(void* element, void* binding);
+
+// ── Diagnostics: error / assert handlers + memory queries (TODO §17/§18) ─────
+//
+// All NsCore kernel functions — the kernel must be up (dm_noesis_init has run)
+// before they do anything meaningful. ALWAYS drive the invokers with
+// fatal=false: a fatal error or a failed assert can abort the process.
+//
+// SetErrorHandler / SetAssertHandler take a bare C function pointer with NO
+// userdata, so the Rust callback lives in a process-global slot inside the shim
+// and a fixed trampoline forwards to (cb, userdata). Each setter returns the
+// previous (cb, userdata) pair via out-params so a Rust RAII guard can restore
+// its predecessor; the first install also captures + later restores the Noesis
+// default. SetThreadErrorHandler / ErrorHandler2 carries a void* user, so the
+// boxed Rust closure threads straight through it.
+
+// Binary-compatible with Noesis::ErrorContext (static_assert'd in the .cpp).
+// XAML parse errors surface the offending uri/line/column here.
+typedef struct dm_noesis_error_context {
+    const char* uri;
+    uint32_t    line;
+    uint32_t    column;
+} dm_noesis_error_context;
+
+// Global error handler (no per-call context). fatal is forwarded verbatim.
+typedef void (*dm_noesis_error_fn)(
+    void* userdata, const char* file, uint32_t line, const char* message, bool fatal);
+
+// Global assert handler. Return true to request a debug break, false otherwise.
+typedef bool (*dm_noesis_assert_fn)(
+    void* userdata, const char* file, uint32_t line, const char* expr);
+
+// Per-thread error handler (Noesis::ErrorHandler2). Receives the optional
+// ErrorContext (NULL when none was supplied) and the userdata passed at install.
+typedef void (*dm_noesis_error2_fn)(
+    const char* file, uint32_t line, const char* message, bool fatal,
+    dm_noesis_error_context* context, void* userdata);
+
+// Install the global error / assert handler (NULL cb clears it, restoring the
+// Noesis default). The previous (cb, userdata) pair is written to the out-params
+// (either may be NULL).
+void dm_noesis_set_error_handler(dm_noesis_error_fn cb, void* userdata,
+    dm_noesis_error_fn* out_prev_cb, void** out_prev_user);
+void dm_noesis_set_assert_handler(dm_noesis_assert_fn cb, void* userdata,
+    dm_noesis_assert_fn* out_prev_cb, void** out_prev_user);
+
+// Install the per-thread error handler (NULL handler disables it; the global
+// handler is used instead). The previous (handler, userdata) is written out.
+void dm_noesis_set_thread_error_handler(dm_noesis_error2_fn handler, void* userdata,
+    dm_noesis_error2_fn* out_prev_handler, void** out_prev_user);
+
+// Drive the registered handlers through the real SDK dispatch. ALWAYS fatal=
+// false in tests. When has_context is true a non-NULL ErrorContext built from
+// (uri, ctx_line, ctx_col) is supplied (only the thread ErrorHandler2 sees it).
+void dm_noesis_invoke_error_handler(const char* file, uint32_t line, bool fatal,
+    bool has_context, const char* uri, uint32_t ctx_line, uint32_t ctx_col, const char* message);
+bool dm_noesis_invoke_assert_handler(const char* file, uint32_t line, const char* expr);
+
+// Process-global memory counters (Noesis::Get*). Bytes for the first two, a
+// count for the third. Monotonic accum never decreases.
+uint32_t dm_noesis_get_allocated_memory(void);
+uint32_t dm_noesis_get_allocated_memory_accum(void);
+uint32_t dm_noesis_get_allocations_count(void);
 
 #ifdef __cplusplus
 }

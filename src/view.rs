@@ -20,10 +20,11 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::brushes::{Brush, Effect};
 use crate::ffi::{
-    PropType, dm_noesis_base_component_add_reference, dm_noesis_base_component_release,
-    dm_noesis_binding_expression_update_source, dm_noesis_binding_expression_update_target,
-    dm_noesis_control_get_template, dm_noesis_control_set_template,
-    dm_noesis_controls_contextmenu_get_is_open, dm_noesis_controls_contextmenu_set_is_open,
+    PropType, dm_noesis_base_component_add_reference, dm_noesis_base_component_get_num_references,
+    dm_noesis_base_component_release, dm_noesis_binding_expression_update_source,
+    dm_noesis_binding_expression_update_target, dm_noesis_control_get_template,
+    dm_noesis_control_set_template, dm_noesis_controls_contextmenu_get_is_open,
+    dm_noesis_controls_contextmenu_set_is_open,
     dm_noesis_controls_contextmenuservice_get_context_menu,
     dm_noesis_controls_contextmenuservice_set_context_menu, dm_noesis_controls_fe_get_context_menu,
     dm_noesis_controls_fe_get_tooltip, dm_noesis_controls_fe_set_context_menu,
@@ -242,6 +243,17 @@ impl FrameworkElement {
     /// [`crate::name_scope::NameScope::find_name`]).
     pub(crate) unsafe fn from_owned(ptr: NonNull<c_void>) -> Self {
         Self { ptr }
+    }
+
+    /// Current strong reference count of the underlying `BaseComponent`
+    /// (`BaseRefCounted::GetNumReferences`). The absolute value is an internal
+    /// detail — use it for **deltas**: [`clone_ref`](Self::clone_ref) (and any
+    /// Noesis-side retain) bumps it `+1`, dropping that handle (or a Noesis-side
+    /// release) drops it `-1`. A live, owned handle always reports `>= 1`.
+    #[must_use]
+    pub fn num_references(&self) -> i32 {
+        // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
+        unsafe { dm_noesis_base_component_get_num_references(self.ptr.as_ptr()) }
     }
 
     /// Take a new owning handle to the same underlying component, bumping its
