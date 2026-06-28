@@ -51,7 +51,6 @@ view models are wrapped; bindings can be authored in XAML against Rust data. Sti
 
 ## 4. Commands
 
-- **`ICommand` from Rust** (so XAML `Command="{Binding ...}"` can invoke Rust logic).
 - **`RoutedCommand` / `RoutedUICommand`**, `CommandBinding`, `CommandManager` (RequerySuggested).
 - Built-in command libraries: `ApplicationCommands`, `ComponentCommands`, `NavigationCommands`.
 

@@ -561,6 +561,27 @@ impl Instance {
             dm_noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
+    /// Set an `ImageSource` / `BaseComponent` DP to a borrowed
+    /// `Noesis::BaseComponent*`. The C++ side stores its own reference, so the
+    /// caller keeps ownership of `component` (pass `null` to clear). The
+    /// motivating use is binding a control to a Rust-backed
+    /// [`crate::commands::Command`]: register a `BaseComponent` DP on the view
+    /// model, point it at `command.raw()`, then bind `Command="{Binding …}"`.
+    ///
+    /// # Safety
+    ///
+    /// `component` must be null or a live `Noesis::BaseComponent*` (e.g. from
+    /// [`crate::commands::Command::raw`] or [`ClassInstance::raw`]). The
+    /// caller's reference is not consumed.
+    pub unsafe fn set_component(self, prop_index: u32, component: *mut c_void) {
+        unsafe {
+            dm_noesis_instance_set_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&component as *const *mut c_void).cast(),
+            );
+        }
+    }
 
     /// Read back an `Int32` DP. Returns `None` on bad input
     /// (instance pointer / index mismatch).
