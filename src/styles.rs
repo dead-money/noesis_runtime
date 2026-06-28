@@ -85,10 +85,8 @@ pub struct Style {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Style {}
-unsafe impl Sync for Style {}
 
 impl Default for Style {
     fn default() -> Self {
@@ -228,9 +226,8 @@ pub struct ControlTemplate {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ControlTemplate {}
-unsafe impl Sync for ControlTemplate {}
 
 impl ControlTemplate {
     /// Parse a bare `<ControlTemplate>` from an in-memory XAML string. Returns
@@ -311,9 +308,8 @@ pub struct DataTemplate {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for DataTemplate {}
-unsafe impl Sync for DataTemplate {}
 
 impl DataTemplate {
     /// Parse a bare `<DataTemplate>` from an in-memory XAML string. Returns
@@ -382,9 +378,8 @@ pub struct OwnedValue {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for OwnedValue {}
-unsafe impl Sync for OwnedValue {}
 
 impl OwnedValue {
     /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -455,9 +450,8 @@ macro_rules! owned_trigger {
             ptr: NonNull<c_void>,
         }
 
-        // SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl Default for $name {
             fn default() -> Self {
@@ -767,9 +761,8 @@ pub struct TriggerReadback {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for TriggerReadback {}
-unsafe impl Sync for TriggerReadback {}
 
 impl TriggerReadback {
     /// Raw `Noesis::BaseTrigger*`. Borrowed for the lifetime of `self`.
@@ -864,10 +857,8 @@ pub struct TemplateSelector {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: the boxed handler is Send; per-object calls are serialised by the
-// caller as with the other wrappers.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for TemplateSelector {}
-unsafe impl Sync for TemplateSelector {}
 
 impl TemplateSelector {
     /// Build a selector backed by `handler`. The handler box is owned by the

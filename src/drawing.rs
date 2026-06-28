@@ -93,10 +93,8 @@ pub struct Pen {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-// affinity as the other owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Pen {}
-unsafe impl Sync for Pen {}
 
 impl Pen {
     /// Create a pen of `thickness` painted by `brush` (any [`Brush`]). Noesis
@@ -241,9 +239,8 @@ pub struct RectangleGeometry {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; see [`Pen`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for RectangleGeometry {}
-unsafe impl Sync for RectangleGeometry {}
 
 impl RectangleGeometry {
     /// Create a rectangle geometry of `(x, y, w, h)` with corner radii

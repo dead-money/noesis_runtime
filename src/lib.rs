@@ -9,6 +9,30 @@
 //!
 //! Set `NOESIS_SDK_DIR` to the extracted Noesis Native SDK 3.2.13 root (the
 //! directory containing `Include/` and `Bin/`). See `README.md`.
+//!
+//! # Thread affinity
+//!
+//! Noesis objects are **thread-affine**: the engine expects every method on a
+//! given object (and on the [`view::View`] that owns it) to be called from the
+//! one thread that drives that view. The owning handle types in this crate
+//! (geometries, brushes, transforms, commands, bindings, the RAII registration
+//! guards, etc.) therefore implement [`Send`] but deliberately **not** [`Sync`]:
+//!
+//! - **`Send` is sound.** `Noesis::BaseRefCounted::mRefCount` is an
+//!   `AtomicInteger`, so the `-1` release performed by [`Drop`] is safe on any
+//!   thread. Ownership of a handle may be *moved* to whichever thread owns the
+//!   Noesis view, after which all calls happen on that thread.
+//! - **`Sync` is unsound.** Many `&self` methods call into Noesis (FFI reads,
+//!   and some lazily mutate engine state — e.g. resource-dictionary or
+//!   collection getters). Sharing a `&handle` across threads would let two
+//!   threads invoke those concurrently on a thread-affine engine, which races.
+//!
+//! Callers must invoke Noesis methods only from the view's thread. SAFETY
+//! comments on the individual `unsafe impl Send` blocks point back here rather
+//! than restating this contract. (The render-device *trait* is the exception:
+//! a user [`render_device::RenderDevice`] impl must be `Send + Sync` because
+//! Noesis may call its trampolines from a dedicated render thread — that bound
+//! is on the trait, not on these owning handles.)
 
 use std::ffi::{CStr, CString};
 

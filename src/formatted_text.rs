@@ -281,10 +281,8 @@ pub struct FormattedText {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle with the same per-object affinity as
-// the other owning wrappers in this crate. FormattedText is not view-bound.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for FormattedText {}
-unsafe impl Sync for FormattedText {}
 
 impl FormattedText {
     /// Begin building a [`FormattedText`] for `text` in `font_family` at

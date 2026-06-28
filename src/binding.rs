@@ -71,10 +71,8 @@ pub struct Boxed {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Boxed {}
-unsafe impl Sync for Boxed {}
 
 impl Boxed {
     /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -98,10 +96,8 @@ pub struct ObservableCollection {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate (per-object calls serialised by the caller).
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ObservableCollection {}
-unsafe impl Sync for ObservableCollection {}
 
 impl Default for ObservableCollection {
     fn default() -> Self {
@@ -309,10 +305,8 @@ pub struct Binding {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Binding {}
-unsafe impl Sync for Binding {}
 
 impl Binding {
     /// Create a binding with the given source property path (e.g. `"Title"`,

@@ -607,10 +607,8 @@ pub struct ClassRegistration {
     num_props: u32,
 }
 
-// SAFETY: the Boxed handler is `Send`; the C++ side only touches the token
-// via the C ABI surface, which is thread-safe per the registry mutex.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ClassRegistration {}
-unsafe impl Sync for ClassRegistration {}
 
 impl ClassRegistration {
     /// Number of dependency properties registered against this class.
@@ -656,11 +654,8 @@ pub struct ClassInstance {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: same rationale as [`Instance`] / `FrameworkElement` — the underlying
-// object is a Noesis BaseComponent whose per-object calls Noesis serialises to
-// one thread; moving the owning handle between threads is sound.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ClassInstance {}
-unsafe impl Sync for ClassInstance {}
 
 impl ClassInstance {
     /// A non-owning [`Instance`] handle for driving the DPs (`set_*` / `get_*`).
@@ -976,11 +971,8 @@ impl Instance {
     }
 }
 
-// SAFETY: Instance is just a raw pointer; the underlying object is owned by
-// Noesis's visual tree and is safe to reference from any thread that respects
-// the View's main-thread invariant.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Instance {}
-unsafe impl Sync for Instance {}
 
 // ── Trampoline ─────────────────────────────────────────────────────────────
 

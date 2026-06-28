@@ -227,10 +227,8 @@ pub struct FontFamily {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-// affinity as the other owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for FontFamily {}
-unsafe impl Sync for FontFamily {}
 
 impl FontFamily {
     /// Create a `FontFamily` from its source string.

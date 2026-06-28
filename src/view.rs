@@ -127,20 +127,8 @@ pub struct FrameworkElement {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: `FrameworkElement` wraps a raw pointer to a Noesis-owned
-// `Ptr<FrameworkElement>`. Noesis's API contract is "calls on a given object
-// are serialized to one thread" — not "the object must stay on one thread
-// for its whole lifetime." Moving a FrameworkElement between threads (via
-// `Send`) is safe as long as the receiving thread is the only one making
-// subsequent calls. Bevy's resource scheduler guarantees that: access to
-// a `Resource` is serialized through `ResMut<_>`, and our callers only
-// hold the element across a single render-thread borrow.
-//
-// `Sync` is safe for essentially the same reason: every mutating method
-// takes `&mut self`, so `&FrameworkElement` carries no usable calls to
-// Noesis — concurrent shared borrows can't race on Noesis state.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for FrameworkElement {}
-unsafe impl Sync for FrameworkElement {}
 
 /// A **borrowed** handle to a `Noesis::BindingExpression` — the live binding
 /// instance on a target element's dependency property, obtained from
@@ -3248,13 +3236,8 @@ pub struct View {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: same rationale as [`FrameworkElement`] — Noesis serialises
-// per-object calls to one thread at a time; every `View` method is `&mut
-// self`; Bevy's scheduler prevents concurrent access. Moving a View between
-// threads, or holding a `&View` from multiple threads simultaneously (which
-// offers no usable mutation), is safe.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for View {}
-unsafe impl Sync for View {}
 
 impl View {
     /// Create a View whose root is `content`. Consumes the
@@ -4064,10 +4047,8 @@ pub struct TimerSubscription {
     token: NonNull<c_void>,
 }
 
-// SAFETY: the boxed handler is `Send`, and the C++ timer is bound to a single
-// view whose access Noesis serialises — mirrors the event subscriptions.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for TimerSubscription {}
-unsafe impl Sync for TimerSubscription {}
 
 impl TimerSubscription {
     /// Restart this timer with a new interval (ms). Equivalent to
@@ -4136,10 +4117,8 @@ pub struct RenderingSubscription {
     token: NonNull<c_void>,
 }
 
-// SAFETY: the boxed handler is `Send`, and the C++ handler is bound to a single
-// view whose access Noesis serialises — mirrors [`TimerSubscription`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for RenderingSubscription {}
-unsafe impl Sync for RenderingSubscription {}
 
 impl Drop for RenderingSubscription {
     fn drop(&mut self) {
@@ -4157,10 +4136,8 @@ pub struct Renderer<'a> {
     _view: PhantomData<&'a mut View>,
 }
 
-// SAFETY: mirrors [`View`]. `Renderer` is a transient borrow that shares
-// thread-safety properties with the `View` it was produced from.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Renderer<'_> {}
-unsafe impl Sync for Renderer<'_> {}
 
 impl Renderer<'_> {
     /// Bind the Noesis renderer to `render_device`. Must be called once
@@ -4250,13 +4227,8 @@ pub struct RendererHandle {
     renderer: NonNull<c_void>, // borrowed from `view`; valid while the ref is held.
 }
 
-// SAFETY: the handle owns a +1 IView ref, so it is self-sufficient (it does not
-// borrow the View). Moving it between threads is sound for the same reason as
-// [`View`]: Noesis serialises per-object calls, and the render-thread split is
-// the documented supported use. `Sync` is safe because every render call goes
-// through `renderer(&mut self)`, so `&RendererHandle` exposes no Noesis calls.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for RendererHandle {}
-unsafe impl Sync for RendererHandle {}
 
 impl RendererHandle {
     /// Borrow the [`Renderer`] for this frame's render calls (`init` /

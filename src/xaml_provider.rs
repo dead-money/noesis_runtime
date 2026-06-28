@@ -33,8 +33,10 @@ use crate::ffi::{
 ///
 /// [`load_xaml`]: Self::load_xaml
 ///
-/// `Send + Sync` supertraits let the [`Registered`] guard live inside a
-/// regular Bevy `Resource`; safety rationale identical to
+/// `Send + Sync` supertraits make the boxed impl `Send` (so the
+/// [`Registered`] guard can be *moved* across threads); the guard is `Send`
+/// but **not** `Sync` (it has `&self` Noesis accessors). Store it in a
+/// `NonSend` resource. Safety rationale identical to
 /// [`crate::render_device::RenderDevice`].
 ///
 /// [`Registered`]: Registered
@@ -104,12 +106,8 @@ pub struct Registered {
     userdata: NonNull<Box<dyn XamlProvider>>,
 }
 
-// SAFETY: matches the rationale on `crate::render_device::Registered` —
-// XamlProvider: Send + Sync, Noesis's per-object call-serialization
-// contract tolerates owner-thread handoffs, and there are no useful
-// `&Registered` methods that touch Noesis state.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Registered {}
-unsafe impl Sync for Registered {}
 
 impl Registered {
     /// Raw `Noesis::XamlProvider*` — useful for passing to other Noesis APIs

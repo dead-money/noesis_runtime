@@ -132,12 +132,8 @@ pub struct Registered {
     userdata: NonNull<Box<dyn FontProvider>>,
 }
 
-// SAFETY: matches [`crate::render_device::Registered`] — the boxed impl
-// is `Send + Sync` (trait supertrait bound), Noesis serialises per-object
-// calls across threads, and `Registered` has no `&self` methods that race
-// on Noesis state.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Registered {}
-unsafe impl Sync for Registered {}
 
 impl Registered {
     /// Raw `Noesis::FontProvider*` — useful for other Noesis APIs that

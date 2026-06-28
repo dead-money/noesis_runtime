@@ -136,10 +136,8 @@ pub struct Command {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate (per-object calls serialised by the caller).
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Command {}
-unsafe impl Sync for Command {}
 
 impl Command {
     /// Build a command from a [`CommandHandler`]. A bare
@@ -232,10 +230,8 @@ pub struct RoutedCommand {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for RoutedCommand {}
-unsafe impl Sync for RoutedCommand {}
 
 impl RoutedCommand {
     /// Create a routed command named `name`, owned by the type `owner_type`
@@ -308,9 +304,8 @@ pub struct RoutedUICommand {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: see [`RoutedCommand`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for RoutedUICommand {}
-unsafe impl Sync for RoutedUICommand {}
 
 impl RoutedUICommand {
     /// Create a routed UI command. `text` is the display label; see
@@ -410,10 +405,8 @@ pub struct BorrowedCommand {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a process-lifetime framework singleton; sharing the borrowed pointer
-// across threads is sound under the same per-object-serialisation contract.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for BorrowedCommand {}
-unsafe impl Sync for BorrowedCommand {}
 
 impl BorrowedCommand {
     /// Raw `Noesis::ICommand*`, valid for the process lifetime.
@@ -615,10 +608,8 @@ pub struct CommandBinding {
     token: NonNull<c_void>,
 }
 
-// SAFETY: the boxed handler is `Send`; the C++ bridge is bound to one binding
-// whose access Noesis serialises — mirrors the event subscriptions.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for CommandBinding {}
-unsafe impl Sync for CommandBinding {}
 
 impl CommandBinding {
     /// Build a binding for `command` (any [`AsCommand`] — a [`RoutedCommand`],

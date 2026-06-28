@@ -198,10 +198,8 @@ pub struct CursorCallback {
     id: u64,
 }
 
-// SAFETY: the boxed closure is `Send`; Noesis serialises callback dispatch
-// per global hook. Mirrors the provider `Registered` guards.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for CursorCallback {}
-unsafe impl Sync for CursorCallback {}
 
 impl Drop for CursorCallback {
     fn drop(&mut self) {
@@ -263,9 +261,8 @@ pub struct SoftwareKeyboardCallback {
     id: u64,
 }
 
-// SAFETY: see [`CursorCallback`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for SoftwareKeyboardCallback {}
-unsafe impl Sync for SoftwareKeyboardCallback {}
 
 impl Drop for SoftwareKeyboardCallback {
     fn drop(&mut self) {
@@ -322,9 +319,8 @@ pub struct OpenUrlCallback {
     id: u64,
 }
 
-// SAFETY: see [`CursorCallback`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for OpenUrlCallback {}
-unsafe impl Sync for OpenUrlCallback {}
 
 impl Drop for OpenUrlCallback {
     fn drop(&mut self) {
@@ -393,9 +389,8 @@ pub struct PlayAudioCallback {
     id: u64,
 }
 
-// SAFETY: see [`CursorCallback`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for PlayAudioCallback {}
-unsafe impl Sync for PlayAudioCallback {}
 
 impl Drop for PlayAudioCallback {
     fn drop(&mut self) {

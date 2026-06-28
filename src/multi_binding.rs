@@ -126,10 +126,8 @@ pub struct MultiConverter {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for MultiConverter {}
-unsafe impl Sync for MultiConverter {}
 
 impl MultiConverter {
     /// Build a multi-value converter from a [`MultiValueConverter`]. A bare
@@ -195,10 +193,8 @@ pub struct MultiBinding {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for MultiBinding {}
-unsafe impl Sync for MultiBinding {}
 
 impl Default for MultiBinding {
     fn default() -> Self {

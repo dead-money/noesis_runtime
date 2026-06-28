@@ -91,10 +91,8 @@ pub struct MarkupExtensionRegistration {
     _name: CString,
 }
 
-// SAFETY: the boxed handler is Send; the C++ side serializes registry
-// access via its own mutex.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for MarkupExtensionRegistration {}
-unsafe impl Sync for MarkupExtensionRegistration {}
 
 impl MarkupExtensionRegistration {
     /// Register a Rust-backed `MarkupExtension`. `name` is the XAML-visible

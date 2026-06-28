@@ -407,10 +407,8 @@ macro_rules! shape_handle {
             ptr: NonNull<c_void>,
         }
 
-        // SAFETY: a Noesis BaseComponent handle; same single-threaded-per-object
-        // affinity as the other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Create the shape with default property values.

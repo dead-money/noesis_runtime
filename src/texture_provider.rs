@@ -180,11 +180,8 @@ pub struct Registered {
     userdata: NonNull<Box<dyn TextureProvider>>,
 }
 
-// SAFETY: matches the XAML / Font provider `Registered` wrappers —
-// supertrait bound makes the boxed impl Send + Sync, Noesis serialises
-// per-object calls.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Registered {}
-unsafe impl Sync for Registered {}
 
 impl Registered {
     /// Raw `Noesis::TextureProvider*`.

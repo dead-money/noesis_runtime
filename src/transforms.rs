@@ -45,10 +45,8 @@ pub trait Transform {
 
 macro_rules! transform_handle {
     ($name:ident) => {
-        // SAFETY: a Noesis BaseComponent handle; same per-object affinity as the
-        // other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
@@ -469,10 +467,8 @@ pub trait Transform3D {
 
 macro_rules! transform3d_handle {
     ($name:ident) => {
-        // SAFETY: a Noesis BaseComponent handle; same per-object affinity as the
-        // other owning wrappers in this crate.
+        // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
         unsafe impl Send for $name {}
-        unsafe impl Sync for $name {}
 
         impl $name {
             /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.

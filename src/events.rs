@@ -82,12 +82,8 @@ pub struct ClickSubscription {
     userdata: NonNull<Box<dyn ClickHandler>>,
 }
 
-// SAFETY: matches the Registered guards on the providers — every Box<dyn
-// ClickHandler> is `Send`, and the C++ subscription is bound to a single
-// button whose access is serialized by Noesis. Sync is safe for the same
-// reason: there are no `&self` methods that touch Noesis state.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for ClickSubscription {}
-unsafe impl Sync for ClickSubscription {}
 
 impl Drop for ClickSubscription {
     fn drop(&mut self) {
@@ -332,11 +328,8 @@ pub struct KeyDownSubscription {
     userdata: NonNull<Box<dyn KeyDownHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] —
-// every Box<dyn KeyDownHandler> is `Send`, and the C++ subscription is
-// bound to a single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for KeyDownSubscription {}
-unsafe impl Sync for KeyDownSubscription {}
 
 impl Drop for KeyDownSubscription {
     fn drop(&mut self) {
@@ -796,11 +789,8 @@ pub struct EventSubscription {
     userdata: NonNull<Box<dyn RoutedEventHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
-// Box<dyn RoutedEventHandler> is `Send`, and the C++ subscription is bound to a
-// single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for EventSubscription {}
-unsafe impl Sync for EventSubscription {}
 
 impl Drop for EventSubscription {
     fn drop(&mut self) {
@@ -912,11 +902,8 @@ pub struct LifecycleSubscription {
     userdata: NonNull<Box<dyn LifecycleHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
-// Box<dyn LifecycleHandler> is `Send`, and the C++ subscription is bound to a
-// single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for LifecycleSubscription {}
-unsafe impl Sync for LifecycleSubscription {}
 
 impl Drop for LifecycleSubscription {
     fn drop(&mut self) {
@@ -1055,11 +1042,8 @@ pub struct DataObjectSubscription {
     userdata: NonNull<Box<dyn DataObjectHandler>>,
 }
 
-// SAFETY: matches the Send/Sync rationale on [`ClickSubscription`] — every
-// Box<dyn DataObjectHandler> is `Send`, and the C++ subscription is bound to a
-// single element whose access is serialised by Noesis.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for DataObjectSubscription {}
-unsafe impl Sync for DataObjectSubscription {}
 
 impl Drop for DataObjectSubscription {
     fn drop(&mut self) {

@@ -233,10 +233,8 @@ pub struct KeyGesture {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same per-object-serialisation
-// threading rationale as the other owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for KeyGesture {}
-unsafe impl Sync for KeyGesture {}
 
 impl KeyGesture {
     /// Build a key gesture for `key` + `modifiers`.
@@ -269,9 +267,8 @@ pub struct MouseGesture {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: see [`KeyGesture`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for MouseGesture {}
-unsafe impl Sync for MouseGesture {}
 
 impl MouseGesture {
     /// Build a mouse gesture for `action` + `modifiers`.
@@ -309,9 +306,8 @@ pub struct KeyBinding {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; see [`KeyGesture`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for KeyBinding {}
-unsafe impl Sync for KeyBinding {}
 
 impl KeyBinding {
     /// Bind `command` (any [`AsCommand`]) to the `key` + `modifiers` chord.
@@ -354,9 +350,8 @@ pub struct MouseBinding {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: see [`KeyGesture`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for MouseBinding {}
-unsafe impl Sync for MouseBinding {}
 
 impl MouseBinding {
     /// Bind `command` (any [`AsCommand`]) to the `action` + `modifiers` chord.
@@ -403,9 +398,8 @@ pub struct InputBinding {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: see [`KeyGesture`].
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for InputBinding {}
-unsafe impl Sync for InputBinding {}
 
 impl InputBinding {
     /// Bind `command` (any [`AsCommand`]) to `gesture` (a [`KeyGesture`] —

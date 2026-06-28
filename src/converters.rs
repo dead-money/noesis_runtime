@@ -242,10 +242,8 @@ pub struct Converter {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
-// owning wrappers in this crate (per-object calls serialised by the caller).
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Converter {}
-unsafe impl Sync for Converter {}
 
 impl Converter {
     /// Build a converter from a [`ValueConverter`]. A bare

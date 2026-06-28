@@ -323,10 +323,8 @@ pub struct PlainVmClass {
     prop_count: u32,
 }
 
-// SAFETY: the token is an opaque registration handle; per-object calls are
-// serialised by the caller, matching the other owning wrappers in this crate.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for PlainVmClass {}
-unsafe impl Sync for PlainVmClass {}
 
 impl PlainVmClass {
     /// Create an instance of this type. Returns `None` only on an impossible
@@ -366,10 +364,8 @@ pub struct PlainInstance {
     prop_count: u32,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same rationale as the other owning
-// wrappers — per-object calls serialised by the caller.
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for PlainInstance {}
-unsafe impl Sync for PlainInstance {}
 
 impl PlainInstance {
     /// Raw `Noesis::BaseComponent*`, borrowed for the lifetime of `self`.

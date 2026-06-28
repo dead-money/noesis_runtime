@@ -24,10 +24,8 @@ pub struct NameScope {
     ptr: NonNull<c_void>,
 }
 
-// SAFETY: a Noesis BaseComponent handle; same per-object thread affinity as the
-// other owning wrappers in this crate (Noesis serialises per-object access).
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for NameScope {}
-unsafe impl Sync for NameScope {}
 
 impl NameScope {
     /// Create a new, empty namescope.
