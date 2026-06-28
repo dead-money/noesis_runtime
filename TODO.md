@@ -1,88 +1,57 @@
 # TODO — unexposed Noesis SDK surface
 
-This tracks Noesis Native SDK (3.2.12) features that are **not yet exposed** through the
-crate's C ABI (`cpp/noesis_shim.h`) and Rust wrappers. It's a map of the gap between the
-full SDK and what we wrap today, roughly ordered by how likely we are to want each one.
+This tracks Noesis Native SDK (3.2.12) features **not yet exposed** through the crate's
+C ABI (`cpp/noesis_shim.h`) and Rust wrappers — the remaining gap between the full SDK
+and what we wrap today.
 
-Scope is driven by Dead Money's needs, so most of this is intentionally unbuilt. The point
-of the list is to know what exists before deciding to wrap it, not to imply everything here
-is planned.
+The goal is to **complete the crate**: cover the whole reachable SDK surface. Sections below
+list only outstanding work (finished work is removed, not annotated). The recommended
+sequencing is in [Suggested completion order](#suggested-completion-order); things 3.2.12
+genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
+don't keep re-discovering them.
 
 ## 1. View / Renderer
 
-Most of `IView` is unexposed beyond the basics. From `NsGui/IView.h`:
-
-- **Quality / AA tuning.** `SetTessellationMaxPixelError` (Low/Medium/HighQuality), `GetTessellationMaxPixelError`. We set flags but never expose tessellation quality.
+- **Quality / AA tuning.** `SetTessellationMaxPixelError` (Low/Medium/HighQuality), `GetTessellationMaxPixelError`.
 - **`RenderFlags` as typed options.** We pass a raw `u32` to `set_flags`; expose the enum (`Wireframe`, `ColorBatches`, `Overdraw`, `FlipY`, `PPAA`, `LCD`, `ShowGlyphs`, `ShowRamps`, `DepthTesting`) and `GetFlags`.
 - **Gesture / touch thresholds.** `SetHoldingTimeThreshold`, `SetHoldingDistanceThreshold`, `SetManipulationDistanceThreshold`, `SetDoubleTapTimeThreshold`, `SetDoubleTapDistanceThreshold`, `SetEmulateTouch`.
 - **Stereo / VR.** `SetStereoOffscreenScaleFactor`.
 - **`Rendering` event.** Per-frame `RenderingEventHandler` delegate (hook before render).
-- **View-driven timers.** `CreateTimer` / `RestartTimer` / `CancelTimer` (animation/dispatcher-style callbacks scheduled by the view).
-- **`ViewStats`.** `GetStats()` returns frame/update/render time, triangle/draw/batch counts, glyph stats, etc. Useful for profiling overlays.
+- **View-driven timers.** `CreateTimer` / `RestartTimer` / `CancelTimer` — animation/dispatcher-style callbacks scheduled by the view. Unlocks §2 queued-invoke and §6 animation scheduling.
+- **`ViewStats`.** `GetStats()` (frame/update/render time, triangle/draw/batch counts, glyph stats) for profiling overlays.
 - **`MouseHWheel`** (horizontal wheel) is in `IView` but not pumped.
-- **Renderer offscreen sizing / glyph cache** and render-thread split (UpdateRenderTree on render thread vs Update on UI thread) are not modeled separately.
+- **Renderer offscreen sizing / glyph cache** and the render-thread split (UpdateRenderTree on render thread vs Update on UI thread).
 
-## 2. Element tree access (DependencyObject / generic properties)
+## 2. Element tree access
 
-Generic name-keyed property access, attached properties (owner-qualified, incl. `uint32`
-layout props like `Grid.Row`), visual + logical tree traversal, single-point hit testing,
-name-scope register/unregister, value-source helpers (`ClearLocalValue` / `SetCurrentValue` /
-`GetBaseValue`), `Type*`→tag inference, and typed `FrameworkElement` sugar (`ActualWidth/Height`,
-`Width/Height/Opacity`, `IsEnabled`, `Focusable`, `Tag`, alignment, `DataContext`) are wrapped.
-Remaining:
-
-- **`Dispatcher` queued invoke.** `CheckAccess` / thread-id affinity queries are exposed, but `BeginInvoke`-style cross-thread marshalling has no NsGui surface — it routes through the View's timer API (`CreateTimer`, §1).
-- **Base value for reference-typed properties.** `GetBaseValue` has no boxed/object form in the SDK, so the base-value getter covers value/struct/string tags only, not component/brush DPs.
+- **`Dispatcher` queued invoke.** Cross-thread/queued invoke routes through the View timer API (`CreateTimer`, §1); blocked until those land. (Thread-affinity queries `CheckAccess`/`thread_id` are already wrapped — see also [limitations](#known-sdk-limitations).)
 - **`Style` / `RenderTransform` first-class typed wrappers.** Reachable today via the generic component accessors; no dedicated sugar yet.
 - **Filtered hit testing.** Only the single-point `VisualTreeHelper::HitTest` is wrapped; the `HitTestFilterCallback` / result-callback overload is not.
 - **Standalone `INameScope` / `NameScope` object.** Registration goes through `FrameworkElement::RegisterName`/`UnregisterName`; the freestanding scope object isn't exposed.
 
 ## 3. Data binding
 
-`DataContext`, `ObservableCollection` → `ItemsSource`, and `DependencyObject`-backed
-view models are wrapped; bindings can be authored in XAML against Rust data, built
-from code (`Binding` + `BindingOperations::SetBinding`, with Source / ElementName /
-RelativeSource Self / Mode / Converter / ConverterParameter / StringFormat /
-FallbackValue / UpdateSourceTrigger), and run through Rust `IValueConverter`s
-(Convert + ConvertBack). Still missing:
-
-- **`INotifyPropertyChanged`** from Rust for plain (non-`DependencyObject`) view models — needs runtime-reflected properties.
-- **`IMultiValueConverter`** implemented in Rust (the single-value `IValueConverter` is wrapped).
-- **`MultiBinding`**, `PriorityBinding`, `TemplateBinding` (runtime construction).
-- **`CollectionView` / `CollectionViewSource`** (sorting/filtering/grouping/current-item).
-- **`RelativeSource` ancestor modes** (`FindAncestor` with `AncestorType` / `AncestorLevel`, `PreviousData`, `TemplatedParent`) — only the `Self` convenience is wrapped.
-- **`BindingExpression` inspection** (`BindingOperations::GetBindingExpression`, explicit `UpdateSource` / `UpdateTarget`).
+- **`RelativeSource` ancestor modes** (`FindAncestor` with `AncestorType`/`AncestorLevel`, `PreviousData`, `TemplatedParent`) — only the `Self` convenience is wrapped. Cheap.
+- **`BindingExpression` inspection** — `BindingOperations::GetBindingExpression`, explicit `UpdateSource`/`UpdateTarget`. Cheap; completes the already-wrapped `UpdateSourceTrigger::Explicit` (nothing currently commits an explicit-trigger binding).
+- **`IMultiValueConverter` + `MultiBinding`** (runtime construction; `TryConvert` over an array of values).
+- **`PriorityBinding`, `TemplateBinding`** (runtime construction).
+- **`INotifyPropertyChanged` for plain (non-`DependencyObject`) view models.** Large: Noesis resolves non-DP binding paths only through registered `TypeProperty` reflection (no getter-by-name), so this needs the runtime reflection registration from §9. The `DependencyObject`-backed VM path already covers the notification need.
 
 ## 4. Commands
 
-- **`RoutedCommand` / `RoutedUICommand`**, `CommandBinding`, `CommandManager` (RequerySuggested).
-- Built-in command libraries: `ApplicationCommands`, `ComponentCommands`, `NavigationCommands`.
+- **`RoutedCommand` / `RoutedUICommand`** (note: `Create` needs a reflected `TypeClass` owner — see §9).
+- **`CommandBinding`** (CanExecute/Executed delegates) attached via `UIElement::GetCommandBindings()`, plus `CommandManager`'s attached `CanExecute`/`Executed` routed events.
+- **Built-in command libraries:** `ApplicationCommands`, `ComponentCommands` (static `const RoutedUICommand*` getters).
 
-## 5. Routed events (beyond Click / KeyDown)
+## 5. Routed events
 
-The generic name-keyed `AddHandler`/`RemoveHandler` mechanism is wrapped
-(`events::subscribe_event`), covering mouse, keyboard (+`TextInput`), focus,
-lifecycle (`Loaded`/`Unloaded`/`SizeChanged`), and the touch/manipulation/drag
-events, with typed arg accessors for position, button, wheel delta, key, new
-size, and source. Remaining:
-
-- **`handledEventsToo` across the route.** This SDK's `AddHandler` has only the
-  2-arg form, so already-handled events aren't re-delivered to a handler as the
-  route bubbles/tunnels; the flag is honoured only within one element's handler
-  chain. True route-wide `handledEventsToo` would need SDK support.
-- **Richer typed arg accessors.** Focus-changed (`old`/`new` element),
-  manipulation (delta/velocity/inertia), and drag (`DataObject`, effects,
-  key-states) args are reachable as base `RoutedEventArgs` (source/handled) but
-  have no dedicated FFI accessors yet.
-- **Non-routed lifecycle events.** `Initialized`, `LayoutUpdated`, and the
-  `Is*Changed` property-changed notifications use `AddEventHandler(Symbol, ...)`
-  (the `Event_` mechanism), not `AddHandler(RoutedEvent, ...)`, so they're
-  outside the routed-event surface above.
-- **`DragDrop` / `DataObject`** construction + the drag-source side (`DoDragDrop`).
+- **Non-routed lifecycle events.** `Initialized`, `LayoutUpdated`, and the `Is*Changed` notifications use `AddEventHandler(Symbol, EventHandler)` (the `Event_` mechanism), not `AddHandler(RoutedEvent, …)`. Cheap: one `EventHandler`/Symbol trampoline covers all of them.
+- **Richer typed arg accessors.** Focus-changed (`old`/`new` element — 2 fields, cheap), manipulation (delta/velocity/inertia — ~6 nested structs), and drag (effects/key-states bitmasks). Currently reachable only as base `RoutedEventArgs` (source/handled).
+- **`DragDrop` source side** (`DoDragDrop`) and the copy/paste `DataObject` handlers.
 
 ## 6. Animation & timing
 
-Nothing in this area is exposed.
+Nothing here is exposed. Leans on §1 View timers for scheduling.
 
 - **`Storyboard`** Begin/Pause/Resume/Stop/Seek (+ `BeginStoryboard` and the controllable actions).
 - **Animation classes** (Double/Color/Point/Thickness/Rect/Size/Object/Matrix/Int*, plus `*UsingKeyFrames`, easing functions, key splines, repeat/handoff behaviors).
@@ -92,17 +61,16 @@ Nothing in this area is exposed.
 
 Only `LoadApplicationResources` is wired.
 
-- **`ResourceDictionary` access.** `GUI::SetApplicationResources` / `GetApplicationResources`, per-element `Resources`, `FindResource` / `TryFindResource`, merged dictionaries, `RegisterDefaultStyles`.
+- **`ResourceDictionary` access.** `GUI::SetApplicationResources`/`GetApplicationResources`, per-element `Resources`, `FindResource`/`TryFindResource`, merged dictionaries, `RegisterDefaultStyles`.
 - **`Style`** construction/assignment, setters, triggers (`Trigger`, `DataTrigger`, `EventTrigger`, multi-triggers) from code.
 - **Templates.** `ControlTemplate` / `DataTemplate` / `ItemsPanelTemplate` / `HierarchicalDataTemplate` runtime creation; `DataTemplateSelector` from Rust; `FrameworkTemplate::FindName`.
-- **Dynamic resources.** `DynamicResourceExtension`, `StaticResourceExtension` (we have custom markup extensions but not these built-ins).
+- **Dynamic resources.** `DynamicResourceExtension`, `StaticResourceExtension` (built-ins; we have custom markup extensions but not these).
 
 ## 8. Controls — programmatic access
 
-We never touch specific control APIs except TextBox text. Each common control has state worth
-exposing (selection, value, items, checked, expansion). High-value candidates:
+Only TextBox text is touched today. Best done incrementally, per control as a screen needs it.
 
-- **Selection.** `Selector` / `ListBox` / `ComboBox` / `TabControl` `SelectedIndex`/`SelectedItem`/`SelectedValue`; `ListView`/`TreeView` selection.
+- **Selection.** `Selector`/`ListBox`/`ComboBox`/`TabControl` `SelectedIndex`/`SelectedItem`/`SelectedValue`; `ListView`/`TreeView` selection.
 - **Items.** `ItemsControl::GetItems` add/remove/clear, `ItemsSource`, `ItemContainerGenerator`.
 - **Ranges.** `RangeBase` (`Slider`, `ProgressBar`, `ScrollBar`) `Value`/`Minimum`/`Maximum`.
 - **Toggles.** `ToggleButton`/`CheckBox`/`RadioButton` `IsChecked`.
@@ -113,22 +81,23 @@ exposing (selection, value, items, checked, expansion). High-value candidates:
 
 ## 9. Custom types / reflection registration
 
-`ClassBuilder` supports a `ContentControl` base plus custom markup extensions. The reflection
-system supports far more.
+`ClassBuilder` supports a `ContentControl` base plus custom markup extensions. This is also the
+prerequisite for §3 plain-VM `INotifyPropertyChanged` (runtime `TypeProperty` registration).
 
-- **More base classes.** `Control`, `FrameworkElement`, `UserControl`, `Panel` (custom layout — Measure/Arrange overrides), `Decorator`, `Freezable`, custom `Brush`/`Effect`/`Geometry`/`Transform`.
+- **More base classes.** `Control`, `FrameworkElement`, `UserControl`, `Panel` (custom layout), `Decorator`, `Freezable`, custom `Brush`/`Effect`/`Geometry`/`Transform`.
 - **Custom dependency properties:** more types, `PropertyMetadata` (defaults, coercion, `FrameworkPropertyMetadataOptions` like AffectsMeasure/Render), read-only DPs, `attached` properties.
+- **Runtime-reflected plain properties** (`NsProp`-equivalent `TypeProperty` registration) so non-DO Rust VMs become bindable — the missing half of §3 INPC.
 - **Custom routed events** registration on Rust-backed types.
 - **Custom enums** (`NsRegisterEnum`) usable from XAML.
 - **`RegisterComponent` / `Factory`** for arbitrary component types; `NsMeta`/content-property/`DependsOn`/`TypeConverter` metadata.
 - **Custom `IValueConverter` / `TypeConverter`** registration.
-- **Layout participation.** `MeasureOverride`/`ArrangeOverride` trampolines for true custom panels/controls (current `ContentControl` base does not expose layout).
+- **Layout participation.** `MeasureOverride`/`ArrangeOverride` trampolines for true custom panels/controls.
 
 ## 10. Geometry, shapes, drawing
 
 Only `Path.set_points` is exposed.
 
-- **Geometry construction.** `StreamGeometry` / `StreamGeometryContext`, `PathGeometry` + figures/segments (Line/Bezier/Arc/Poly*), `EllipseGeometry`/`RectangleGeometry`/`LineGeometry`, `CombinedGeometry`, `GeometryGroup`.
+- **Geometry construction.** `StreamGeometry`/`StreamGeometryContext`, `PathGeometry` + figures/segments (Line/Bezier/Arc/Poly*), `EllipseGeometry`/`RectangleGeometry`/`LineGeometry`, `CombinedGeometry`, `GeometryGroup`.
 - **Shapes.** `Rectangle`/`Ellipse`/`Line`/`Polygon`/`Polyline` property access; `Shape` stroke/fill/`Pen`/`DashStyle`.
 - **`DrawingContext`** immediate-mode drawing.
 
@@ -136,12 +105,12 @@ Only `Path.set_points` is exposed.
 
 - **Brushes.** `SolidColorBrush` color set, `LinearGradientBrush`/`RadialGradientBrush` + `GradientStop`s, `ImageBrush`, `VisualBrush`, `TileBrush`, `BrushShader`.
 - **Transforms.** `TranslateTransform`/`ScaleTransform`/`RotateTransform`/`SkewTransform`/`MatrixTransform`/`TransformGroup`/`CompositeTransform`; 3D transforms (`Transform3D`, `CompositeTransform3D`).
-- **Effects.** `BlurEffect`, `DropShadowEffect`, custom `ShaderEffect` (noted out-of-scope in README — `Batch.pixelShader` path).
+- **Effects.** `BlurEffect`, `DropShadowEffect`, custom `ShaderEffect` (`Batch.pixelShader` path — noted out-of-scope in README).
 - **`RenderOptions`** (per-element bitmap scaling / caching hints).
 
 ## 12. Media, imaging, render targets
 
-- **Bitmaps.** `BitmapImage`, `BitmapSource`, `CroppedBitmap`, `DynamicTextureSource`, `TextureSource`/`RenderTexture` (render UI into a texture / use a texture as a source).
+- **Bitmaps.** `BitmapImage`, `BitmapSource`, `CroppedBitmap`, `DynamicTextureSource`, `TextureSource`/`RenderTexture`.
 - **SVG.** `SVG` / `SVGPath` loading.
 - **Offscreen capture / screenshots** of a rendered view (beyond the raw `render_offscreen` pass).
 
@@ -156,7 +125,7 @@ Only `Path.set_points` is exposed.
 From `IntegrationAPI.h`, none are wired:
 
 - **`SetCursorCallback`** (host updates the OS cursor).
-- **`SetSoftwareKeyboardCallback`** (show/hide on-screen keyboard for text fields — important on console/mobile).
+- **`SetSoftwareKeyboardCallback`** (show/hide on-screen keyboard — important on console/mobile).
 - **`SetOpenUrlCallback`** / `OpenUrl` (hyperlink navigation).
 - **`SetPlayAudioCallback`** / `PlayAudio` (UI sound effects).
 - **`SetClipboard`**-style data object exchange (via `DataObject`).
@@ -164,7 +133,7 @@ From `IntegrationAPI.h`, none are wired:
 
 ## 15. XAML loading variants
 
-- **`ParseXaml`** (parse from an in-memory string, not just a URI).
+- **`ParseXaml`** (parse from an in-memory string, not just a URI). Cheap and broadly handy.
 - **`LoadComponent`** (load XAML into an existing component instance — code-behind pattern).
 - **`LoadXaml<T>`** typed variants and `GetXamlDependencies` (asset dependency discovery / preloading).
 - **Scheme / assembly-scoped providers.** `SetSchemeXamlProvider`, `SetAssemblyXamlProvider`, and the texture/font equivalents.
@@ -173,28 +142,62 @@ From `IntegrationAPI.h`, none are wired:
 
 - **Mouse capture.** `Mouse::Capture` / `CaptureMouse` / `ReleaseMouseCapture` on elements.
 - **Keyboard state / modifiers** querying, `Keyboard::Focus`, `KeyboardNavigation` (tab order, directional nav, `FocusManager`).
-- **Input gestures / bindings.** `KeyBinding`/`MouseBinding`/`InputBinding`, `KeyGesture`/`MouseGesture`.
+- **Input gestures / bindings.** `KeyBinding`/`MouseBinding`/`InputBinding`, `KeyGesture`/`MouseGesture` (pairs with §4 routed commands).
 - **Stylus** events (distinct from touch).
-- **Gamepad / focus engagement** navigation modes.
+- **Gamepad / focus engagement** navigation modes — important for console.
 
 ## 17. Diagnostics & tooling
 
-- **Inspector / hot-reload.** `DisableHotReload`, `DisableInspector`, `IsInspectorConnected`, `UpdateInspector`, `DisableSocketInit` — currently not surfaced (we may want to *enable* the inspector for debugging).
+- **Inspector / hot-reload.** `DisableHotReload`, `DisableInspector`, `IsInspectorConnected`, `UpdateInspector`, `DisableSocketInit` — we likely want to *enable* the inspector for debugging. Cheap dev-experience win.
 - **Profiling.** `CpuProfiler`, `ViewStats` overlay (see §1), memory usage queries.
 - **Logging** has a handler; structured log levels / categories could be richer.
 
 ## 18. Memory / kernel hooks
 
+- **`SetErrorHandler` / `SetAssertHandler`** (route Noesis fatal errors into our logging/panic path) — `NsCore/Error.h`. Good robustness win.
 - **`MemoryCallbacks`** (custom allocator integration with the engine's allocator).
-- **`SetErrorHandler` / `SetAssertHandler`** (route Noesis fatal errors into our logging/panic path) — `NsCore/Error.h`.
-- **`Ptr<T>` / `BaseComponent` lifetime helpers** beyond the single `base_component_release` (AddReference/GetNumReferences if needed for advanced ownership).
+- **`Ptr<T>` / `BaseComponent` lifetime helpers** beyond `base_component_release` (AddReference/GetNumReferences for advanced ownership).
 
 ---
 
-### Notes on prioritization
+## Suggested completion order
 
-The two foundations are now in place: generic `DependencyProperty` get/set plus the broader
-element-tree surface (§2), and the binding bridge (§3, `DataContext` + `ObservableCollection`
-from Rust). With those wrapped, the next most broadly useful, low-surface-area win is
-**generic `AddHandler` / `RemoveHandler` routed events** (§5) — it unlocks every mouse, keyboard,
-focus, and lifecycle event from one mechanism instead of bespoke per-event wrappers.
+Ordered to finish the crate with the least rework — cheap completions and high-leverage
+primitives first, big rocks once their prerequisites exist. Each phase is a natural batch.
+
+**Phase A — finish the core + cheap wins.**
+1. §3 `RelativeSource FindAncestor` + `BindingExpression` `UpdateSource`/`UpdateTarget`, and §5 `Initialized`/`LayoutUpdated`/`Is*Changed` — all cheap, complementary; one small PR.
+2. §1 View timers (`CreateTimer`) + `RenderFlags`/`ViewStats`/quality. **Timers unlock §2 queued-invoke and §6 animation**, so do them before those.
+3. §15 `ParseXaml` (+ `LoadComponent`) and §17 inspector-enable — both cheap and broadly useful for dev/tests.
+
+**Phase B — presentation.**
+4. §7 Styles / resources / templates (`FindResource`, `DataTemplate`/`ControlTemplate` from code) — needed to theme and to render bound collections meaningfully.
+5. §8 Controls programmatic access — incremental, per control as screens need it.
+6. §11 Brushes / transforms — needed to drive styled visuals from code.
+
+**Phase C — custom types + motion.**
+7. §9 Custom types / reflection (more base classes, custom DPs/events/enums, `MeasureOverride`/`ArrangeOverride`, and **runtime-reflected plain properties**). Foundational; also unblocks §3 plain-VM INPC.
+8. §3 plain-VM `INotifyPropertyChanged` + `MultiBinding`/`IMultiValueConverter` (after §9 reflection).
+9. §6 Animation & timing (after §1 timers).
+
+**Phase D — drawing / media / text.**
+10. §10 Geometry & shapes, §12 Media / imaging / render targets, §13 rich text & inlines.
+
+**Phase E — platform & finer input.**
+11. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
+12. §16 Finer input (mouse capture, `FocusManager`/keyboard nav, input gestures, **gamepad / focus engagement**).
+13. §4 Routed commands (`RoutedCommand`/`CommandBinding`/built-in libraries) — pairs with §16 input bindings; the Rust `ICommand` already covers simple cases, so this is late.
+
+**Phase F — robustness & profiling.**
+14. §18 `SetErrorHandler`/`SetAssertHandler` + memory/lifetime hooks, and §17 profiling (`CpuProfiler`, `ViewStats` overlay).
+
+## Known SDK limitations
+
+Recorded so they aren't re-attempted — 3.2.12 doesn't expose these; the workaround is noted.
+
+- **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.12 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
+- **`CollectionView` sort / filter / group (§3).** `ICollectionView` here is current-item navigation only — no `SortDescriptions`, `Filter` delegate, `GroupDescriptions`, or `CollectionViewSource::GetDefaultView` ship. Sort/filter/group in Rust before populating the `ObservableCollection`. (Current-item navigation — `MoveCurrentTo*` — *is* available if ever needed.)
+- **`CommandManager.RequerySuggested` / `InvalidateRequerySuggested` (§4).** Absent. Use per-command `BaseCommand::RaiseCanExecuteChanged` (already wrapped) to drive enable/disable.
+- **`NavigationCommands` (§4).** Header doesn't ship (`ApplicationCommands`/`ComponentCommands` do).
+- **`GetBaseValue` object form (§2).** No boxed `GetBaseValue`, so the base-value getter covers value/struct/string DPs only, not component/brush DPs.
+- **`Dispatcher::BeginInvoke` (§2).** No NsGui dispatcher queue; queued/cross-thread invoke must route through the View timer API (`CreateTimer`, §1) once wrapped.
