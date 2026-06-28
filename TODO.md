@@ -10,14 +10,6 @@ sequencing is in [Suggested completion order](#suggested-completion-order); thin
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
-## 3. Data binding
-
-Code-built bindings (`RelativeSource` incl. `FindAncestor`, `BindingExpression` update), Rust value
-converters, `MultiBinding` + `IMultiValueConverter`, and plain (non-`DependencyObject`) view models
-with `INotifyPropertyChanged` (via §9 reflected plain properties) all ship. Remaining:
-
-- **`PriorityBinding`, `TemplateBinding`** (runtime construction).
-
 ## 4. Commands
 
 - **`RoutedCommand` / `RoutedUICommand`** (note: `Create` needs a reflected `TypeClass` owner — see §9).
@@ -176,6 +168,8 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 
 - **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.13 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
 - **`CollectionView` sort / filter / group (§3).** `ICollectionView` here is current-item navigation only — no `SortDescriptions`, `Filter` delegate, `GroupDescriptions`, or `CollectionViewSource::GetDefaultView` ship. Sort/filter/group in Rust before populating the `ObservableCollection`. (Current-item navigation — `MoveCurrentTo*` — *is* available if ever needed.)
+- **`PriorityBinding` (§3).** Not in 3.2.13 — the class doesn't exist in the SDK (a WPF feature Noesis omits, like `NavigationCommands`). No workaround; restructure so a single binding with a `FallbackValue` covers the priority case.
+- **`TemplateBinding` runtime construction (§3).** `TemplateBindingExtension` exists but is only meaningful inside a `ControlTemplate`; the XAML `{TemplateBinding X}` parse path already works, and the code path is covered by a templated-parent binding (`{Binding RelativeSource={RelativeSource TemplatedParent}}`, already wrapped). A dedicated runtime wrapper would just duplicate that, so it's intentionally not built.
 - **`CommandManager.RequerySuggested` / `InvalidateRequerySuggested` (§4).** Absent. Use per-command `BaseCommand::RaiseCanExecuteChanged` (already wrapped) to drive enable/disable.
 - **`NavigationCommands` (§4).** Header doesn't ship (`ApplicationCommands`/`ComponentCommands` do).
 - **`GetBaseValue` object form (§2).** No boxed `GetBaseValue`, so the base-value getter covers value/struct/string DPs only, not component/brush DPs.
