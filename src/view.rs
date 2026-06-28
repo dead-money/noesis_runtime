@@ -20,42 +20,45 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
     PropType, dm_noesis_base_component_release, dm_noesis_binding_expression_update_source,
-    dm_noesis_binding_expression_update_target, dm_noesis_dependency_object_check_access,
+    dm_noesis_binding_expression_update_target, dm_noesis_control_get_template,
+    dm_noesis_control_set_template, dm_noesis_dependency_object_check_access,
     dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
     dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
     dm_noesis_dependency_object_thread_id, dm_noesis_expander_get_is_expanded,
     dm_noesis_expander_set_is_expanded, dm_noesis_focus_element,
-    dm_noesis_framework_element_find_name, dm_noesis_framework_element_get_data_context,
-    dm_noesis_framework_element_get_halign, dm_noesis_framework_element_get_name,
-    dm_noesis_framework_element_get_valign, dm_noesis_framework_element_logical_parent,
-    dm_noesis_framework_element_register_name, dm_noesis_framework_element_set_data_context,
-    dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
-    dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
-    dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
-    dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml,
-    dm_noesis_items_control_items_add, dm_noesis_items_control_items_clear,
-    dm_noesis_items_control_items_count, dm_noesis_items_control_items_insert,
-    dm_noesis_items_control_items_remove_at, dm_noesis_items_control_realized_count,
-    dm_noesis_items_control_set_items_source, dm_noesis_logical_child,
-    dm_noesis_logical_children_count, dm_noesis_path_set_points, dm_noesis_renderer_init,
-    dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
-    dm_noesis_renderer_update_render_tree, dm_noesis_text_caret_to_end, dm_noesis_text_get,
-    dm_noesis_text_set, dm_noesis_view_activate, dm_noesis_view_cancel_timer, dm_noesis_view_char,
-    dm_noesis_view_create, dm_noesis_view_create_timer, dm_noesis_view_deactivate,
-    dm_noesis_view_destroy, dm_noesis_view_get_content, dm_noesis_view_get_flags,
-    dm_noesis_view_get_renderer, dm_noesis_view_get_stats,
-    dm_noesis_view_get_tessellation_max_pixel_error, dm_noesis_view_hscroll,
-    dm_noesis_view_key_down, dm_noesis_view_key_up, dm_noesis_view_mouse_button_down,
-    dm_noesis_view_mouse_button_up, dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel,
-    dm_noesis_view_mouse_move, dm_noesis_view_mouse_wheel, dm_noesis_view_restart_timer,
-    dm_noesis_view_scroll, dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix,
-    dm_noesis_view_set_scale, dm_noesis_view_set_size,
-    dm_noesis_view_set_tessellation_max_pixel_error, dm_noesis_view_touch_down,
-    dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
-    dm_noesis_visual_child, dm_noesis_visual_children_count, dm_noesis_visual_hit_test,
-    dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
+    dm_noesis_framework_element_find_name, dm_noesis_framework_element_find_resource,
+    dm_noesis_framework_element_get_data_context, dm_noesis_framework_element_get_halign,
+    dm_noesis_framework_element_get_name, dm_noesis_framework_element_get_resources,
+    dm_noesis_framework_element_get_style, dm_noesis_framework_element_get_valign,
+    dm_noesis_framework_element_logical_parent, dm_noesis_framework_element_register_name,
+    dm_noesis_framework_element_set_data_context, dm_noesis_framework_element_set_halign,
+    dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_resources,
+    dm_noesis_framework_element_set_style, dm_noesis_framework_element_set_valign,
+    dm_noesis_framework_element_set_visibility, dm_noesis_framework_element_template_child,
+    dm_noesis_framework_element_unregister_name, dm_noesis_get_binding_expression,
+    dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml, dm_noesis_items_control_items_add,
+    dm_noesis_items_control_items_clear, dm_noesis_items_control_items_count,
+    dm_noesis_items_control_items_insert, dm_noesis_items_control_items_remove_at,
+    dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
+    dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_path_set_points,
+    dm_noesis_renderer_init, dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen,
+    dm_noesis_renderer_shutdown, dm_noesis_renderer_update_render_tree,
+    dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_view_activate,
+    dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
+    dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
+    dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
+    dm_noesis_view_get_stats, dm_noesis_view_get_tessellation_max_pixel_error,
+    dm_noesis_view_hscroll, dm_noesis_view_key_down, dm_noesis_view_key_up,
+    dm_noesis_view_mouse_button_down, dm_noesis_view_mouse_button_up,
+    dm_noesis_view_mouse_double_click, dm_noesis_view_mouse_hwheel, dm_noesis_view_mouse_move,
+    dm_noesis_view_mouse_wheel, dm_noesis_view_restart_timer, dm_noesis_view_scroll,
+    dm_noesis_view_set_flags, dm_noesis_view_set_projection_matrix, dm_noesis_view_set_scale,
+    dm_noesis_view_set_size, dm_noesis_view_set_tessellation_max_pixel_error,
+    dm_noesis_view_touch_down, dm_noesis_view_touch_move, dm_noesis_view_touch_up,
+    dm_noesis_view_update, dm_noesis_visual_child, dm_noesis_visual_children_count,
+    dm_noesis_visual_hit_test, dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
 };
 use crate::ffi::{
     dm_noesis_passwordbox_get_password, dm_noesis_passwordbox_set_password,
@@ -675,16 +678,33 @@ impl FrameworkElement {
     // Bindings authored in XAML (`{Binding Path}`) then resolve against that
     // Rust-owned data. Same View-thread affinity as the other accessors here.
 
-    /// Set this element's `DataContext` to an arbitrary `Noesis::BaseComponent*`
-    /// (most usefully a [`crate::classes::ClassInstance`] view model). Returns
+    /// Set this element's `DataContext` to a Rust-backed view model. Returns
     /// `false` if this element is not a `FrameworkElement`. Noesis stores its
-    /// own reference to `context`.
+    /// own reference to the instance, so it stays valid even after `instance`
+    /// is dropped on the Rust side — though by convention the
+    /// [`ClassInstance`](crate::classes::ClassInstance) is kept alive for as
+    /// long as the binding is live.
+    ///
+    /// This is the safe entry point preferred by `unsafe`-free consumers (e.g.
+    /// `dm_noesis_bevy`, which is `unsafe_code = forbid`): the `&ClassInstance`
+    /// borrow encodes the "live `BaseComponent`" invariant the raw setter
+    /// demands. For an arbitrary `BaseComponent*` use [`Self::set_data_context_raw`].
+    pub fn set_data_context(&mut self, instance: &crate::classes::ClassInstance) -> bool {
+        // SAFETY: `instance.raw()` is a live BaseComponent* for the duration of
+        // the borrow, which fully covers this synchronous call.
+        unsafe { self.set_data_context_raw(instance.raw()) }
+    }
+
+    /// Set this element's `DataContext` to an arbitrary `Noesis::BaseComponent*`.
+    /// Returns `false` if this element is not a `FrameworkElement`. Noesis stores
+    /// its own reference to `context`. Prefer the safe [`Self::set_data_context`]
+    /// when the context is a [`ClassInstance`](crate::classes::ClassInstance).
     ///
     /// # Safety
     ///
     /// `context` must be a valid live `Noesis::BaseComponent*` (e.g. from
     /// [`crate::classes::ClassInstance::raw`]) or null to clear.
-    pub unsafe fn set_data_context(&mut self, context: *mut c_void) -> bool {
+    pub unsafe fn set_data_context_raw(&mut self, context: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; `context` is a live
         // BaseComponent* (or null) per the contract above; the C side
         // DynamicCasts and null-checks.
@@ -709,16 +729,41 @@ impl FrameworkElement {
         NonNull::new(p)
     }
 
-    /// Set this element's `ItemsSource` (it must be an `ItemsControl` — e.g.
-    /// `ItemsControl` / `ListBox` / `ListView`). Returns `false` if this element
-    /// is not an `ItemsControl`. Pass an
-    /// [`crate::binding::ObservableCollection`]'s `raw()` to drive a live list.
+    /// Point this element's `ItemsSource` at a Rust-owned
+    /// [`ObservableCollection`](crate::binding::ObservableCollection). The
+    /// element must be an `ItemsControl` (e.g. `ItemsControl` / `ListBox` /
+    /// `ListView` / `ComboBox`); returns `false` otherwise. Noesis stores its
+    /// own reference to the collection.
+    ///
+    /// Safe entry point for `unsafe`-free consumers — the `&ObservableCollection`
+    /// borrow encodes the live-`BaseComponent` invariant. Use
+    /// [`Self::clear_items_source`] to detach, or [`Self::set_items_source_raw`]
+    /// for an arbitrary list-implementing `BaseComponent*`.
+    pub fn set_items_source(&mut self, items: &crate::binding::ObservableCollection) -> bool {
+        // SAFETY: `items.raw()` is a live ObservableCollection* (a BaseComponent
+        // implementing a list interface) for the duration of the borrow.
+        unsafe { self.set_items_source_raw(items.raw()) }
+    }
+
+    /// Detach this element's `ItemsSource`. Returns `false` if this element is
+    /// not an `ItemsControl`. Clearing with null is always sound.
+    pub fn clear_items_source(&mut self) -> bool {
+        // SAFETY: self.ptr is a live FrameworkElement*; null is always valid.
+        unsafe {
+            dm_noesis_items_control_set_items_source(self.ptr.as_ptr(), core::ptr::null_mut())
+        }
+    }
+
+    /// Set this element's `ItemsSource` to an arbitrary `Noesis::BaseComponent*`
+    /// (it must be an `ItemsControl`). Returns `false` if this element is not an
+    /// `ItemsControl`. Prefer the safe [`Self::set_items_source`] /
+    /// [`Self::clear_items_source`].
     ///
     /// # Safety
     ///
     /// `items` must be a valid live `Noesis::BaseComponent*` implementing a
     /// list interface (e.g. an `ObservableCollection`) or null to clear.
-    pub unsafe fn set_items_source(&mut self, items: *mut c_void) -> bool {
+    pub unsafe fn set_items_source_raw(&mut self, items: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; `items` is a live
         // BaseComponent* (or null) per the contract above.
         unsafe { dm_noesis_items_control_set_items_source(self.ptr.as_ptr(), items) }
@@ -1821,6 +1866,95 @@ impl FrameworkElement {
         let c = CString::new(password).expect("password contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
         unsafe { dm_noesis_passwordbox_set_password(self.ptr.as_ptr(), c.as_ptr()) }
+    }
+
+    // ── resources-styles-templates (§7) ─────────────────────────────────────
+    //
+    // Per-element Resources get/set + non-throwing FindResource, Style
+    // assign/read-back, and ControlTemplate assign/read-back. The owned
+    // wrappers ([`ResourceDictionary`], [`Style`], [`ControlTemplate`]) and the
+    // free application-resource / parse helpers live in [`crate::resources`] /
+    // [`crate::styles`]; these methods are the element-facing entrypoints.
+
+    /// This element's local resource dictionary (`FrameworkElement::GetResources`),
+    /// or `None` if it has none. The returned
+    /// [`ResourceDictionary`](crate::resources::ResourceDictionary) owns its own
+    /// `+1` reference (the accessor `AddRef`'d it), so it stays valid past this
+    /// borrow and mutating it mutates the live dictionary on the element.
+    #[must_use]
+    pub fn get_resources(&self) -> Option<crate::resources::ResourceDictionary> {
+        // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs the
+        // result so the wrapper owns a +1.
+        let ptr = unsafe { dm_noesis_framework_element_get_resources(self.ptr.as_ptr()) };
+        NonNull::new(ptr)
+            .map(|ptr| unsafe { crate::resources::ResourceDictionary::from_owned(ptr) })
+    }
+
+    /// Replace this element's local resource dictionary
+    /// (`FrameworkElement::SetResources`). Noesis takes its own reference, so
+    /// `dict` may be dropped afterwards. Returns `false` if this is not a
+    /// `FrameworkElement`.
+    pub fn set_resources(&mut self, dict: &crate::resources::ResourceDictionary) -> bool {
+        // SAFETY: both pointers are live; Noesis AddRefs the dictionary.
+        unsafe { dm_noesis_framework_element_set_resources(self.ptr.as_ptr(), dict.raw()) }
+    }
+
+    /// Look up a resource by `key`, walking the logical parent chain and the
+    /// application resources (`FrameworkElement::FindResource`). Borrowed (no
+    /// `+1`) — valid only transiently; copy / re-root if you need it longer.
+    /// Returns `None` on a miss (the non-throwing variant) or if this is not a
+    /// `FrameworkElement`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `key` contains an interior NUL byte.
+    #[must_use]
+    pub fn find_resource(&self, key: &str) -> Option<NonNull<c_void>> {
+        let c = CString::new(key).expect("resource key contained interior NUL");
+        // SAFETY: self.ptr live; c lives for the call. The returned pointer is
+        // borrowed (owned by whichever dictionary holds the entry).
+        let p = unsafe { dm_noesis_framework_element_find_resource(self.ptr.as_ptr(), c.as_ptr()) };
+        NonNull::new(p)
+    }
+
+    /// Assign a [`Style`](crate::styles::Style) to this element
+    /// (`FrameworkElement::SetStyle`). Applying the style seals it. Noesis takes
+    /// its own reference, so `style` may be dropped afterwards. Returns `false`
+    /// if this is not a `FrameworkElement`.
+    pub fn set_style(&mut self, style: &crate::styles::Style) -> bool {
+        // SAFETY: both pointers are live; Noesis AddRefs the style.
+        unsafe { dm_noesis_framework_element_set_style(self.ptr.as_ptr(), style.raw()) }
+    }
+
+    /// This element's assigned [`Style`](crate::styles::Style)
+    /// (`FrameworkElement::GetStyle`), or `None` if none. The returned wrapper
+    /// owns its own `+1` reference (the accessor `AddRef`'d it).
+    #[must_use]
+    pub fn get_style(&self) -> Option<crate::styles::Style> {
+        // SAFETY: self.ptr is a live FrameworkElement*; the C side AddRefs.
+        let ptr = unsafe { dm_noesis_framework_element_get_style(self.ptr.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| unsafe { crate::styles::Style::from_owned(ptr) })
+    }
+
+    /// Assign a [`ControlTemplate`](crate::styles::ControlTemplate) to this
+    /// element (`Control::SetTemplate`). Noesis takes its own reference, so the
+    /// template may be dropped afterwards. Returns `false` if this is not a
+    /// `Control`. After the next layout pass the template parts become
+    /// resolvable via [`template_child`](Self::template_child) or
+    /// [`ControlTemplate::find_name`](crate::styles::ControlTemplate::find_name).
+    pub fn set_control_template(&mut self, template: &crate::styles::ControlTemplate) -> bool {
+        // SAFETY: both pointers are live; Noesis AddRefs the template.
+        unsafe { dm_noesis_control_set_template(self.ptr.as_ptr(), template.raw()) }
+    }
+
+    /// This control's assigned [`ControlTemplate`](crate::styles::ControlTemplate)
+    /// (`Control::GetTemplate`), or `None` if none / not a `Control`. The
+    /// returned wrapper owns its own `+1` reference (the accessor `AddRef`'d it).
+    #[must_use]
+    pub fn get_control_template(&self) -> Option<crate::styles::ControlTemplate> {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side AddRefs.
+        let ptr = unsafe { dm_noesis_control_get_template(self.ptr.as_ptr()) };
+        NonNull::new(ptr).map(|ptr| unsafe { crate::styles::ControlTemplate::from_owned(ptr) })
     }
 }
 

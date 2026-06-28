@@ -155,7 +155,7 @@ fn rust_command_drives_button() {
         let mut content = view.content().expect("View::content returned None");
         // SAFETY: vm is alive for the rest of this scope.
         assert!(
-            unsafe { content.set_data_context(vm.raw()) },
+            content.set_data_context(&vm),
             "set_data_context returned false"
         );
 

@@ -59,8 +59,7 @@ fn selector_and_items_mutation() {
         let mut lbd = content.find_name("LBD").expect("find direct ListBox");
 
         // -- Selector via ItemsSource + selected-item identity --
-        // SAFETY: coll outlives lb (dropped at end of scope after the view).
-        assert!(unsafe { lb.set_items_source(coll.raw()) });
+        assert!(lb.set_items_source(&coll));
         for i in 5..=9 {
             view.update(f64::from(i) * 0.016);
         }

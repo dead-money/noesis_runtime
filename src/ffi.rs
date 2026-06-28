@@ -544,6 +544,62 @@ unsafe extern "C" {
         element: *mut c_void,
         password: *const c_char,
     ) -> bool;
+    // ── ResourceDictionary, Style, templates (TODO §7). See cpp/noesis_shim.h
+    //    for the per-function ownership contract (create/parse → +1 owned;
+    //    get_* → AddRef'd +1 owned; find_* / get_application_resources →
+    //    borrowed, do not release). ──────────────────────────────────────────
+    pub fn dm_noesis_box_float(value: f32) -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_create() -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_destroy(dict: *mut c_void);
+    pub fn dm_noesis_resource_dictionary_parse(xaml: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_count(dict: *mut c_void) -> u32;
+    pub fn dm_noesis_resource_dictionary_add(
+        dict: *mut c_void,
+        key: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_resource_dictionary_contains(dict: *mut c_void, key: *const c_char) -> bool;
+    pub fn dm_noesis_resource_dictionary_find(dict: *mut c_void, key: *const c_char)
+    -> *mut c_void;
+    pub fn dm_noesis_resource_dictionary_add_merged(dict: *mut c_void, merged: *mut c_void)
+    -> bool;
+
+    pub fn dm_noesis_gui_set_application_resources(dict: *mut c_void);
+    pub fn dm_noesis_gui_get_application_resources() -> *mut c_void;
+    pub fn dm_noesis_gui_register_default_styles(uri: *const c_char) -> bool;
+
+    pub fn dm_noesis_framework_element_get_resources(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_framework_element_set_resources(
+        element: *mut c_void,
+        dict: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_framework_element_find_resource(
+        element: *mut c_void,
+        key: *const c_char,
+    ) -> *mut c_void;
+
+    pub fn dm_noesis_style_create() -> *mut c_void;
+    pub fn dm_noesis_style_destroy(style: *mut c_void);
+    pub fn dm_noesis_style_set_target_type(style: *mut c_void, type_name: *const c_char) -> bool;
+    pub fn dm_noesis_style_add_setter(
+        style: *mut c_void,
+        dp_name: *const c_char,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_style_set_based_on(style: *mut c_void, base: *mut c_void);
+
+    pub fn dm_noesis_framework_element_set_style(element: *mut c_void, style: *mut c_void) -> bool;
+    pub fn dm_noesis_framework_element_get_style(element: *mut c_void) -> *mut c_void;
+
+    pub fn dm_noesis_control_template_parse(xaml: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_data_template_parse(xaml: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_control_set_template(control: *mut c_void, tmpl: *mut c_void) -> bool;
+    pub fn dm_noesis_control_get_template(control: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_framework_template_find_name(
+        tmpl: *mut c_void,
+        name: *const c_char,
+        templated_parent: *mut c_void,
+    ) -> *mut c_void;
 }
 
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
