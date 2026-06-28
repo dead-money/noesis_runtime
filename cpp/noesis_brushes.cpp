@@ -21,12 +21,14 @@
 #include <NsCore/Ptr.h>
 #include <NsDrawing/Color.h>
 #include <NsDrawing/Point.h>
+#include <NsDrawing/Rect.h>
 #include <NsGui/BlurEffect.h>
 #include <NsGui/CompositeTransform.h>
+#include <NsGui/CompositeTransform3D.h>
 #include <NsGui/DependencyObject.h>
 #include <NsGui/DropShadowEffect.h>
 #include <NsGui/Effect.h>
-#include <NsGui/Enums.h>  // BitmapScalingMode
+#include <NsGui/Enums.h>  // BitmapScalingMode, AlignmentX/Y, Stretch, TileMode, BrushMappingMode
 #include <NsGui/GradientBrush.h>
 #include <NsGui/GradientStop.h>
 #include <NsGui/GradientStopCollection.h>
@@ -34,15 +36,21 @@
 #include <NsGui/ImageSource.h>
 #include <NsGui/LinearGradientBrush.h>
 #include <NsGui/MatrixTransform.h>
+#include <NsGui/MatrixTransform3D.h>
 #include <NsGui/RadialGradientBrush.h>
 #include <NsGui/RenderOptions.h>
 #include <NsGui/RotateTransform.h>
 #include <NsGui/ScaleTransform.h>
 #include <NsGui/SkewTransform.h>
 #include <NsGui/SolidColorBrush.h>
+#include <NsGui/TileBrush.h>
 #include <NsGui/Transform.h>
+#include <NsGui/Transform3D.h>
 #include <NsGui/TransformGroup.h>
 #include <NsGui/TranslateTransform.h>
+#include <NsGui/UIElement.h>
+#include <NsGui/Visual.h>
+#include <NsGui/VisualBrush.h>
 #include <NsMath/Transform.h>
 
 namespace {
@@ -233,6 +241,167 @@ extern "C" void* dm_noesis_image_brush_get_image_source(void* brush) {
     return b->GetImageSource();
 }
 
+// ── VisualBrush ──────────────────────────────────────────────────────────────
+
+// Create a VisualBrush, optionally pointing at a borrowed Visual (any element is
+// a Visual; pass null to wire the source later). Noesis takes its own reference
+// to the visual. NOTE: VisualBrush only renders when the visual is part of the
+// logical tree (header comment), but the property assignment + read-back is
+// fully headless-verifiable via GetVisual pointer identity.
+extern "C" void* dm_noesis_visual_brush_create(void* visual) {
+    Noesis::Ptr<Noesis::VisualBrush> brush = *new Noesis::VisualBrush();
+    if (visual) {
+        brush->SetVisual(cast<Noesis::Visual>(visual));
+    }
+    return handout(brush.GetPtr());
+}
+
+extern "C" bool dm_noesis_visual_brush_set_visual(void* brush, void* visual) {
+    auto* b = cast<Noesis::VisualBrush>(brush);
+    if (!b) return false;
+    b->SetVisual(cast<Noesis::Visual>(visual));
+    return true;
+}
+
+// Borrowed (no +1) Visual currently set on the brush, or null.
+extern "C" void* dm_noesis_visual_brush_get_visual(void* brush) {
+    auto* b = cast<Noesis::VisualBrush>(brush);
+    if (!b) return nullptr;
+    return b->GetVisual();
+}
+
+// ── TileBrush tiling knobs (base of ImageBrush AND VisualBrush) ───────────────
+//
+// AlignmentX/Y, Stretch, TileMode and the Viewport/Viewbox *Units use the
+// integer enum ordinals from NsGui/Enums.h. The getters return the ordinal or
+// -1 if `brush` is not a TileBrush (every enum's minimum ordinal is 0).
+// Viewport/Viewbox are Rects passed as {x, y, width, height}.
+
+extern "C" bool dm_noesis_tile_brush_set_alignment_x(void* brush, int32_t value) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    b->SetAlignmentX(static_cast<Noesis::AlignmentX>(value));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_tile_brush_get_alignment_x(void* brush) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetAlignmentX());
+}
+
+extern "C" bool dm_noesis_tile_brush_set_alignment_y(void* brush, int32_t value) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    b->SetAlignmentY(static_cast<Noesis::AlignmentY>(value));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_tile_brush_get_alignment_y(void* brush) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetAlignmentY());
+}
+
+extern "C" bool dm_noesis_tile_brush_set_stretch(void* brush, int32_t value) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    b->SetStretch(static_cast<Noesis::Stretch>(value));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_tile_brush_get_stretch(void* brush) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetStretch());
+}
+
+extern "C" bool dm_noesis_tile_brush_set_tile_mode(void* brush, int32_t value) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    b->SetTileMode(static_cast<Noesis::TileMode>(value));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_tile_brush_get_tile_mode(void* brush) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetTileMode());
+}
+
+extern "C" bool dm_noesis_tile_brush_set_viewport_units(void* brush, int32_t value) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    b->SetViewportUnits(static_cast<Noesis::BrushMappingMode>(value));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_tile_brush_get_viewport_units(void* brush) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetViewportUnits());
+}
+
+extern "C" bool dm_noesis_tile_brush_set_viewbox_units(void* brush, int32_t value) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    b->SetViewboxUnits(static_cast<Noesis::BrushMappingMode>(value));
+    return true;
+}
+
+extern "C" int32_t dm_noesis_tile_brush_get_viewbox_units(void* brush) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return -1;
+    return static_cast<int32_t>(b->GetViewboxUnits());
+}
+
+// rect = {x, y, width, height}
+extern "C" bool dm_noesis_tile_brush_set_viewport(void* brush, float x, float y, float w, float h) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    Noesis::Rect r;
+    r.x = x;
+    r.y = y;
+    r.width = w;
+    r.height = h;
+    b->SetViewport(r);
+    return true;
+}
+
+extern "C" bool dm_noesis_tile_brush_get_viewport(void* brush, float out[4]) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b || !out) return false;
+    const Noesis::Rect& r = b->GetViewport();
+    out[0] = r.x;
+    out[1] = r.y;
+    out[2] = r.width;
+    out[3] = r.height;
+    return true;
+}
+
+extern "C" bool dm_noesis_tile_brush_set_viewbox(void* brush, float x, float y, float w, float h) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b) return false;
+    Noesis::Rect r;
+    r.x = x;
+    r.y = y;
+    r.width = w;
+    r.height = h;
+    b->SetViewbox(r);
+    return true;
+}
+
+extern "C" bool dm_noesis_tile_brush_get_viewbox(void* brush, float out[4]) {
+    auto* b = cast<Noesis::TileBrush>(brush);
+    if (!b || !out) return false;
+    const Noesis::Rect& r = b->GetViewbox();
+    out[0] = r.x;
+    out[1] = r.y;
+    out[2] = r.width;
+    out[3] = r.height;
+    return true;
+}
+
 // ── Transforms ───────────────────────────────────────────────────────────────
 
 extern "C" void* dm_noesis_translate_transform_create(float x, float y) {
@@ -414,6 +583,116 @@ extern "C" bool dm_noesis_composite_transform_get(void* transform, float out[9])
     out[7] = t->GetTranslateX();
     out[8] = t->GetTranslateY();
     return true;
+}
+
+// ── 3D transforms ──────────────────────────────────────────────────────────
+//
+// Transform3D objects are assigned to an element via UIElement::SetTransform3D
+// (the Transform3DProperty), NOT via RenderTransform. See the element accessors
+// dm_noesis_element_set_transform3d / _get_transform3d below.
+
+// fields = {centerX, centerY, centerZ, rotationX, rotationY, rotationZ,
+//           scaleX, scaleY, scaleZ, translateX, translateY, translateZ}
+extern "C" void* dm_noesis_composite_transform3d_create(const float fields[12]) {
+    Noesis::Ptr<Noesis::CompositeTransform3D> t = *new Noesis::CompositeTransform3D();
+    if (fields) {
+        t->SetCenterX(fields[0]);
+        t->SetCenterY(fields[1]);
+        t->SetCenterZ(fields[2]);
+        t->SetRotationX(fields[3]);
+        t->SetRotationY(fields[4]);
+        t->SetRotationZ(fields[5]);
+        t->SetScaleX(fields[6]);
+        t->SetScaleY(fields[7]);
+        t->SetScaleZ(fields[8]);
+        t->SetTranslateX(fields[9]);
+        t->SetTranslateY(fields[10]);
+        t->SetTranslateZ(fields[11]);
+    }
+    return handout(t.GetPtr());
+}
+
+extern "C" bool dm_noesis_composite_transform3d_set(void* transform, const float fields[12]) {
+    auto* t = cast<Noesis::CompositeTransform3D>(transform);
+    if (!t || !fields) return false;
+    t->SetCenterX(fields[0]);
+    t->SetCenterY(fields[1]);
+    t->SetCenterZ(fields[2]);
+    t->SetRotationX(fields[3]);
+    t->SetRotationY(fields[4]);
+    t->SetRotationZ(fields[5]);
+    t->SetScaleX(fields[6]);
+    t->SetScaleY(fields[7]);
+    t->SetScaleZ(fields[8]);
+    t->SetTranslateX(fields[9]);
+    t->SetTranslateY(fields[10]);
+    t->SetTranslateZ(fields[11]);
+    return true;
+}
+
+extern "C" bool dm_noesis_composite_transform3d_get(void* transform, float out[12]) {
+    auto* t = cast<Noesis::CompositeTransform3D>(transform);
+    if (!t || !out) return false;
+    out[0] = t->GetCenterX();
+    out[1] = t->GetCenterY();
+    out[2] = t->GetCenterZ();
+    out[3] = t->GetRotationX();
+    out[4] = t->GetRotationY();
+    out[5] = t->GetRotationZ();
+    out[6] = t->GetScaleX();
+    out[7] = t->GetScaleY();
+    out[8] = t->GetScaleZ();
+    out[9] = t->GetTranslateX();
+    out[10] = t->GetTranslateY();
+    out[11] = t->GetTranslateZ();
+    return true;
+}
+
+// matrix = 12 floats = Noesis::Transform3 (4 rows of Vector3, row-major).
+extern "C" void* dm_noesis_matrix_transform3d_create(const float matrix[12]) {
+    Noesis::Transform3 m = matrix ? Noesis::Transform3(matrix) : Noesis::Transform3::Identity();
+    Noesis::Ptr<Noesis::MatrixTransform3D> t = *new Noesis::MatrixTransform3D(m);
+    return handout(t.GetPtr());
+}
+
+extern "C" bool dm_noesis_matrix_transform3d_set(void* transform, const float matrix[12]) {
+    auto* t = cast<Noesis::MatrixTransform3D>(transform);
+    if (!t || !matrix) return false;
+    t->SetMatrix(Noesis::Transform3(matrix));
+    return true;
+}
+
+extern "C" bool dm_noesis_matrix_transform3d_get(void* transform, float out[12]) {
+    auto* t = cast<Noesis::MatrixTransform3D>(transform);
+    if (!t || !out) return false;
+    const Noesis::Transform3& m = t->GetMatrix();
+    const float* data = m.GetData();
+    for (int i = 0; i < 12; ++i) out[i] = data[i];
+    return true;
+}
+
+// Assign a Transform3D to an element (UIElement::SetTransform3D). `transform` is
+// a borrowed Transform3D* (or null to clear); Noesis takes its own reference.
+// Returns false if `element` is not a UIElement or `transform` is non-null but
+// not a Transform3D.
+extern "C" bool dm_noesis_element_set_transform3d(void* element, void* transform) {
+    auto* e = cast<Noesis::UIElement>(element);
+    if (!e) return false;
+    if (transform) {
+        auto* t = cast<Noesis::Transform3D>(transform);
+        if (!t) return false;
+        e->SetTransform3D(t);
+    } else {
+        e->SetTransform3D(nullptr);
+    }
+    return true;
+}
+
+// Borrowed (no +1) Transform3D currently set on the element, or null.
+extern "C" void* dm_noesis_element_get_transform3d(void* element) {
+    auto* e = cast<Noesis::UIElement>(element);
+    if (!e) return nullptr;
+    return e->GetTransform3D();
 }
 
 // ── Effects ──────────────────────────────────────────────────────────────────

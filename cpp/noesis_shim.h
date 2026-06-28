@@ -1929,6 +1929,37 @@ void* dm_noesis_image_brush_create(void* image_source);
 bool dm_noesis_image_brush_set_image_source(void* brush, void* image_source);
 void* dm_noesis_image_brush_get_image_source(void* brush);
 
+// VisualBrush. `visual` is a borrowed Visual* (any element is a Visual; or null);
+// Noesis takes its own reference. get returns a borrowed Visual* (no +1) or null.
+// VisualBrush only renders when the visual is in the logical tree, but the
+// property assignment is headless-verifiable through GetVisual pointer identity.
+void* dm_noesis_visual_brush_create(void* visual);
+bool dm_noesis_visual_brush_set_visual(void* brush, void* visual);
+void* dm_noesis_visual_brush_get_visual(void* brush);
+
+// TileBrush tiling knobs (base of ImageBrush AND VisualBrush). Enum ordinals
+// match NsGui/Enums.h: AlignmentX {Left,Center,Right}, AlignmentY {Top,Center,
+// Bottom}, Stretch {None,Fill,Uniform,UniformToFill}, TileMode {None,Tile,FlipX,
+// FlipY,FlipXY}, BrushMappingMode {Absolute,RelativeToBoundingBox}. The enum
+// getters return -1 if `brush` is not a TileBrush. Viewport/Viewbox are Rects
+// expressed as {x, y, width, height}.
+bool dm_noesis_tile_brush_set_alignment_x(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_alignment_x(void* brush);
+bool dm_noesis_tile_brush_set_alignment_y(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_alignment_y(void* brush);
+bool dm_noesis_tile_brush_set_stretch(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_stretch(void* brush);
+bool dm_noesis_tile_brush_set_tile_mode(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_tile_mode(void* brush);
+bool dm_noesis_tile_brush_set_viewport_units(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_viewport_units(void* brush);
+bool dm_noesis_tile_brush_set_viewbox_units(void* brush, int32_t value);
+int32_t dm_noesis_tile_brush_get_viewbox_units(void* brush);
+bool dm_noesis_tile_brush_set_viewport(void* brush, float x, float y, float w, float h);
+bool dm_noesis_tile_brush_get_viewport(void* brush, float out[4]);
+bool dm_noesis_tile_brush_set_viewbox(void* brush, float x, float y, float w, float h);
+bool dm_noesis_tile_brush_get_viewbox(void* brush, float out[4]);
+
 // Transforms (NsGui/*Transform.h). Assign via set_component("RenderTransform").
 void* dm_noesis_translate_transform_create(float x, float y);
 bool dm_noesis_translate_transform_set(void* transform, float x, float y);
@@ -1961,6 +1992,29 @@ int32_t dm_noesis_transform_group_child_count(void* group);
 //           translateX, translateY}
 void* dm_noesis_composite_transform_create(const float fields[9]);
 bool dm_noesis_composite_transform_get(void* transform, float out[9]);
+
+// 3D transforms (NsGui/CompositeTransform3D.h, MatrixTransform3D.h). Assigned to
+// an element via dm_noesis_element_set_transform3d (UIElement::SetTransform3D),
+// NOT via RenderTransform.
+//
+// fields = {centerX, centerY, centerZ, rotationX, rotationY, rotationZ,
+//           scaleX, scaleY, scaleZ, translateX, translateY, translateZ}
+void* dm_noesis_composite_transform3d_create(const float fields[12]);
+bool dm_noesis_composite_transform3d_set(void* transform, const float fields[12]);
+bool dm_noesis_composite_transform3d_get(void* transform, float out[12]);
+
+// matrix = 12 floats = Noesis::Transform3 (4 rows of Vector3, row-major).
+void* dm_noesis_matrix_transform3d_create(const float matrix[12]);
+bool dm_noesis_matrix_transform3d_set(void* transform, const float matrix[12]);
+bool dm_noesis_matrix_transform3d_get(void* transform, float out[12]);
+
+// Element Transform3D assignment (UIElement::SetTransform3D / GetTransform3D).
+// `transform` is a borrowed Transform3D* (or null to clear); Noesis takes its
+// own reference. set returns false if `element` is not a UIElement (or the
+// non-null `transform` is not a Transform3D). get returns a borrowed Transform3D*
+// (no +1) or null.
+bool dm_noesis_element_set_transform3d(void* element, void* transform);
+void* dm_noesis_element_get_transform3d(void* element);
 
 // Effects (NsGui/BlurEffect.h, DropShadowEffect.h). Assign via
 // set_component("Effect").

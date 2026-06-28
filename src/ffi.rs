@@ -1203,6 +1203,41 @@ unsafe extern "C" {
     ) -> bool;
     pub fn dm_noesis_image_brush_get_image_source(brush: *mut c_void) -> *mut c_void;
 
+    // VisualBrush
+    pub fn dm_noesis_visual_brush_create(visual: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_visual_brush_set_visual(brush: *mut c_void, visual: *mut c_void) -> bool;
+    pub fn dm_noesis_visual_brush_get_visual(brush: *mut c_void) -> *mut c_void;
+
+    // TileBrush tiling knobs (ImageBrush + VisualBrush)
+    pub fn dm_noesis_tile_brush_set_alignment_x(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_alignment_x(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_alignment_y(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_alignment_y(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_stretch(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_stretch(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_tile_mode(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_tile_mode(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_viewport_units(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewport_units(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_viewbox_units(brush: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewbox_units(brush: *mut c_void) -> i32;
+    pub fn dm_noesis_tile_brush_set_viewport(
+        brush: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewport(brush: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_tile_brush_set_viewbox(
+        brush: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_tile_brush_get_viewbox(brush: *mut c_void, out: *mut f32) -> bool;
+
     // Transforms
     pub fn dm_noesis_translate_transform_create(x: f32, y: f32) -> *mut c_void;
     pub fn dm_noesis_translate_transform_set(transform: *mut c_void, x: f32, y: f32) -> bool;
@@ -1239,6 +1274,18 @@ unsafe extern "C" {
 
     pub fn dm_noesis_composite_transform_create(fields: *const f32) -> *mut c_void;
     pub fn dm_noesis_composite_transform_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    // 3D transforms
+    pub fn dm_noesis_composite_transform3d_create(fields: *const f32) -> *mut c_void;
+    pub fn dm_noesis_composite_transform3d_set(transform: *mut c_void, fields: *const f32) -> bool;
+    pub fn dm_noesis_composite_transform3d_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_matrix_transform3d_create(matrix: *const f32) -> *mut c_void;
+    pub fn dm_noesis_matrix_transform3d_set(transform: *mut c_void, matrix: *const f32) -> bool;
+    pub fn dm_noesis_matrix_transform3d_get(transform: *mut c_void, out: *mut f32) -> bool;
+
+    pub fn dm_noesis_element_set_transform3d(element: *mut c_void, transform: *mut c_void) -> bool;
+    pub fn dm_noesis_element_get_transform3d(element: *mut c_void) -> *mut c_void;
 
     // Effects
     pub fn dm_noesis_blur_effect_create(radius: f32) -> *mut c_void;

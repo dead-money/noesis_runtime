@@ -52,7 +52,8 @@ use crate::ffi::{
     dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
     dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
     dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
-    dm_noesis_dependency_object_thread_id, dm_noesis_expander_get_is_expanded,
+    dm_noesis_dependency_object_thread_id, dm_noesis_element_get_transform3d,
+    dm_noesis_element_set_transform3d, dm_noesis_expander_get_is_expanded,
     dm_noesis_expander_set_is_expanded, dm_noesis_focus_element,
     dm_noesis_framework_element_find_name, dm_noesis_framework_element_find_resource,
     dm_noesis_framework_element_get_data_context, dm_noesis_framework_element_get_halign,
@@ -116,7 +117,7 @@ use crate::ffi::{
     dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
-use crate::transforms::Transform;
+use crate::transforms::{Transform, Transform3D};
 
 /// A loaded XAML root. Holds a +1 refcount on the underlying
 /// `Noesis::FrameworkElement`; [`View::create`] consumes it and forwards the
@@ -1885,6 +1886,38 @@ impl FrameworkElement {
     pub fn set_render_transform_origin(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; thin pass-through.
         unsafe { dm_noesis_ui_element_set_render_transform_origin(self.ptr.as_ptr(), x, y) }
+    }
+
+    /// Set this element's 3D transform (`UIElement::SetTransform3D`, the
+    /// `Transform3DProperty`) to `transform`. This is the WinUI/Noesis
+    /// `Element.Transform3D` attached behaviour, distinct from `RenderTransform`.
+    /// Returns `false` if this element is not a `UIElement`.
+    pub fn set_transform3d<T: Transform3D>(&mut self, transform: &T) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; transform.transform3d_raw()
+        // is a live Transform3D* borrowed for the call; Noesis stores its own ref.
+        unsafe { dm_noesis_element_set_transform3d(self.ptr.as_ptr(), transform.transform3d_raw()) }
+    }
+
+    /// Clear this element's 3D transform. Returns `false` if this is not a
+    /// `UIElement`.
+    pub fn clear_transform3d(&mut self) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; null clears the property.
+        unsafe { dm_noesis_element_set_transform3d(self.ptr.as_ptr(), core::ptr::null_mut()) }
+    }
+
+    /// This element's current 3D transform (`UIElement::GetTransform3D`) as an
+    /// owning, type-erased [`AnyTransform3D`](crate::transforms::AnyTransform3D),
+    /// or `None` if none is set / this is not a `UIElement`. The handle can be
+    /// re-applied to another element via [`Self::set_transform3d`].
+    #[must_use]
+    pub fn transform3d(&self) -> Option<crate::transforms::AnyTransform3D> {
+        // SAFETY: self.ptr is a live BaseComponent*; returns a borrowed pointer.
+        let borrowed = unsafe { dm_noesis_element_get_transform3d(self.ptr.as_ptr()) };
+        let borrowed = NonNull::new(borrowed)?;
+        // AddRef so the returned handle owns its reference (released on Drop).
+        // SAFETY: borrowed is a live Transform3D* (BaseComponent*).
+        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        NonNull::new(owned).map(|p| unsafe { crate::transforms::AnyTransform3D::from_owned(p) })
     }
 
     /// Set this element's `Effect` to `effect` (e.g. a blur or drop shadow).
