@@ -15,15 +15,42 @@
 //! clears the registration on `Drop`, mirroring the Registered-guard idiom in
 //! [`crate::texture_provider`] / [`crate::font_provider`].
 //!
+//! # Single-slot, last-registration-wins
+//!
+//! These hooks are **process-global with exactly one slot per hook** — both
+//! Noesis itself and the C++ shim store a single `(user, callback)` pair. They
+//! are therefore **not** independent, freely-stacked registrations: calling a
+//! `set_*` again replaces the previous registration (last-registration-wins),
+//! and the older guard is then logically dead even though it is still alive.
+//!
+//! To make `Drop` safe under that reality, each registration is tagged with a
+//! unique generation id (see [`next_reg_id`]) and a per-hook atomic records the
+//! id of the *currently active* registration. A guard's `Drop` clears the
+//! global slot **only if it is still the active registration** (its id still
+//! matches the per-hook atomic); otherwise it just frees its own boxed closure
+//! and leaves the slot pointing at whoever overwrote it. Consequences:
+//!
+//!   - Dropping the **older** of two guards for the same hook is a no-op on the
+//!     slot — the newer registration keeps firing (no clobber). Its box is
+//!     still freed; the C++ slot never referenced it after the overwrite.
+//!   - Dropping the **active** guard clears the slot and unregisters the Noesis
+//!     callback. A previously-overwritten registration is **not** restored —
+//!     once replaced, an older registration is gone for good.
+//!
+//! Each guard always frees exactly its own boxed closure, so there is no
+//! double-free or use-after-free regardless of drop order.
+//!
 //! # Triggering
 //!
 //! [`open_url`] and [`play_audio`] invoke the registered callback
 //! **synchronously** — they are genuine end-to-end round trips and are tested
-//! as such. The cursor and software-keyboard callbacks fire from input /
-//! focus handling deep inside a live view's event pump and are not reachable
-//! headlessly (see the note in `tests/integration.rs` and "Known SDK
-//! limitations"); we still verify their registration / unregistration FFI
-//! crossing is sound.
+//! as such. The cursor callback fires from input handling inside a live view's
+//! event pump and *is* reachable headlessly: a mouse-move over an element with
+//! a non-default `Cursor` drives it (proved in `tests/integration.rs`). The
+//! software-keyboard callback fires only when a virtual-keyboard-enabled
+//! element gains focus on a platform that requests it; that path can't be
+//! synthesised headlessly, so for it we verify only that registration /
+//! unregistration crosses the FFI cleanly.
 //!
 //! # Lifetime
 //!
@@ -36,8 +63,22 @@
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ffi;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Registration generation ids
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Monotonic source of per-registration ids, shared across every hook. `0` is
+/// reserved as the "no active registration" sentinel, so ids start at `1`.
+static NEXT_REG_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Allocate a fresh, never-`0` registration id.
+fn next_reg_id() -> u64 {
+    NEXT_REG_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // CursorType
@@ -140,15 +181,21 @@ fn cstr_to_str<'a>(p: *const c_char) -> &'a str {
 
 type CursorClosure = Box<dyn FnMut(*mut c_void, CursorType) + Send>;
 
+/// Id of the cursor hook's currently active registration (`0` = none).
+static CURSOR_ACTIVE: AtomicU64 = AtomicU64::new(0);
+
 unsafe extern "C" fn cursor_tramp(user: *mut c_void, view: *mut c_void, cursor_type: i32) {
     let cb = &mut *user.cast::<CursorClosure>();
     cb(view, CursorType::from_raw(cursor_type));
 }
 
-/// Guard for a registered cursor callback. Drop unregisters and frees the
-/// boxed closure.
+/// Guard for a registered cursor callback. This is a **process-global,
+/// single-slot, last-registration-wins** hook (see the module docs): dropping
+/// the guard clears the slot only while it is still the active registration,
+/// and always frees its own boxed closure.
 pub struct CursorCallback {
     user: NonNull<CursorClosure>,
+    id: u64,
 }
 
 // SAFETY: the boxed closure is `Send`; Noesis serialises callback dispatch
@@ -158,26 +205,39 @@ unsafe impl Sync for CursorCallback {}
 
 impl Drop for CursorCallback {
     fn drop(&mut self) {
-        unsafe {
-            ffi::dm_noesis_set_cursor_callback(core::ptr::null_mut(), None);
-            drop(Box::from_raw(self.user.as_ptr()));
+        // Only clear the global slot if it still points at THIS registration;
+        // otherwise a newer `set_cursor_callback` owns it and must keep firing.
+        if CURSOR_ACTIVE
+            .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            unsafe { ffi::dm_noesis_set_cursor_callback(core::ptr::null_mut(), None) };
         }
+        unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
 }
 
 /// Register `f` as the global cursor-update callback. `f` receives the
 /// borrowed `Noesis::IView*` (opaque) requesting the change and the desired
 /// [`CursorType`]. Returns a guard; drop it to unregister.
+///
+/// This hook is **process-global with a single slot**: a later
+/// `set_cursor_callback` replaces this one (last-registration-wins), after
+/// which dropping this (now older) guard no longer touches the slot. See the
+/// module docs for the full semantics.
 pub fn set_cursor_callback<F>(f: F) -> CursorCallback
 where
     F: FnMut(*mut c_void, CursorType) + Send + 'static,
 {
     let boxed: Box<CursorClosure> = Box::new(Box::new(f));
     let user = Box::into_raw(boxed);
+    let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
     unsafe { ffi::dm_noesis_set_cursor_callback(user.cast(), Some(cursor_tramp)) };
+    CURSOR_ACTIVE.store(id, Ordering::Release);
     CursorCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
+        id,
     }
 }
 
@@ -187,14 +247,20 @@ where
 
 type KeyboardClosure = Box<dyn FnMut(*mut c_void, bool) + Send>;
 
+/// Id of the keyboard hook's currently active registration (`0` = none).
+static KEYBOARD_ACTIVE: AtomicU64 = AtomicU64::new(0);
+
 unsafe extern "C" fn keyboard_tramp(user: *mut c_void, focused: *mut c_void, open: bool) {
     let cb = &mut *user.cast::<KeyboardClosure>();
     cb(focused, open);
 }
 
-/// Guard for a registered software-keyboard callback.
+/// Guard for a registered software-keyboard callback. Process-global,
+/// single-slot, last-registration-wins; see [`CursorCallback`] and the module
+/// docs.
 pub struct SoftwareKeyboardCallback {
     user: NonNull<KeyboardClosure>,
+    id: u64,
 }
 
 // SAFETY: see [`CursorCallback`].
@@ -203,26 +269,35 @@ unsafe impl Sync for SoftwareKeyboardCallback {}
 
 impl Drop for SoftwareKeyboardCallback {
     fn drop(&mut self) {
-        unsafe {
-            ffi::dm_noesis_set_software_keyboard_callback(core::ptr::null_mut(), None);
-            drop(Box::from_raw(self.user.as_ptr()));
+        if KEYBOARD_ACTIVE
+            .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            unsafe { ffi::dm_noesis_set_software_keyboard_callback(core::ptr::null_mut(), None) };
         }
+        unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
 }
 
 /// Register `f` as the global on-screen-keyboard callback. `f` receives the
 /// borrowed `Noesis::UIElement*` (opaque) that has focus and a `bool` that is
 /// `true` to open the keyboard, `false` to close it.
+///
+/// Process-global, single-slot, last-registration-wins; see
+/// [`set_cursor_callback`] and the module docs.
 pub fn set_software_keyboard_callback<F>(f: F) -> SoftwareKeyboardCallback
 where
     F: FnMut(*mut c_void, bool) + Send + 'static,
 {
     let boxed: Box<KeyboardClosure> = Box::new(Box::new(f));
     let user = Box::into_raw(boxed);
+    let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
     unsafe { ffi::dm_noesis_set_software_keyboard_callback(user.cast(), Some(keyboard_tramp)) };
+    KEYBOARD_ACTIVE.store(id, Ordering::Release);
     SoftwareKeyboardCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
+        id,
     }
 }
 
@@ -232,14 +307,19 @@ where
 
 type OpenUrlClosure = Box<dyn FnMut(&str) + Send>;
 
+/// Id of the open-URL hook's currently active registration (`0` = none).
+static OPEN_URL_ACTIVE: AtomicU64 = AtomicU64::new(0);
+
 unsafe extern "C" fn open_url_tramp(user: *mut c_void, url: *const c_char) {
     let cb = &mut *user.cast::<OpenUrlClosure>();
     cb(cstr_to_str(url));
 }
 
-/// Guard for a registered open-URL callback.
+/// Guard for a registered open-URL callback. Process-global, single-slot,
+/// last-registration-wins; see [`CursorCallback`] and the module docs.
 pub struct OpenUrlCallback {
     user: NonNull<OpenUrlClosure>,
+    id: u64,
 }
 
 // SAFETY: see [`CursorCallback`].
@@ -248,26 +328,35 @@ unsafe impl Sync for OpenUrlCallback {}
 
 impl Drop for OpenUrlCallback {
     fn drop(&mut self) {
-        unsafe {
-            ffi::dm_noesis_set_open_url_callback(core::ptr::null_mut(), None);
-            drop(Box::from_raw(self.user.as_ptr()));
+        if OPEN_URL_ACTIVE
+            .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            unsafe { ffi::dm_noesis_set_open_url_callback(core::ptr::null_mut(), None) };
         }
+        unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
 }
 
 /// Register `f` as the global open-URL callback. `f` receives the URL string
 /// whenever the host should open it in a browser. [`open_url`] triggers this
 /// synchronously.
+///
+/// Process-global, single-slot, last-registration-wins; see
+/// [`set_cursor_callback`] and the module docs.
 pub fn set_open_url_callback<F>(f: F) -> OpenUrlCallback
 where
     F: FnMut(&str) + Send + 'static,
 {
     let boxed: Box<OpenUrlClosure> = Box::new(Box::new(f));
     let user = Box::into_raw(boxed);
+    let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
     unsafe { ffi::dm_noesis_set_open_url_callback(user.cast(), Some(open_url_tramp)) };
+    OPEN_URL_ACTIVE.store(id, Ordering::Release);
     OpenUrlCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
+        id,
     }
 }
 
@@ -289,14 +378,19 @@ pub fn open_url(url: &str) {
 
 type PlayAudioClosure = Box<dyn FnMut(&str, f32) + Send>;
 
+/// Id of the play-audio hook's currently active registration (`0` = none).
+static PLAY_AUDIO_ACTIVE: AtomicU64 = AtomicU64::new(0);
+
 unsafe extern "C" fn play_audio_tramp(user: *mut c_void, uri: *const c_char, volume: f32) {
     let cb = &mut *user.cast::<PlayAudioClosure>();
     cb(cstr_to_str(uri), volume);
 }
 
-/// Guard for a registered play-audio callback.
+/// Guard for a registered play-audio callback. Process-global, single-slot,
+/// last-registration-wins; see [`CursorCallback`] and the module docs.
 pub struct PlayAudioCallback {
     user: NonNull<PlayAudioClosure>,
+    id: u64,
 }
 
 // SAFETY: see [`CursorCallback`].
@@ -305,26 +399,35 @@ unsafe impl Sync for PlayAudioCallback {}
 
 impl Drop for PlayAudioCallback {
     fn drop(&mut self) {
-        unsafe {
-            ffi::dm_noesis_set_play_audio_callback(core::ptr::null_mut(), None);
-            drop(Box::from_raw(self.user.as_ptr()));
+        if PLAY_AUDIO_ACTIVE
+            .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            unsafe { ffi::dm_noesis_set_play_audio_callback(core::ptr::null_mut(), None) };
         }
+        unsafe { drop(Box::from_raw(self.user.as_ptr())) };
     }
 }
 
 /// Register `f` as the global play-audio callback. `f` receives the
 /// canonicalized URI string of the sound and a volume in `[0.0, 1.0]`.
 /// [`play_audio`] triggers this synchronously.
+///
+/// Process-global, single-slot, last-registration-wins; see
+/// [`set_cursor_callback`] and the module docs.
 pub fn set_play_audio_callback<F>(f: F) -> PlayAudioCallback
 where
     F: FnMut(&str, f32) + Send + 'static,
 {
     let boxed: Box<PlayAudioClosure> = Box::new(Box::new(f));
     let user = Box::into_raw(boxed);
+    let id = next_reg_id();
     // SAFETY: `user` is freshly leaked; trampoline is 'static.
     unsafe { ffi::dm_noesis_set_play_audio_callback(user.cast(), Some(play_audio_tramp)) };
+    PLAY_AUDIO_ACTIVE.store(id, Ordering::Release);
     PlayAudioCallback {
         user: NonNull::new(user).expect("Box::into_raw returned null"),
+        id,
     }
 }
 
