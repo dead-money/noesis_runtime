@@ -120,9 +120,15 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
 
         // ── Same tiling knobs on ImageBrush (it is also a TileBrush) ────────
         let mut ib = ImageBrush::new();
-        // Sanity: a fresh ImageBrush's enums read back as valid variants (proves
-        // the TileBrush cast works on ImageBrush too).
-        assert!(ib.alignment_x().is_some(), "ib has a default alignment_x");
+        // Sanity: a fresh ImageBrush reads back the SDK's default AlignmentX
+        // (proves the TileBrush cast works on ImageBrush too, and that we read a
+        // real value, not just a valid variant). TileBrush.AlignmentXProperty
+        // defaults to AlignmentX::Center in Noesis (matching WPF).
+        assert_eq!(
+            ib.alignment_x(),
+            Some(AlignmentX::Center),
+            "fresh ImageBrush should default to AlignmentX::Center"
+        );
         ib.set_alignment_x(AlignmentX::Left);
         ib.set_alignment_y(AlignmentY::Top);
         ib.set_stretch(Stretch::None);
