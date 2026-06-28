@@ -16,11 +16,6 @@ don't keep re-discovering them.
 - **`CommandBinding`** (CanExecute/Executed delegates) attached via `UIElement::GetCommandBindings()`, plus `CommandManager`'s attached `CanExecute`/`Executed` routed events.
 - **Built-in command libraries:** `ApplicationCommands`, `ComponentCommands` (static `const RoutedUICommand*` getters).
 
-## 5. Routed events
-
-- **Richer typed arg accessors.** Focus-changed (`old`/`new` element — 2 fields, cheap), manipulation (delta/velocity/inertia — ~6 nested structs), and drag (effects/key-states bitmasks). Currently reachable only as base `RoutedEventArgs` (source/handled).
-- **`DragDrop` source side** (`DoDragDrop`) and the copy/paste `DataObject` handlers.
-
 ## 6. Animation & timing
 
 `Storyboard` (Begin/Pause/Resume/Stop/Seek), the Double/Color/Thickness/Point From-To animations,
@@ -143,6 +138,7 @@ crate with the least rework:
 Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workaround is noted.
 
 - **Route-wide `handledEventsToo` (§5).** `UIElement::AddHandler` is 2-arg only in 3.2.13 — no overload to receive already-handled events as the route bubbles/tunnels. Per-element `handled` honoring (already wrapped) is the ceiling.
+- **Headless drag / manipulation synthesis (§5).** The typed `DragEventArgs` / `Manipulation*EventArgs` accessors are wrapped and round-trip tested, but the events themselves cannot be *raised* headlessly: a drag needs an OS pointer/drag loop (`DragDrop::DoDragDrop` is exposed and crosses the FFI but has no synchronous/headless completion) and manipulation events are promoted from a multi-frame touch stream under a live render pass. `tests/routed_events_typed_args.rs` drives keyboard-focus events for real and exercises the drag/manipulation accessors by constructing the real arg structs C++-side (under `--features test-utils`). `DataObject.Copying`/`.Pasting` handlers attach/detach but the clipboard copy/paste that fires them is likewise host-driven.
 - **`CollectionView` sort / filter / group (§3).** `ICollectionView` here is current-item navigation only — no `SortDescriptions`, `Filter` delegate, `GroupDescriptions`, or `CollectionViewSource::GetDefaultView` ship. Sort/filter/group in Rust before populating the `ObservableCollection`. (Current-item navigation — `MoveCurrentTo*` — *is* available if ever needed.)
 - **`PriorityBinding` (§3).** Not in 3.2.13 — the class doesn't exist in the SDK (a WPF feature Noesis omits, like `NavigationCommands`). No workaround; restructure so a single binding with a `FallbackValue` covers the priority case.
 - **`TemplateBinding` runtime construction (§3).** `TemplateBindingExtension` exists but is only meaningful inside a `ControlTemplate`; the XAML `{TemplateBinding X}` parse path already works, and the code path is covered by a templated-parent binding (`{Binding RelativeSource={RelativeSource TemplatedParent}}`, already wrapped). A dedicated runtime wrapper would just duplicate that, so it's intentionally not built.

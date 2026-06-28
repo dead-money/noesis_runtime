@@ -833,6 +833,88 @@ bool dm_noesis_size_changed_args_new_size(const void* args, float* width, float*
 // or NULL. Not ref-counted — do not release; valid only for the callback.
 void* dm_noesis_routed_args_source(const void* args);
 
+// ── Typed arg accessors: focus / drag / manipulation (TODO §5) ──────────────
+//
+// Same sentinel contract as the accessors above: a kind mismatch yields NULL /
+// false / -1. Returned element/data pointers are borrowed (not ref-counted) and
+// valid only for the callback's duration.
+
+// KeyboardFocusChangedEventArgs old/new focus (GotKeyboardFocus /
+// LostKeyboardFocus and their Preview variants). Borrowed UIElement* or NULL.
+void* dm_noesis_routed_events_focus_old(const void* args);
+void* dm_noesis_routed_events_focus_new(const void* args);
+
+// DragEventArgs effects / allowedEffects / keyStates bitmasks (DragDropEffects /
+// DragDropKeyStates). Writes only the non-null out params. Returns false unless
+// the event is a drag event (DragEnter/DragOver/DragLeave/Drop + Preview).
+bool dm_noesis_routed_events_drag_effects(
+    const void* args, uint32_t* effects, uint32_t* allowed, uint32_t* key_states);
+
+// Set DragEventArgs::effects (mutable) — the drop result reported to the source.
+// Returns false unless the event is a drag event.
+bool dm_noesis_routed_events_drag_set_effects(const void* args, uint32_t effects);
+
+// Borrowed pointer to the dragged data object (DragEventArgs::data), or NULL.
+void* dm_noesis_routed_events_drag_data(const void* args);
+
+// DragEventArgs::GetPosition(relative_to) — drop point in `relative_to`'s
+// coordinates. `relative_to` must be a live UIElement*. Returns false unless the
+// event is a drag event and `relative_to` is non-null.
+bool dm_noesis_routed_events_drag_position(
+    const void* args, void* relative_to, float* x, float* y);
+
+// Manipulation origin (manipulationOrigin) — Started / Delta / Completed /
+// InertiaStarting. Returns false for other kinds.
+bool dm_noesis_routed_events_manip_origin(const void* args, float* x, float* y);
+
+// Primary ManipulationDelta transform — deltaManipulation (Delta) or
+// totalManipulation (Completed): translation, scale, rotation (deg), expansion.
+// Returns false for other kinds.
+bool dm_noesis_routed_events_manip_delta(
+    const void* args, float* tx, float* ty, float* scale, float* rotation, float* ex, float* ey);
+
+// Cumulative ManipulationDelta transform for a Delta event. Returns false
+// otherwise.
+bool dm_noesis_routed_events_manip_cumulative(
+    const void* args, float* tx, float* ty, float* scale, float* rotation, float* ex, float* ey);
+
+// ManipulationVelocities — velocities (Delta), finalVelocities (Completed) or
+// initialVelocities (InertiaStarting): angular (deg/ms), linear and expansion
+// (px/ms). Returns false for other kinds.
+bool dm_noesis_routed_events_manip_velocities(
+    const void* args, float* angular, float* lx, float* ly, float* ex, float* ey);
+
+// isInertial flag — 1, 0, or -1 when not a Delta/Completed manipulation event.
+int32_t dm_noesis_routed_events_manip_is_inertial(const void* args);
+
+// ── DragDrop source side + DataObject copy/paste handlers (TODO §5) ──────────
+
+// Noesis::DragDrop::DoDragDrop — initiate a drag from `source` (DynamicCast to
+// DependencyObject*) carrying `data`, advertising `allowed_effects`
+// (DragDropEffects bitmask). The drag is then driven by host pointer input;
+// there is no headless completion. Returns false if `source`/`data` is null or
+// `source` is not a DependencyObject.
+bool dm_noesis_routed_events_do_drag_drop(void* source, void* data, uint32_t allowed_effects);
+
+// DataObject.Copying / .Pasting handler callback. Receives the data object
+// (borrowed BaseComponent*, may be NULL), the isDragDrop flag, and a writable
+// cancel flag (set true to cancel the copy/paste). Same threading contract as
+// `dm_noesis_click_fn`.
+typedef void (*dm_noesis_data_object_fn)(
+    void* userdata, void* data_object, bool is_drag_drop, bool* out_cancel);
+
+// Attach a DataObject.Copying / .Pasting handler to `element` (DynamicCast to
+// UIElement*). Returns an opaque token to pass once to
+// `dm_noesis_routed_events_remove_data_object_handler`, or NULL if `element` is
+// not a UIElement or `cb` is NULL. The token holds a +1 ref on the element.
+void* dm_noesis_routed_events_add_copying_handler(
+    void* element, dm_noesis_data_object_fn cb, void* userdata);
+void* dm_noesis_routed_events_add_pasting_handler(
+    void* element, dm_noesis_data_object_fn cb, void* userdata);
+
+// Remove and free a DataObject handler. Safe to call with NULL.
+void dm_noesis_routed_events_remove_data_object_handler(void* token);
+
 // ── Text + focus helpers ───────────────────────────────────────────────────
 //
 // Read / write the `Text` property of a `TextBox` or `TextBlock`, and move
