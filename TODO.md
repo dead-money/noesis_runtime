@@ -40,14 +40,18 @@ Remaining:
 ## 3. Data binding
 
 `DataContext`, `ObservableCollection` → `ItemsSource`, and `DependencyObject`-backed
-view models are wrapped; bindings can be authored in XAML against Rust data. Still missing:
+view models are wrapped; bindings can be authored in XAML against Rust data, built
+from code (`Binding` + `BindingOperations::SetBinding`, with Source / ElementName /
+RelativeSource Self / Mode / Converter / ConverterParameter / StringFormat /
+FallbackValue / UpdateSourceTrigger), and run through Rust `IValueConverter`s
+(Convert + ConvertBack). Still missing:
 
-- **`Binding`** construction from code + `SetBinding` / `BindingOperations` (Path, Source, ElementName, RelativeSource, Mode, Converter, StringFormat, FallbackValue) — bindings are XAML-authored only today.
 - **`INotifyPropertyChanged`** from Rust for plain (non-`DependencyObject`) view models — needs runtime-reflected properties.
-- **Value converters.** `IValueConverter` / `IMultiValueConverter` implemented in Rust.
+- **`IMultiValueConverter`** implemented in Rust (the single-value `IValueConverter` is wrapped).
 - **`MultiBinding`**, `PriorityBinding`, `TemplateBinding` (runtime construction).
 - **`CollectionView` / `CollectionViewSource`** (sorting/filtering/grouping/current-item).
-- **`RelativeSource`**, `UpdateSourceTrigger`, `BindingExpression` inspection.
+- **`RelativeSource` ancestor modes** (`FindAncestor` with `AncestorType` / `AncestorLevel`, `PreviousData`, `TemplatedParent`) — only the `Self` convenience is wrapped.
+- **`BindingExpression` inspection** (`BindingOperations::GetBindingExpression`, explicit `UpdateSource` / `UpdateTarget`).
 
 ## 4. Commands
 

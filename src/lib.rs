@@ -15,6 +15,7 @@ use std::ffi::{CStr, CString};
 pub mod binding;
 pub mod classes;
 pub mod commands;
+pub mod converters;
 pub mod events;
 pub mod ffi;
 pub mod font_provider;

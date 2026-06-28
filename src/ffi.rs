@@ -399,7 +399,78 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn dm_noesis_command_destroy(command: *mut c_void);
     pub fn dm_noesis_command_raise_can_execute_changed(command: *mut c_void);
+
+    // ── Value boxing / unboxing primitives (TODO §3) ──────────────────────────
+    pub fn dm_noesis_box_bool(value: bool) -> *mut c_void;
+    pub fn dm_noesis_box_int32(value: i32) -> *mut c_void;
+    pub fn dm_noesis_box_double(value: f64) -> *mut c_void;
+    pub fn dm_noesis_unbox_bool(boxed: *mut c_void, out: *mut bool) -> bool;
+    pub fn dm_noesis_unbox_int32(boxed: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_unbox_double(boxed: *mut c_void, out: *mut f64) -> bool;
+    pub fn dm_noesis_unbox_string(boxed: *mut c_void) -> *const c_char;
+
+    // ── Value converters: IValueConverter from Rust (TODO §3) ─────────────────
+    pub fn dm_noesis_value_converter_create(
+        vt: *const ValueConverterVTable,
+        userdata: *mut c_void,
+        free_handler: ValueConverterFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_value_converter_destroy(converter: *mut c_void);
+
+    // ── Code-built Binding + SetBinding (TODO §3) ─────────────────────────────
+    pub fn dm_noesis_binding_create(path: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_binding_destroy(binding: *mut c_void);
+    pub fn dm_noesis_binding_set_source(binding: *mut c_void, source: *mut c_void);
+    pub fn dm_noesis_binding_set_element_name(binding: *mut c_void, name: *const c_char);
+    pub fn dm_noesis_binding_set_mode(binding: *mut c_void, mode: i32);
+    pub fn dm_noesis_binding_set_converter(binding: *mut c_void, converter: *mut c_void);
+    pub fn dm_noesis_binding_set_converter_parameter(binding: *mut c_void, parameter: *mut c_void);
+    pub fn dm_noesis_binding_set_string_format(binding: *mut c_void, format: *const c_char);
+    pub fn dm_noesis_binding_set_fallback_value(binding: *mut c_void, value: *mut c_void);
+    pub fn dm_noesis_binding_set_update_source_trigger(binding: *mut c_void, trigger: i32);
+    pub fn dm_noesis_binding_set_relative_source_self(binding: *mut c_void);
+    pub fn dm_noesis_set_binding(
+        element: *mut c_void,
+        dp_name: *const c_char,
+        binding: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_framework_element_add_resource(
+        element: *mut c_void,
+        key: *const c_char,
+        object: *mut c_void,
+    ) -> bool;
 }
+
+/// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
+/// pointers receive the `userdata` passed to [`dm_noesis_value_converter_create`],
+/// the borrowed boxed `value` / `parameter` (`BaseComponent*`, may be null), an
+/// opaque `target_type` (`const Noesis::Type*`), and an out-slot that takes a
+/// `+1`-owned `BaseComponent*` (ownership transfers to Noesis). Return `true`
+/// when a value was produced (`*out_result` may be null for a null value),
+/// `false` for `UnsetValue`.
+#[repr(C)]
+pub struct ValueConverterVTable {
+    pub convert: unsafe extern "C" fn(
+        userdata: *mut c_void,
+        value: *mut c_void,
+        target_type: *const c_void,
+        parameter: *mut c_void,
+        out_result: *mut *mut c_void,
+    ) -> bool,
+    pub convert_back: unsafe extern "C" fn(
+        userdata: *mut c_void,
+        value: *mut c_void,
+        target_type: *const c_void,
+        parameter: *mut c_void,
+        out_result: *mut *mut c_void,
+    ) -> bool,
+}
+
+/// Free callback invoked exactly once when the underlying `RustValueConverter`
+/// is finally destroyed (last reference released). Drops the boxed handler
+/// whose ownership transferred to C++ at
+/// [`dm_noesis_value_converter_create`].
+pub type ValueConverterFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 /// Mirror of `dm_noesis_command_vtable` in `cpp/noesis_shim.h`. Both fn
 /// pointers receive the `userdata` passed to [`dm_noesis_command_create`] and

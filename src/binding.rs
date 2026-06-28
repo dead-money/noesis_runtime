@@ -26,13 +26,22 @@
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
+use crate::converters::Converter;
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_box_string, dm_noesis_observable_collection_add,
-    dm_noesis_observable_collection_clear, dm_noesis_observable_collection_count,
-    dm_noesis_observable_collection_create, dm_noesis_observable_collection_get,
-    dm_noesis_observable_collection_insert, dm_noesis_observable_collection_remove_at,
-    dm_noesis_observable_collection_set,
+    dm_noesis_base_component_release, dm_noesis_binding_create, dm_noesis_binding_destroy,
+    dm_noesis_binding_set_converter, dm_noesis_binding_set_converter_parameter,
+    dm_noesis_binding_set_element_name, dm_noesis_binding_set_fallback_value,
+    dm_noesis_binding_set_mode, dm_noesis_binding_set_relative_source_self,
+    dm_noesis_binding_set_source, dm_noesis_binding_set_string_format,
+    dm_noesis_binding_set_update_source_trigger, dm_noesis_box_bool, dm_noesis_box_double,
+    dm_noesis_box_int32, dm_noesis_box_string, dm_noesis_framework_element_add_resource,
+    dm_noesis_observable_collection_add, dm_noesis_observable_collection_clear,
+    dm_noesis_observable_collection_count, dm_noesis_observable_collection_create,
+    dm_noesis_observable_collection_get, dm_noesis_observable_collection_insert,
+    dm_noesis_observable_collection_remove_at, dm_noesis_observable_collection_set,
+    dm_noesis_set_binding,
 };
+use crate::view::FrameworkElement;
 
 /// Box a UTF-8 string as a `Noesis::BoxedValue<String>`, returned as a borrowed
 /// opaque pointer wrapped in an owning [`Boxed`]. Noesis copies the bytes, so
@@ -209,4 +218,243 @@ impl Drop for ObservableCollection {
         // SAFETY: produced by dm_noesis_observable_collection_create with +1 ref.
         unsafe { dm_noesis_base_component_release(self.ptr.as_ptr()) }
     }
+}
+
+/// Box a `bool` as a `Noesis::BoxedValue<bool>`. Like [`box_string`], returns an
+/// owning [`Boxed`] holding a `+1` reference.
+#[must_use]
+pub fn box_bool(value: bool) -> Boxed {
+    let ptr = unsafe { dm_noesis_box_bool(value) };
+    Boxed {
+        ptr: NonNull::new(ptr).expect("dm_noesis_box_bool returned null"),
+    }
+}
+
+/// Box an `i32` as a `Noesis::BoxedValue<int>`.
+#[must_use]
+pub fn box_i32(value: i32) -> Boxed {
+    let ptr = unsafe { dm_noesis_box_int32(value) };
+    Boxed {
+        ptr: NonNull::new(ptr).expect("dm_noesis_box_int32 returned null"),
+    }
+}
+
+/// Box an `f64` as a `Noesis::BoxedValue<double>`.
+#[must_use]
+pub fn box_f64(value: f64) -> Boxed {
+    let ptr = unsafe { dm_noesis_box_double(value) };
+    Boxed {
+        ptr: NonNull::new(ptr).expect("dm_noesis_box_double returned null"),
+    }
+}
+
+/// How a [`Binding`] propagates values between source and target. Mirrors
+/// `Noesis::BindingMode`.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum BindingMode {
+    /// Use the target property's default mode.
+    Default = 0,
+    /// Source ⇄ target.
+    TwoWay = 1,
+    /// Source → target.
+    OneWay = 2,
+    /// Source → target once, then disconnect.
+    OneTime = 3,
+    /// Target → source.
+    OneWayToSource = 4,
+}
+
+/// When a `TwoWay` / `OneWayToSource` [`Binding`] pushes target changes back to
+/// the source. Mirrors `Noesis::UpdateSourceTrigger`.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum UpdateSourceTrigger {
+    /// Use the target property's default trigger (`PropertyChanged` for most
+    /// properties; `LostFocus` for `TextBox.Text`).
+    Default = 0,
+    /// Update the source immediately on every target change.
+    PropertyChanged = 1,
+    /// Update the source when the target element loses focus.
+    LostFocus = 2,
+    /// Update the source only on an explicit `UpdateSource` call.
+    Explicit = 3,
+}
+
+/// A code-built `Noesis::Binding` — the programmatic equivalent of authoring
+/// `{Binding ...}` in XAML. Build it with [`Binding::new`] (a property path) or
+/// [`Binding::whole`] (bind the whole `DataContext`), chain the knob setters,
+/// then wire it onto a target DP with [`set_binding`].
+///
+/// Owns a `+1` reference released on drop. [`set_binding`] makes Noesis take its
+/// own reference, so a [`Binding`] may be dropped right after wiring.
+pub struct Binding {
+    ptr: NonNull<c_void>,
+}
+
+// SAFETY: a Noesis BaseComponent handle; same threading rationale as the other
+// owning wrappers in this crate.
+unsafe impl Send for Binding {}
+unsafe impl Sync for Binding {}
+
+impl Binding {
+    /// Create a binding with the given source property path (e.g. `"Title"`,
+    /// `"Item.Name"`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` contains an interior NUL byte, or if the Noesis
+    /// allocation fails.
+    #[must_use]
+    pub fn new(path: &str) -> Self {
+        let c = CString::new(path).expect("binding path contained interior NUL");
+        let ptr = unsafe { dm_noesis_binding_create(c.as_ptr()) };
+        Self {
+            ptr: NonNull::new(ptr).expect("dm_noesis_binding_create returned null"),
+        }
+    }
+
+    /// Create a binding with an empty path — binds to the whole `DataContext`
+    /// (or `Source`) object, like `{Binding}` in XAML.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the Noesis allocation fails.
+    #[must_use]
+    pub fn whole() -> Self {
+        let ptr = unsafe { dm_noesis_binding_create(core::ptr::null()) };
+        Self {
+            ptr: NonNull::new(ptr).expect("dm_noesis_binding_create returned null"),
+        }
+    }
+
+    /// Raw `Noesis::Binding*` (a `BaseComponent*`). Borrowed for the lifetime of
+    /// `self`.
+    #[must_use]
+    pub fn raw(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+
+    /// Set the binding [`mode`](BindingMode). Chainable.
+    #[must_use]
+    pub fn mode(self, mode: BindingMode) -> Self {
+        unsafe { dm_noesis_binding_set_mode(self.ptr.as_ptr(), mode as i32) };
+        self
+    }
+
+    /// Set the [`UpdateSourceTrigger`]. Chainable.
+    #[must_use]
+    pub fn update_source_trigger(self, trigger: UpdateSourceTrigger) -> Self {
+        unsafe { dm_noesis_binding_set_update_source_trigger(self.ptr.as_ptr(), trigger as i32) };
+        self
+    }
+
+    /// Attach a Rust [`Converter`]. Chainable. The binding takes its own
+    /// reference, so the [`Converter`] handle may be dropped afterwards (the
+    /// converter stays alive while the binding references it).
+    #[must_use]
+    pub fn converter(self, converter: &Converter) -> Self {
+        unsafe { dm_noesis_binding_set_converter(self.ptr.as_ptr(), converter.raw()) };
+        self
+    }
+
+    /// Set the converter parameter (a boxed value passed to the converter on
+    /// every call). The binding stores its own reference. Chainable.
+    #[must_use]
+    pub fn converter_parameter(self, parameter: &Boxed) -> Self {
+        unsafe { dm_noesis_binding_set_converter_parameter(self.ptr.as_ptr(), parameter.raw()) };
+        self
+    }
+
+    /// Set a .NET-style composite `StringFormat` (e.g. `"F2"`, `"Value is
+    /// {0:F2}"`). Chainable.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `format` contains an interior NUL byte.
+    #[must_use]
+    pub fn string_format(self, format: &str) -> Self {
+        let c = CString::new(format).expect("string format contained interior NUL");
+        unsafe { dm_noesis_binding_set_string_format(self.ptr.as_ptr(), c.as_ptr()) };
+        self
+    }
+
+    /// Set the fallback value used when the binding can't produce one. The
+    /// binding stores its own reference. Chainable.
+    #[must_use]
+    pub fn fallback_value(self, value: &Boxed) -> Self {
+        unsafe { dm_noesis_binding_set_fallback_value(self.ptr.as_ptr(), value.raw()) };
+        self
+    }
+
+    /// Bind against another element resolved by its `x:Name`. Chainable.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn element_name(self, name: &str) -> Self {
+        let c = CString::new(name).expect("element name contained interior NUL");
+        unsafe { dm_noesis_binding_set_element_name(self.ptr.as_ptr(), c.as_ptr()) };
+        self
+    }
+
+    /// Bind relative to the target element itself (`RelativeSource Self`).
+    /// Chainable.
+    #[must_use]
+    pub fn relative_source_self(self) -> Self {
+        unsafe { dm_noesis_binding_set_relative_source_self(self.ptr.as_ptr()) };
+        self
+    }
+
+    /// Set an explicit binding source object (overrides the inherited
+    /// `DataContext`). Chainable.
+    ///
+    /// # Safety
+    ///
+    /// `source` must be null or a live `Noesis::BaseComponent*` (e.g. a view
+    /// model from [`crate::classes::ClassInstance::raw`]). The binding stores
+    /// its own reference; the caller keeps ownership.
+    #[must_use]
+    pub unsafe fn source(self, source: *mut c_void) -> Self {
+        unsafe { dm_noesis_binding_set_source(self.ptr.as_ptr(), source) };
+        self
+    }
+}
+
+impl Drop for Binding {
+    fn drop(&mut self) {
+        // SAFETY: produced by dm_noesis_binding_create with +1 ref.
+        unsafe { dm_noesis_binding_destroy(self.ptr.as_ptr()) }
+    }
+}
+
+/// Wire `binding` onto `element`'s dependency property named `dp_name`, via
+/// `Noesis::BindingOperations::SetBinding` — the code-built equivalent of
+/// authoring `dp_name="{Binding ...}"` in XAML. Returns `false` if `element` is
+/// not a `DependencyObject` or `dp_name` doesn't resolve to one of its
+/// dependency properties.
+#[must_use]
+pub fn set_binding(element: &FrameworkElement, dp_name: &str, binding: &Binding) -> bool {
+    let c = CString::new(dp_name).expect("dp name contained interior NUL");
+    // SAFETY: element.raw() is a live FrameworkElement*; binding.raw() a live
+    // Binding*; both outlive the call. Noesis takes its own reference.
+    unsafe { dm_noesis_set_binding(element.raw(), c.as_ptr(), binding.raw()) }
+}
+
+/// Insert `object` (e.g. a [`Converter`] via [`Converter::raw`], or a [`Boxed`]
+/// value) into `element`'s `ResourceDictionary` under `key`, creating the
+/// dictionary if the element has none. Makes the object reachable from XAML via
+/// `{StaticResource key}` — e.g. `{Binding Path, Converter={StaticResource
+/// key}}`. The dictionary stores its own reference. Returns `false` if `element`
+/// is not a `FrameworkElement`.
+///
+/// # Safety
+///
+/// `object` must be a live `Noesis::BaseComponent*` (e.g. [`Converter::raw`] /
+/// [`Boxed::raw`] / [`crate::classes::ClassInstance::raw`]).
+#[must_use]
+pub unsafe fn add_resource(element: &FrameworkElement, key: &str, object: *mut c_void) -> bool {
+    let c = CString::new(key).expect("resource key contained interior NUL");
+    unsafe { dm_noesis_framework_element_add_resource(element.raw(), c.as_ptr(), object) }
 }
