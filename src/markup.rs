@@ -168,15 +168,17 @@ impl Drop for MarkupExtensionRegistration {
 /// `Box<Box<dyn MarkupExtensionHandler>>` whose ownership was transferred
 /// to C++ at register time, plus the per-handler scratch slot.
 unsafe extern "C" fn markup_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    forget_string_scratch(userdata);
-    // SAFETY: `userdata` is the `Box::into_raw` from `new`. Single-owner
-    // contract; C++ calls this exactly once.
-    drop(Box::from_raw(
-        userdata.cast::<Box<dyn MarkupExtensionHandler>>(),
-    ));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        forget_string_scratch(userdata);
+        // SAFETY: `userdata` is the `Box::into_raw` from `new`. Single-owner
+        // contract; C++ calls this exactly once.
+        drop(Box::from_raw(
+            userdata.cast::<Box<dyn MarkupExtensionHandler>>(),
+        ));
+    })
 }
 
 // ── Trampoline ─────────────────────────────────────────────────────────────
@@ -187,49 +189,51 @@ unsafe extern "C" fn provide_trampoline(
     out_string: *mut *const c_char,
     out_component: *mut *mut c_void,
 ) -> bool {
-    let handler = &mut *userdata.cast::<Box<dyn MarkupExtensionHandler>>();
-    let key_str = if key.is_null() {
-        ""
-    } else {
-        CStr::from_ptr(key).to_str().unwrap_or("")
-    };
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn MarkupExtensionHandler>>();
+        let key_str = if key.is_null() {
+            ""
+        } else {
+            CStr::from_ptr(key).to_str().unwrap_or("")
+        };
 
-    *out_string = core::ptr::null();
-    *out_component = core::ptr::null_mut();
+        *out_string = core::ptr::null();
+        *out_component = core::ptr::null_mut();
 
-    match handler.provide_value(key_str) {
-        MarkupValue::Unset => false,
-        MarkupValue::Component(ptr) => {
-            *out_component = ptr.as_ptr();
-            true
+        match handler.provide_value(key_str) {
+            MarkupValue::Unset => false,
+            MarkupValue::Component(ptr) => {
+                *out_component = ptr.as_ptr();
+                true
+            }
+            MarkupValue::String(s) => {
+                // The borrowed &str must remain valid for the C++ side to copy
+                // the bytes into Noesis's String storage. The string returned by
+                // `provide_value` borrows from the handler — typically scratch
+                // storage on the handler itself, which the C++ side copies before
+                // the next callback or any further handler mutation. Stash a
+                // CString in a per-handler slot so the trailing NUL is in place.
+                let cstring = CString::new(s.as_bytes()).unwrap_or_default();
+                let key = userdata as usize;
+                let mut table = STRING_SCRATCH.lock().expect("STRING_SCRATCH poisoned");
+                // Replace any prior scratch for this handler — the C++ side
+                // copies bytes synchronously, so the previous slot can go.
+                let slot = table.iter_mut().find(|(k, _)| *k == key);
+                let cstr_ptr = match slot {
+                    Some(slot) => {
+                        slot.1 = cstring;
+                        slot.1.as_ptr()
+                    }
+                    None => {
+                        table.push((key, cstring));
+                        table.last().expect("just pushed").1.as_ptr()
+                    }
+                };
+                *out_string = cstr_ptr;
+                true
+            }
         }
-        MarkupValue::String(s) => {
-            // The borrowed &str must remain valid for the C++ side to copy
-            // the bytes into Noesis's String storage. The string returned by
-            // `provide_value` borrows from the handler — typically scratch
-            // storage on the handler itself, which the C++ side copies before
-            // the next callback or any further handler mutation. Stash a
-            // CString in a per-handler slot so the trailing NUL is in place.
-            let cstring = CString::new(s.as_bytes()).unwrap_or_default();
-            let key = userdata as usize;
-            let mut table = STRING_SCRATCH.lock().expect("STRING_SCRATCH poisoned");
-            // Replace any prior scratch for this handler — the C++ side
-            // copies bytes synchronously, so the previous slot can go.
-            let slot = table.iter_mut().find(|(k, _)| *k == key);
-            let cstr_ptr = match slot {
-                Some(slot) => {
-                    slot.1 = cstring;
-                    slot.1.as_ptr()
-                }
-                None => {
-                    table.push((key, cstring));
-                    table.last().expect("just pushed").1.as_ptr()
-                }
-            };
-            *out_string = cstr_ptr;
-            true
-        }
-    }
+    })
 }
 
 // Per-handler CString scratch. Handlers borrow &str into Rust-owned data;

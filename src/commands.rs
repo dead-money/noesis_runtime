@@ -110,23 +110,29 @@ unsafe extern "C" fn command_can_execute_trampoline(
     userdata: *mut c_void,
     param: *mut c_void,
 ) -> bool {
-    let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
-    handler.can_execute(NonNull::new(param))
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
+        handler.can_execute(NonNull::new(param))
+    })
 }
 
 /// SAFETY: see [`command_can_execute_trampoline`].
 unsafe extern "C" fn command_execute_trampoline(userdata: *mut c_void, param: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
-    handler.execute(NonNull::new(param));
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
+        handler.execute(NonNull::new(param));
+    })
 }
 
 /// SAFETY: `userdata` was produced by [`Command::new`] and C++ owns it; this
 /// is the matching `Box::from_raw` that ends that ownership, run exactly once.
 unsafe extern "C" fn command_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn CommandHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn CommandHandler>>()));
+    })
 }
 
 /// A Rust-backed `ICommand`. Owns a `+1` reference released on drop. Hand
@@ -580,25 +586,31 @@ impl<F: FnMut(CommandParameter) + Send + 'static> CommandBindingHandler for F {
 /// SAFETY: `userdata` is the double-boxed handler leaked in
 /// [`CommandBinding::new`], alive until the free trampoline runs.
 unsafe extern "C" fn cb_executed_trampoline(userdata: *mut c_void, param: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
-    handler.execute(NonNull::new(param));
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
+        handler.execute(NonNull::new(param));
+    })
 }
 
 /// SAFETY: see [`cb_executed_trampoline`].
 unsafe extern "C" fn cb_can_execute_trampoline(userdata: *mut c_void, param: *mut c_void) -> bool {
-    let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
-    handler.can_execute(NonNull::new(param))
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
+        handler.can_execute(NonNull::new(param))
+    })
 }
 
 /// SAFETY: matching `Box::from_raw` for the leak in [`CommandBinding::new`],
 /// run exactly once by the C++ destructor.
 unsafe extern "C" fn cb_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(
-        userdata.cast::<Box<dyn CommandBindingHandler>>(),
-    ));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(
+            userdata.cast::<Box<dyn CommandBindingHandler>>(),
+        ));
+    })
 }
 
 /// Binds a command to Rust handlers and (once [`attached`](Self::attach)) makes

@@ -29,6 +29,7 @@
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
 use core::ptr::NonNull;
+use std::borrow::Cow;
 use std::ffi::{CStr, c_void};
 use std::os::raw::c_char;
 
@@ -71,13 +72,13 @@ unsafe fn provider<'a>(userdata: *mut c_void) -> &'a mut Box<dyn FontProvider> {
     &mut *userdata.cast::<Box<dyn FontProvider>>()
 }
 
-fn cstr_to_str<'a>(p: *const c_char) -> &'a str {
+/// Decode a Noesis-supplied string lossily — odd/non-UTF-8 engine input must not
+/// panic across the C ABI, so invalid bytes become U+FFFD rather than aborting.
+fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {
-        ""
+        Cow::Borrowed("")
     } else {
-        unsafe { CStr::from_ptr(p) }
-            .to_str()
-            .expect("noesis passed non-UTF-8 string to FontProvider")
+        unsafe { CStr::from_ptr(p) }.to_string_lossy()
     }
 }
 
@@ -87,15 +88,19 @@ unsafe extern "C" fn t_scan_folder(
     register_fn: RegisterFontFn,
     register_cx: *mut c_void,
 ) {
-    let folder = cstr_to_str(folder_uri);
-    let prov = provider(userdata);
-    prov.scan_folder(folder, &mut |filename: &str| {
-        // Allocate a NUL-terminated copy for the C ABI. The callback is
-        // synchronous and copies internally (via `RegisterFont`), so the
-        // CString can drop right after.
-        let c = std::ffi::CString::new(filename).expect("font filename contains interior NUL");
-        register_fn(register_cx, c.as_ptr());
-    });
+    crate::panic_guard::guard(|| {
+        let folder = cstr_to_str(folder_uri);
+        let prov = provider(userdata);
+        prov.scan_folder(&folder, &mut |filename: &str| {
+            // Allocate a NUL-terminated copy for the C ABI. The callback is
+            // synchronous and copies internally (via `RegisterFont`), so the
+            // CString can drop right after. A filename with an interior NUL
+            // can't cross the C ABI; skip it rather than panic.
+            if let Ok(c) = std::ffi::CString::new(filename) {
+                register_fn(register_cx, c.as_ptr());
+            }
+        });
+    })
 }
 
 unsafe extern "C" fn t_open_font(
@@ -105,14 +110,21 @@ unsafe extern "C" fn t_open_font(
     out_data: *mut *const u8,
     out_len: *mut u32,
 ) -> bool {
-    let folder = cstr_to_str(folder_uri);
-    let name = cstr_to_str(filename);
-    let Some(bytes) = provider(userdata).open_font(folder, name) else {
-        return false;
-    };
-    out_data.write(bytes.as_ptr());
-    out_len.write(u32::try_from(bytes.len()).expect("font file > 4 GiB"));
-    true
+    crate::panic_guard::guard(|| {
+        let folder = cstr_to_str(folder_uri);
+        let name = cstr_to_str(filename);
+        let Some(bytes) = provider(userdata).open_font(&folder, &name) else {
+            return false;
+        };
+        // A >4 GiB font file can't be represented to the shim — treat as failure
+        // rather than panicking inside the trampoline.
+        let Ok(len) = u32::try_from(bytes.len()) else {
+            return false;
+        };
+        out_data.write(bytes.as_ptr());
+        out_len.write(len);
+        true
+    })
 }
 
 static VTABLE: FontProviderVTable = FontProviderVTable {

@@ -1209,20 +1209,27 @@ impl FrameworkElement {
         }
 
         unsafe extern "C" fn filter_tramp(ud: *mut c_void, visual: *mut c_void) -> i32 {
-            // SAFETY: ud is the &mut Ctx passed below, live for the call.
-            let ctx = unsafe { &mut *ud.cast::<Ctx>() };
-            let behavior = unsafe {
-                with_borrowed(visual, |e| (ctx.filter)(e), HitTestFilterBehavior::Continue)
-            };
-            behavior as i32
+            // A panicking user filter is contained and treated as "Continue"
+            // (descend normally) rather than unwinding across the C ABI.
+            crate::panic_guard::guard_or(HitTestFilterBehavior::Continue as i32, || {
+                // SAFETY: ud is the &mut Ctx passed below, live for the call.
+                let ctx = unsafe { &mut *ud.cast::<Ctx>() };
+                let behavior = unsafe {
+                    with_borrowed(visual, |e| (ctx.filter)(e), HitTestFilterBehavior::Continue)
+                };
+                behavior as i32
+            })
         }
         unsafe extern "C" fn result_tramp(ud: *mut c_void, visual: *mut c_void) -> i32 {
-            // SAFETY: ud is the &mut Ctx passed below, live for the call.
-            let ctx = unsafe { &mut *ud.cast::<Ctx>() };
-            let behavior = unsafe {
-                with_borrowed(visual, |e| (ctx.result)(e), HitTestResultBehavior::Continue)
-            };
-            behavior as i32
+            // A panicking user callback is contained and treated as "Continue".
+            crate::panic_guard::guard_or(HitTestResultBehavior::Continue as i32, || {
+                // SAFETY: ud is the &mut Ctx passed below, live for the call.
+                let ctx = unsafe { &mut *ud.cast::<Ctx>() };
+                let behavior = unsafe {
+                    with_borrowed(visual, |e| (ctx.result)(e), HitTestResultBehavior::Continue)
+                };
+                behavior as i32
+            })
         }
 
         let mut ctx = Ctx {
@@ -4025,17 +4032,23 @@ impl<F: FnMut() -> u32 + Send + 'static> TimerHandler for F {
 /// SAFETY: `userdata` must be a pointer produced by [`View::create_timer`] and
 /// still alive (its [`TimerSubscription`] hasn't been dropped).
 unsafe extern "C" fn timer_trampoline(userdata: *mut c_void) -> u32 {
-    // SAFETY: userdata is the double-boxed handler leaked in create_timer; the
-    // RustTimer keeps it alive until cancel, so the deref is valid here.
-    let handler = unsafe { &mut *userdata.cast::<Box<dyn TimerHandler>>() };
-    handler.on_tick()
+    // A panicking tick is contained and reported as `0` (stop the timer) rather
+    // than unwinding across the C ABI.
+    crate::panic_guard::guard(|| {
+        // SAFETY: userdata is the double-boxed handler leaked in create_timer; the
+        // RustTimer keeps it alive until cancel, so the deref is valid here.
+        let handler = unsafe { &mut *userdata.cast::<Box<dyn TimerHandler>>() };
+        handler.on_tick()
+    })
 }
 
 /// SAFETY: `userdata` must be the pointer donated to the C++ `RustTimer` by
 /// [`View::create_timer`]; the C side invokes this exactly once on cancel.
 unsafe extern "C" fn timer_free(userdata: *mut c_void) {
-    // SAFETY: reconstitute and drop the double box we leaked in create_timer.
-    unsafe { drop(Box::from_raw(userdata.cast::<Box<dyn TimerHandler>>())) };
+    crate::panic_guard::guard(|| {
+        // SAFETY: reconstitute and drop the double box we leaked in create_timer.
+        unsafe { drop(Box::from_raw(userdata.cast::<Box<dyn TimerHandler>>())) };
+    })
 }
 
 /// RAII handle for a view timer created by [`View::create_timer`]. While alive,
@@ -4092,20 +4105,24 @@ impl<F: FnMut() + Send + 'static> RenderingHandler for F {
 /// [`View::add_rendering_handler`] and still alive (its
 /// [`RenderingSubscription`] hasn't been dropped).
 unsafe extern "C" fn rendering_trampoline(userdata: *mut c_void, _view: *mut c_void) {
-    // SAFETY: userdata is the double-boxed handler leaked in
-    // add_rendering_handler; the C++ handler keeps it alive until removal, so
-    // the deref is valid here.
-    let handler = unsafe { &mut *userdata.cast::<Box<dyn RenderingHandler>>() };
-    handler.on_rendering();
+    crate::panic_guard::guard(|| {
+        // SAFETY: userdata is the double-boxed handler leaked in
+        // add_rendering_handler; the C++ handler keeps it alive until removal, so
+        // the deref is valid here.
+        let handler = unsafe { &mut *userdata.cast::<Box<dyn RenderingHandler>>() };
+        handler.on_rendering();
+    })
 }
 
 /// SAFETY: `userdata` must be the pointer donated to the C++ handler by
 /// [`View::add_rendering_handler`]; the C side invokes this exactly once on
 /// removal.
 unsafe extern "C" fn rendering_free(userdata: *mut c_void) {
-    // SAFETY: reconstitute and drop the double box we leaked in
-    // add_rendering_handler.
-    unsafe { drop(Box::from_raw(userdata.cast::<Box<dyn RenderingHandler>>())) };
+    crate::panic_guard::guard(|| {
+        // SAFETY: reconstitute and drop the double box we leaked in
+        // add_rendering_handler.
+        unsafe { drop(Box::from_raw(userdata.cast::<Box<dyn RenderingHandler>>())) };
+    })
 }
 
 /// RAII handle for a `Rendering` subscription created by

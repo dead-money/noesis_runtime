@@ -67,8 +67,10 @@ impl<F: FnMut() + Send + 'static> ClickHandler for F {
 /// SAFETY: `userdata` must be a pointer produced by [`subscribe_click`] and
 /// still alive (the [`ClickSubscription`] hasn't been dropped).
 unsafe extern "C" fn click_trampoline(userdata: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn ClickHandler>>();
-    handler.on_click();
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn ClickHandler>>();
+        handler.on_click();
+    })
 }
 
 /// RAII subscription token. Drop to unsubscribe and free the boxed handler.
@@ -165,15 +167,17 @@ impl<F: FnMut(Key) -> bool + Send + 'static> KeyDownHandler for F {
 /// `out_handled` must be a non-null pointer to a writable bool (the C++
 /// shim guarantees this).
 unsafe extern "C" fn keydown_trampoline(userdata: *mut c_void, key: i32, out_handled: *mut bool) {
-    let handler = &mut *userdata.cast::<Box<dyn KeyDownHandler>>();
-    // Best-effort map of the raw ordinal back to our safe `Key` mirror.
-    // Anything outside the mirrored set arrives as `Key::None` — callers
-    // can still observe the event and choose to ignore unmapped keys.
-    let mapped = key_from_raw(key);
-    let handled = handler.on_keydown(mapped);
-    if !out_handled.is_null() {
-        *out_handled = handled;
-    }
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn KeyDownHandler>>();
+        // Best-effort map of the raw ordinal back to our safe `Key` mirror.
+        // Anything outside the mirrored set arrives as `Key::None` — callers
+        // can still observe the event and choose to ignore unmapped keys.
+        let mapped = key_from_raw(key);
+        let handled = handler.on_keydown(mapped);
+        if !out_handled.is_null() {
+            *out_handled = handled;
+        }
+    })
 }
 
 /// Convert a raw `Noesis::Key` ordinal back into the safe [`Key`] mirror.
@@ -771,15 +775,17 @@ unsafe extern "C" fn event_trampoline(
     args: *const c_void,
     out_handled: *mut bool,
 ) {
-    let handler = &mut *userdata.cast::<Box<dyn RoutedEventHandler>>();
-    let ev = EventArgs {
-        raw: args,
-        _not_send: PhantomData,
-    };
-    let handled = handler.on_event(&ev);
-    if !out_handled.is_null() {
-        *out_handled = handled;
-    }
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn RoutedEventHandler>>();
+        let ev = EventArgs {
+            raw: args,
+            _not_send: PhantomData,
+        };
+        let handled = handler.on_event(&ev);
+        if !out_handled.is_null() {
+            *out_handled = handled;
+        }
+    })
 }
 
 /// RAII subscription token for [`subscribe_event`]. Drop to unsubscribe and
@@ -891,8 +897,10 @@ impl<F: FnMut() + Send + 'static> LifecycleHandler for F {
 /// SAFETY: `userdata` must be a pointer produced by [`subscribe_lifecycle`] and
 /// still alive (the [`LifecycleSubscription`] hasn't been dropped).
 unsafe extern "C" fn lifecycle_trampoline(userdata: *mut c_void) {
-    let handler = &mut *userdata.cast::<Box<dyn LifecycleHandler>>();
-    handler.on_event();
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn LifecycleHandler>>();
+        handler.on_event();
+    })
 }
 
 /// RAII subscription token for [`subscribe_lifecycle`]. Drop to unsubscribe and
@@ -1026,12 +1034,14 @@ unsafe extern "C" fn data_object_trampoline(
     is_drag_drop: bool,
     out_cancel: *mut bool,
 ) {
-    let handler = &mut *userdata.cast::<Box<dyn DataObjectHandler>>();
-    let data = (!data_object.is_null()).then_some(data_object);
-    let cancel = handler.on_data_object(data, is_drag_drop);
-    if !out_cancel.is_null() {
-        *out_cancel = cancel;
-    }
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn DataObjectHandler>>();
+        let data = (!data_object.is_null()).then_some(data_object);
+        let cancel = handler.on_data_object(data, is_drag_drop);
+        if !out_cancel.is_null() {
+            *out_cancel = cancel;
+        }
+    })
 }
 
 /// RAII subscription token for a `DataObject.Copying` / `.Pasting` handler.

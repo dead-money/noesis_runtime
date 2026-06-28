@@ -106,12 +106,14 @@ unsafe extern "C" fn error_trampoline(
     message: *const c_char,
     fatal: bool,
 ) {
-    // SAFETY: userdata is the leaked Box<ErrorClosure>; the guard guarantees it
-    // outlives every dispatch.
-    let closure = unsafe { &mut *userdata.cast::<ErrorClosure>() };
-    let file = unsafe { cstr(file) };
-    let message = unsafe { cstr(message) };
-    closure(&file, line, &message, fatal);
+    crate::panic_guard::guard(|| {
+        // SAFETY: userdata is the leaked Box<ErrorClosure>; the guard guarantees it
+        // outlives every dispatch.
+        let closure = unsafe { &mut *userdata.cast::<ErrorClosure>() };
+        let file = unsafe { cstr(file) };
+        let message = unsafe { cstr(message) };
+        closure(&file, line, &message, fatal);
+    })
 }
 
 /// RAII guard for the global error handler. On drop, restores the previously
@@ -182,11 +184,14 @@ unsafe extern "C" fn assert_trampoline(
     line: u32,
     expr: *const c_char,
 ) -> bool {
-    // SAFETY: see `error_trampoline`.
-    let closure = unsafe { &mut *userdata.cast::<AssertClosure>() };
-    let file = unsafe { cstr(file) };
-    let expr = unsafe { cstr(expr) };
-    closure(&file, line, &expr)
+    // A panicking handler is contained and reported as `false` (no debug break).
+    crate::panic_guard::guard(|| {
+        // SAFETY: see `error_trampoline`.
+        let closure = unsafe { &mut *userdata.cast::<AssertClosure>() };
+        let file = unsafe { cstr(file) };
+        let expr = unsafe { cstr(expr) };
+        closure(&file, line, &expr)
+    })
 }
 
 /// RAII guard for the global assert handler; restores the predecessor on drop.
@@ -256,22 +261,24 @@ unsafe extern "C" fn error2_trampoline(
     context: *mut FfiErrorContext,
     userdata: *mut c_void,
 ) {
-    // SAFETY: see `error_trampoline`; userdata is our leaked Box<Error2Closure>.
-    let closure = unsafe { &mut *userdata.cast::<Error2Closure>() };
-    let file = unsafe { cstr(file) };
-    let message = unsafe { cstr(message) };
-    let ctx = if context.is_null() {
-        None
-    } else {
-        // SAFETY: non-null context is a valid ErrorContext for this call.
-        let c = unsafe { &*context };
-        Some(ErrorContext {
-            uri: unsafe { cstr_opt(c.uri) },
-            line: c.line,
-            column: c.column,
-        })
-    };
-    closure(&file, line, &message, fatal, ctx.as_ref());
+    crate::panic_guard::guard(|| {
+        // SAFETY: see `error_trampoline`; userdata is our leaked Box<Error2Closure>.
+        let closure = unsafe { &mut *userdata.cast::<Error2Closure>() };
+        let file = unsafe { cstr(file) };
+        let message = unsafe { cstr(message) };
+        let ctx = if context.is_null() {
+            None
+        } else {
+            // SAFETY: non-null context is a valid ErrorContext for this call.
+            let c = unsafe { &*context };
+            Some(ErrorContext {
+                uri: unsafe { cstr_opt(c.uri) },
+                line: c.line,
+                column: c.column,
+            })
+        };
+        closure(&file, line, &message, fatal, ctx.as_ref());
+    })
 }
 
 /// RAII guard for the per-thread error handler; restores the predecessor on

@@ -11,6 +11,7 @@
 use core::num::NonZeroU64;
 use core::ptr::NonNull;
 use core::slice;
+use std::borrow::Cow;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_void};
 
@@ -39,15 +40,14 @@ use crate::render_device::types::{Batch, DeviceCaps, TextureFormat, Tile};
 // Helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-/// Decode a C `*const c_char` into a `&str`. Empty string on null. Panics on
-/// non-UTF-8 (Noesis labels are always ASCII debug strings).
-unsafe fn cstr_to_str<'a>(p: *const c_char) -> &'a str {
+/// Decode a C `*const c_char` into a string. Empty on null. Noesis labels are
+/// ASCII debug strings; decode lossily so odd input can't panic across the C
+/// ABI (this runs on the render thread).
+unsafe fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {
-        ""
+        Cow::Borrowed("")
     } else {
-        CStr::from_ptr(p)
-            .to_str()
-            .expect("noesis passed non-UTF-8 label")
+        CStr::from_ptr(p).to_string_lossy()
     }
 }
 
@@ -94,8 +94,10 @@ unsafe fn device<'a>(userdata: *mut c_void) -> &'a mut Box<dyn RenderDevice> {
 // ────────────────────────────────────────────────────────────────────────────
 
 unsafe extern "C" fn t_get_caps(userdata: *mut c_void, out: *mut DeviceCaps) {
-    let caps = device(userdata).caps();
-    out.write(caps);
+    crate::panic_guard::guard(|| {
+        let caps = device(userdata).caps();
+        out.write(caps);
+    })
 }
 
 unsafe extern "C" fn t_create_texture(
@@ -108,46 +110,48 @@ unsafe extern "C" fn t_create_texture(
     data: *const *const c_void,
     out: *mut TextureBindingFfi,
 ) {
-    let dev = device(userdata);
-    let label = cstr_to_str(label);
-    let format = texture_format_from_raw(format_raw);
+    crate::panic_guard::guard(|| {
+        let dev = device(userdata);
+        let label = cstr_to_str(label);
+        let format = texture_format_from_raw(format_raw);
 
-    // Build the per-level slice array; lifetime ends with this fn body.
-    let slices: Vec<&[u8]> = if data.is_null() {
-        Vec::new()
-    } else {
-        let ptrs = slice::from_raw_parts(data, num_levels as usize);
-        ptrs.iter()
-            .enumerate()
-            .map(|(lvl, &p)| {
-                let len = level_byte_count(format, width, height, lvl as u32);
-                slice::from_raw_parts(p.cast::<u8>(), len)
-            })
-            .collect()
-    };
-
-    let desc = TextureDesc {
-        label,
-        width,
-        height,
-        num_levels,
-        format,
-        data: if data.is_null() {
-            None
+        // Build the per-level slice array; lifetime ends with this fn body.
+        let slices: Vec<&[u8]> = if data.is_null() {
+            Vec::new()
         } else {
-            Some(slices.as_slice())
-        },
-    };
-    let binding = dev.create_texture(desc);
-    out.write(TextureBindingFfi {
-        handle: binding.handle.0.get(),
-        width: binding.width,
-        height: binding.height,
-        has_mipmaps: binding.has_mipmaps,
-        inverted: binding.inverted,
-        has_alpha: binding.has_alpha,
-        pad: 0,
-    });
+            let ptrs = slice::from_raw_parts(data, num_levels as usize);
+            ptrs.iter()
+                .enumerate()
+                .map(|(lvl, &p)| {
+                    let len = level_byte_count(format, width, height, lvl as u32);
+                    slice::from_raw_parts(p.cast::<u8>(), len)
+                })
+                .collect()
+        };
+
+        let desc = TextureDesc {
+            label: &label,
+            width,
+            height,
+            num_levels,
+            format,
+            data: if data.is_null() {
+                None
+            } else {
+                Some(slices.as_slice())
+            },
+        };
+        let binding = dev.create_texture(desc);
+        out.write(TextureBindingFfi {
+            handle: binding.handle.0.get(),
+            width: binding.width,
+            height: binding.height,
+            has_mipmaps: binding.has_mipmaps,
+            inverted: binding.inverted,
+            has_alpha: binding.has_alpha,
+            pad: 0,
+        });
+    })
 }
 
 unsafe extern "C" fn t_update_texture(
@@ -161,21 +165,23 @@ unsafe extern "C" fn t_update_texture(
     format_raw: u32,
     data: *const c_void,
 ) {
-    let dev = device(userdata);
-    let format = texture_format_from_raw(format_raw);
-    let len = (width as usize) * (height as usize) * bytes_per_pixel(format) as usize;
-    let bytes = slice::from_raw_parts(data.cast::<u8>(), len);
-    dev.update_texture(
-        texture_handle(handle),
-        level,
-        TextureRect {
-            x,
-            y,
-            width,
-            height,
-        },
-        bytes,
-    );
+    crate::panic_guard::guard(|| {
+        let dev = device(userdata);
+        let format = texture_format_from_raw(format_raw);
+        let len = (width as usize) * (height as usize) * bytes_per_pixel(format) as usize;
+        let bytes = slice::from_raw_parts(data.cast::<u8>(), len);
+        dev.update_texture(
+            texture_handle(handle),
+            level,
+            TextureRect {
+                x,
+                y,
+                width,
+                height,
+            },
+            bytes,
+        );
+    })
 }
 
 unsafe extern "C" fn t_end_updating_textures(
@@ -183,14 +189,18 @@ unsafe extern "C" fn t_end_updating_textures(
     handles: *const u64,
     count: u32,
 ) {
-    let dev = device(userdata);
-    let raws = slice::from_raw_parts(handles, count as usize);
-    let typed: Vec<TextureHandle> = raws.iter().copied().map(texture_handle).collect();
-    dev.end_updating_textures(&typed);
+    crate::panic_guard::guard(|| {
+        let dev = device(userdata);
+        let raws = slice::from_raw_parts(handles, count as usize);
+        let typed: Vec<TextureHandle> = raws.iter().copied().map(texture_handle).collect();
+        dev.end_updating_textures(&typed);
+    })
 }
 
 unsafe extern "C" fn t_drop_texture(userdata: *mut c_void, handle: u64) {
-    device(userdata).drop_texture(texture_handle(handle));
+    crate::panic_guard::guard(|| {
+        device(userdata).drop_texture(texture_handle(handle));
+    })
 }
 
 unsafe extern "C" fn t_create_render_target(
@@ -202,27 +212,30 @@ unsafe extern "C" fn t_create_render_target(
     needs_stencil: bool,
     out: *mut RenderTargetBindingFfi,
 ) {
-    let dev = device(userdata);
-    let desc = RenderTargetDesc {
-        label: cstr_to_str(label),
-        width,
-        height,
-        sample_count,
-        needs_stencil,
-    };
-    let binding = dev.create_render_target(desc);
-    out.write(RenderTargetBindingFfi {
-        handle: binding.handle.0.get(),
-        resolve_texture: TextureBindingFfi {
-            handle: binding.resolve_texture.handle.0.get(),
-            width: binding.resolve_texture.width,
-            height: binding.resolve_texture.height,
-            has_mipmaps: binding.resolve_texture.has_mipmaps,
-            inverted: binding.resolve_texture.inverted,
-            has_alpha: binding.resolve_texture.has_alpha,
-            pad: 0,
-        },
-    });
+    crate::panic_guard::guard(|| {
+        let dev = device(userdata);
+        let label = cstr_to_str(label);
+        let desc = RenderTargetDesc {
+            label: &label,
+            width,
+            height,
+            sample_count,
+            needs_stencil,
+        };
+        let binding = dev.create_render_target(desc);
+        out.write(RenderTargetBindingFfi {
+            handle: binding.handle.0.get(),
+            resolve_texture: TextureBindingFfi {
+                handle: binding.resolve_texture.handle.0.get(),
+                width: binding.resolve_texture.width,
+                height: binding.resolve_texture.height,
+                has_mipmaps: binding.resolve_texture.has_mipmaps,
+                inverted: binding.resolve_texture.inverted,
+                has_alpha: binding.resolve_texture.has_alpha,
+                pad: 0,
+            },
+        });
+    })
 }
 
 unsafe extern "C" fn t_clone_render_target(
@@ -231,49 +244,68 @@ unsafe extern "C" fn t_clone_render_target(
     src_handle: u64,
     out: *mut RenderTargetBindingFfi,
 ) {
-    let dev = device(userdata);
-    let binding = dev.clone_render_target(cstr_to_str(label), render_target_handle(src_handle));
-    out.write(RenderTargetBindingFfi {
-        handle: binding.handle.0.get(),
-        resolve_texture: TextureBindingFfi {
-            handle: binding.resolve_texture.handle.0.get(),
-            width: binding.resolve_texture.width,
-            height: binding.resolve_texture.height,
-            has_mipmaps: binding.resolve_texture.has_mipmaps,
-            inverted: binding.resolve_texture.inverted,
-            has_alpha: binding.resolve_texture.has_alpha,
-            pad: 0,
-        },
-    });
+    crate::panic_guard::guard(|| {
+        let dev = device(userdata);
+        let label = cstr_to_str(label);
+        let binding = dev.clone_render_target(&label, render_target_handle(src_handle));
+        out.write(RenderTargetBindingFfi {
+            handle: binding.handle.0.get(),
+            resolve_texture: TextureBindingFfi {
+                handle: binding.resolve_texture.handle.0.get(),
+                width: binding.resolve_texture.width,
+                height: binding.resolve_texture.height,
+                has_mipmaps: binding.resolve_texture.has_mipmaps,
+                inverted: binding.resolve_texture.inverted,
+                has_alpha: binding.resolve_texture.has_alpha,
+                pad: 0,
+            },
+        });
+    })
 }
 
 unsafe extern "C" fn t_drop_render_target(userdata: *mut c_void, handle: u64) {
-    device(userdata).drop_render_target(render_target_handle(handle));
+    crate::panic_guard::guard(|| {
+        device(userdata).drop_render_target(render_target_handle(handle));
+    })
 }
 
 unsafe extern "C" fn t_begin_offscreen_render(userdata: *mut c_void) {
-    device(userdata).begin_offscreen_render();
+    crate::panic_guard::guard(|| {
+        device(userdata).begin_offscreen_render();
+    })
 }
 unsafe extern "C" fn t_end_offscreen_render(userdata: *mut c_void) {
-    device(userdata).end_offscreen_render();
+    crate::panic_guard::guard(|| {
+        device(userdata).end_offscreen_render();
+    })
 }
 unsafe extern "C" fn t_begin_onscreen_render(userdata: *mut c_void) {
-    device(userdata).begin_onscreen_render();
+    crate::panic_guard::guard(|| {
+        device(userdata).begin_onscreen_render();
+    })
 }
 unsafe extern "C" fn t_end_onscreen_render(userdata: *mut c_void) {
-    device(userdata).end_onscreen_render();
+    crate::panic_guard::guard(|| {
+        device(userdata).end_onscreen_render();
+    })
 }
 
 unsafe extern "C" fn t_set_render_target(userdata: *mut c_void, handle: u64) {
-    device(userdata).set_render_target(render_target_handle(handle));
+    crate::panic_guard::guard(|| {
+        device(userdata).set_render_target(render_target_handle(handle));
+    })
 }
 
 unsafe extern "C" fn t_begin_tile(userdata: *mut c_void, handle: u64, tile: *const Tile) {
-    device(userdata).begin_tile(render_target_handle(handle), *tile);
+    crate::panic_guard::guard(|| {
+        device(userdata).begin_tile(render_target_handle(handle), *tile);
+    })
 }
 
 unsafe extern "C" fn t_end_tile(userdata: *mut c_void, handle: u64) {
-    device(userdata).end_tile(render_target_handle(handle));
+    crate::panic_guard::guard(|| {
+        device(userdata).end_tile(render_target_handle(handle));
+    })
 }
 
 unsafe extern "C" fn t_resolve_render_target(
@@ -282,26 +314,40 @@ unsafe extern "C" fn t_resolve_render_target(
     tiles: *const Tile,
     count: u32,
 ) {
-    let dev = device(userdata);
-    let tiles_slice = slice::from_raw_parts(tiles, count as usize);
-    dev.resolve_render_target(render_target_handle(handle), tiles_slice);
+    crate::panic_guard::guard(|| {
+        let dev = device(userdata);
+        let tiles_slice = slice::from_raw_parts(tiles, count as usize);
+        dev.resolve_render_target(render_target_handle(handle), tiles_slice);
+    })
 }
 
 unsafe extern "C" fn t_map_vertices(userdata: *mut c_void, bytes: u32) -> *mut c_void {
-    device(userdata).map_vertices(bytes).as_mut_ptr().cast()
+    // A panic here yields null; Noesis tolerates a failed map far better than an
+    // unwind across the render-thread C ABI.
+    crate::panic_guard::guard_or(core::ptr::null_mut(), || {
+        device(userdata).map_vertices(bytes).as_mut_ptr().cast()
+    })
 }
 unsafe extern "C" fn t_unmap_vertices(userdata: *mut c_void) {
-    device(userdata).unmap_vertices();
+    crate::panic_guard::guard(|| {
+        device(userdata).unmap_vertices();
+    })
 }
 unsafe extern "C" fn t_map_indices(userdata: *mut c_void, bytes: u32) -> *mut c_void {
-    device(userdata).map_indices(bytes).as_mut_ptr().cast()
+    crate::panic_guard::guard_or(core::ptr::null_mut(), || {
+        device(userdata).map_indices(bytes).as_mut_ptr().cast()
+    })
 }
 unsafe extern "C" fn t_unmap_indices(userdata: *mut c_void) {
-    device(userdata).unmap_indices();
+    crate::panic_guard::guard(|| {
+        device(userdata).unmap_indices();
+    })
 }
 
 unsafe extern "C" fn t_draw_batch(userdata: *mut c_void, batch: *const Batch) {
-    device(userdata).draw_batch(&*batch);
+    crate::panic_guard::guard(|| {
+        device(userdata).draw_batch(&*batch);
+    })
 }
 
 // ────────────────────────────────────────────────────────────────────────────

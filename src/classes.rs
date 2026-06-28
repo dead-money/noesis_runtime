@@ -65,18 +65,20 @@ use crate::ffi::{
 /// transferred to C++ at registration time, and clears the prop-types
 /// scratch slot keyed on the same userdata pointer.
 unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    forget_prop_types(userdata);
-    // SAFETY: `userdata` is `Box::into_raw(Box<Box<dyn PropertyChangeHandler>>)`
-    // produced by `ClassBuilder::register`. The C++ ClassData holds the
-    // unique ownership; this is the matching `Box::from_raw` that ends it.
-    unsafe {
-        drop(Box::from_raw(
-            userdata.cast::<Box<dyn PropertyChangeHandler>>(),
-        ))
-    };
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        forget_prop_types(userdata);
+        // SAFETY: `userdata` is `Box::into_raw(Box<Box<dyn PropertyChangeHandler>>)`
+        // produced by `ClassBuilder::register`. The C++ ClassData holds the
+        // unique ownership; this is the matching `Box::from_raw` that ends it.
+        unsafe {
+            drop(Box::from_raw(
+                userdata.cast::<Box<dyn PropertyChangeHandler>>(),
+            ))
+        };
+    })
 }
 
 /// Read width / height of an `ImageSource` value (or any `BaseComponent*`
@@ -982,17 +984,19 @@ unsafe extern "C" fn prop_changed_trampoline(
     prop_index: u32,
     value_ptr: *const c_void,
 ) {
-    let handler = &mut *userdata.cast::<Box<dyn PropertyChangeHandler>>();
-    let Some(instance) = NonNull::new(instance) else {
-        return;
-    };
+    crate::panic_guard::guard(|| {
+        let handler = &mut *userdata.cast::<Box<dyn PropertyChangeHandler>>();
+        let Some(instance) = NonNull::new(instance) else {
+            return;
+        };
 
-    // We need the prop type to decode the value. The C++ side knows the type
-    // tag for the prop but doesn't pass it across the FFI on the changed
-    // callback (to keep the surface narrow). We recover it via a side table
-    // populated at registration: see `with_class_props`.
-    let value = decode_value(userdata, prop_index, value_ptr);
-    handler.on_changed(Instance(instance), prop_index, value);
+        // We need the prop type to decode the value. The C++ side knows the type
+        // tag for the prop but doesn't pass it across the FFI on the changed
+        // callback (to keep the surface narrow). We recover it via a side table
+        // populated at registration: see `with_class_props`.
+        let value = decode_value(userdata, prop_index, value_ptr);
+        handler.on_changed(Instance(instance), prop_index, value);
+    })
 }
 
 // Side table from (handler userdata pointer) → property type list, populated
@@ -1474,26 +1478,30 @@ unsafe extern "C" fn coerce_trampoline(
     in_value: *const c_void,
     out_value: *mut c_void,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn CoerceHandler>>();
-    let Some(inst) = NonNull::new(instance) else {
-        return;
-    };
-    let value = decode_value(userdata, prop_index, in_value);
-    let coerced = handler.coerce(Instance(inst), prop_index, value);
-    encode_coerced(userdata, prop_index, coerced, out_value);
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        let handler = &mut *userdata.cast::<Box<dyn CoerceHandler>>();
+        let Some(inst) = NonNull::new(instance) else {
+            return;
+        };
+        let value = decode_value(userdata, prop_index, in_value);
+        let coerced = handler.coerce(Instance(inst), prop_index, value);
+        encode_coerced(userdata, prop_index, coerced, out_value);
+    })
 }
 
 /// Free trampoline for the donated coerce handler box. Mirrors
 /// [`class_handler_free_trampoline`].
 unsafe extern "C" fn coerce_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    forget_prop_types(userdata);
-    drop(Box::from_raw(userdata.cast::<Box<dyn CoerceHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        forget_prop_types(userdata);
+        drop(Box::from_raw(userdata.cast::<Box<dyn CoerceHandler>>()));
+    })
 }
 
 unsafe fn encode_coerced(
@@ -1580,20 +1588,22 @@ unsafe extern "C" fn layout_measure_trampoline(
     out_w: *mut f32,
     out_h: *mut f32,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
-    let size = match NonNull::new(instance) {
-        Some(inst) => handler.measure(Instance(inst), Size::new(avail_w, avail_h)),
-        None => Size::ZERO,
-    };
-    if !out_w.is_null() {
-        *out_w = size.width;
-    }
-    if !out_h.is_null() {
-        *out_h = size.height;
-    }
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
+        let size = match NonNull::new(instance) {
+            Some(inst) => handler.measure(Instance(inst), Size::new(avail_w, avail_h)),
+            None => Size::ZERO,
+        };
+        if !out_w.is_null() {
+            *out_w = size.width;
+        }
+        if !out_h.is_null() {
+            *out_h = size.height;
+        }
+    })
 }
 
 unsafe extern "C" fn layout_arrange_trampoline(
@@ -1604,29 +1614,33 @@ unsafe extern "C" fn layout_arrange_trampoline(
     out_w: *mut f32,
     out_h: *mut f32,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
-    let size = match NonNull::new(instance) {
-        Some(inst) => handler.arrange(Instance(inst), Size::new(final_w, final_h)),
-        None => Size::new(final_w, final_h),
-    };
-    if !out_w.is_null() {
-        *out_w = size.width;
-    }
-    if !out_h.is_null() {
-        *out_h = size.height;
-    }
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
+        let size = match NonNull::new(instance) {
+            Some(inst) => handler.arrange(Instance(inst), Size::new(final_w, final_h)),
+            None => Size::new(final_w, final_h),
+        };
+        if !out_w.is_null() {
+            *out_w = size.width;
+        }
+        if !out_h.is_null() {
+            *out_h = size.height;
+        }
+    })
 }
 
 /// Free trampoline for the donated layout handler box. Mirrors
 /// [`class_handler_free_trampoline`].
 unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn LayoutHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn LayoutHandler>>()));
+    })
 }
 
 // ── Immediate-mode rendering (TODO §10) ──────────────────────────────────────
@@ -1653,24 +1667,28 @@ unsafe extern "C" fn render_trampoline(
     instance: *mut c_void,
     context: *mut c_void,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &mut *userdata.cast::<Box<dyn RenderHandler>>();
-    let (Some(inst), Some(ctx)) = (NonNull::new(instance), NonNull::new(context)) else {
-        return;
-    };
-    // SAFETY: `ctx` is the borrowed DrawingContext* delivered to OnRender, valid
-    // only for this call — the `DrawingContext<'_>` lifetime keeps it scoped.
-    let ctx = DrawingContext::from_raw(ctx);
-    handler.render(Instance(inst), ctx);
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        let handler = &mut *userdata.cast::<Box<dyn RenderHandler>>();
+        let (Some(inst), Some(ctx)) = (NonNull::new(instance), NonNull::new(context)) else {
+            return;
+        };
+        // SAFETY: `ctx` is the borrowed DrawingContext* delivered to OnRender, valid
+        // only for this call — the `DrawingContext<'_>` lifetime keeps it scoped.
+        let ctx = DrawingContext::from_raw(ctx);
+        handler.render(Instance(inst), ctx);
+    })
 }
 
 /// Free trampoline for the donated render handler box. Mirrors
 /// [`class_handler_free_trampoline`].
 unsafe extern "C" fn render_handler_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn RenderHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn RenderHandler>>()));
+    })
 }

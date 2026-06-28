@@ -190,22 +190,26 @@ unsafe extern "C" fn plain_set_trampoline(
     prop_index: u32,
     boxed_value: *mut c_void,
 ) {
-    if userdata.is_null() {
-        return;
-    }
-    let handler = &*userdata.cast::<Box<dyn PlainSetHandler>>();
-    let value = PlainValueRef::new(boxed_value);
-    handler.on_set(prop_index, &value);
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        let handler = &*userdata.cast::<Box<dyn PlainSetHandler>>();
+        let value = PlainValueRef::new(boxed_value);
+        handler.on_set(prop_index, &value);
+    })
 }
 
 /// SAFETY: `userdata` was produced by [`PlainVmBuilder::register`] and C++ owns
 /// it; this is the matching `Box::from_raw` that ends that ownership, run
 /// exactly once when the registration refcount hits zero.
 unsafe extern "C" fn plain_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(userdata.cast::<Box<dyn PlainSetHandler>>()));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(userdata.cast::<Box<dyn PlainSetHandler>>()));
+    })
 }
 
 /// Builder for a plain-VM type registration.

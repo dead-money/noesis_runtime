@@ -87,37 +87,41 @@ unsafe extern "C" fn multi_convert_trampoline(
     parameter: *mut c_void,
     out_result: *mut *mut c_void,
 ) -> bool {
-    let handler = &*userdata.cast::<Box<dyn MultiValueConverter>>();
+    crate::panic_guard::guard(|| {
+        let handler = &*userdata.cast::<Box<dyn MultiValueConverter>>();
 
-    // Materialise the borrowed args into a Vec<ConvertArg> the closure can index.
-    let args: Vec<ConvertArg> = if values.is_null() || count == 0 {
-        Vec::new()
-    } else {
-        let slice = core::slice::from_raw_parts(values, count as usize);
-        slice.iter().map(|&p| ConvertArg::new(p)).collect()
-    };
-    let param = ConvertArg::new(parameter);
+        // Materialise the borrowed args into a Vec<ConvertArg> the closure can index.
+        let args: Vec<ConvertArg> = if values.is_null() || count == 0 {
+            Vec::new()
+        } else {
+            let slice = core::slice::from_raw_parts(values, count as usize);
+            slice.iter().map(|&p| ConvertArg::new(p)).collect()
+        };
+        let param = ConvertArg::new(parameter);
 
-    match handler.convert(&args, &param) {
-        Some(result) => {
-            if !out_result.is_null() {
-                *out_result = result.into_boxed();
+        match handler.convert(&args, &param) {
+            Some(result) => {
+                if !out_result.is_null() {
+                    *out_result = result.into_boxed();
+                }
+                true
             }
-            true
+            None => false,
         }
-        None => false,
-    }
+    })
 }
 
 /// SAFETY: `userdata` was produced by [`MultiConverter::new`] and C++ owns it;
 /// this is the matching `Box::from_raw`, run exactly once on last release.
 unsafe extern "C" fn multi_converter_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    drop(Box::from_raw(
-        userdata.cast::<Box<dyn MultiValueConverter>>(),
-    ));
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        drop(Box::from_raw(
+            userdata.cast::<Box<dyn MultiValueConverter>>(),
+        ));
+    })
 }
 
 /// A Rust-backed `IMultiValueConverter`. Owns a `+1` reference released on drop.

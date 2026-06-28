@@ -140,23 +140,26 @@ impl NameScope {
         let mut callback: &mut dyn FnMut(&str, &FrameworkElement) = &mut f;
 
         unsafe extern "C" fn tramp(ud: *mut c_void, name: *const c_char, obj: *mut c_void) {
-            // SAFETY: ud is the &mut &mut dyn FnMut passed below.
-            let f = unsafe { &mut *ud.cast::<&mut dyn FnMut(&str, &FrameworkElement)>() };
-            let name = if name.is_null() {
-                ""
-            } else {
-                // SAFETY: name is a live, NUL-terminated C string for this call.
-                match unsafe { CStr::from_ptr(name) }.to_str() {
-                    Ok(s) => s,
-                    Err(_) => return,
+            crate::panic_guard::guard(|| {
+                // SAFETY: ud is the &mut &mut dyn FnMut passed below.
+                let f = unsafe { &mut *ud.cast::<&mut dyn FnMut(&str, &FrameworkElement)>() };
+                let name = if name.is_null() {
+                    ""
+                } else {
+                    // SAFETY: name is a live, NUL-terminated C string for this call.
+                    match unsafe { CStr::from_ptr(name) }.to_str() {
+                        Ok(s) => s,
+                        Err(_) => return,
+                    }
+                };
+                if let Some(p) = NonNull::new(obj) {
+                    // SAFETY: from_owned just stores the ptr; ManuallyDrop keeps the
+                    // borrowed object from being Released here.
+                    let elem =
+                        core::mem::ManuallyDrop::new(unsafe { FrameworkElement::from_owned(p) });
+                    f(name, &elem);
                 }
-            };
-            if let Some(p) = NonNull::new(obj) {
-                // SAFETY: from_owned just stores the ptr; ManuallyDrop keeps the
-                // borrowed object from being Released here.
-                let elem = core::mem::ManuallyDrop::new(unsafe { FrameworkElement::from_owned(p) });
-                f(name, &elem);
-            }
+            })
         }
 
         // SAFETY: tramp matches the C ABI; `callback` outlives the synchronous

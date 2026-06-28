@@ -61,6 +61,7 @@
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
 use core::ptr::NonNull;
+use std::borrow::Cow;
 use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -165,13 +166,13 @@ impl CursorType {
 // Shared helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-fn cstr_to_str<'a>(p: *const c_char) -> &'a str {
+/// Decode a Noesis-supplied string lossily — odd/non-UTF-8 engine input must not
+/// panic across the C ABI, so invalid bytes become U+FFFD rather than aborting.
+fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {
-        ""
+        Cow::Borrowed("")
     } else {
-        unsafe { CStr::from_ptr(p) }
-            .to_str()
-            .expect("noesis passed non-UTF-8 string to an integration callback")
+        unsafe { CStr::from_ptr(p) }.to_string_lossy()
     }
 }
 
@@ -185,8 +186,10 @@ type CursorClosure = Box<dyn FnMut(*mut c_void, CursorType) + Send>;
 static CURSOR_ACTIVE: AtomicU64 = AtomicU64::new(0);
 
 unsafe extern "C" fn cursor_tramp(user: *mut c_void, view: *mut c_void, cursor_type: i32) {
-    let cb = &mut *user.cast::<CursorClosure>();
-    cb(view, CursorType::from_raw(cursor_type));
+    crate::panic_guard::guard(|| {
+        let cb = &mut *user.cast::<CursorClosure>();
+        cb(view, CursorType::from_raw(cursor_type));
+    })
 }
 
 /// Guard for a registered cursor callback. This is a **process-global,
@@ -249,8 +252,10 @@ type KeyboardClosure = Box<dyn FnMut(*mut c_void, bool) + Send>;
 static KEYBOARD_ACTIVE: AtomicU64 = AtomicU64::new(0);
 
 unsafe extern "C" fn keyboard_tramp(user: *mut c_void, focused: *mut c_void, open: bool) {
-    let cb = &mut *user.cast::<KeyboardClosure>();
-    cb(focused, open);
+    crate::panic_guard::guard(|| {
+        let cb = &mut *user.cast::<KeyboardClosure>();
+        cb(focused, open);
+    })
 }
 
 /// Guard for a registered software-keyboard callback. Process-global,
@@ -308,8 +313,10 @@ type OpenUrlClosure = Box<dyn FnMut(&str) + Send>;
 static OPEN_URL_ACTIVE: AtomicU64 = AtomicU64::new(0);
 
 unsafe extern "C" fn open_url_tramp(user: *mut c_void, url: *const c_char) {
-    let cb = &mut *user.cast::<OpenUrlClosure>();
-    cb(cstr_to_str(url));
+    crate::panic_guard::guard(|| {
+        let cb = &mut *user.cast::<OpenUrlClosure>();
+        cb(&cstr_to_str(url));
+    })
 }
 
 /// Guard for a registered open-URL callback. Process-global, single-slot,
@@ -378,8 +385,10 @@ type PlayAudioClosure = Box<dyn FnMut(&str, f32) + Send>;
 static PLAY_AUDIO_ACTIVE: AtomicU64 = AtomicU64::new(0);
 
 unsafe extern "C" fn play_audio_tramp(user: *mut c_void, uri: *const c_char, volume: f32) {
-    let cb = &mut *user.cast::<PlayAudioClosure>();
-    cb(cstr_to_str(uri), volume);
+    crate::panic_guard::guard(|| {
+        let cb = &mut *user.cast::<PlayAudioClosure>();
+        cb(&cstr_to_str(uri), volume);
+    })
 }
 
 /// Guard for a registered play-audio callback. Process-global, single-slot,

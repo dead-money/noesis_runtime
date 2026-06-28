@@ -56,6 +56,7 @@ pub mod integration;
 pub mod markup;
 pub mod multi_binding;
 pub mod name_scope;
+pub(crate) mod panic_guard;
 pub mod plain_vm;
 pub mod reflection;
 pub mod render_device;

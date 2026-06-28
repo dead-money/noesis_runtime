@@ -930,22 +930,26 @@ unsafe extern "C" fn selector_select_trampoline(
     item: *mut c_void,
     container: *mut c_void,
 ) -> *mut c_void {
-    if userdata.is_null() {
-        return core::ptr::null_mut();
-    }
-    // SAFETY: userdata is the Box<Box<dyn SelectTemplate>> leaked in `new`, alive
-    // until selector_free_trampoline runs.
-    let handler = unsafe { &mut *userdata.cast::<Box<dyn SelectTemplate>>() };
-    handler
-        .select(item, container)
-        .unwrap_or(core::ptr::null_mut())
+    crate::panic_guard::guard_or(core::ptr::null_mut(), || {
+        if userdata.is_null() {
+            return core::ptr::null_mut();
+        }
+        // SAFETY: userdata is the Box<Box<dyn SelectTemplate>> leaked in `new`, alive
+        // until selector_free_trampoline runs.
+        let handler = unsafe { &mut *userdata.cast::<Box<dyn SelectTemplate>>() };
+        handler
+            .select(item, container)
+            .unwrap_or(core::ptr::null_mut())
+    })
 }
 
 unsafe extern "C" fn selector_free_trampoline(userdata: *mut c_void) {
-    if userdata.is_null() {
-        return;
-    }
-    // SAFETY: called exactly once when the native object is destroyed; reclaims
-    // the leaked handler box.
-    drop(unsafe { Box::from_raw(userdata.cast::<Box<dyn SelectTemplate>>()) });
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // SAFETY: called exactly once when the native object is destroyed; reclaims
+        // the leaked handler box.
+        drop(unsafe { Box::from_raw(userdata.cast::<Box<dyn SelectTemplate>>()) });
+    })
 }

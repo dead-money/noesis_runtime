@@ -69,21 +69,26 @@ unsafe extern "C" fn t_load_xaml(
     out_data: *mut *const u8,
     out_len: *mut u32,
 ) -> bool {
-    let uri_str = if uri.is_null() {
-        ""
-    } else {
-        // Noesis URIs are always ASCII / UTF-8; a non-UTF-8 URI is a bug on
-        // their end that should surface loudly.
-        CStr::from_ptr(uri)
-            .to_str()
-            .expect("noesis passed non-UTF-8 URI to XamlProvider")
-    };
-    let Some(bytes) = provider(userdata).load_xaml(uri_str) else {
-        return false;
-    };
-    out_data.write(bytes.as_ptr());
-    out_len.write(u32::try_from(bytes.len()).expect("XAML > 4 GiB"));
-    true
+    crate::panic_guard::guard(|| {
+        // Noesis URIs are normally ASCII/UTF-8; decode lossily so a stray
+        // non-UTF-8 URI can't panic across the C ABI (it just won't match).
+        let uri_str = if uri.is_null() {
+            std::borrow::Cow::Borrowed("")
+        } else {
+            CStr::from_ptr(uri).to_string_lossy()
+        };
+        let Some(bytes) = provider(userdata).load_xaml(&uri_str) else {
+            return false;
+        };
+        // A >4 GiB document can't be represented to the shim — treat as failure
+        // rather than panicking inside the trampoline.
+        let Ok(len) = u32::try_from(bytes.len()) else {
+            return false;
+        };
+        out_data.write(bytes.as_ptr());
+        out_len.write(len);
+        true
+    })
 }
 
 static VTABLE: XamlProviderVTable = XamlProviderVTable {
