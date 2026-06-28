@@ -174,6 +174,24 @@ unsafe extern "C" {
 
     pub fn dm_noesis_view_activate(view: *mut c_void);
     pub fn dm_noesis_view_deactivate(view: *mut c_void);
+    pub fn dm_noesis_view_mouse_hwheel(view: *mut c_void, x: i32, y: i32, delta: i32) -> bool;
+
+    // ── View flags / quality / stats (TODO §1) ───────────────────────────────
+    pub fn dm_noesis_view_get_flags(view: *mut c_void) -> u32;
+    pub fn dm_noesis_view_set_tessellation_max_pixel_error(view: *mut c_void, error: f32);
+    pub fn dm_noesis_view_get_tessellation_max_pixel_error(view: *mut c_void) -> f32;
+    pub fn dm_noesis_view_get_stats(view: *mut c_void, out: *mut crate::view::ViewStats);
+
+    // ── View-driven timers (TODO §1) ─────────────────────────────────────────
+    pub fn dm_noesis_view_create_timer(
+        view: *mut c_void,
+        interval_ms: u32,
+        cb: TimerFn,
+        userdata: *mut c_void,
+        free_handler: TimerFreeFn,
+    ) -> *mut c_void;
+    pub fn dm_noesis_view_restart_timer(token: *mut c_void, interval_ms: u32);
+    pub fn dm_noesis_view_cancel_timer(token: *mut c_void);
 
     pub fn dm_noesis_framework_element_find_name(
         element: *mut c_void,
@@ -549,6 +567,17 @@ pub type KeyDownFn = unsafe extern "C" fn(userdata: *mut c_void, key: i32, out_h
 /// Same threading contract as [`ClickFn`].
 pub type RoutedEventFn =
     unsafe extern "C" fn(userdata: *mut c_void, args: *const c_void, out_handled: *mut bool);
+
+/// C callback fired on each view-timer tick (the `dm_noesis_view_create_timer`
+/// path). Returns the next interval in milliseconds, or `0` to stop the timer.
+/// Fires from inside `IView::Update` on the view-driving thread — same
+/// threading contract as [`ClickFn`].
+pub type TimerFn = unsafe extern "C" fn(userdata: *mut c_void) -> u32;
+
+/// C callback invoked exactly once when a view-timer token is cancelled (the
+/// C++ `RustTimer` destroyed). Frees the donated `userdata`. Mirrors
+/// [`CommandFreeFn`].
+pub type TimerFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Custom XAML class registration (Phase 5.C). See cpp/noesis_shim.h for the

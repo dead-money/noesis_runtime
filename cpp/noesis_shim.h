@@ -430,6 +430,83 @@ bool dm_noesis_view_char(void* view, uint32_t codepoint);
 void dm_noesis_view_activate(void* view);
 void dm_noesis_view_deactivate(void* view);
 
+// Horizontal mouse wheel. `delta` mirrors `dm_noesis_view_mouse_wheel`'s
+// Windows-style 120-units-per-notch convention; positive scrolls right.
+bool dm_noesis_view_mouse_hwheel(void* view, int32_t x, int32_t y, int32_t delta);
+
+// ── View flags / quality / stats (TODO §1) ─────────────────────────────────
+
+// Current render flags (a bitmask of `Noesis::RenderFlags`). Companion to
+// dm_noesis_view_set_flags.
+uint32_t dm_noesis_view_get_flags(void* view);
+
+// Tessellation curve tolerance in screen-space pixels (smaller == higher
+// quality). LowQuality is 0.7, MediumQuality 0.4, HighQuality 0.2.
+void dm_noesis_view_set_tessellation_max_pixel_error(void* view, float error);
+float dm_noesis_view_get_tessellation_max_pixel_error(void* view);
+
+// Performance counters for the last rendered frame. Field order / types match
+// `Noesis::ViewStats` exactly (3 floats then 12 uint32_t); a static_assert in
+// noesis_view.cpp guards the size. `out` is written only when both pointers
+// are non-null.
+typedef struct dm_noesis_view_stats {
+    float frame_time;
+    float update_time;
+    float render_time;
+
+    uint32_t triangles;
+    uint32_t draws;
+    uint32_t batches;
+
+    uint32_t tessellations;
+    uint32_t flushes;
+    uint32_t geometry_size;
+
+    uint32_t masks;
+    uint32_t opacities;
+    uint32_t render_target_switches;
+
+    uint32_t uploaded_ramps;
+    uint32_t rasterized_glyphs;
+    uint32_t discarded_glyph_tiles;
+} dm_noesis_view_stats;
+
+void dm_noesis_view_get_stats(void* view, dm_noesis_view_stats* out);
+
+// ── View-driven timers (TODO §1) ───────────────────────────────────────────
+//
+// `IView::CreateTimer(interval, Delegate<uint32_t()>)` fires from inside
+// View::Update on the thread driving the view. The callback returns the next
+// interval in milliseconds, or 0 to stop. Lifetime mirrors the RustCommand
+// donated-free-fn pattern: a heap `RustTimer` holds the Rust callback + the
+// donated userdata + a free handler + the assigned timer id + the IView (with
+// a +1 ref so the token can safely outlive the caller's other view handles).
+// The token returned here is that `RustTimer*`.
+
+// Callback fired on each timer tick. Returns the next interval in ms (0 stops
+// the timer). Fires from inside View::Update on the view-driving thread.
+typedef uint32_t (*dm_noesis_timer_fn)(void* userdata);
+
+// Free callback invoked exactly once when the timer token is cancelled (its
+// RustTimer destroyed). Receives the `userdata` passed to create; ownership of
+// `userdata` transfers to the C++ side at creation. Optional (may be NULL).
+typedef void (*dm_noesis_timer_free_fn)(void* userdata);
+
+// Create a view timer firing every `interval_ms`. Returns an opaque token (a
+// RustTimer*) or NULL on failure (`view`/`cb` null). Cancel + free via
+// dm_noesis_view_cancel_timer.
+void* dm_noesis_view_create_timer(
+    void* view, uint32_t interval_ms, dm_noesis_timer_fn cb, void* userdata,
+    dm_noesis_timer_free_fn free_handler);
+
+// Restart the timer with a new interval (ms). No-op on a NULL token.
+void dm_noesis_view_restart_timer(void* token, uint32_t interval_ms);
+
+// Cancel the timer and destroy the token: calls IView::CancelTimer(id), then
+// deletes the RustTimer (invoking the donated free handler exactly once and
+// releasing the +1 view ref). Safe to call with NULL.
+void dm_noesis_view_cancel_timer(void* token);
+
 // ── Element traversal + events (Phase 5.B) ─────────────────────────────────
 //
 // Look up named elements in the logical / visual tree and subscribe Rust
