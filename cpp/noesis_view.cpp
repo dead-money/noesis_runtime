@@ -16,6 +16,7 @@
 
 #include <NsCore/Noesis.h>
 #include <NsCore/Ptr.h>
+#include <NsCore/Delegate.h>
 #include <NsCore/DynamicCast.h>
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/InputEnums.h>
@@ -362,4 +363,143 @@ extern "C" void dm_noesis_view_activate(void* view) {
 
 extern "C" void dm_noesis_view_deactivate(void* view) {
     static_cast<Noesis::IView*>(view)->Deactivate();
+}
+
+extern "C" bool dm_noesis_view_mouse_hwheel(void* view, int32_t x, int32_t y, int32_t delta) {
+    return static_cast<Noesis::IView*>(view)->MouseHWheel(x, y, delta);
+}
+
+// ── View flags / quality / stats (TODO §1) ─────────────────────────────────
+
+extern "C" uint32_t dm_noesis_view_get_flags(void* view) {
+    if (!view) return 0;
+    return static_cast<Noesis::IView*>(view)->GetFlags();
+}
+
+extern "C" void dm_noesis_view_set_tessellation_max_pixel_error(void* view, float error) {
+    if (!view) return;
+    static_cast<Noesis::IView*>(view)->SetTessellationMaxPixelError(
+        Noesis::TessellationMaxPixelError(error));
+}
+
+extern "C" float dm_noesis_view_get_tessellation_max_pixel_error(void* view) {
+    if (!view) return 0.0f;
+    return static_cast<Noesis::IView*>(view)->GetTessellationMaxPixelError().error;
+}
+
+// The C ABI struct mirrors `Noesis::ViewStats` field-for-field; guard the size
+// so a future SDK field addition can't silently desync the copy below.
+static_assert(sizeof(dm_noesis_view_stats) == sizeof(Noesis::ViewStats),
+    "dm_noesis_view_stats must match Noesis::ViewStats layout");
+
+extern "C" void dm_noesis_view_get_stats(void* view, dm_noesis_view_stats* out) {
+    if (!view || !out) return;
+    const Noesis::ViewStats s = static_cast<Noesis::IView*>(view)->GetStats();
+    out->frame_time = s.frameTime;
+    out->update_time = s.updateTime;
+    out->render_time = s.renderTime;
+    out->triangles = s.triangles;
+    out->draws = s.draws;
+    out->batches = s.batches;
+    out->tessellations = s.tessellations;
+    out->flushes = s.flushes;
+    out->geometry_size = s.geometrySize;
+    out->masks = s.masks;
+    out->opacities = s.opacities;
+    out->render_target_switches = s.renderTargetSwitches;
+    out->uploaded_ramps = s.uploadedRamps;
+    out->rasterized_glyphs = s.rasterizedGlyphs;
+    out->discarded_glyph_tiles = s.discardedGlyphTiles;
+}
+
+// ── View-driven timers (TODO §1) ───────────────────────────────────────────
+
+namespace {
+
+// Trampoline between Noesis's `Delegate<uint32_t()>` timer callback and the C
+// ABI. Modelled on RustCommand (noesis_commands.cpp): the donated Rust handler
+// box is owned here and freed via `mFree` in the destructor, exactly once.
+// Holds a +1 ref on the IView so the token may safely outlive the caller's
+// other view handles (the only constraint is dropping it before the Noesis
+// runtime shuts down, like every other owning handle in this crate). Noesis
+// stores a copy of the `Delegate` bound to this object until CancelTimer, so
+// the object must stay alive until then — which the Rust RAII handle enforces.
+class RustTimer {
+public:
+    RustTimer(Noesis::IView* view, dm_noesis_timer_fn cb, void* userdata,
+              dm_noesis_timer_free_fn free_handler)
+        : mView(view), mCb(cb), mUserdata(userdata), mFree(free_handler), mId(0)
+    {
+        if (mView) {
+            mView->AddReference();
+        }
+    }
+
+    ~RustTimer() {
+        // Donated ownership: drop the Rust handler box here, exactly once.
+        // Null first so a (currently-impossible) re-entrant teardown can't
+        // double-free.
+        void* ud = mUserdata;
+        mUserdata = nullptr;
+        if (mFree && ud) {
+            mFree(ud);
+        }
+        if (mView) {
+            mView->Release();
+        }
+    }
+
+    RustTimer(const RustTimer&) = delete;
+    RustTimer& operator=(const RustTimer&) = delete;
+
+    // The Noesis timer callback: forwards to Rust and returns the next interval
+    // (0 stops the timer).
+    uint32_t Tick() {
+        if (mCb) {
+            return mCb(mUserdata);
+        }
+        return 0;
+    }
+
+    void setId(uint32_t id) { mId = id; }
+    uint32_t id() const { return mId; }
+    Noesis::IView* view() const { return mView; }
+
+private:
+    Noesis::IView* mView;  // raw + manual AddRef/Release — see ctor/dtor.
+    dm_noesis_timer_fn mCb;
+    void* mUserdata;
+    dm_noesis_timer_free_fn mFree;
+    uint32_t mId;
+};
+
+}  // namespace
+
+extern "C" void* dm_noesis_view_create_timer(
+    void* view, uint32_t interval_ms, dm_noesis_timer_fn cb, void* userdata,
+    dm_noesis_timer_free_fn free_handler)
+{
+    if (!view || !cb) return nullptr;
+    auto* v = static_cast<Noesis::IView*>(view);
+    auto* timer = new RustTimer(v, cb, userdata, free_handler);
+    const uint32_t id = v->CreateTimer(interval_ms, Noesis::MakeDelegate(timer, &RustTimer::Tick));
+    timer->setId(id);
+    return timer;
+}
+
+extern "C" void dm_noesis_view_restart_timer(void* token, uint32_t interval_ms) {
+    if (!token) return;
+    auto* timer = static_cast<RustTimer*>(token);
+    if (auto* v = timer->view()) {
+        v->RestartTimer(timer->id(), interval_ms);
+    }
+}
+
+extern "C" void dm_noesis_view_cancel_timer(void* token) {
+    if (!token) return;
+    auto* timer = static_cast<RustTimer*>(token);
+    if (auto* v = timer->view()) {
+        v->CancelTimer(timer->id());
+    }
+    delete timer;  // dtor frees the donated userdata + releases the view ref.
 }

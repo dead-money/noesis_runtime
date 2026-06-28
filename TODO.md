@@ -12,14 +12,9 @@ don't keep re-discovering them.
 
 ## 1. View / Renderer
 
-- **Quality / AA tuning.** `SetTessellationMaxPixelError` (Low/Medium/HighQuality), `GetTessellationMaxPixelError`.
-- **`RenderFlags` as typed options.** We pass a raw `u32` to `set_flags`; expose the enum (`Wireframe`, `ColorBatches`, `Overdraw`, `FlipY`, `PPAA`, `LCD`, `ShowGlyphs`, `ShowRamps`, `DepthTesting`) and `GetFlags`.
 - **Gesture / touch thresholds.** `SetHoldingTimeThreshold`, `SetHoldingDistanceThreshold`, `SetManipulationDistanceThreshold`, `SetDoubleTapTimeThreshold`, `SetDoubleTapDistanceThreshold`, `SetEmulateTouch`.
 - **Stereo / VR.** `SetStereoOffscreenScaleFactor`.
 - **`Rendering` event.** Per-frame `RenderingEventHandler` delegate (hook before render).
-- **View-driven timers.** `CreateTimer` / `RestartTimer` / `CancelTimer` — animation/dispatcher-style callbacks scheduled by the view. Unlocks §2 queued-invoke and §6 animation scheduling.
-- **`ViewStats`.** `GetStats()` (frame/update/render time, triangle/draw/batch counts, glyph stats) for profiling overlays.
-- **`MouseHWheel`** (horizontal wheel) is in `IView` but not pumped.
 - **Renderer offscreen sizing / glyph cache** and the render-thread split (UpdateRenderTree on render thread vs Update on UI thread).
 
 ## 2. Element tree access
@@ -167,7 +162,7 @@ primitives first, big rocks once their prerequisites exist. Each phase is a natu
 
 **Phase A — finish the core + cheap wins.**
 1. §3 `RelativeSource FindAncestor` + `BindingExpression` `UpdateSource`/`UpdateTarget`, and §5 `Initialized`/`LayoutUpdated`/`Is*Changed` — all cheap, complementary; one small PR.
-2. §1 View timers (`CreateTimer`) + `RenderFlags`/`ViewStats`/quality. **Timers unlock §2 queued-invoke and §6 animation**, so do them before those.
+2. ~~§1 View timers (`CreateTimer`) + `RenderFlags`/`ViewStats`/quality. **Timers unlock §2 queued-invoke and §6 animation**, so do them before those.~~ (done — timers, typed `RenderFlags`+`GetFlags`, `ViewStats`, tessellation quality, `MouseHWheel`)
 3. §15 `ParseXaml` (+ `LoadComponent`) and §17 inspector-enable — both cheap and broadly useful for dev/tests.
 
 **Phase B — presentation.**
