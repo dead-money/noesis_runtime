@@ -2359,6 +2359,15 @@ bool dm_noesis_drawing_draw_rounded_rectangle(void* context, void* brush, void* 
 bool dm_noesis_drawing_draw_ellipse(void* context, void* brush, void* pen,
                                     float cx, float cy, float rX, float rY);
 bool dm_noesis_drawing_draw_geometry(void* context, void* brush, void* pen, void* geometry);
+// Draw a wrapped FormattedText (dm_noesis_formatted_text_*) into the bounds rect
+// {x, y, w, h}. The brush/foreground is baked into the FormattedText, so there
+// is no brush argument. Returns false if `formatted_text` is null / not a
+// FormattedText.
+bool dm_noesis_drawing_draw_text(void* context, void* formatted_text,
+                                 float x, float y, float w, float h);
+// Fill a MeshData (dm_noesis_mesh_data_*) with `brush` (null ⇒ paints nothing).
+// Returns false if `mesh` is null / not a MeshData.
+bool dm_noesis_drawing_draw_mesh(void* context, void* brush, void* mesh);
 // Returns false if `image_source` is null / not an ImageSource (DrawImage
 // requires a real source — see Known SDK limitations re: building one headless).
 bool dm_noesis_drawing_draw_image(void* context, void* image_source,
@@ -2369,6 +2378,33 @@ bool dm_noesis_drawing_push_transform(void* context, void* transform);
 // `mode` ordinal matches Noesis::BlendingMode (0 Normal, 1 Multiply, 2 Screen,
 // 3 Additive).
 bool dm_noesis_drawing_push_blending_mode(void* context, int32_t mode);
+
+// ── MeshData + Mesh element (TODO §10) ──────────────────────────────────────
+//
+// Implemented in cpp/noesis_mesh.cpp. MeshData is a code-built CPU geometry
+// payload (interleaved (x,y) vertex / (u,v) uv buffers + 16-bit index buffer +
+// an explicit bounds rect) handed out with a single owned +1 reference. The
+// buffers round-trip on the CPU; there is no GetNum* getter in 3.2.13, so a
+// count is proven by reading the same number of elements back. Mesh is a
+// FrameworkElement carrying a MeshData (Data) and a fill Brush.
+void* dm_noesis_mesh_data_create(void);
+// `xy` / `out_xy` are 2*count interleaved floats; `count == 0` allows null.
+bool dm_noesis_mesh_data_set_vertices(void* mesh, const float* xy, uint32_t count);
+bool dm_noesis_mesh_data_get_vertices(void* mesh, float* out_xy, uint32_t count);
+bool dm_noesis_mesh_data_set_uvs(void* mesh, const float* uv, uint32_t count);
+bool dm_noesis_mesh_data_get_uvs(void* mesh, float* out_uv, uint32_t count);
+bool dm_noesis_mesh_data_set_indices(void* mesh, const uint16_t* indices, uint32_t count);
+bool dm_noesis_mesh_data_get_indices(void* mesh, uint16_t* out_indices, uint32_t count);
+bool dm_noesis_mesh_data_set_bounds(void* mesh, float x, float y, float w, float h);
+// out = {x, y, w, h}
+bool dm_noesis_mesh_data_get_bounds(void* mesh, float out[4]);
+void* dm_noesis_mesh_create(void);
+bool dm_noesis_mesh_set_data(void* mesh, void* data);
+// Borrowed MeshData* (no +1; do not release).
+void* dm_noesis_mesh_get_data(void* mesh);
+bool dm_noesis_mesh_set_brush(void* mesh, void* brush);
+// Borrowed Brush* (no +1; do not release).
+void* dm_noesis_mesh_get_brush(void* mesh);
 
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //

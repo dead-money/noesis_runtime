@@ -33,8 +33,9 @@ use crate::brushes::Brush;
 use crate::ffi::{
     dm_noesis_base_component_release, dm_noesis_drawing_draw_ellipse,
     dm_noesis_drawing_draw_geometry, dm_noesis_drawing_draw_image, dm_noesis_drawing_draw_line,
-    dm_noesis_drawing_draw_rectangle, dm_noesis_drawing_draw_rounded_rectangle,
-    dm_noesis_drawing_pop, dm_noesis_drawing_push_blending_mode, dm_noesis_drawing_push_clip,
+    dm_noesis_drawing_draw_mesh, dm_noesis_drawing_draw_rectangle,
+    dm_noesis_drawing_draw_rounded_rectangle, dm_noesis_drawing_draw_text, dm_noesis_drawing_pop,
+    dm_noesis_drawing_push_blending_mode, dm_noesis_drawing_push_clip,
     dm_noesis_drawing_push_transform, dm_noesis_pen_create, dm_noesis_pen_get_brush,
     dm_noesis_pen_get_line_caps, dm_noesis_pen_get_line_join, dm_noesis_pen_get_thickness,
     dm_noesis_pen_set_brush, dm_noesis_pen_set_line_caps, dm_noesis_pen_set_line_join,
@@ -340,6 +341,37 @@ impl DrawingContext<'_> {
                 geometry.geometry_raw(),
             )
         }
+    }
+
+    /// Draw a [`FormattedText`](crate::formatted_text::FormattedText) into the
+    /// bounds rect `[x, y, w, h]`. The text's foreground brush is baked into the
+    /// `FormattedText` at construction, so there is no brush argument here.
+    /// Returns `false` only if the context cast fails.
+    pub fn draw_text(
+        &self,
+        formatted_text: &crate::formatted_text::FormattedText,
+        bounds: [f32; 4],
+    ) -> bool {
+        // SAFETY: self.ptr is a live DrawingContext*; raw() is a live
+        // FormattedText* borrowed for the call.
+        unsafe {
+            dm_noesis_drawing_draw_text(
+                self.ptr.as_ptr(),
+                formatted_text.raw(),
+                bounds[0],
+                bounds[1],
+                bounds[2],
+                bounds[3],
+            )
+        }
+    }
+
+    /// Fill a [`MeshData`](crate::mesh::MeshData) with an optional `brush`
+    /// (`None` paints nothing). Returns `false` if the context cast fails.
+    pub fn draw_mesh(&self, brush: Option<&dyn Brush>, mesh: &crate::mesh::MeshData) -> bool {
+        // SAFETY: self.ptr is a live DrawingContext*; mesh.raw() is a live
+        // MeshData*; the brush pointer (or null) is live for the borrow.
+        unsafe { dm_noesis_drawing_draw_mesh(self.ptr.as_ptr(), brush_ptr(brush), mesh.raw()) }
     }
 
     /// Draw a borrowed `Noesis::ImageSource*` into `[x, y, w, h]`. Returns

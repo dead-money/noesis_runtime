@@ -1856,6 +1856,19 @@ unsafe extern "C" {
         pen: *mut c_void,
         geometry: *mut c_void,
     ) -> bool;
+    pub fn dm_noesis_drawing_draw_text(
+        context: *mut c_void,
+        formatted_text: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_drawing_draw_mesh(
+        context: *mut c_void,
+        brush: *mut c_void,
+        mesh: *mut c_void,
+    ) -> bool;
     pub fn dm_noesis_drawing_draw_image(
         context: *mut c_void,
         image_source: *mut c_void,
@@ -1868,6 +1881,47 @@ unsafe extern "C" {
     pub fn dm_noesis_drawing_push_clip(context: *mut c_void, geometry: *mut c_void) -> bool;
     pub fn dm_noesis_drawing_push_transform(context: *mut c_void, transform: *mut c_void) -> bool;
     pub fn dm_noesis_drawing_push_blending_mode(context: *mut c_void, mode: i32) -> bool;
+}
+
+// ── MeshData + Mesh element (TODO §10) ───────────────────────────────────────
+//
+// `_create` entrypoints return a `+1`-owned BaseComponent the Rust handle
+// releases on Drop (see src/mesh.rs). Vertex / UV buffers are interleaved
+// `(x, y)` / `(u, v)` float pairs (`2 * count` floats); the index buffer is
+// 16-bit. `mesh_get_data` / `mesh_get_brush` return BORROWED pointers (no +1).
+unsafe extern "C" {
+    pub fn dm_noesis_mesh_data_create() -> *mut c_void;
+    pub fn dm_noesis_mesh_data_set_vertices(mesh: *mut c_void, xy: *const f32, count: u32) -> bool;
+    pub fn dm_noesis_mesh_data_get_vertices(
+        mesh: *mut c_void,
+        out_xy: *mut f32,
+        count: u32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_set_uvs(mesh: *mut c_void, uv: *const f32, count: u32) -> bool;
+    pub fn dm_noesis_mesh_data_get_uvs(mesh: *mut c_void, out_uv: *mut f32, count: u32) -> bool;
+    pub fn dm_noesis_mesh_data_set_indices(
+        mesh: *mut c_void,
+        indices: *const u16,
+        count: u32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_get_indices(
+        mesh: *mut c_void,
+        out_indices: *mut u16,
+        count: u32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_set_bounds(
+        mesh: *mut c_void,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    pub fn dm_noesis_mesh_data_get_bounds(mesh: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_mesh_create() -> *mut c_void;
+    pub fn dm_noesis_mesh_set_data(mesh: *mut c_void, data: *mut c_void) -> bool;
+    pub fn dm_noesis_mesh_get_data(mesh: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_mesh_set_brush(mesh: *mut c_void, brush: *mut c_void) -> bool;
+    pub fn dm_noesis_mesh_get_brush(mesh: *mut c_void) -> *mut c_void;
 }
 
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn

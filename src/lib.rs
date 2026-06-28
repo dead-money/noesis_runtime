@@ -57,6 +57,7 @@ pub mod imaging;
 pub mod input;
 pub mod integration;
 pub mod markup;
+pub mod mesh;
 pub mod multi_binding;
 pub mod name_scope;
 pub(crate) mod panic_guard;

@@ -32,8 +32,10 @@
 #include <NsGui/Brush.h>
 #include <NsGui/DrawingContext.h>
 #include <NsGui/Enums.h>  // BlendingMode, PenLineCap, PenLineJoin
+#include <NsGui/FormattedText.h>
 #include <NsGui/Geometry.h>
 #include <NsGui/ImageSource.h>
+#include <NsGui/MeshData.h>
 #include <NsGui/Pen.h>
 #include <NsGui/RectangleGeometry.h>
 #include <NsGui/Transform.h>
@@ -196,6 +198,30 @@ extern "C" bool dm_noesis_drawing_draw_geometry(void* context, void* brush, void
     if (!dc) return false;
     dc->DrawGeometry(cast<Noesis::Brush>(brush), cast<Noesis::Pen>(pen),
                      cast<Noesis::Geometry>(geometry));
+    return true;
+}
+
+// Draw a FormattedText (NsGui/FormattedText.h, fully wrapped in
+// cpp/noesis_formatted_text.cpp) into the bounds rect {x, y, w, h}. The text's
+// foreground/brush is baked into the FormattedText itself, so DrawText takes no
+// brush argument (see NsGui/DrawingContext.h: DrawText(FormattedText*, Rect)).
+extern "C" bool dm_noesis_drawing_draw_text(void* context, void* formatted_text, float x, float y,
+                                            float w, float h) {
+    auto* dc = cast<Noesis::DrawingContext>(context);
+    auto* ft = cast<Noesis::FormattedText>(formatted_text);
+    if (!dc || !ft) return false;
+    dc->DrawText(ft, rect_xywh(x, y, w, h));
+    return true;
+}
+
+// Fill a MeshData (NsGui/MeshData.h, built via dm_noesis_mesh_data_* in
+// cpp/noesis_mesh.cpp) with `brush`. A null mesh is rejected; a null brush
+// paints nothing (matching the other fill calls).
+extern "C" bool dm_noesis_drawing_draw_mesh(void* context, void* brush, void* mesh) {
+    auto* dc = cast<Noesis::DrawingContext>(context);
+    auto* md = cast<Noesis::MeshData>(mesh);
+    if (!dc || !md) return false;
+    dc->DrawMesh(cast<Noesis::Brush>(brush), md);
     return true;
 }
 
