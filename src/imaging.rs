@@ -361,6 +361,7 @@ impl BitmapImage {
     /// # Panics
     ///
     /// Panics if `uri` contains an interior NUL.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_uri_source(&mut self, uri: &str) -> bool {
         let c = CString::new(uri).expect("BitmapImage uri contains interior NUL");
         // SAFETY: self.ptr is a live BitmapImage*; `c` outlives the call.

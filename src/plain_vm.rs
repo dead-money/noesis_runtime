@@ -416,6 +416,7 @@ impl PlainInstance {
     /// # Panics
     ///
     /// Panics if `prop_name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_and_notify(&self, prop_index: u32, prop_name: &str, value: PlainValue) -> bool {
         self.set(prop_index, value) && self.notify(prop_name)
     }
@@ -459,6 +460,7 @@ impl PlainInstance {
 
     /// Set this instance as `element`'s `DataContext`. Noesis takes its own
     /// reference. Returns `false` if `element` is not a `FrameworkElement`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_data_context(&self, element: &mut FrameworkElement) -> bool {
         // SAFETY: self.raw() is a live BaseComponent* valid for the call;
         // Noesis stores its own reference.

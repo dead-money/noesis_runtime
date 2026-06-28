@@ -38,7 +38,7 @@
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
-use core::ffi::CStr;
+use core::ffi::{CStr, c_char};
 use core::ptr::{self, NonNull};
 use std::ffi::{CString, c_void};
 use std::sync::Mutex;
@@ -207,7 +207,7 @@ enum OwnedDefault {
     Float(f32),
     Double(f64),
     Bool(bool),
-    String(Option<CString>),
+    String(Option<StringDefault>),
     Thickness([f32; 4]),
     Color([f32; 4]),
     Rect([f32; 4]),
@@ -215,6 +215,19 @@ enum OwnedDefault {
     Size([f32; 2]),
     Vector([f32; 2]),
     Enum(i32),
+}
+
+/// Owned storage for a `DM_NOESIS_PROP_STRING` default. The FFI expects a
+/// `const char* const*` (a pointer *to* a c-string pointer), so we keep both
+/// the NUL-terminated bytes (`_bytes`) and a stable slot (`ptr`) holding the
+/// pointer into them. `ptr` is computed from the heap-allocated `CString`
+/// buffer, which is move-stable, so `&self.ptr` stays valid for the synchronous
+/// registration call regardless of where the enclosing `PropSpec` lives.
+struct StringDefault {
+    /// Owns the bytes that `ptr` points into; never read directly.
+    _bytes: CString,
+    /// `_bytes.as_ptr()`, stored so its address can be handed to the FFI.
+    ptr: *const c_char,
 }
 
 impl<H: PropertyChangeHandler> ClassBuilder<H> {
@@ -545,8 +558,11 @@ impl PropertyDefault<'_> {
             PropertyDefault::Double(v) => OwnedDefault::Double(v),
             PropertyDefault::Bool(v) => OwnedDefault::Bool(v),
             PropertyDefault::String(s) => {
-                let c = CString::new(s).ok();
-                OwnedDefault::String(c)
+                let slot = CString::new(s).ok().map(|bytes| {
+                    let ptr = bytes.as_ptr();
+                    StringDefault { _bytes: bytes, ptr }
+                });
+                OwnedDefault::String(slot)
             }
             PropertyDefault::Thickness {
                 left,
@@ -579,25 +595,14 @@ impl OwnedDefault {
             OwnedDefault::Float(v) => (v as *const f32).cast(),
             OwnedDefault::Double(v) => (v as *const f64).cast(),
             OwnedDefault::Bool(v) => (v as *const bool).cast(),
-            OwnedDefault::String(c) => match c {
-                Some(cs) => {
-                    // FFI expects const char* const* — pointer to a c-string pointer.
-                    // We need stable storage; Box<*const c_char> would work but
-                    // we sidestep by writing the pointer into a slot the caller
-                    // owns. Here, return the pointer to the inner pointer of
-                    // the CString box.
-                    let p: *const i8 = cs.as_ptr();
-                    // SAFETY: we leak this slot for the duration of the
-                    // registration call. ClassBuilder::register takes &props
-                    // by ref, so &p is valid for the call site only — the
-                    // pointer is dereferenced synchronously by the C++ side.
-                    // The returned pointer is to a stack temporary; we
-                    // sidestep by NOT supporting String defaults via the
-                    // borrow path. Use SetValue from Rust after construction.
-                    // Returning null causes the C++ default ("") to apply.
-                    let _ = p;
-                    ptr::null()
-                }
+            OwnedDefault::String(slot) => match slot {
+                // FFI expects `const char* const*` — a pointer to a c-string
+                // pointer. `slot.ptr` is that c-string pointer, held in stable
+                // storage owned by this `OwnedDefault`; we hand the FFI the
+                // address of that slot. It is dereferenced synchronously by the
+                // C++ side during the registration call, while `self` is alive.
+                Some(slot) => (&slot.ptr as *const *const c_char).cast(),
+                // Interior NUL (or no default): fall back to the C++ "" default.
                 None => ptr::null(),
             },
             OwnedDefault::Thickness(arr) | OwnedDefault::Color(arr) | OwnedDefault::Rect(arr) => {
@@ -904,6 +909,25 @@ impl Instance {
             )
         };
         ok.then_some(out)
+    }
+    /// Read back a `String` DP. Returns `None` on bad input (instance pointer /
+    /// index mismatch / type mismatch) or a null string pointer.
+    pub fn get_string(self, prop_index: u32) -> Option<String> {
+        let mut p: *const c_char = ptr::null();
+        let ok = unsafe {
+            dm_noesis_instance_get_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&mut p as *mut *const c_char).cast(),
+            )
+        };
+        if !ok || p.is_null() {
+            return None;
+        }
+        // SAFETY: p is a live NUL-terminated UTF-8 string borrowed from
+        // Noesis-owned storage while we hold our instance reference; copy out
+        // before yielding control.
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
     }
     pub fn get_thickness(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
@@ -1375,6 +1399,7 @@ impl Instance {
     /// Set a read-only `Int32` DP via the privileged path (the analogue of a
     /// WPF `DependencyPropertyKey`). Ordinary [`Self::set_int32`] is a no-op on
     /// a read-only DP. Returns `false` on a bad instance / index.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_int32(self, prop_index: u32, value: i32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1386,6 +1411,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `UInt32` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_uint32(self, prop_index: u32, value: u32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1397,6 +1423,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Float` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_float(self, prop_index: u32, value: f32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1408,6 +1435,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Double` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_double(self, prop_index: u32, value: f64) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1419,6 +1447,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Bool` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_bool(self, prop_index: u32, value: bool) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {
@@ -1434,6 +1463,7 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `value` contains an interior NUL.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_string(self, prop_index: u32, value: &str) -> bool {
         let cstr = CString::new(value).expect("string contained NUL");
         let ptr: *const i8 = cstr.as_ptr();
@@ -1447,6 +1477,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Point` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_point(self, prop_index: u32, x: f32, y: f32) -> bool {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
@@ -1459,6 +1490,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Size` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_size(self, prop_index: u32, width: f32, height: f32) -> bool {
         let arr = [width, height];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
@@ -1471,6 +1503,7 @@ impl Instance {
         }
     }
     /// Read-only setter for a `Vector` DP. See [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_vector(self, prop_index: u32, x: f32, y: f32) -> bool {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
@@ -1484,6 +1517,7 @@ impl Instance {
     }
     /// Read-only setter for an enum DP (underlying `int32` member value). See
     /// [`Self::set_readonly_int32`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_enum(self, prop_index: u32, value: i32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
         unsafe {

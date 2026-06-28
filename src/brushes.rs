@@ -722,6 +722,7 @@ impl VisualBrush {
     /// reference, so `element` may outlive or be dropped after the call (the
     /// brush holds the live element alive). Returns `false` only if `self` is
     /// somehow not a `VisualBrush` (not expected).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_visual(&mut self, element: &crate::view::FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live VisualBrush*; element.raw() is a live
         // Visual* borrowed for the call.

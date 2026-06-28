@@ -56,6 +56,7 @@ impl NameScope {
     /// Attach `scope` to `element` as its namescope (`NameScope::SetNameScope`),
     /// or pass `None` to clear it. Returns `false` if `element` is not a
     /// `DependencyObject`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_on(element: &mut FrameworkElement, scope: Option<&NameScope>) -> bool {
         let scope_ptr = scope.map_or(core::ptr::null_mut(), NameScope::raw);
         // SAFETY: both pointers are live (or null to clear); Noesis stores its

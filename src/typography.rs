@@ -329,6 +329,7 @@ fn read_source(ptr: *mut c_void) -> Option<String> {
 
 /// Set `TextElement.FontSize` (device-independent pixels) on `element`. Returns
 /// `false` if `element` is not a `DependencyObject`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_font_size(element: &FrameworkElement, size: f32) -> bool {
     // SAFETY: element.raw() is a live FrameworkElement* (a DependencyObject*).
     unsafe { dm_noesis_typography_text_element_set_font_size(element.raw(), size) }
@@ -347,6 +348,7 @@ pub fn font_size(element: &FrameworkElement) -> Option<f32> {
 }
 
 /// Set `TextElement.FontFamily` on `element` (Noesis `AddRef`s the family).
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_font_family(element: &FrameworkElement, family: &FontFamily) -> bool {
     // SAFETY: both pointers are live for the call.
     unsafe { dm_noesis_typography_text_element_set_font_family(element.raw(), family.raw()) }
@@ -364,6 +366,7 @@ pub fn get_font_family(element: &FrameworkElement) -> Option<FontFamilyRef> {
 
 /// Set `TextElement.Foreground` on `element` to any [`Brush`] (Noesis `AddRef`s
 /// it). Reuses [`crate::brushes`].
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_foreground(element: &FrameworkElement, brush: &impl Brush) -> bool {
     // SAFETY: both pointers are live for the call.
     unsafe { dm_noesis_typography_text_element_set_foreground(element.raw(), brush.brush_raw()) }
@@ -379,6 +382,7 @@ pub fn get_foreground(element: &FrameworkElement) -> Option<NonNull<c_void>> {
 }
 
 /// Set `TextElement.FontWeight` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_font_weight(element: &FrameworkElement, weight: FontWeight) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_text_element_set_font_weight(element.raw(), weight as i32) }
@@ -391,6 +395,7 @@ pub fn font_weight(element: &FrameworkElement) -> Option<i32> {
 }
 
 /// Set `TextElement.FontStyle` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_font_style(element: &FrameworkElement, style: FontStyle) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_text_element_set_font_style(element.raw(), style as i32) }
@@ -403,6 +408,7 @@ pub fn font_style(element: &FrameworkElement) -> Option<i32> {
 }
 
 /// Set `TextElement.FontStretch` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_font_stretch(element: &FrameworkElement, stretch: FontStretch) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_text_element_set_font_stretch(element.raw(), stretch as i32) }
@@ -417,6 +423,7 @@ pub fn font_stretch(element: &FrameworkElement) -> Option<i32> {
 // ── Typography attached DPs (representative subset) ───────────────────────────
 
 /// Set `Typography.Capitals` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_capitals(element: &FrameworkElement, value: FontCapitals) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_set_capitals(element.raw(), value as i32) }
@@ -429,6 +436,7 @@ pub fn capitals(element: &FrameworkElement) -> Option<i32> {
 }
 
 /// Set `Typography.NumeralStyle` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_numeral_style(element: &FrameworkElement, value: FontNumeralStyle) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_set_numeral_style(element.raw(), value as i32) }
@@ -441,6 +449,7 @@ pub fn numeral_style(element: &FrameworkElement) -> Option<i32> {
 }
 
 /// Set `Typography.Fraction` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_fraction(element: &FrameworkElement, value: FontFraction) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_set_fraction(element.raw(), value as i32) }
@@ -453,6 +462,7 @@ pub fn fraction(element: &FrameworkElement) -> Option<i32> {
 }
 
 /// Set `Typography.Variants` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_variants(element: &FrameworkElement, value: FontVariants) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_set_variants(element.raw(), value as i32) }
@@ -465,6 +475,7 @@ pub fn variants(element: &FrameworkElement) -> Option<i32> {
 }
 
 /// Set `Typography.StandardLigatures` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_standard_ligatures(element: &FrameworkElement, value: bool) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_set_standard_ligatures(element.raw(), value) }
@@ -477,6 +488,7 @@ pub fn standard_ligatures(element: &FrameworkElement) -> Option<bool> {
 }
 
 /// Set `Typography.Kerning` on `element`.
+#[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_kerning(element: &FrameworkElement, value: bool) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { dm_noesis_typography_set_kerning(element.raw(), value) }

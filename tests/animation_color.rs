@@ -44,8 +44,14 @@ fn color_animation_drives_brush_color() {
 
         // Red -> blue over 0.5s.
         let mut anim = ColorAnimation::new();
-        anim.set_from(Some([1.0, 0.0, 0.0, 1.0]));
-        anim.set_to(Some([0.0, 0.0, 1.0, 1.0]));
+        assert!(
+            anim.set_from(Some([1.0, 0.0, 0.0, 1.0])),
+            "setter should succeed"
+        );
+        assert!(
+            anim.set_to(Some([0.0, 0.0, 1.0, 1.0])),
+            "setter should succeed"
+        );
         anim.set_duration_secs(0.5);
         anim.set_target_name("Box");
         anim.set_target_property("(Border.Background).(SolidColorBrush.Color)");

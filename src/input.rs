@@ -487,6 +487,7 @@ impl FocusManager {
 
     /// Mark `element` as a focus scope (or not). Returns `false` if `element`
     /// is not a `DependencyObject`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_focus_scope(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe { dm_noesis_focus_manager_set_is_focus_scope(element.raw(), value) }
@@ -526,6 +527,7 @@ impl KeyboardNavigation {
 
     /// Set `KeyboardNavigation.TabIndex`. `false` if `element` is not a
     /// `DependencyObject`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tab_index(element: &FrameworkElement, value: i32) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe { dm_noesis_keyboard_navigation_set_tab_index(element.raw(), value) }
@@ -541,6 +543,7 @@ impl KeyboardNavigation {
     }
 
     /// Set `KeyboardNavigation.IsTabStop`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_tab_stop(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe { dm_noesis_keyboard_navigation_set_is_tab_stop(element.raw(), value) }
@@ -554,6 +557,7 @@ impl KeyboardNavigation {
     }
 
     /// Set `KeyboardNavigation.TabNavigation`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tab_navigation(element: &FrameworkElement, mode: KeyboardNavigationMode) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe { dm_noesis_keyboard_navigation_set_tab_navigation(element.raw(), mode as i32) }
@@ -610,6 +614,7 @@ impl KeyboardNavigation {
     }
 
     /// Set `KeyboardNavigation.AcceptsReturn`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_accepts_return(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe { dm_noesis_keyboard_navigation_set_accepts_return(element.raw(), value) }

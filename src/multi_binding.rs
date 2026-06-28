@@ -274,6 +274,7 @@ impl MultiBinding {
     /// # Panics
     ///
     /// Panics if `dp_name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_on(&self, element: &FrameworkElement, dp_name: &str) -> bool {
         let c = CString::new(dp_name).expect("dp name contained interior NUL");
         // SAFETY: element + self are live; c is valid for the call.

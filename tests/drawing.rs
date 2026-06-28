@@ -181,7 +181,7 @@ fn on_render_fires_and_draws() {
             (pen.thickness() - 3.5).abs() < 1.0e-4,
             "pen thickness round-trip"
         );
-        pen.set_thickness(2.0);
+        assert!(pen.set_thickness(2.0), "setter should succeed");
         assert!(
             (pen.thickness() - 2.0).abs() < 1.0e-4,
             "pen set_thickness round-trip"

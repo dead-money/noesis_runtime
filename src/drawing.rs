@@ -136,6 +136,7 @@ impl Pen {
     }
 
     /// Point the pen at `brush` (Noesis takes its own reference).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_brush(&mut self, brush: &dyn Brush) -> bool {
         // SAFETY: self.ptr is a live Pen*; brush_raw() is a live Brush*.
         unsafe { dm_noesis_pen_set_brush(self.ptr.as_ptr(), brush.brush_raw()) }
@@ -151,6 +152,7 @@ impl Pen {
     }
 
     /// Set the stroke thickness (in DIPs).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_thickness(&mut self, thickness: f32) -> bool {
         // SAFETY: self.ptr is a live Pen*.
         unsafe { dm_noesis_pen_set_thickness(self.ptr.as_ptr(), thickness) }
@@ -166,6 +168,7 @@ impl Pen {
     }
 
     /// Set the start, end, and dash line caps.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_line_caps(&mut self, start: PenLineCap, end: PenLineCap, dash: PenLineCap) -> bool {
         // SAFETY: self.ptr is a live Pen*; the enum ordinals match Noesis's.
         unsafe {
@@ -190,6 +193,7 @@ impl Pen {
     }
 
     /// Set the line join and miter limit.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_line_join(&mut self, join: PenLineJoin, miter_limit: f32) -> bool {
         // SAFETY: self.ptr is a live Pen*; the enum ordinal matches Noesis's.
         unsafe { dm_noesis_pen_set_line_join(self.ptr.as_ptr(), join as i32, miter_limit) }

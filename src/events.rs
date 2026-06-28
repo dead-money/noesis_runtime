@@ -579,6 +579,7 @@ impl EventArgs {
     /// Set the drop result (`DragEventArgs::effects`) a `Drop` / `DragOver`
     /// handler reports back to the drag source. `effects` is a [`drag_effects`]
     /// bitmask. Returns `true` if written (i.e. the live args are a drag event).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_drag_effects(&self, effects: u32) -> bool {
         // SAFETY: opaque handle; accessor validates the kind before writing.
         unsafe { dm_noesis_routed_events_drag_set_effects(self.raw, effects) }

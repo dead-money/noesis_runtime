@@ -381,6 +381,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `text` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_text(&mut self, text: &str) -> bool {
         let c = CString::new(text).expect("text contained interior NUL");
         // SAFETY: self.ptr is a live FrameworkElement*; c.as_ptr() lives
@@ -394,6 +395,7 @@ impl FrameworkElement {
     /// (returns `false`) if the element is not a `TextBox`. Mirrors `AoR`'s
     /// `_commandInput.CaretIndex = _commandInput.Text.Length` pattern
     /// after a history-nav substitution.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_caret_to_end(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; the C side does a
         // null check + DynamicCast + SetCaretIndex.
@@ -588,6 +590,7 @@ impl FrameworkElement {
     /// `false` if the element is not a `Path` or there are fewer than two points.
     /// A real vector trace (built via a Noesis `StreamGeometry`), the geometry
     /// counterpart of [`set_text`](Self::set_text).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_path_points(&mut self, points: &[[f32; 2]]) -> bool {
         if points.len() < 2 {
             return false;
@@ -676,6 +679,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_i32(&mut self, name: &str, value: i32) -> bool {
         self.set_prop(name, PropType::Int32, (&value as *const i32).cast())
     }
@@ -687,6 +691,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_u32(&mut self, name: &str, value: u32) -> bool {
         self.set_prop(name, PropType::UInt32, (&value as *const u32).cast())
     }
@@ -698,6 +703,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_f32(&mut self, name: &str, value: f32) -> bool {
         self.set_prop(name, PropType::Float, (&value as *const f32).cast())
     }
@@ -707,6 +713,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_f64(&mut self, name: &str, value: f64) -> bool {
         self.set_prop(name, PropType::Double, (&value as *const f64).cast())
     }
@@ -716,6 +723,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_bool(&mut self, name: &str, value: bool) -> bool {
         self.set_prop(name, PropType::Bool, (&value as *const bool).cast())
     }
@@ -726,6 +734,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` or `value` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_string(&mut self, name: &str, value: &str) -> bool {
         let v = CString::new(value).expect("string value contained interior NUL");
         let ptr: *const i8 = v.as_ptr();
@@ -737,6 +746,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_thickness(&mut self, name: &str, value: [f32; 4]) -> bool {
         self.set_prop(name, PropType::Thickness, value.as_ptr().cast())
     }
@@ -746,6 +756,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_color(&mut self, name: &str, rgba: [f32; 4]) -> bool {
         self.set_prop(name, PropType::Color, rgba.as_ptr().cast())
     }
@@ -755,6 +766,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_rect(&mut self, name: &str, value: [f32; 4]) -> bool {
         self.set_prop(name, PropType::Rect, value.as_ptr().cast())
     }
@@ -891,6 +903,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_point(&mut self, name: &str, value: [f32; 2]) -> bool {
         self.set_prop(name, PropType::Point, value.as_ptr().cast())
     }
@@ -913,6 +926,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_size(&mut self, name: &str, value: [f32; 2]) -> bool {
         self.set_prop(name, PropType::Size, value.as_ptr().cast())
     }
@@ -935,6 +949,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_vector(&mut self, name: &str, value: [f32; 2]) -> bool {
         self.set_prop(name, PropType::Vector, value.as_ptr().cast())
     }
@@ -958,6 +973,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_enum(&mut self, name: &str, value: i32) -> bool {
         self.set_prop(name, PropType::Enum, (&value as *const i32).cast())
     }
@@ -1019,6 +1035,7 @@ impl FrameworkElement {
     /// `dm_noesis_bevy`, which is `unsafe_code = forbid`): the `&ClassInstance`
     /// borrow encodes the "live `BaseComponent`" invariant the raw setter
     /// demands. For an arbitrary `BaseComponent*` use [`Self::set_data_context_raw`].
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_data_context(&mut self, instance: &crate::classes::ClassInstance) -> bool {
         // SAFETY: `instance.raw()` is a live BaseComponent* for the duration of
         // the borrow, which fully covers this synchronous call.
@@ -1069,6 +1086,7 @@ impl FrameworkElement {
     /// borrow encodes the live-`BaseComponent` invariant. Use
     /// [`Self::clear_items_source`] to detach, or [`Self::set_items_source_raw`]
     /// for an arbitrary list-implementing `BaseComponent*`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_items_source(&mut self, items: &crate::binding::ObservableCollection) -> bool {
         // SAFETY: `items.raw()` is a live ObservableCollection* (a BaseComponent
         // implementing a list interface) for the duration of the borrow.
@@ -1364,6 +1382,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_attached_i32(&mut self, owner: &str, prop: &str, v: i32) -> bool {
         self.set_attached(owner, prop, PropType::Int32, (&v as *const i32).cast())
     }
@@ -1390,6 +1409,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_attached_u32(&mut self, owner: &str, prop: &str, v: u32) -> bool {
         self.set_attached(owner, prop, PropType::UInt32, (&v as *const u32).cast())
     }
@@ -1412,6 +1432,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_attached_f32(&mut self, owner: &str, prop: &str, v: f32) -> bool {
         self.set_attached(owner, prop, PropType::Float, (&v as *const f32).cast())
     }
@@ -1434,6 +1455,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `owner` or `prop` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_attached_bool(&mut self, owner: &str, prop: &str, v: bool) -> bool {
         self.set_attached(owner, prop, PropType::Bool, (&v as *const bool).cast())
     }
@@ -1498,6 +1520,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_i32(&mut self, name: &str, value: i32) -> bool {
         self.set_current(name, PropType::Int32, (&value as *const i32).cast())
     }
@@ -1508,6 +1531,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_u32(&mut self, name: &str, value: u32) -> bool {
         self.set_current(name, PropType::UInt32, (&value as *const u32).cast())
     }
@@ -1518,6 +1542,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_f32(&mut self, name: &str, value: f32) -> bool {
         self.set_current(name, PropType::Float, (&value as *const f32).cast())
     }
@@ -1528,6 +1553,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_f64(&mut self, name: &str, value: f64) -> bool {
         self.set_current(name, PropType::Double, (&value as *const f64).cast())
     }
@@ -1538,6 +1564,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_bool(&mut self, name: &str, value: bool) -> bool {
         self.set_current(name, PropType::Bool, (&value as *const bool).cast())
     }
@@ -1548,6 +1575,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` or `value` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_string(&mut self, name: &str, value: &str) -> bool {
         let v = CString::new(value).expect("string value contained interior NUL");
         let ptr: *const i8 = v.as_ptr();
@@ -1560,6 +1588,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_point(&mut self, name: &str, value: [f32; 2]) -> bool {
         self.set_current(name, PropType::Point, value.as_ptr().cast())
     }
@@ -1570,6 +1599,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_size(&mut self, name: &str, value: [f32; 2]) -> bool {
         self.set_current(name, PropType::Size, value.as_ptr().cast())
     }
@@ -1580,6 +1610,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_vector(&mut self, name: &str, value: [f32; 2]) -> bool {
         self.set_current(name, PropType::Vector, value.as_ptr().cast())
     }
@@ -1591,6 +1622,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_enum(&mut self, name: &str, value: i32) -> bool {
         self.set_current(name, PropType::Enum, (&value as *const i32).cast())
     }
@@ -1827,6 +1859,7 @@ impl FrameworkElement {
     }
 
     /// Set the requested `Width`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_width(&mut self, value: f32) -> bool {
         self.set_f32("Width", value)
     }
@@ -1838,6 +1871,7 @@ impl FrameworkElement {
     }
 
     /// Set the requested `Height`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_height(&mut self, value: f32) -> bool {
         self.set_f32("Height", value)
     }
@@ -1849,6 +1883,7 @@ impl FrameworkElement {
     }
 
     /// Set `Opacity`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_opacity(&mut self, value: f32) -> bool {
         self.set_f32("Opacity", value)
     }
@@ -1860,6 +1895,7 @@ impl FrameworkElement {
     }
 
     /// Set `IsEnabled`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_enabled(&mut self, value: bool) -> bool {
         self.set_bool("IsEnabled", value)
     }
@@ -1871,6 +1907,7 @@ impl FrameworkElement {
     }
 
     /// Set `Focusable`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_focusable(&mut self, value: bool) -> bool {
         self.set_bool("Focusable", value)
     }
@@ -1887,6 +1924,7 @@ impl FrameworkElement {
     /// `BaseComponent`). Noesis stores its own reference. Returns `false` on a
     /// tag mismatch (should not happen for `Tag`) or if this is not a
     /// `DependencyObject`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tag(&mut self, value: &Self) -> bool {
         // SAFETY: `value` is a live FrameworkElement we borrow for the call.
         unsafe { self.set_component("Tag", value.ptr.as_ptr()) }
@@ -2080,6 +2118,7 @@ impl FrameworkElement {
     /// Set this element's `RenderTransformOrigin` (the relative `0.0..=1.0`
     /// pivot the render transform rotates/scales around). Returns `false` if
     /// this is not a `UIElement`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_render_transform_origin(&mut self, x: f32, y: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; thin pass-through.
         unsafe { dm_noesis_ui_element_set_render_transform_origin(self.ptr.as_ptr(), x, y) }
@@ -2128,6 +2167,7 @@ impl FrameworkElement {
     /// element (ordinals match Noesis `BitmapScalingMode`: `0` `Unspecified`,
     /// `1` `LowQuality`, `2` `HighQuality`). Returns `false` if this is not a
     /// `DependencyObject`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_bitmap_scaling_mode(&mut self, mode: i32) -> bool {
         // SAFETY: self.ptr is a live DependencyObject*; the C side DynamicCasts.
         unsafe { dm_noesis_render_options_set_bitmap_scaling_mode(self.ptr.as_ptr(), mode) }
@@ -2168,6 +2208,7 @@ impl FrameworkElement {
     /// Set the selected index. Pass `-1` to clear the selection; an out-of-range
     /// index is coerced by Noesis to `-1`. Returns `false` if this element is not
     /// a `Selector`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_selected_index(&mut self, index: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_selector_set_selected_index(self.ptr.as_ptr(), index) }
@@ -2290,18 +2331,21 @@ impl FrameworkElement {
 
     /// Set the `Value`, going through `RangeBase::SetValue` so Noesis coerces it
     /// into `[Minimum, Maximum]`. Returns `false` if not a `RangeBase`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_range_value(&mut self, value: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 0, value) }
     }
 
     /// Set the `Minimum`. Returns `false` if not a `RangeBase`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_range_minimum(&mut self, value: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 1, value) }
     }
 
     /// Set the `Maximum`. Returns `false` if not a `RangeBase`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_range_maximum(&mut self, value: f32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_rangebase_set(self.ptr.as_ptr(), 2, value) }
@@ -2330,6 +2374,7 @@ impl FrameworkElement {
 
     /// Set the tri-state `IsChecked` (`None` = indeterminate). Returns `false`
     /// if this element is not a `ToggleButton`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_checked(&mut self, state: Option<bool>) -> bool {
         let code: i8 = match state {
             Some(true) => 1,
@@ -2352,6 +2397,7 @@ impl FrameworkElement {
     }
 
     /// Set `Popup.IsOpen`. Returns `false` if this element is not a `Popup`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_open(&mut self, open: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_popup_set_is_open(self.ptr.as_ptr(), open) }
@@ -2367,6 +2413,7 @@ impl FrameworkElement {
     }
 
     /// Set `Expander.IsExpanded`. Returns `false` if not an `Expander`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_expanded(&mut self, expanded: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_expander_set_is_expanded(self.ptr.as_ptr(), expanded) }
@@ -2481,18 +2528,21 @@ impl FrameworkElement {
     }
 
     /// Set `SelectionStart`. Returns `false` if not a `TextBox`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_selection_start(&mut self, value: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 0, value) }
     }
 
     /// Set `SelectionLength`. Returns `false` if not a `TextBox`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_selection_length(&mut self, value: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 1, value) }
     }
 
     /// Set `CaretIndex`. Returns `false` if not a `TextBox`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_caret_index(&mut self, value: i32) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_textbox_set_int(self.ptr.as_ptr(), 2, value) }
@@ -2539,6 +2589,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `password` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_password(&mut self, password: &str) -> bool {
         let c = CString::new(password).expect("password contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
@@ -2594,6 +2645,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `path` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_selected_value_path(&mut self, path: &str) -> bool {
         let c = CString::new(path).expect("path contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
@@ -2627,6 +2679,7 @@ impl FrameworkElement {
     }
 
     /// Set `TreeViewItem.IsSelected`. Returns `false` if not a `TreeViewItem`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tree_item_is_selected(&mut self, selected: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_controls_treeviewitem_set_is_selected(self.ptr.as_ptr(), selected) }
@@ -2642,6 +2695,7 @@ impl FrameworkElement {
     }
 
     /// Set `TreeViewItem.IsExpanded`. Returns `false` if not a `TreeViewItem`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tree_item_is_expanded(&mut self, expanded: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_controls_treeviewitem_set_is_expanded(self.ptr.as_ptr(), expanded) }
@@ -2823,6 +2877,7 @@ impl FrameworkElement {
     /// # Panics
     ///
     /// Panics if `text` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tooltip_string(&mut self, text: &str) -> bool {
         let c = CString::new(text).expect("tooltip text contained interior NUL");
         // SAFETY: self.ptr is live; c.as_ptr() lives for the call.
@@ -2860,6 +2915,7 @@ impl FrameworkElement {
     }
 
     /// Set `ToolTip.IsOpen`. Returns `false` if not a `ToolTip` control.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tooltip_is_open(&mut self, open: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_controls_tooltip_set_is_open(self.ptr.as_ptr(), open) }
@@ -2920,6 +2976,7 @@ impl FrameworkElement {
     }
 
     /// Set `ContextMenu.IsOpen`. Returns `false` if not a `ContextMenu` control.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_context_menu_is_open(&mut self, open: bool) -> bool {
         // SAFETY: self.ptr is a live BaseComponent*; the C side DynamicCasts.
         unsafe { dm_noesis_controls_contextmenu_set_is_open(self.ptr.as_ptr(), open) }
@@ -3077,6 +3134,7 @@ impl FrameworkElement {
     /// (`FrameworkElement::SetResources`). Noesis takes its own reference, so
     /// `dict` may be dropped afterwards. Returns `false` if this is not a
     /// `FrameworkElement`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_resources(&mut self, dict: &crate::resources::ResourceDictionary) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the dictionary.
         unsafe { dm_noesis_framework_element_set_resources(self.ptr.as_ptr(), dict.raw()) }
@@ -3104,6 +3162,7 @@ impl FrameworkElement {
     /// (`FrameworkElement::SetStyle`). Applying the style seals it. Noesis takes
     /// its own reference, so `style` may be dropped afterwards. Returns `false`
     /// if this is not a `FrameworkElement`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_style(&mut self, style: &crate::styles::Style) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the style.
         unsafe { dm_noesis_framework_element_set_style(self.ptr.as_ptr(), style.raw()) }
@@ -3125,6 +3184,7 @@ impl FrameworkElement {
     /// `Control`. After the next layout pass the template parts become
     /// resolvable via [`template_child`](Self::template_child) or
     /// [`ControlTemplate::find_name`](crate::styles::ControlTemplate::find_name).
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_template(&mut self, template: &crate::styles::ControlTemplate) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the template.
         unsafe { dm_noesis_control_set_template(self.ptr.as_ptr(), template.raw()) }

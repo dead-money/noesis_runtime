@@ -45,6 +45,8 @@ pub mod converters;
 pub mod diagnostics;
 pub mod drawing;
 pub mod events;
+// Not part of the stable API; no semver guarantees.
+#[doc(hidden)]
 pub mod ffi;
 pub mod font_provider;
 pub mod formatted_text;
