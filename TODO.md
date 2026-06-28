@@ -114,7 +114,6 @@ Only `Path.set_points` is exposed.
 ## 12. Media, imaging, render targets
 
 - **Bitmaps.** `BitmapImage`, `BitmapSource`, `CroppedBitmap`, `DynamicTextureSource`, `TextureSource`/`RenderTexture`.
-- **SVG.** `SVG` / `SVGPath` loading.
 - **Offscreen capture / screenshots** of a rendered view (beyond the raw `render_offscreen` pass).
 
 ## 13. Text & fonts (rich)
@@ -190,4 +189,5 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **Read-only DP value types (§9).** `DependencyObject::SetReadOnlyProperty` is template-only with no boxed object form, so the key-gated read-only setter covers value / struct / string DPs only — not component / brush DPs. (`DependencyPropertyKey` / `RegisterReadOnly` don't exist in 3.2.13; read-only DPs use `PropertyAccess_ReadOnly` + `SetReadOnlyProperty`.)
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
+- **`SVG::Parse` result is a CPU struct, not an `ImageSource` (§12).** `Noesis::SVG::Parse(const char*, SVG::Image&)` fills a plain `SVG::Image` value type (`width`, `height`, `Vector<SVG::Shape>` — each shape an `id`/`data`/fill+stroke `SVG::Brush`/transform record), NOT a `Noesis::ImageSource`/`Drawing` you can assign to an `Image`/`ImageBrush`. There is no SDK path in 3.2.13 to host the parsed result on an element; observe it via its parsed size + shape count + per-shape fill type (`src/svg.rs` `SvgImage`), or feed `SVGPath` command buffers into your own geometry. (`SVGPath` itself — parse, `CalculateBounds`, `FillContains`, `StrokeContains`, and the builder statics — is fully wrapped and headless-testable.)
 - **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.

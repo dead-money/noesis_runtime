@@ -2198,6 +2198,62 @@ bool dm_noesis_type_set_content_property(
 // The consumption side (dm_noesis_type_converter_from_string above) works for
 // any built-in / reflected type. See TODO.md "Known SDK limitations".
 
+// ── SVG / SVGPath parsing (TODO §12) ────────────────────────────────────────
+//
+// Implemented in cpp/noesis_svg.cpp. Both surfaces are CPU/headless — no GPU
+// RenderDevice or render pass needed. The handles are plain heap objects (NOT
+// BaseComponents); release SVGPath* with dm_noesis_svg_path_destroy and
+// SVG::Image* with dm_noesis_svg_image_destroy.
+
+// Parse an SVG path string (e.g. "M0 0 L100 0 L100 50 Z") into an owned
+// SVGPath. Returns null on parse failure.
+void* dm_noesis_svg_path_parse(const char* str);
+
+// Create an empty SVGPath to populate with the builder entrypoints below.
+void* dm_noesis_svg_path_create(void);
+
+// Release an SVGPath created by parse/create.
+void dm_noesis_svg_path_destroy(void* path);
+
+// Number of uint32 entries in the path's command buffer (0 for null/empty).
+uint32_t dm_noesis_svg_path_command_count(void* path);
+
+// Path-builder statics appending to the owned command buffer.
+void dm_noesis_svg_path_move_to(void* path, float x, float y);
+void dm_noesis_svg_path_line_to(void* path, float x, float y);
+void dm_noesis_svg_path_close(void* path);
+void dm_noesis_svg_path_add_rect(void* path, float x, float y, float width, float height);
+void dm_noesis_svg_path_add_ellipse(void* path, float x, float y, float rx, float ry);
+
+// AABB of the path geometry. out = [x, y, width, height]. Returns false if null.
+bool dm_noesis_svg_path_calculate_bounds(void* path, float out[4]);
+
+// True if (x, y) is inside the filled region. fill_rule: 0 EvenOdd, 1 NonZero.
+bool dm_noesis_svg_path_fill_contains(void* path, float x, float y, int32_t fill_rule);
+
+// True if (x, y) falls within the stroked outline for the given pen. `join` is a
+// StrokeJoinStyle ordinal (0 Miter, 1 Bevel, 2 Round); `start_cap`/`end_cap` are
+// StrokeCapStyle ordinals (0 Butt, 1 Square, 2 Round, 3 Triangle).
+bool dm_noesis_svg_path_stroke_contains(void* path, float x, float y, float width, int32_t join,
+                                        int32_t start_cap, int32_t end_cap, float miter_limit);
+
+// Parse a full <svg> document string into an owned Noesis::SVG::Image. Returns
+// null only if `svg` is null; a malformed document yields a zero-shape image.
+void* dm_noesis_svg_image_parse(const char* svg);
+
+// Release an SVG::Image created by dm_noesis_svg_image_parse.
+void dm_noesis_svg_image_destroy(void* image);
+
+// Parsed document size (the <svg> width/height). Returns false if `image` null.
+bool dm_noesis_svg_image_get_size(void* image, float* width, float* height);
+
+// Number of parsed shapes (paths) in the document.
+uint32_t dm_noesis_svg_image_shape_count(void* image);
+
+// Fill-brush type ordinal of shape `index` (0 None, 1 Solid, 2 Linear,
+// 3 Radial), or -1 if the index is out of range.
+int32_t dm_noesis_svg_image_shape_fill_type(void* image, uint32_t index);
+
 #ifdef __cplusplus
 }
 #endif
