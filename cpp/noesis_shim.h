@@ -2198,6 +2198,58 @@ bool dm_noesis_type_set_content_property(
 // The consumption side (dm_noesis_type_converter_from_string above) works for
 // any built-in / reflected type. See TODO.md "Known SDK limitations".
 
+// ── FormattedText measurement / layout (TODO §13) ───────────────────────────
+//
+// FormattedText (NsGui/FormattedText.h) computes glyph metrics + a text layout
+// for a string and font properties at construction time. This unit owns no
+// FontFamily entrypoint: _create takes the font family as a NAME and builds the
+// Noesis::FontFamily internally. The returned handle is a +1 BaseComponent*
+// (release with dm_noesis_base_component_release). Metrics getters re-read from
+// the live object so a stub fails the round-trip. None of these call
+// VerifyAccess(); FormattedText is not view-bound, so they are safe off-thread.
+
+// Build a FormattedText. `weight`/`stretch`/`style` are NsGui/FontProperties.h
+// ordinals; `flow_direction`/`text_alignment`/`text_trimming` are the
+// TextProperties.h / FlowDirection ordinals. Negative `max_width`/`max_height`
+// mean unconstrained (FLT_MAX); `line_height` 0 means natural. `foreground` is
+// an optional [r,g,b,a] (null ⇒ opaque black). Returns a +1 FormattedText*.
+void* dm_noesis_formatted_text_create(
+    const char* text, const char* font_family, int32_t weight, int32_t stretch, int32_t style,
+    float font_size, int32_t flow_direction, float max_width, float max_height, float line_height,
+    int32_t text_alignment, int32_t text_trimming, const float foreground[4]);
+
+// Layout bounds: out = {x, y, width, height} in DIPs. False if not a FormattedText.
+bool dm_noesis_formatted_text_get_bounds(void* ft, float out[4]);
+
+// Number of laid-out lines, or -1 if `ft` is not a FormattedText.
+int32_t dm_noesis_formatted_text_get_num_lines(void* ft);
+
+// Per-line metrics for `index`: glyph count, height, baseline (any out may be
+// null). False on not-a-FormattedText or out-of-range index.
+bool dm_noesis_formatted_text_get_line_info(void* ft, uint32_t index, uint32_t* out_num_glyphs,
+    float* out_height, float* out_baseline);
+
+// Write IsEmpty() / HasVisualBrush() to `out`. False (out untouched) if `ft` is
+// not a FormattedText.
+bool dm_noesis_formatted_text_is_empty(void* ft, bool* out);
+bool dm_noesis_formatted_text_has_visual_brush(void* ft, bool* out);
+
+// Re-measure the stored runs under fresh constraints; writes the Size to
+// out_w/out_h. Enum args are the matching ordinals; negative max_* ⇒ FLT_MAX.
+bool dm_noesis_formatted_text_measure(void* ft, int32_t alignment, int32_t wrapping,
+    int32_t trimming, float max_width, float max_height, float line_height, int32_t line_stacking,
+    int32_t flow_direction, float* out_w, float* out_h);
+
+// Glyph x/y for character `ch_index` (after the char when `after_char`); Noesis
+// writes -10/-10 when the index is outside layout limits.
+bool dm_noesis_formatted_text_get_glyph_position(void* ft, uint32_t ch_index, bool after_char,
+    float* out_x, float* out_y);
+
+// Glyph index under (x, y) in layout DIPs, plus inside / trailing flags (any
+// out may be null). False if `ft` is not a FormattedText.
+bool dm_noesis_formatted_text_hit_test(void* ft, float x, float y, uint32_t* out_index,
+    bool* out_is_inside, bool* out_is_trailing);
+
 #ifdef __cplusplus
 }
 #endif

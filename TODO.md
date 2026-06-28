@@ -78,7 +78,6 @@ values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `Scrol
 
 - **Selection.** `Selector::SelectedValue`/`SelectedValuePath`; `TreeView` selection; `ListView` columns.
 - **Items.** `ItemContainerGenerator` deep access (container ⇄ item ⇄ index mapping).
-- **Text.** `FormattedText` (its own large feature).
 - **Popups/overlays.** `ContextMenu`, `ToolTip`/`ToolTipService`.
 - **Scrolling.** Direct `IScrollInfo` and the line/page-scroll methods (`LineUp`/`PageDown`/…).
 - **`Image` / `MediaElement`-style** source assignment from code.
@@ -120,7 +119,6 @@ Only `Path.set_points` is exposed.
 ## 13. Text & fonts (rich)
 
 - **`TextBlock` inlines.** `Run`/`Span`/`Bold`/`Italic`/`Underline`/`Hyperlink`/`LineBreak`/`InlineUIContainer`.
-- **`FormattedText`** measurement/layout.
 - **Typography** properties, `FontFamily` enumeration, `TextElement` props, `CompositionUnderline` (IME).
 
 ## 14. System integration callbacks
@@ -191,3 +189,6 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
 - **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.
+- **`FormattedText` layout setters (§13).** 3.2.13's `FormattedText` has no `SetMaxTextWidth`/`SetTextAlignment`/`SetFontSize`/… mutators; all constraints (font, size, weight/stretch/style, max width/height, line height, alignment, trimming, flow direction) are *constructor* arguments and metrics are computed once during construction. The wrapper therefore takes them via a builder and rebuilds for a new layout. Getters exposed: `GetBounds`, `GetNumLines`, `GetLineInfo`, `IsEmpty`, `HasVisualBrush`, plus `Measure` and `HitTest`/`GetGlyphPosition`.
+- **`FormattedText` glyph positions & standalone `Measure` width (§13).** `GetGlyphPosition` returns `(-10,-10)` and `Measure(...)` reports `0` width for an unconstrained `NoWrap` pass on a `FormattedText` built via the metrics-only ctors — those paths populate measurement/line metrics (`GetBounds`, `GetLineInfo` height/baseline are real) but not the full render layout a `TextBlock` would drive. Glyph-hit geometry needs the object attached to a rendered `TextBlock`; the standalone wrapper exposes the calls but cannot guarantee non-zero render coordinates.
+- **`FormattedText` font resolution (§13).** Metrics are only non-zero when the named `FontFamily` resolves to a real face: register a `FontProvider` (or set font fallbacks) before measuring. With no font system configured Noesis cannot shape glyphs and all metrics collapse to zero — this is a configuration dependency, not a stub. `tests/formatted_text.rs` drives the SDK's bundled `Bitter-Regular.ttf` to get genuine metrics.

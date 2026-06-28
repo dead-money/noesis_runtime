@@ -21,6 +21,7 @@ pub mod converters;
 pub mod events;
 pub mod ffi;
 pub mod font_provider;
+pub mod formatted_text;
 pub mod gui;
 pub mod markup;
 pub mod multi_binding;

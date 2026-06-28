@@ -1178,6 +1178,70 @@ unsafe extern "C" {
         handoff: i32,
     ) -> bool;
 }
+
+// ── FormattedText measurement / layout (TODO §13) ───────────────────────────
+//
+// `_create` returns a `+1`-owned `FormattedText*` (src/formatted_text.rs
+// releases it on Drop via dm_noesis_base_component_release). Enum args are the
+// NsGui/FontProperties.h + NsGui/TextProperties.h ordinals. See cpp/noesis_shim.h
+// for the full contracts.
+unsafe extern "C" {
+    pub fn dm_noesis_formatted_text_create(
+        text: *const c_char,
+        font_family: *const c_char,
+        weight: i32,
+        stretch: i32,
+        style: i32,
+        font_size: f32,
+        flow_direction: i32,
+        max_width: f32,
+        max_height: f32,
+        line_height: f32,
+        text_alignment: i32,
+        text_trimming: i32,
+        foreground: *const f32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_formatted_text_get_bounds(ft: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_formatted_text_get_num_lines(ft: *mut c_void) -> i32;
+    pub fn dm_noesis_formatted_text_get_line_info(
+        ft: *mut c_void,
+        index: u32,
+        out_num_glyphs: *mut u32,
+        out_height: *mut f32,
+        out_baseline: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_formatted_text_is_empty(ft: *mut c_void, out: *mut bool) -> bool;
+    pub fn dm_noesis_formatted_text_has_visual_brush(ft: *mut c_void, out: *mut bool) -> bool;
+    pub fn dm_noesis_formatted_text_measure(
+        ft: *mut c_void,
+        alignment: i32,
+        wrapping: i32,
+        trimming: i32,
+        max_width: f32,
+        max_height: f32,
+        line_height: f32,
+        line_stacking: i32,
+        flow_direction: i32,
+        out_w: *mut f32,
+        out_h: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_formatted_text_get_glyph_position(
+        ft: *mut c_void,
+        ch_index: u32,
+        after_char: bool,
+        out_x: *mut f32,
+        out_y: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_formatted_text_hit_test(
+        ft: *mut c_void,
+        x: f32,
+        y: f32,
+        out_index: *mut u32,
+        out_is_inside: *mut bool,
+        out_is_trailing: *mut bool,
+    ) -> bool;
+}
+
 // Reflection meta: custom enums / routed events / factory + string conversion
 // (TODO §9). See cpp/noesis_shim.h for the full ownership + threading contracts.
 // ────────────────────────────────────────────────────────────────────────────
