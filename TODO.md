@@ -113,9 +113,7 @@ Only `Path.set_points` is exposed.
 
 ## 12. Media, imaging, render targets
 
-- **Bitmaps.** `BitmapImage`, `BitmapSource`, `CroppedBitmap`, `DynamicTextureSource`, `TextureSource`/`RenderTexture`.
 - **SVG.** `SVG` / `SVGPath` loading.
-- **Offscreen capture / screenshots** of a rendered view (beyond the raw `render_offscreen` pass).
 
 ## 13. Text & fonts (rich)
 
@@ -191,3 +189,5 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
 - **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.
+- **Offscreen capture / screenshots (§12).** 3.2.13 ships no Noesis API to read back a rendered view's pixels. `IRenderer::Render`/`RenderOffscreen` draw into whatever render target is currently bound on the host `RenderDevice` — capture is purely a host/RenderDevice concern. Workaround: render the view into a render target your `RenderDevice` owns (the `render_offscreen` pass + the wrapped `RenderDevice` render-target surface already give you this) and read the pixels back from that host-side target. (The `IRenderer::Render`/`RenderStereo` family, `flipY`/`clear` flags, and `RenderOffscreen` are the full Noesis-side surface; there is no `SaveToFile` / `ReadPixels` / screenshot entry point.)
+- **GPU-resolved imaging values (§12).** `TextureSource::GetTexture` is null, and `BitmapSource::GetPixelWidth/Height` / `GetDpiX/Y` read `0` / defaults, until the source is resolved on a live `RenderDevice` render pass: a real `Noesis::Texture*` is only minted by the host `RenderDevice` (`CreateTexture`), and `BitmapImage` pixel dims resolve through a `TextureProvider` during rendering. The constructible imaging objects (`CroppedBitmap` source + crop rect, `TextureSource`, `BitmapImage` `UriSource`, `DynamicTextureSource` dims) all round-trip headless; the GPU-backed read-backs require driving a host render pass. `DynamicTextureSource`'s `TextureRenderCallback` likewise only fires from the render thread under a live pass. (`BitmapSource::Create(pixels…)` from a raw CPU buffer is also available but still needs a `RenderDevice` to upload before the pixels become a usable `Texture`.)

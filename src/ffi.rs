@@ -854,6 +854,80 @@ unsafe extern "C" {
     pub fn dm_noesis_render_options_get_bitmap_scaling_mode(obj: *mut c_void) -> i32;
 }
 
+/// Mirror of `dm_noesis_texture_render_callback` in `cpp/noesis_shim.h`. Pointer-
+/// ABI-compatible with `Noesis::DynamicTextureSource::TextureRenderCallback`
+/// (`Texture* (*)(RenderDevice*, void*)`). Invoked from the render thread under a
+/// live `RenderDevice` render pass; `device` is a borrowed `Noesis::RenderDevice*`,
+/// `user` is the pointer passed to [`dm_noesis_dynamic_texture_source_create`].
+/// The returned `*mut c_void` is a borrowed `Noesis::Texture*` (or null).
+pub type TextureRenderCallback =
+    unsafe extern "C" fn(device: *mut c_void, user: *mut c_void) -> *mut c_void;
+
+// ── ImageSource / BitmapSource family (TODO §12 "Bitmaps") ──────────────────
+//
+// Object construction from Rust. Each `*_create` returns a `+1`-owned
+// `BaseComponent*` (the owning wrapper in src/imaging.rs releases it on Drop).
+unsafe extern "C" {
+    // CroppedBitmap
+    pub fn dm_noesis_cropped_bitmap_create() -> *mut c_void;
+    pub fn dm_noesis_cropped_bitmap_set_source(crop: *mut c_void, source: *mut c_void) -> bool;
+    pub fn dm_noesis_cropped_bitmap_get_source(crop: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_cropped_bitmap_set_source_rect(
+        crop: *mut c_void,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    ) -> bool;
+    pub fn dm_noesis_cropped_bitmap_get_source_rect(
+        crop: *mut c_void,
+        x: *mut i32,
+        y: *mut i32,
+        width: *mut u32,
+        height: *mut u32,
+    ) -> bool;
+
+    // TextureSource
+    pub fn dm_noesis_texture_source_create(texture: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_texture_source_set_texture(source: *mut c_void, texture: *mut c_void) -> bool;
+    pub fn dm_noesis_texture_source_get_texture(source: *mut c_void) -> *mut c_void;
+
+    // BitmapImage
+    pub fn dm_noesis_bitmap_image_create(uri: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_bitmap_image_set_uri_source(image: *mut c_void, uri: *const c_char) -> bool;
+    pub fn dm_noesis_bitmap_image_get_uri_source(image: *mut c_void) -> *const c_char;
+
+    // BitmapSource base getters
+    pub fn dm_noesis_bitmap_source_get_pixel_size(
+        source: *mut c_void,
+        width: *mut i32,
+        height: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_bitmap_source_get_dpi(
+        source: *mut c_void,
+        dpi_x: *mut f32,
+        dpi_y: *mut f32,
+    ) -> bool;
+
+    // DynamicTextureSource
+    pub fn dm_noesis_dynamic_texture_source_create(
+        width: u32,
+        height: u32,
+        callback: TextureRenderCallback,
+        user: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_dynamic_texture_source_resize(
+        source: *mut c_void,
+        width: u32,
+        height: u32,
+    ) -> bool;
+    pub fn dm_noesis_dynamic_texture_source_get_pixel_size(
+        source: *mut c_void,
+        width: *mut u32,
+        height: *mut u32,
+    ) -> bool;
+}
+
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
 /// pointers receive the `userdata` passed to [`dm_noesis_value_converter_create`],
 /// the borrowed boxed `value` / `parameter` (`BaseComponent*`, may be null), an
