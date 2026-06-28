@@ -88,6 +88,27 @@ pub enum FontWeight {
     ExtraBlack = 950,
 }
 
+impl FontWeight {
+    /// Map a raw `Noesis::FontWeight` numeric weight class back to the typed
+    /// enum, or `None` for an unrecognised value.
+    fn from_raw(v: i32) -> Option<Self> {
+        match v {
+            100 => Some(Self::Thin),
+            200 => Some(Self::ExtraLight),
+            300 => Some(Self::Light),
+            350 => Some(Self::SemiLight),
+            400 => Some(Self::Normal),
+            500 => Some(Self::Medium),
+            600 => Some(Self::SemiBold),
+            700 => Some(Self::Bold),
+            800 => Some(Self::ExtraBold),
+            900 => Some(Self::Black),
+            950 => Some(Self::ExtraBlack),
+            _ => None,
+        }
+    }
+}
+
 /// `Noesis::FontStyle` (FontProperties.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -98,6 +119,19 @@ pub enum FontStyle {
     Oblique = 1,
     /// Italic (designed) glyphs.
     Italic = 2,
+}
+
+impl FontStyle {
+    /// Map a raw `Noesis::FontStyle` ordinal back to the typed enum, or `None`
+    /// for an unrecognised value.
+    fn from_raw(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Normal),
+            1 => Some(Self::Oblique),
+            2 => Some(Self::Italic),
+            _ => None,
+        }
+    }
 }
 
 /// `Noesis::FontStretch` (FontProperties.h).
@@ -124,6 +158,25 @@ pub enum FontStretch {
     UltraExpanded = 9,
 }
 
+impl FontStretch {
+    /// Map a raw `Noesis::FontStretch` ordinal back to the typed enum, or `None`
+    /// for an unrecognised value.
+    fn from_raw(v: i32) -> Option<Self> {
+        match v {
+            1 => Some(Self::UltraCondensed),
+            2 => Some(Self::ExtraCondensed),
+            3 => Some(Self::Condensed),
+            4 => Some(Self::SemiCondensed),
+            5 => Some(Self::Normal),
+            6 => Some(Self::SemiExpanded),
+            7 => Some(Self::Expanded),
+            8 => Some(Self::ExtraExpanded),
+            9 => Some(Self::UltraExpanded),
+            _ => None,
+        }
+    }
+}
+
 /// `Noesis::FontCapitals` (Typography.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -144,6 +197,23 @@ pub enum FontCapitals {
     Titling = 6,
 }
 
+impl FontCapitals {
+    /// Map a raw `Noesis::FontCapitals` ordinal back to the typed enum, or
+    /// `None` for an unrecognised value.
+    fn from_raw(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Normal),
+            1 => Some(Self::AllSmallCaps),
+            2 => Some(Self::SmallCaps),
+            3 => Some(Self::AllPetiteCaps),
+            4 => Some(Self::PetiteCaps),
+            5 => Some(Self::Unicase),
+            6 => Some(Self::Titling),
+            _ => None,
+        }
+    }
+}
+
 /// `Noesis::FontNumeralStyle` (Typography.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -156,6 +226,19 @@ pub enum FontNumeralStyle {
     OldStyle = 2,
 }
 
+impl FontNumeralStyle {
+    /// Map a raw `Noesis::FontNumeralStyle` ordinal back to the typed enum, or
+    /// `None` for an unrecognised value.
+    fn from_raw(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Normal),
+            1 => Some(Self::Lining),
+            2 => Some(Self::OldStyle),
+            _ => None,
+        }
+    }
+}
+
 /// `Noesis::FontFraction` (Typography.h).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -166,6 +249,19 @@ pub enum FontFraction {
     Slashed = 1,
     /// Stacked (vertical) fractions.
     Stacked = 2,
+}
+
+impl FontFraction {
+    /// Map a raw `Noesis::FontFraction` ordinal back to the typed enum, or
+    /// `None` for an unrecognised value.
+    fn from_raw(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Normal),
+            1 => Some(Self::Slashed),
+            2 => Some(Self::Stacked),
+            _ => None,
+        }
+    }
 }
 
 /// `Noesis::FontVariants` (Typography.h).
@@ -184,6 +280,22 @@ pub enum FontVariants {
     Inferior = 4,
     /// Ruby.
     Ruby = 5,
+}
+
+impl FontVariants {
+    /// Map a raw `Noesis::FontVariants` ordinal back to the typed enum, or
+    /// `None` for an unrecognised value.
+    fn from_raw(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Normal),
+            1 => Some(Self::Superscript),
+            2 => Some(Self::Subscript),
+            3 => Some(Self::Ordinal),
+            4 => Some(Self::Inferior),
+            5 => Some(Self::Ruby),
+            _ => None,
+        }
+    }
 }
 
 /// `Noesis::CompositionLineStyle` (CompositionUnderline.h) — the line style of
@@ -388,10 +500,12 @@ pub fn set_font_weight(element: &FrameworkElement, weight: FontWeight) -> bool {
     unsafe { dm_noesis_typography_text_element_set_font_weight(element.raw(), weight as i32) }
 }
 
-/// Read `TextElement.FontWeight` back, as its raw numeric weight class.
+/// Read `TextElement.FontWeight` back as the typed [`FontWeight`], re-read from
+/// the live object. `None` if unset or the value is not a recognised weight.
 #[must_use]
-pub fn font_weight(element: &FrameworkElement) -> Option<i32> {
+pub fn font_weight(element: &FrameworkElement) -> Option<FontWeight> {
     read_i32(element, dm_noesis_typography_text_element_get_font_weight)
+        .and_then(FontWeight::from_raw)
 }
 
 /// Set `TextElement.FontStyle` on `element`.
@@ -401,10 +515,12 @@ pub fn set_font_style(element: &FrameworkElement, style: FontStyle) -> bool {
     unsafe { dm_noesis_typography_text_element_set_font_style(element.raw(), style as i32) }
 }
 
-/// Read `TextElement.FontStyle` back as its ordinal.
+/// Read `TextElement.FontStyle` back as the typed [`FontStyle`], re-read from
+/// the live object. `None` if unset or the ordinal is unrecognised.
 #[must_use]
-pub fn font_style(element: &FrameworkElement) -> Option<i32> {
+pub fn font_style(element: &FrameworkElement) -> Option<FontStyle> {
     read_i32(element, dm_noesis_typography_text_element_get_font_style)
+        .and_then(FontStyle::from_raw)
 }
 
 /// Set `TextElement.FontStretch` on `element`.
@@ -414,10 +530,12 @@ pub fn set_font_stretch(element: &FrameworkElement, stretch: FontStretch) -> boo
     unsafe { dm_noesis_typography_text_element_set_font_stretch(element.raw(), stretch as i32) }
 }
 
-/// Read `TextElement.FontStretch` back as its ordinal.
+/// Read `TextElement.FontStretch` back as the typed [`FontStretch`], re-read
+/// from the live object. `None` if unset or the ordinal is unrecognised.
 #[must_use]
-pub fn font_stretch(element: &FrameworkElement) -> Option<i32> {
+pub fn font_stretch(element: &FrameworkElement) -> Option<FontStretch> {
     read_i32(element, dm_noesis_typography_text_element_get_font_stretch)
+        .and_then(FontStretch::from_raw)
 }
 
 // ── Typography attached DPs (representative subset) ───────────────────────────
@@ -429,10 +547,11 @@ pub fn set_capitals(element: &FrameworkElement, value: FontCapitals) -> bool {
     unsafe { dm_noesis_typography_set_capitals(element.raw(), value as i32) }
 }
 
-/// Read `Typography.Capitals` back as its ordinal.
+/// Read `Typography.Capitals` back as the typed [`FontCapitals`], re-read from
+/// the live object. `None` if unset or the ordinal is unrecognised.
 #[must_use]
-pub fn capitals(element: &FrameworkElement) -> Option<i32> {
-    read_i32(element, dm_noesis_typography_get_capitals)
+pub fn capitals(element: &FrameworkElement) -> Option<FontCapitals> {
+    read_i32(element, dm_noesis_typography_get_capitals).and_then(FontCapitals::from_raw)
 }
 
 /// Set `Typography.NumeralStyle` on `element`.
@@ -442,10 +561,11 @@ pub fn set_numeral_style(element: &FrameworkElement, value: FontNumeralStyle) ->
     unsafe { dm_noesis_typography_set_numeral_style(element.raw(), value as i32) }
 }
 
-/// Read `Typography.NumeralStyle` back as its ordinal.
+/// Read `Typography.NumeralStyle` back as the typed [`FontNumeralStyle`],
+/// re-read from the live object. `None` if unset or the ordinal is unrecognised.
 #[must_use]
-pub fn numeral_style(element: &FrameworkElement) -> Option<i32> {
-    read_i32(element, dm_noesis_typography_get_numeral_style)
+pub fn numeral_style(element: &FrameworkElement) -> Option<FontNumeralStyle> {
+    read_i32(element, dm_noesis_typography_get_numeral_style).and_then(FontNumeralStyle::from_raw)
 }
 
 /// Set `Typography.Fraction` on `element`.
@@ -455,10 +575,11 @@ pub fn set_fraction(element: &FrameworkElement, value: FontFraction) -> bool {
     unsafe { dm_noesis_typography_set_fraction(element.raw(), value as i32) }
 }
 
-/// Read `Typography.Fraction` back as its ordinal.
+/// Read `Typography.Fraction` back as the typed [`FontFraction`], re-read from
+/// the live object. `None` if unset or the ordinal is unrecognised.
 #[must_use]
-pub fn fraction(element: &FrameworkElement) -> Option<i32> {
-    read_i32(element, dm_noesis_typography_get_fraction)
+pub fn fraction(element: &FrameworkElement) -> Option<FontFraction> {
+    read_i32(element, dm_noesis_typography_get_fraction).and_then(FontFraction::from_raw)
 }
 
 /// Set `Typography.Variants` on `element`.
@@ -468,10 +589,11 @@ pub fn set_variants(element: &FrameworkElement, value: FontVariants) -> bool {
     unsafe { dm_noesis_typography_set_variants(element.raw(), value as i32) }
 }
 
-/// Read `Typography.Variants` back as its ordinal.
+/// Read `Typography.Variants` back as the typed [`FontVariants`], re-read from
+/// the live object. `None` if unset or the ordinal is unrecognised.
 #[must_use]
-pub fn variants(element: &FrameworkElement) -> Option<i32> {
-    read_i32(element, dm_noesis_typography_get_variants)
+pub fn variants(element: &FrameworkElement) -> Option<FontVariants> {
+    read_i32(element, dm_noesis_typography_get_variants).and_then(FontVariants::from_raw)
 }
 
 /// Set `Typography.StandardLigatures` on `element`.

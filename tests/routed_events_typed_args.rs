@@ -22,7 +22,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::{collections::HashMap, ffi::c_void};
 
 use dm_noesis_runtime::events::{
-    DataObjectEvent, EventArgs, do_drag_drop, drag_effects, subscribe_data_object, subscribe_event,
+    DataObjectEvent, DragEffects, EventArgs, RoutedEvent, do_drag_drop, subscribe_data_object,
+    subscribe_event,
 };
 use dm_noesis_runtime::view::{FrameworkElement, View};
 use dm_noesis_runtime::xaml_provider::XamlProvider;
@@ -84,7 +85,7 @@ fn typed_args_focus_drag_manipulation() {
         let ff = Arc::clone(&focus_fires);
         let got_sub = subscribe_event(
             &content,
-            "GotKeyboardFocus",
+            RoutedEvent::GotKeyboardFocus,
             true,
             move |args: &EventArgs| {
                 if let Some(p) = args.focus_new_ptr() {
@@ -99,7 +100,7 @@ fn typed_args_focus_drag_manipulation() {
         let lf = Arc::clone(&lost_focus);
         let lost_sub = subscribe_event(
             &content,
-            "LostKeyboardFocus",
+            RoutedEvent::LostKeyboardFocus,
             true,
             move |args: &EventArgs| {
                 if let Some(p) = args.focus_old_ptr() {
@@ -147,7 +148,7 @@ fn typed_args_focus_drag_manipulation() {
         // true for live elements (a stub returning false on the null-guard path
         // would still pass here, but the null path is covered by the C guard).
         assert!(
-            do_drag_drop(&content, &content, drag_effects::ALL),
+            do_drag_drop(&content, &content, DragEffects::ALL),
             "DoDragDrop on a live element should cross the FFI"
         );
 
@@ -168,7 +169,7 @@ fn typed_args_focus_drag_manipulation() {
         // ── Drag + manipulation typed accessors (test-utils raisers) ──
         #[cfg(feature = "test-utils")]
         {
-            use dm_noesis_runtime::events::drag_key_states;
+            use dm_noesis_runtime::events::DragKeyStates;
             use dm_noesis_runtime::ffi::{
                 RoutedEventFn, dm_noesis_routed_events_test_raise_drag,
                 dm_noesis_routed_events_test_raise_manip_completed,
@@ -209,9 +210,9 @@ fn typed_args_focus_drag_manipulation() {
             let mut drag_seen = 0u32;
             run_raise(dm_noesis_routed_events_test_raise_drag, &mut |args| {
                 let info = args.drag().expect("drag() should be Some for a drag event");
-                assert_eq!(info.effects, drag_effects::COPY, "effects");
-                assert_eq!(info.allowed_effects, drag_effects::ALL, "allowedEffects");
-                assert_eq!(info.key_states, drag_key_states::CONTROL_KEY, "keyStates");
+                assert_eq!(info.effects, DragEffects::COPY, "effects");
+                assert_eq!(info.allowed_effects, DragEffects::ALL, "allowedEffects");
+                assert_eq!(info.key_states, DragKeyStates::CONTROL_KEY, "keyStates");
                 assert_eq!(
                     args.drag_data_ptr(),
                     Some(content.raw()),
@@ -225,10 +226,10 @@ fn typed_args_focus_drag_manipulation() {
                     "drop point {pos:?} should be (12, 34)"
                 );
                 // Mutating the result effect round-trips through the live args.
-                assert!(args.set_drag_effects(drag_effects::MOVE));
+                assert!(args.set_drag_effects(DragEffects::MOVE));
                 assert_eq!(
                     args.drag().unwrap().effects,
-                    drag_effects::MOVE,
+                    DragEffects::MOVE,
                     "set_drag_effects should round-trip"
                 );
                 drag_seen += 1;
