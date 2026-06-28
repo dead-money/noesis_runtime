@@ -26,9 +26,11 @@ don't keep re-discovering them.
 
 ## 3. Data binding
 
-- **`IMultiValueConverter` + `MultiBinding`** (runtime construction; `TryConvert` over an array of values).
+Code-built bindings (`RelativeSource` incl. `FindAncestor`, `BindingExpression` update), Rust value
+converters, `MultiBinding` + `IMultiValueConverter`, and plain (non-`DependencyObject`) view models
+with `INotifyPropertyChanged` (via §9 reflected plain properties) all ship. Remaining:
+
 - **`PriorityBinding`, `TemplateBinding`** (runtime construction).
-- **`INotifyPropertyChanged` for plain (non-`DependencyObject`) view models.** Large: Noesis resolves non-DP binding paths only through registered `TypeProperty` reflection (no getter-by-name), so this needs the runtime reflection registration from §9. The `DependencyObject`-backed VM path already covers the notification need.
 
 ## 4. Commands
 
@@ -43,11 +45,14 @@ don't keep re-discovering them.
 
 ## 6. Animation & timing
 
-Nothing here is exposed. Leans on §1 View timers for scheduling.
+`Storyboard` (Begin/Pause/Resume/Stop/Seek), the Double/Color/Thickness/Point From-To animations,
+Double/Color `*UsingKeyFrames` (Discrete/Linear/Easing key frames), the easing-function family, the
+common `Timeline` knobs, and storyboard-less `begin_on` (`ApplyAnimationClock` equivalent) ship
+(`src/animation.rs`, `cpp/noesis_animation.cpp`). Remaining:
 
-- **`Storyboard`** Begin/Pause/Resume/Stop/Seek (+ `BeginStoryboard` and the controllable actions).
-- **Animation classes** (Double/Color/Point/Thickness/Rect/Size/Object/Matrix/Int*, plus `*UsingKeyFrames`, easing functions, key splines, repeat/handoff behaviors).
-- **`Clock` / `AnimationClock` / `Timeline`** control and `ApplyAnimationClock`.
+- **More animation value types.** `Rect`/`Size`/`Object`/`Matrix`/`Int*` animations + their `*UsingKeyFrames`.
+- **`KeySpline`** (spline key frames) and per-animation `HandoffBehavior` on the `Storyboard` path.
+- **`BeginStoryboard`** trigger-action wrapper (only useful inside a trigger; code-driven `Begin` covers the rest).
 
 ## 7. Styles, resources, templates
 
@@ -87,16 +92,17 @@ values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `Scrol
 
 ## 9. Custom types / reflection registration
 
-`ClassBuilder` supports a `ContentControl` base plus custom markup extensions. This is also the
-prerequisite for §3 plain-VM `INotifyPropertyChanged` (runtime `TypeProperty` registration).
+The runtime type system is broadly wired: element base classes (`Control`/`FrameworkElement`/
+`UserControl`/`Panel`/`Decorator`, each a `Rust*` trampoline on a synthetic `TypeClass`), custom DPs
+with coercion / `FrameworkPropertyMetadataOptions` / read-only keys / attached registration,
+`MeasureOverride`/`ArrangeOverride` layout, custom enums, custom routed events, `Factory` +
+`ContentProperty` metadata, custom `IValueConverter`, and reflected plain (non-DO) properties (which
+unblocked §3 plain-VM INPC) all ship (`src/classes.rs`, `src/reflection.rs`, `src/plain_vm.rs`).
+Remaining:
 
-- **More base classes (remaining).** `Freezable` + custom `Brush`/`Effect`/`Geometry`/`Transform`. (The `Control`, `FrameworkElement`, `UserControl`, `Panel`, `Decorator` element bases ship — each a `Rust*` trampoline sharing the synthetic-`TypeClass` machinery.)
-- **Custom dependency properties (remaining):** more property value types (enums, `Point`/`Vector`/`Size` structs). (Coercion, `FrameworkPropertyMetadataOptions` AffectsMeasure/Arrange/Render, read-only DPs with a key-gated setter, and attached-property registration on a Rust owner type all ship — see `classes::ClassBuilder::add_property_ex` / `set_coerce`.)
-- **Runtime-reflected plain properties** (`NsProp`-equivalent `TypeProperty` registration) so non-DO Rust VMs become bindable — the missing half of §3 INPC.
-- **Custom routed events** registration on Rust-backed types.
-- **Custom enums** (`NsRegisterEnum`) usable from XAML.
-- **`RegisterComponent` / `Factory`** for arbitrary component types; `NsMeta`/content-property/`DependsOn`/`TypeConverter` metadata.
-- **Custom `IValueConverter` / `TypeConverter`** registration.
+- **More base classes.** `Freezable` + custom `Brush`/`Effect`/`Geometry`/`Transform` (different lifetime model than the element bases).
+- **More custom-DP value types.** Enum / `Point`/`Vector`/`Size`-struct property types.
+- **`DependsOn` metadata** attribution (the `ContentProperty` path ships).
 
 ## 10. Geometry, shapes, drawing
 
@@ -163,33 +169,20 @@ From `IntegrationAPI.h`, none are wired:
 
 ## Suggested completion order
 
-Ordered to finish the crate with the least rework — cheap completions and high-leverage
-primitives first, big rocks once their prerequisites exist. Each phase is a natural batch.
-
-**Phase A — finish the core + cheap wins.** ✅ Complete (§3 `RelativeSource FindAncestor` +
-`BindingExpression` update, §5 non-routed lifecycle events; §1 View timers + typed `RenderFlags` +
-`ViewStats` + tessellation quality + `MouseHWheel`; §15 `ParseXaml`/`LoadComponent`; §17 inspector).
-
-**Phase B — presentation.** Core delivered; advanced remainders tracked in §7/§8/§11 above.
-4. ~~§7 Styles / resources / templates~~ ✅ core done — ResourceDictionary access, `Style` from code, template parse+assign, `FindResource`. Remaining: style triggers, code-built template factories, dynamic-resource code path (see §7).
-5. ~~§8 Controls programmatic access~~ ✅ core done — selection, items mutation, ranges, tri-state toggles, popups/expander, scroll offsets + `ScrollTo*`, text/password selection. Remaining: `SelectedValue`/`TreeView`, `ItemContainerGenerator`, `FormattedText`, `ContextMenu`/`ToolTip`, `IScrollInfo`/line-page scroll, image source (see §8).
-6. ~~§11 Brushes / transforms~~ ✅ core done — solid/gradient/image brushes, 2D transforms + group, blur/drop-shadow effects, `RenderOptions`. Remaining: `VisualBrush`/`TileBrush`/shaders, 3D transforms (see §11).
-
-**Phase C — custom types + motion.**
-7. §9 Custom types / reflection (more base classes, custom DPs/events/enums, `MeasureOverride`/`ArrangeOverride`, and **runtime-reflected plain properties**). Foundational; also unblocks §3 plain-VM INPC.
-8. §3 plain-VM `INotifyPropertyChanged` + `MultiBinding`/`IMultiValueConverter` (after §9 reflection).
-9. §6 Animation & timing (after §1 timers).
+Phases A–C are complete (core + cheap wins; presentation; custom types + motion) — the §-sections
+above track only their leftover remainders. What's left, ordered to finish the crate with the least
+rework:
 
 **Phase D — drawing / media / text.**
-10. §10 Geometry & shapes, §12 Media / imaging / render targets, §13 rich text & inlines.
+1. §10 Geometry & shapes, §12 Media / imaging / render targets, §13 rich text & inlines.
 
 **Phase E — platform & finer input.**
-11. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
-12. §16 Finer input (mouse capture, `FocusManager`/keyboard nav, input gestures, **gamepad / focus engagement**).
-13. §4 Routed commands (`RoutedCommand`/`CommandBinding`/built-in libraries) — pairs with §16 input bindings; the Rust `ICommand` already covers simple cases, so this is late.
+2. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
+3. §16 Finer input (mouse capture, `FocusManager`/keyboard nav, input gestures, **gamepad / focus engagement**).
+4. §4 Routed commands (`RoutedCommand`/`CommandBinding`/built-in libraries) — pairs with §16 input bindings; the Rust `ICommand` already covers simple cases, so this is late.
 
 **Phase F — robustness & profiling.**
-14. §18 `SetErrorHandler`/`SetAssertHandler` + memory/lifetime hooks, and §17 profiling (`CpuProfiler`, `ViewStats` overlay).
+5. §18 `SetErrorHandler`/`SetAssertHandler` + memory/lifetime hooks, and §17 profiling (`CpuProfiler`, `ViewStats` overlay).
 
 ## Known SDK limitations
 
@@ -203,3 +196,5 @@ Recorded so they aren't re-attempted — 3.2.12 doesn't expose these; the workar
 - **`Dispatcher::BeginInvoke` (§2).** No NsGui dispatcher queue; queued/cross-thread invoke must route through the View timer API (`CreateTimer`, §1) once wrapped.
 - **Read-only DP value types (§9).** `DependencyObject::SetReadOnlyProperty` is template-only with no boxed object form, so the key-gated read-only setter covers value / struct / string DPs only — not component / brush DPs. (`DependencyPropertyKey` / `RegisterReadOnly` don't exist in 3.2.13; read-only DPs use `PropertyAccess_ReadOnly` + `SetReadOnlyProperty`.)
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
+- **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
+- **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.
