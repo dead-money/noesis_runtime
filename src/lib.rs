@@ -32,6 +32,7 @@ pub mod render_device;
 pub mod resources;
 pub mod shapes;
 pub mod styles;
+pub mod svg;
 pub mod texture_provider;
 pub mod transforms;
 pub mod view;

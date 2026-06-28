@@ -38,12 +38,29 @@
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
 
 use core::ptr::NonNull;
-use std::ffi::c_void;
+use std::ffi::{CString, c_void};
+use std::os::raw::c_char;
 
 use crate::ffi::{
-    CommandVTable, dm_noesis_command_create, dm_noesis_command_destroy,
-    dm_noesis_command_raise_can_execute_changed,
+    CommandVTable, dm_noesis_application_command, dm_noesis_base_component_release,
+    dm_noesis_command_binding_attach, dm_noesis_command_binding_create,
+    dm_noesis_command_binding_destroy, dm_noesis_command_create, dm_noesis_command_destroy,
+    dm_noesis_command_raise_can_execute_changed, dm_noesis_component_command,
+    dm_noesis_routed_command_can_execute, dm_noesis_routed_command_create,
+    dm_noesis_routed_command_execute, dm_noesis_routed_command_get_name,
+    dm_noesis_routed_ui_command_create, dm_noesis_routed_ui_command_get_text,
+    dm_noesis_routed_ui_command_set_text,
 };
+use crate::view::FrameworkElement;
+
+/// A borrowed C string (`*const c_char`) → owned `String`, or `None` if null.
+unsafe fn cstr_opt(p: *const c_char) -> Option<String> {
+    if p.is_null() {
+        None
+    } else {
+        Some(std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned())
+    }
+}
 
 /// A borrowed command parameter — Noesis's `CommandParameter` as an opaque
 /// `Noesis::BaseComponent*`. `None` when the bound control supplied no

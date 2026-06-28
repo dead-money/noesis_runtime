@@ -1121,6 +1121,49 @@ unsafe extern "C" {
     pub fn dm_noesis_geometry_group_child_count(geometry: *mut c_void) -> i32;
 }
 
+// SVG / SVGPath parsing (TODO §12). See cpp/noesis_svg.cpp. The handles are
+// plain heap objects (NOT BaseComponents); release with the matching *_destroy.
+unsafe extern "C" {
+    pub fn dm_noesis_svg_path_parse(str: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_svg_path_create() -> *mut c_void;
+    pub fn dm_noesis_svg_path_destroy(path: *mut c_void);
+    pub fn dm_noesis_svg_path_command_count(path: *mut c_void) -> u32;
+
+    pub fn dm_noesis_svg_path_move_to(path: *mut c_void, x: f32, y: f32);
+    pub fn dm_noesis_svg_path_line_to(path: *mut c_void, x: f32, y: f32);
+    pub fn dm_noesis_svg_path_close(path: *mut c_void);
+    pub fn dm_noesis_svg_path_add_rect(path: *mut c_void, x: f32, y: f32, width: f32, height: f32);
+    pub fn dm_noesis_svg_path_add_ellipse(path: *mut c_void, x: f32, y: f32, rx: f32, ry: f32);
+
+    pub fn dm_noesis_svg_path_calculate_bounds(path: *mut c_void, out: *mut f32) -> bool;
+    pub fn dm_noesis_svg_path_fill_contains(
+        path: *mut c_void,
+        x: f32,
+        y: f32,
+        fill_rule: i32,
+    ) -> bool;
+    pub fn dm_noesis_svg_path_stroke_contains(
+        path: *mut c_void,
+        x: f32,
+        y: f32,
+        width: f32,
+        join: i32,
+        start_cap: i32,
+        end_cap: i32,
+        miter_limit: f32,
+    ) -> bool;
+
+    pub fn dm_noesis_svg_image_parse(svg: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_svg_image_destroy(image: *mut c_void);
+    pub fn dm_noesis_svg_image_get_size(
+        image: *mut c_void,
+        width: *mut f32,
+        height: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_svg_image_shape_count(image: *mut c_void) -> u32;
+    pub fn dm_noesis_svg_image_shape_fill_type(image: *mut c_void, index: u32) -> i32;
+}
+
 /// Mirror of `dm_noesis_value_converter_vtable` in `cpp/noesis_shim.h`. Both fn
 /// pointers receive the `userdata` passed to [`dm_noesis_value_converter_create`],
 /// the borrowed boxed `value` / `parameter` (`BaseComponent*`, may be null), an
