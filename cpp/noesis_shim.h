@@ -1793,6 +1793,90 @@ void* dm_noesis_control_get_template(void* control);
 void* dm_noesis_framework_template_find_name(
     void* tmpl, const char* name, void* templated_parent);
 
+// ── Reflection meta: enums / routed events / factory / type converters (TODO §9) ──
+//
+// Runtime registration of "other reflected entities" against Noesis's
+// reflection database, so XAML / bindings / the parser can resolve them the
+// same way they resolve compile-time NS_REGISTER_* declarations. These reuse
+// the synthetic-type machinery from noesis_classes.cpp (RustContentControl) for
+// the per-type owner; everything here is keyed by the reflected type *name* so
+// it does not need the opaque ClassData token.
+
+// (A) Custom enums ----------------------------------------------------------
+
+// One (string name -> integer value) pair of a runtime enum.
+typedef struct dm_noesis_enum_value {
+    const char* name;
+    int32_t     value;
+} dm_noesis_enum_value;
+
+// Register a named runtime enum (a Noesis::TypeEnum) with `count` string<->int
+// pairs, so it is reachable by reflection name (XAML enum-typed values, Style
+// setters, the EnumConverter path). Returns a borrowed `const Noesis::Type*`
+// (owned by the reflection registry; do NOT release) or NULL on a NULL/empty
+// name or if the name is already registered. Idempotent-unsafe: a duplicate
+// name returns NULL rather than shadowing.
+void* dm_noesis_register_enum(
+    const char* name, const dm_noesis_enum_value* values, uint32_t count);
+
+// Resolve `enum_type` (reflected name) and look up the integer value of
+// `value_name`. Returns false if the type is unknown / not an enum / the name
+// is not a member. This reads straight through Noesis::TypeEnum::HasName, so it
+// is the ground truth of what was registered.
+bool dm_noesis_enum_value_from_name(
+    const char* enum_type, const char* value_name, int32_t* out_value);
+
+// Inverse of the above: the member name for an integer value (borrowed string,
+// valid while Noesis lives — it is an interned Symbol). false if unknown.
+bool dm_noesis_enum_name_from_value(
+    const char* enum_type, int32_t value, const char** out_name);
+
+// Resolve the TypeConverter registered for `type_name` (TypeConverter::Get) and
+// convert `str` to a boxed value via TryConvertFromString. Writes a +1-owned
+// boxed `BaseComponent*` to *out_boxed (release via base_component_release).
+// This is the exact string->value path the XAML parser drives for a typed
+// property. Returns false if the type / converter is unknown or the string
+// does not convert.
+bool dm_noesis_type_converter_from_string(
+    const char* type_name, const char* str, void** out_boxed);
+
+// (B) Custom routed events --------------------------------------------------
+
+// Register a routed event named `event_name` on the registered type
+// `type_name` (must own a UIElementData meta — i.e. a Rust-backed
+// ContentControl from dm_noesis_class_register). `strategy`: 0 Tunnel,
+// 1 Bubble, 2 Direct. Returns false if the type is unknown, has no
+// UIElementData, or the name is already registered on it.
+bool dm_noesis_register_routed_event(
+    const char* type_name, const char* event_name, int32_t strategy);
+
+// Raise the routed event `event_name` from `element` (a UIElement), resolving
+// it through the element's class hierarchy (FindRoutedEvent) and dispatching
+// via UIElement::RaiseEvent. Returns false if `element` is not a UIElement or
+// the event is not found. Subscribers wired with dm_noesis_subscribe_event
+// observe it.
+bool dm_noesis_raise_routed_event(void* element, const char* event_name);
+
+// (C) Factory / component metadata ------------------------------------------
+
+// Whether a component named `name` is registered in Noesis::Factory (so
+// `<ns:name/>` can be instantiated by the XAML parser). Rust-backed classes
+// register their factory creator in dm_noesis_class_register.
+bool dm_noesis_factory_is_registered(const char* name);
+
+// Attach ContentPropertyMetaData(prop_name) to the registered type `type_name`,
+// so XAML child content (`<ns:Thing><Child/></ns:Thing>`) is routed into the
+// `prop_name` property instead of the inherited content property. Returns false
+// if the type is unknown.
+bool dm_noesis_type_set_content_property(
+    const char* type_name, const char* prop_name);
+
+// (D) Custom reflection TypeConverter registration is DEFERRED — not exposed in
+// 3.2.13. TypeConverter::Get resolves converters via an internal registry that
+// TypeConverterMetaData + Factory::RegisterComponent do not drive at runtime.
+// The consumption side (dm_noesis_type_converter_from_string above) works for
+// any built-in / reflected type. See TODO.md "Known SDK limitations".
+
 #ifdef __cplusplus
 }
 #endif

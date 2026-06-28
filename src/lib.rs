@@ -22,6 +22,7 @@ pub mod ffi;
 pub mod font_provider;
 pub mod gui;
 pub mod markup;
+pub mod reflection;
 pub mod render_device;
 pub mod resources;
 pub mod styles;
