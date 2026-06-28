@@ -384,6 +384,24 @@ impl Drop for DefinitionCollection {
     }
 }
 
+impl FrameworkElement {
+    /// Append `child` to this `Panel`'s `Children` (`StackPanel` / `Grid` /
+    /// `Canvas` / …) — the typed convenience for the common tree-building case.
+    /// The panel takes its own reference, so `child` may be dropped afterwards.
+    /// Returns `false` if this element is not a `Panel` or `child` is not a
+    /// `UIElement`.
+    ///
+    /// Thin sugar over [`panel_children`] + [`PanelChildren::add`]; reach for
+    /// those directly when you need the insertion index, insert-at, or removal.
+    /// For a single-child `Decorator` / `Border` use
+    /// [`set_decorator_child`](FrameworkElement::set_decorator_child); for a
+    /// `ContentControl` use [`set_content`](FrameworkElement::set_content).
+    #[must_use = "a false return means the child was not added (not a Panel / not a UIElement)"]
+    pub fn add_child(&mut self, child: &FrameworkElement) -> bool {
+        panel_children(self).is_some_and(|mut children| children.add(child).is_some())
+    }
+}
+
 /// The live [`PanelChildren`] of a `Panel` (`StackPanel` / `Grid` / `Canvas` /
 /// …). `None` if `element` is not a `Panel`.
 #[must_use]

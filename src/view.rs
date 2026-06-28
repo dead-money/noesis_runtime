@@ -1951,6 +1951,40 @@ impl FrameworkElement {
         )
     }
 
+    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand) — a
+    /// [`Command`](crate::commands::Command),
+    /// [`RoutedCommand`](crate::commands::RoutedCommand),
+    /// [`RoutedUICommand`](crate::commands::RoutedUICommand), or built-in
+    /// [`BorrowedCommand`](crate::commands::BorrowedCommand)) to the
+    /// `BaseComponent`-typed dependency property `name`. Noesis stores its own
+    /// reference, so `command` may be dropped afterwards (the bound object keeps
+    /// it alive). Returns `false` if `name` is unknown on this element's type or
+    /// is not a `BaseComponent`-typed DP.
+    ///
+    /// This is the safe, `unsafe`-free element counterpart of
+    /// [`Instance::set_command`](crate::classes::Instance::set_command): the
+    /// `&impl AsCommand` borrow encodes the live-`BaseComponent` invariant the
+    /// raw [`set_component`](Self::set_component) demands.
+    ///
+    /// This reaches a built-in control's `Command` directly — e.g.
+    /// `button.set_command("Command", &cmd)` wires a Rust command to a `Button`
+    /// from code without a `DataContext` binding. To drive it from a view model
+    /// instead, register a `BaseComponent` property, point it with
+    /// [`Instance::set_command`](crate::classes::Instance::set_command), and bind
+    /// `Command="{Binding …}"` — the route the [`crate::commands`] module
+    /// documents.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the command was not set (unknown name / not a BaseComponent DP)"]
+    pub fn set_command(&mut self, name: &str, command: &impl crate::commands::AsCommand) -> bool {
+        // SAFETY: `command.command_ptr()` is a live ICommand* (a BaseComponent*
+        // at runtime) borrowed for the duration of the call; the DP stores its
+        // own reference.
+        unsafe { self.set_component(name, command.command_ptr()) }
+    }
+
     /// `HorizontalAlignment`, or `None` if this is not a `FrameworkElement`.
     #[must_use]
     pub fn horizontal_alignment(&self) -> Option<HAlign> {
@@ -2341,6 +2375,57 @@ impl FrameworkElement {
         let borrowed = NonNull::new(borrowed)?;
         // AddRef so the returned handle owns its reference, released on drop.
         // SAFETY: `borrowed` is a live UIElement* (BaseComponent*).
+        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        NonNull::new(owned).map(|ptr| Self { ptr })
+    }
+
+    // ── ContentControl Content (Phase 2) ────────────────────────────────────
+    //
+    // Unlike `Decorator::Child`, `ContentControl::Content` *is* a
+    // `DependencyProperty` (of type `Object` / `BaseComponent`), so these are
+    // thin, safe sugar over the by-name component-DP path
+    // ([`set_component`](Self::set_component) / [`get_component`](Self::get_component)):
+    // the `&FrameworkElement` borrow encodes the live-`BaseComponent` invariant
+    // the raw setter demands, so callers need no `unsafe`.
+
+    /// Set this `ContentControl`'s (e.g. `Button` / `ContentControl`) `Content`
+    /// to another live element. Noesis stores its own reference, so `content`
+    /// may be dropped afterwards. Returns `false` if this element has no
+    /// `Content` dependency property (i.e. it is not a `ContentControl`).
+    ///
+    /// Safe wrapper over the `Content` component-DP path — the `&FrameworkElement`
+    /// borrow guarantees the value is a live `BaseComponent` for the call, so no
+    /// `unsafe` is needed at the call site (unlike the generic
+    /// [`set_component`](Self::set_component)).
+    #[must_use = "a false return means the content was not set (no Content DP / not a ContentControl)"]
+    pub fn set_content(&mut self, content: &FrameworkElement) -> bool {
+        // SAFETY: content.raw() is a live UIElement* (BaseComponent*) borrowed
+        // for the call; `Content` is a BaseComponent-typed DP, so the C side's
+        // tag check accepts it and stores its own reference.
+        unsafe { self.set_component("Content", content.raw()) }
+    }
+
+    /// Clear this `ContentControl`'s `Content`. Returns `false` if this element
+    /// has no `Content` dependency property.
+    #[must_use = "a false return means this element has no Content DP"]
+    pub fn clear_content(&mut self) -> bool {
+        // SAFETY: clearing a BaseComponent DP with null is always sound.
+        unsafe { self.set_component("Content", core::ptr::null_mut()) }
+    }
+
+    /// This `ContentControl`'s current `Content` as an owning [`FrameworkElement`]
+    /// (an independent `+1`, so dropping it does not affect the tree), or `None`
+    /// if the `Content` is unset, this element is not a `ContentControl`, or the
+    /// content is a non-element value (e.g. a bare string). The returned handle
+    /// is intended for element content set via [`set_content`](Self::set_content).
+    #[must_use]
+    pub fn content(&self) -> Option<FrameworkElement> {
+        // get_component re-reads the live `Content` DP (a borrowed pointer, no
+        // +1) — this proves the value crossed the FFI rather than echoing a
+        // Rust-side cache.
+        let borrowed = self.get_component("Content")?;
+        // AddRef so the returned handle owns its reference, released on drop.
+        // SAFETY: `borrowed` is a live BaseComponent* held by this element.
         let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|ptr| Self { ptr })
     }

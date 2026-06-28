@@ -137,10 +137,10 @@ fn rust_command_drives_button() {
             enabled: Arc::clone(&enabled),
         });
         // Hand the command to the VM's `Go` property; the binding resolves
-        // `{Binding Go}` against it.
-        // SAFETY: command is alive for the rest of this scope; raw() is a live
-        // BaseComponent*. The VM stores its own reference.
-        unsafe { vm.handle().set_component(go_idx, command.raw()) };
+        // `{Binding Go}` against it. Safe `set_command` (no `unsafe`): the
+        // `&command` borrow encodes the live-BaseComponent invariant. The VM
+        // stores its own reference.
+        vm.handle().set_command(go_idx, &command);
 
         // ── Wire the scene. ─────────────────────────────────────────────────
         let mut bytes = HashMap::new();
