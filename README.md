@@ -47,7 +47,7 @@ view.activate();
 loop {
     // Forward input to view.mouse_*, view.key_*, view.touch_*
     let _changed = view.update(time_seconds);
-    // Your renderer drives view.get_renderer().
+    // Your renderer drives view.renderer().
     // See dm_noesis_bevy for a complete integration.
 }
 
@@ -102,13 +102,14 @@ let _registration = MarkupExtensionRegistration::from_closure(
 
 ## How it works
 
-- **No bindgen.** Noesis's C++ API leans on templates, intrusive `Ptr<T>` smart pointers, and pure-virtual hierarchies, which bindgen handles poorly. Instead we hand-write a narrow C ABI in `cpp/noesis_shim.{h,cpp}` and mirror it in `src/ffi.rs`. The Noesis types stay opaque on the Rust side, and only C-layout POD structs cross the boundary.
-- **POD mirrors with size checks.** Structs like `Batch`, `Tile`, and `DeviceCaps` are `#[repr(C)]` mirrors of the Noesis headers. Each one asserts its size at compile time, so an SDK update that reshapes a struct fails the build instead of producing garbage.
-- **RAII registration guards.** Every "install something global" call (`set_xaml_provider`, `subscribe_click`, `register_class`, and so on) returns a guard that clears the registration when dropped. Drop order matters; see the per-module docs for the exact contract.
-- **Custom classes via synthetic types.** The C++ shim ships trampoline subclasses (`RustContentControl`, `RustMarkupExtension`) that report a per-name synthetic `TypeClass` and forward virtuals like `OnPropertyChanged` and `ProvideValue` to a Rust callback. This is the same shape Noesis's own C# and Unity bindings use.
-- **Threading.** Noesis is not thread-safe. The view, renderer, and input pump all run on a single rendering thread. The RAII guards are `Send` so you can move resources between threads, but the underlying calls stay single-threaded.
+- **Hand-written C ABI, no bindgen.** Noesis's C++ API (templates, intrusive `Ptr<T>`, pure-virtual hierarchies) is a poor fit for bindgen, so the binding is a narrow C ABI hand-written in `cpp/noesis_shim.{h,cpp}` and mirrored in `src/ffi.rs`. Noesis types stay opaque on the Rust side; only `#[repr(C)]` POD structs cross the boundary, and each one's size is checked at compile time, so an SDK update that reshapes a struct fails the build instead of producing garbage.
+- **RAII registration guards.** Every "install something global" call (`set_xaml_provider`, `subscribe_click`, `register_class`) hands back a guard that clears the registration when dropped. Drop order matters; the per-module docs spell out the contract.
+- **Custom controls via trampoline subclasses.** The shim's `RustContentControl` and `RustMarkupExtension` report a synthetic `TypeClass` per name and forward virtuals like `OnPropertyChanged` and `ProvideValue` to your Rust callback, the same shape Noesis's own C# and Unity bindings use.
+- **Single-threaded.** Noesis isn't thread-safe. The view, renderer, and input pump all run on one rendering thread. The guards are `Send`, so you can move resources between threads, but the calls themselves stay on that thread.
 
-Custom pixel shaders (`BrushShader` / `ShaderEffect`) are intentionally out of scope. They need compiled shader bytecode and a live render device to do anything, which is beyond this crate's headless FFI surface; the `Batch::pixel_shader` pointer is round-tripped through the render device but the crate exposes no way to author one.
+Custom pixel shaders (`BrushShader` / `ShaderEffect`) are out of scope. They need compiled shader bytecode and a live render device to do anything, which the crate's headless FFI surface can't provide. The `Batch::pixel_shader` pointer round-trips through the render device, but there's no way to author one here.
+
+For the rest of what the SDK can't do, or does differently from WPF, see [SDK limitations](./LIMITATIONS.md).
 
 ## Building
 
