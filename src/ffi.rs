@@ -825,6 +825,122 @@ unsafe extern "C" {
         element: *mut c_void,
         password: *const c_char,
     ) -> bool;
+
+    // ── §8 remainder (dm_noesis_controls_) ──────────────────────────────────
+    // Selector.SelectedValue / SelectedValuePath
+    pub fn dm_noesis_controls_selector_get_selected_value(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_selector_set_selected_value(
+        element: *mut c_void,
+        value: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_controls_selector_get_selected_value_path(
+        element: *mut c_void,
+    ) -> *const c_char;
+    pub fn dm_noesis_controls_selector_set_selected_value_path(
+        element: *mut c_void,
+        path: *const c_char,
+    ) -> bool;
+
+    // TreeView selection / TreeViewItem state
+    pub fn dm_noesis_controls_treeview_get_selected_item(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_treeviewitem_get_is_selected(
+        element: *mut c_void,
+        out: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_controls_treeviewitem_set_is_selected(
+        element: *mut c_void,
+        selected: bool,
+    ) -> bool;
+    pub fn dm_noesis_controls_treeviewitem_get_is_expanded(
+        element: *mut c_void,
+        out: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_controls_treeviewitem_set_is_expanded(
+        element: *mut c_void,
+        expanded: bool,
+    ) -> bool;
+
+    // ItemContainerGenerator
+    pub fn dm_noesis_controls_generator_container_from_index(
+        element: *mut c_void,
+        index: i32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_controls_generator_container_from_item(
+        element: *mut c_void,
+        item: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_controls_generator_index_from_container(
+        element: *mut c_void,
+        container: *mut c_void,
+    ) -> i32;
+    pub fn dm_noesis_controls_generator_item_from_container(
+        element: *mut c_void,
+        container: *mut c_void,
+    ) -> *mut c_void;
+
+    // ListView / GridView columns
+    pub fn dm_noesis_controls_listview_get_view(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_gridview_column_count(gridview: *mut c_void) -> i32;
+    pub fn dm_noesis_controls_gridview_column_get_width(
+        gridview: *mut c_void,
+        index: u32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_controls_gridview_column_set_width(
+        gridview: *mut c_void,
+        index: u32,
+        width: f32,
+    ) -> bool;
+    pub fn dm_noesis_controls_gridview_column_get_actual_width(
+        gridview: *mut c_void,
+        index: u32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_controls_gridview_column_get_header(
+        gridview: *mut c_void,
+        index: u32,
+    ) -> *mut c_void;
+
+    // ToolTip / ToolTipService
+    pub fn dm_noesis_controls_fe_get_tooltip(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_fe_set_tooltip(element: *mut c_void, tooltip: *mut c_void) -> bool;
+    pub fn dm_noesis_controls_fe_set_tooltip_string(
+        element: *mut c_void,
+        text: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_controls_tooltipservice_get_tooltip(obj: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_tooltipservice_set_tooltip(
+        obj: *mut c_void,
+        tooltip: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_controls_tooltip_get_is_open(element: *mut c_void, out: *mut bool) -> bool;
+    pub fn dm_noesis_controls_tooltip_set_is_open(element: *mut c_void, open: bool) -> bool;
+
+    // ContextMenu / ContextMenuService
+    pub fn dm_noesis_controls_fe_get_context_menu(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_fe_set_context_menu(element: *mut c_void, menu: *mut c_void) -> bool;
+    pub fn dm_noesis_controls_contextmenuservice_get_context_menu(obj: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_contextmenuservice_set_context_menu(
+        obj: *mut c_void,
+        menu: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_controls_contextmenu_get_is_open(element: *mut c_void, out: *mut bool)
+    -> bool;
+    pub fn dm_noesis_controls_contextmenu_set_is_open(element: *mut c_void, open: bool) -> bool;
+
+    // ScrollViewer line/page/edge + IScrollInfo
+    pub fn dm_noesis_controls_scrollviewer_line(element: *mut c_void, which: i32) -> bool;
+    pub fn dm_noesis_controls_scrollviewer_page(element: *mut c_void, which: i32) -> bool;
+    pub fn dm_noesis_controls_scrollviewer_edge(element: *mut c_void, which: i32) -> bool;
+    pub fn dm_noesis_controls_scrollviewer_metric(
+        element: *mut c_void,
+        which: i32,
+        out: *mut f32,
+    ) -> bool;
+
+    // Image source
+    pub fn dm_noesis_controls_image_get_source(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_controls_image_set_source(element: *mut c_void, source: *mut c_void) -> bool;
     // ── ResourceDictionary, Style, templates (TODO §7). See cpp/noesis_shim.h
     //    for the per-function ownership contract (create/parse → +1 owned;
     //    get_* → AddRef'd +1 owned; find_* / get_application_resources →
