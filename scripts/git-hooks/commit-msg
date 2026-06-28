@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Strip AI-attribution trailers and footers from commit messages.
+# See CLAUDE.md "Attribution".
+set -euo pipefail
+
+msg_file="$1"
+
+# Drop:
+#   - Co-Authored-By: Claude ... lines (any casing of the trailer key)
+#   - "Generated with [Claude Code](...)" lines and the 🤖 robot marker
+#   - "Co-authored-by: Claude <noreply@anthropic.com>" specifically
+sed -E -i \
+  -e '/^[Cc]o-[Aa]uthored-[Bb]y:[[:space:]]*Claude\b/d' \
+  -e '/^[[:space:]]*🤖[[:space:]]*Generated with \[Claude Code\]/d' \
+  -e '/^[[:space:]]*Generated with \[Claude Code\]/d' \
+  "$msg_file"
+
+# Collapse trailing blank lines that the removals may have left behind.
+# Read file, strip trailing blank lines, write back.
+awk 'BEGIN{blank=0} /^$/{blank++; next} {for(i=0;i<blank;i++) print ""; blank=0; print}' \
+  "$msg_file" > "$msg_file.tmp"
+mv "$msg_file.tmp" "$msg_file"
