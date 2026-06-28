@@ -90,11 +90,13 @@ values, `ToggleButton` tri-state `IsChecked`, `Popup`/`Expander` toggles, `Scrol
 `ClassBuilder` supports a `ContentControl` base plus custom markup extensions. This is also the
 prerequisite for §3 plain-VM `INotifyPropertyChanged` (runtime `TypeProperty` registration).
 
-- **More base classes.** `Control`, `FrameworkElement`, `UserControl`, `Panel` (custom layout), `Decorator`, `Freezable`, custom `Brush`/`Effect`/`Geometry`/`Transform`.
-- **Custom dependency properties:** more types, `PropertyMetadata` (defaults, coercion, `FrameworkPropertyMetadataOptions` like AffectsMeasure/Render), read-only DPs, `attached` properties.
+- **More base classes (remaining).** `Freezable` + custom `Brush`/`Effect`/`Geometry`/`Transform`. (The `Control`, `FrameworkElement`, `UserControl`, `Panel`, `Decorator` element bases ship — each a `Rust*` trampoline sharing the synthetic-`TypeClass` machinery.)
+- **Custom dependency properties (remaining):** more property value types (enums, `Point`/`Vector`/`Size` structs). (Coercion, `FrameworkPropertyMetadataOptions` AffectsMeasure/Arrange/Render, read-only DPs with a key-gated setter, and attached-property registration on a Rust owner type all ship — see `classes::ClassBuilder::add_property_ex` / `set_coerce`.)
 - **Runtime-reflected plain properties** (`NsProp`-equivalent `TypeProperty` registration) so non-DO Rust VMs become bindable — the missing half of §3 INPC.
-- **Component metadata, remaining:** `DependsOn` attribution (the `Factory`/`RegisterComponent` path, `ContentProperty` attribution, and runtime `Factory` introspection now ship in `reflection`; custom `TypeConverter` attribution is an SDK limit — see below).
-- **Layout participation.** `MeasureOverride`/`ArrangeOverride` trampolines for true custom panels/controls.
+- **Custom routed events** registration on Rust-backed types.
+- **Custom enums** (`NsRegisterEnum`) usable from XAML.
+- **`RegisterComponent` / `Factory`** for arbitrary component types; `NsMeta`/content-property/`DependsOn`/`TypeConverter` metadata.
+- **Custom `IValueConverter` / `TypeConverter`** registration.
 
 ## 10. Geometry, shapes, drawing
 
@@ -199,4 +201,5 @@ Recorded so they aren't re-attempted — 3.2.12 doesn't expose these; the workar
 - **`NavigationCommands` (§4).** Header doesn't ship (`ApplicationCommands`/`ComponentCommands` do).
 - **`GetBaseValue` object form (§2).** No boxed `GetBaseValue`, so the base-value getter covers value/struct/string DPs only, not component/brush DPs.
 - **`Dispatcher::BeginInvoke` (§2).** No NsGui dispatcher queue; queued/cross-thread invoke must route through the View timer API (`CreateTimer`, §1) once wrapped.
-- **Custom reflection `TypeConverter` registration (§9).** `TypeConverter::Get` resolves a type's converter through an internal Core registry that runtime registration cannot drive: attaching `TypeConverterMetaData` and registering a synthetic converter type in `Factory::RegisterComponent` does *not* make `Get` return it (verified — the synthetic type registers in the Factory, yet `Get` still returns null). So a string→type converter authored in Rust can't be auto-resolved during XAML parse. Workarounds: the *consumption* side is exposed (`reflection::convert_from_string` drives `Get` + `TryConvertFromString` for built-in/reflected types), and a binding-side `IValueConverter` (`converters::Converter`) covers value mapping. Likewise a runtime-registered custom enum (`reflection::register_enum`) has no auto-resolved `EnumConverter` via `Get` — query its members with `EnumType::value_from_name` / `name_from_value` (the same `TypeEnum::HasName`/`HasValue` the parser's enum coercion uses).
+- **Read-only DP value types (§9).** `DependencyObject::SetReadOnlyProperty` is template-only with no boxed object form, so the key-gated read-only setter covers value / struct / string DPs only — not component / brush DPs. (`DependencyPropertyKey` / `RegisterReadOnly` don't exist in 3.2.13; read-only DPs use `PropertyAccess_ReadOnly` + `SetReadOnlyProperty`.)
+- **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
