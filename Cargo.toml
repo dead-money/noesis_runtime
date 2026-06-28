@@ -2,11 +2,20 @@
 name = "dm_noesis_runtime"
 version = "0.1.0"
 edition = "2024"
-description = "FFI to the Noesis GUI Native SDK plus a wgpu-friendly RenderDevice subclass shim. Renderer-agnostic; Bevy integration lives in dm_noesis_bevy."
+rust-version = "1.85"
+authors = ["Brandon Reinhart <brandon@deadmoney.gg>"]
+description = "Rust bindings for the Noesis GUI Native SDK: load XAML UI, drive the view and renderer, and write custom controls in Rust. Renderer-agnostic; Bevy integration lives in dm_noesis_bevy."
 repository = "https://github.com/dead-money/dm_noesis_runtime"
 license = "MIT"
-publish = false
+readme = "README.md"
+keywords = ["noesis", "xaml", "gui", "gamedev", "ui"]
+categories = ["external-ffi-bindings", "gui", "game-development", "graphics"]
 links = "Noesis"
+# Flip to true (or delete this line) to allow `cargo publish`. Kept false while
+# the API is still in flux.
+publish = false
+# Dev-only files that consumers of the published crate don't need.
+exclude = [".github/", ".claude/", "scripts/", "CLAUDE.md"]
 
 [features]
 default = []
@@ -20,20 +29,18 @@ thiserror = "2"
 [build-dependencies]
 cc = "1"
 
-# Curated lint set carried over from magicsmoke (originally hommlet-rust).
-# Prefer this to a blanket `pedantic = warn` — opting into specific lints keeps
-# the signal-to-noise ratio high and makes intent obvious. The `rust` half of
-# magicsmoke's policy (notably `unsafe_code = "forbid"`) is deliberately NOT
-# adopted: this is an FFI crate built entirely on `unsafe`.
+# Curated lint set. We opt into specific lints rather than a blanket
+# `pedantic = warn`, which keeps the signal-to-noise ratio high and makes intent
+# obvious. A blanket `unsafe_code = "forbid"` is deliberately not adopted: this
+# is an FFI crate built entirely on `unsafe`.
 [lints.clippy]
 type_complexity = "allow"
 too_many_arguments = "allow"
 indexing_slicing = "allow"
 many_single_char_names = "allow"
 
-# FFI-specific allowances (magicsmoke's set assumes no `unsafe`; this crate is
-# all FFI). `mem_forget` is how we hand ownership across the C ABI
-# (`FrameworkElement::into_raw`) and intentionally leak test guards; `panic`
+# FFI-specific allowances. `mem_forget` is how we hand ownership across the C
+# ABI (`FrameworkElement::into_raw`) and intentionally leak test guards; `panic`
 # covers the build script's config-error exits and unreachable enum guards on
 # values the C side promises; `float_cmp` is exact round-trip comparison of
 # values marshalled through the FFI in tests.
