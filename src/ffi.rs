@@ -143,6 +143,7 @@ unsafe extern "C" {
         count: u32,
     ) -> bool;
     pub fn dm_noesis_base_component_release(obj: *mut c_void);
+    pub fn dm_noesis_base_component_add_reference(obj: *mut c_void) -> *mut c_void;
 
     pub fn dm_noesis_view_create(framework_element: *mut c_void) -> *mut c_void;
     pub fn dm_noesis_view_destroy(view: *mut c_void);
@@ -443,6 +444,24 @@ unsafe extern "C" {
     pub fn dm_noesis_visual_child(element: *mut c_void, index: u32) -> *mut c_void;
     pub fn dm_noesis_visual_parent(element: *mut c_void) -> *mut c_void;
     pub fn dm_noesis_visual_hit_test(element: *mut c_void, x: f32, y: f32) -> *mut c_void;
+    pub fn dm_noesis_visual_hit_test_filtered(
+        element: *mut c_void,
+        x: f32,
+        y: f32,
+        filter: HitFilterFn,
+        result: HitResultFn,
+        userdata: *mut c_void,
+    );
+    pub fn dm_noesis_ui_element_get_render_transform_origin(
+        element: *mut c_void,
+        out_x: *mut f32,
+        out_y: *mut f32,
+    );
+    pub fn dm_noesis_ui_element_set_render_transform_origin(
+        element: *mut c_void,
+        x: f32,
+        y: f32,
+    ) -> bool;
     pub fn dm_noesis_framework_element_logical_parent(element: *mut c_void) -> *mut c_void;
     pub fn dm_noesis_logical_children_count(element: *mut c_void) -> u32;
     pub fn dm_noesis_logical_child(element: *mut c_void, index: u32) -> *mut c_void;
@@ -501,6 +520,29 @@ unsafe extern "C" {
         element: *mut c_void,
         name: *const c_char,
     ) -> bool;
+
+    // Standalone NameScope (TODO §2).
+    pub fn dm_noesis_name_scope_create() -> *mut c_void;
+    pub fn dm_noesis_name_scope_get(element: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_name_scope_set(element: *mut c_void, scope: *mut c_void) -> bool;
+    pub fn dm_noesis_name_scope_find_name(scope: *mut c_void, name: *const c_char) -> *mut c_void;
+    pub fn dm_noesis_name_scope_register_name(
+        scope: *mut c_void,
+        name: *const c_char,
+        obj: *mut c_void,
+    );
+    pub fn dm_noesis_name_scope_unregister_name(scope: *mut c_void, name: *const c_char);
+    pub fn dm_noesis_name_scope_update_name(
+        scope: *mut c_void,
+        name: *const c_char,
+        obj: *mut c_void,
+    );
+    pub fn dm_noesis_name_scope_find_object(scope: *mut c_void, obj: *mut c_void) -> *const c_char;
+    pub fn dm_noesis_name_scope_enum(
+        scope: *mut c_void,
+        cb: NameScopeEnumFn,
+        userdata: *mut c_void,
+    );
 
     // G. Thread affinity.
     pub fn dm_noesis_dependency_object_check_access(obj: *mut c_void) -> bool;
@@ -993,6 +1035,22 @@ pub type TimerFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 /// raising the event (do not release). Fires on the view-driving thread — same
 /// threading contract as [`TimerFn`].
 pub type RenderingFn = unsafe extern "C" fn(userdata: *mut c_void, view: *mut c_void);
+
+/// Filter callback for `dm_noesis_visual_hit_test_filtered`: called per visual
+/// as the tree is walked. `visual` is a BORROWED `Visual*` (valid only for the
+/// call). Returns a `HitTestFilterBehavior` discriminant. Runs synchronously
+/// inside the hit-test call on the view-driving thread.
+pub type HitFilterFn = unsafe extern "C" fn(userdata: *mut c_void, visual: *mut c_void) -> i32;
+
+/// Result callback for `dm_noesis_visual_hit_test_filtered`: called per hit.
+/// `visual` is the BORROWED hit `Visual*`. Returns a `HitTestResultBehavior`
+/// discriminant.
+pub type HitResultFn = unsafe extern "C" fn(userdata: *mut c_void, visual: *mut c_void) -> i32;
+
+/// Enumeration callback for `dm_noesis_name_scope_enum`: called per registered
+/// (name, object) pair. Both pointers are BORROWED (valid only for the call).
+pub type NameScopeEnumFn =
+    unsafe extern "C" fn(userdata: *mut c_void, name: *const c_char, obj: *mut c_void);
 
 /// C callback invoked exactly once when a Rendering handler token is removed
 /// (the C++ handler destroyed). Frees the donated `userdata`. Mirrors

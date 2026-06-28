@@ -24,6 +24,7 @@ pub mod font_provider;
 pub mod gui;
 pub mod markup;
 pub mod multi_binding;
+pub mod name_scope;
 pub mod plain_vm;
 pub mod reflection;
 pub mod render_device;

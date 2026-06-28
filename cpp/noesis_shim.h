@@ -428,6 +428,11 @@ bool dm_noesis_gui_install_app_resources_chain(
 // Release a BaseComponent-derived object.
 void dm_noesis_base_component_release(void* obj);
 
+// Add a +1 reference to a BaseComponent-derived object and return it (NULL on
+// NULL input). Promotes a borrowed component pointer into an owning handle;
+// balance with dm_noesis_base_component_release.
+void* dm_noesis_base_component_add_reference(void* obj);
+
 // Create an IView whose root is `framework_element`. The view retains its own
 // reference to the element; the caller's reference is still held by the
 // FrameworkElement wrapper until it's dropped.
@@ -1200,6 +1205,43 @@ void* dm_noesis_visual_parent(void* element);
 // Hit-test a single point in `element`-local DIPs; returns the topmost hit
 // Visual* (+1) or NULL.
 void* dm_noesis_visual_hit_test(void* element, float x, float y);
+
+// Filtered hit test (TODO §2) — the callback overload of
+// VisualTreeHelper::HitTest. `filter` is called per visual as the tree is
+// walked; its return is a `HitTestFilterBehavior` (0 ContinueSkipSelfAndChildren,
+// 1 ContinueSkipChildren, 2 ContinueSkipSelf, 3 Continue, 4 Stop). `result` is
+// called per hit; its return is a `HitTestResultBehavior` (0 Stop, 1 Continue).
+// Both receive BORROWED Visual* (valid only for that call; AddRef via
+// dm_noesis_base_component_add_reference to keep one). `filter` may be NULL
+// (treated as Continue); `result` must be non-NULL or the call is a no-op.
+typedef int32_t (*dm_noesis_hit_filter_fn)(void* userdata, void* visual);
+typedef int32_t (*dm_noesis_hit_result_fn)(void* userdata, void* visual);
+void dm_noesis_visual_hit_test_filtered(
+    void* element, float x, float y, dm_noesis_hit_filter_fn filter,
+    dm_noesis_hit_result_fn result, void* userdata);
+
+// RenderTransform origin (TODO §2) — UIElement's (0..1, 0..1) relative pivot.
+// The getter writes 0,0 when `element` is not a UIElement; the setter is then a
+// no-op returning false.
+void dm_noesis_ui_element_get_render_transform_origin(void* element, float* out_x, float* out_y);
+bool dm_noesis_ui_element_set_render_transform_origin(void* element, float x, float y);
+
+// Standalone NameScope (TODO §2). The freestanding NameScope object, distinct
+// from the per-FrameworkElement RegisterName path. Owning returns (+1, release
+// via dm_noesis_base_component_release): _create, _get, _find_name.
+void* dm_noesis_name_scope_create();
+void* dm_noesis_name_scope_get(void* element);
+bool dm_noesis_name_scope_set(void* element, void* scope);
+void* dm_noesis_name_scope_find_name(void* scope, const char* name);
+void dm_noesis_name_scope_register_name(void* scope, const char* name, void* obj);
+void dm_noesis_name_scope_unregister_name(void* scope, const char* name);
+void dm_noesis_name_scope_update_name(void* scope, const char* name, void* obj);
+// Reverse lookup: registered name of `obj`, or NULL. Borrowed (owned by the
+// scope); copy it before mutating the scope.
+const char* dm_noesis_name_scope_find_object(void* scope, void* obj);
+// Enumerate (name, object) pairs; callback gets BORROWED pointers per call.
+typedef void (*dm_noesis_name_scope_enum_fn)(void* userdata, const char* name, void* obj);
+void dm_noesis_name_scope_enum(void* scope, dm_noesis_name_scope_enum_fn cb, void* userdata);
 
 // Logical-tree + FrameworkElement navigation.
 //
