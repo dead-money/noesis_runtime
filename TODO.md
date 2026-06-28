@@ -81,34 +81,11 @@ Remaining:
 - **More custom-DP value types.** Enum / `Point`/`Vector`/`Size`-struct property types.
 - **`DependsOn` metadata** attribution (the `ContentProperty` path ships).
 
-## 10. Geometry, shapes, drawing
-
-- **`DrawingContext`** immediate-mode drawing.
-`Path.set_points` is exposed, plus immediate-mode `DrawingContext` (via an
-`OnRender` override on the custom-element trampolines — `src/drawing.rs`,
-`cpp/noesis_drawing.cpp`) with a code-built `Pen` and a minimal
-`RectangleGeometry`.
-
-- **Geometry construction.** `StreamGeometry`/`StreamGeometryContext`, `PathGeometry` + figures/segments (Line/Bezier/Arc/Poly*), `EllipseGeometry`/`LineGeometry`, `CombinedGeometry`, `GeometryGroup` (only `RectangleGeometry` ships, as the `DrawGeometry`/`PushClip` argument).
-- **Shapes.** `Rectangle`/`Ellipse`/`Line`/`Polygon`/`Polyline` property access; `Shape` stroke/fill/`Pen`/`DashStyle`.
-
 ## 11. Brushes, transforms, visual properties
 
 - **Brushes.** Remaining: `VisualBrush` (needs a visual source), full `TileBrush` tiling knobs, and `BrushShader`/custom shaders (out-of-scope per README). Done: `SolidColorBrush`, `LinearGradientBrush`/`RadialGradientBrush` + `GradientStop`s, `ImageBrush` (source wiring via an existing `ImageSource*`; building one from pixels needs §12).
 - **Transforms.** Remaining: 3D transforms (`Transform3D`, `CompositeTransform3D`, `MatrixTransform3D`). Done: `TranslateTransform`/`ScaleTransform`/`RotateTransform`/`SkewTransform`/`MatrixTransform`/`TransformGroup`/`CompositeTransform` (code-built in `src/transforms.rs`, assigned via `FrameworkElement::set_render_transform`).
 - **Effects.** Remaining: custom `ShaderEffect` (`Batch.pixelShader` path — out-of-scope per README). Done: `BlurEffect`, `DropShadowEffect` (in `src/brushes.rs`, assigned via `set_effect`).
-
-## 12. Media, imaging, render targets
-
-- **Bitmaps.** `BitmapImage`, `BitmapSource`, `CroppedBitmap`, `DynamicTextureSource`, `TextureSource`/`RenderTexture`.
-- **Offscreen capture / screenshots** of a rendered view (beyond the raw `render_offscreen` pass).
-- **SVG.** `SVG` / `SVGPath` loading.
-
-## 13. Text & fonts (rich)
-
-- **`FormattedText`** measurement/layout.
-- **`TextBlock` inlines.** `Run`/`Span`/`Bold`/`Italic`/`Underline`/`Hyperlink`/`LineBreak`/`InlineUIContainer`.
-- **Typography** properties, `FontFamily` enumeration, `TextElement` props, `CompositionUnderline` (IME).
 
 ## 14. System integration callbacks
 
@@ -149,12 +126,9 @@ From `IntegrationAPI.h`, none are wired:
 
 ## Suggested completion order
 
-Phases A–C are complete (core + cheap wins; presentation; custom types + motion) — the §-sections
-above track only their leftover remainders. What's left, ordered to finish the crate with the least
-rework:
-
-**Phase D — drawing / media / text.**
-1. §10 Geometry & shapes, §12 Media / imaging / render targets, §13 rich text & inlines.
+Phases A–D are complete (core + cheap wins; presentation; custom types + motion; drawing / media /
+text) — the §-sections above track only their leftover remainders. What's left, ordered to finish the
+crate with the least rework:
 
 **Phase E — platform & finer input.**
 2. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
