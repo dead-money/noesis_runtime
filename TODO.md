@@ -81,12 +81,6 @@ Remaining:
 - **More custom-DP value types.** Enum / `Point`/`Vector`/`Size`-struct property types.
 - **`DependsOn` metadata** attribution (the `ContentProperty` path ships).
 
-## 11. Brushes, transforms, visual properties
-
-- **Brushes.** Remaining: `VisualBrush` (needs a visual source), full `TileBrush` tiling knobs, and `BrushShader`/custom shaders (out-of-scope per README). Done: `SolidColorBrush`, `LinearGradientBrush`/`RadialGradientBrush` + `GradientStop`s, `ImageBrush` (source wiring via an existing `ImageSource*`; building one from pixels needs §12).
-- **Transforms.** Remaining: 3D transforms (`Transform3D`, `CompositeTransform3D`, `MatrixTransform3D`). Done: `TranslateTransform`/`ScaleTransform`/`RotateTransform`/`SkewTransform`/`MatrixTransform`/`TransformGroup`/`CompositeTransform` (code-built in `src/transforms.rs`, assigned via `FrameworkElement::set_render_transform`).
-- **Effects.** Remaining: custom `ShaderEffect` (`Batch.pixelShader` path — out-of-scope per README). Done: `BlurEffect`, `DropShadowEffect` (in `src/brushes.rs`, assigned via `set_effect`).
-
 ## 14. System integration callbacks
 
 From `IntegrationAPI.h`, none are wired:
