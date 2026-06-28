@@ -70,6 +70,29 @@ macro_rules! transform_handle {
     };
 }
 
+// ── AnyTransform ─────────────────────────────────────────────────────────────
+
+/// An owning, **type-erased** handle to a `Noesis::Transform` read back from an
+/// element — e.g. via
+/// [`FrameworkElement::render_transform`](crate::view::FrameworkElement::render_transform).
+/// It doesn't expose the concrete transform kind, but it implements
+/// [`Transform`], so it can be re-applied to another element through
+/// [`FrameworkElement::set_render_transform`](crate::view::FrameworkElement::set_render_transform).
+pub struct AnyTransform {
+    ptr: NonNull<c_void>,
+}
+
+transform_handle!(AnyTransform);
+
+impl AnyTransform {
+    /// Wrap a raw `Noesis::Transform*` that already carries a `+1` reference
+    /// this handle takes ownership of (released on drop). Crate-internal: used
+    /// by the render-transform getter, which `AddRef`s the borrowed pointer.
+    pub(crate) unsafe fn from_owned(ptr: NonNull<c_void>) -> Self {
+        Self { ptr }
+    }
+}
+
 // ── TranslateTransform ───────────────────────────────────────────────────────
 
 /// Offsets an element by `(X, Y)`.

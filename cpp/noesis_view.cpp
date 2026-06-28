@@ -132,6 +132,16 @@ extern "C" void dm_noesis_base_component_release(void* obj) {
     static_cast<Noesis::BaseComponent*>(obj)->Release();
 }
 
+// Add a +1 reference to any BaseComponent and return it (NULL on NULL input).
+// Lets Rust promote a borrowed component pointer (e.g. a hit-test visual handed
+// to a callback, or GetRenderTransform's borrowed result) into an owning
+// handle. Balance with dm_noesis_base_component_release.
+extern "C" void* dm_noesis_base_component_add_reference(void* obj) {
+    if (!obj) return nullptr;
+    static_cast<Noesis::BaseComponent*>(obj)->AddReference();
+    return obj;
+}
+
 extern "C" bool dm_noesis_gui_load_application_resources(const char* uri) {
     if (!uri) return false;
     Noesis::Ptr<Noesis::ResourceDictionary> dict =

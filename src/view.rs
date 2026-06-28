@@ -20,30 +20,31 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::brushes::{Brush, Effect};
 use crate::ffi::{
-    PropType, dm_noesis_base_component_release, dm_noesis_binding_expression_update_source,
-    dm_noesis_binding_expression_update_target, dm_noesis_control_get_template,
-    dm_noesis_control_set_template, dm_noesis_dependency_object_check_access,
-    dm_noesis_dependency_object_clear_value, dm_noesis_dependency_object_get_attached,
-    dm_noesis_dependency_object_get_base_value, dm_noesis_dependency_object_get_property,
-    dm_noesis_dependency_object_property_tag, dm_noesis_dependency_object_set_attached,
-    dm_noesis_dependency_object_set_current_value, dm_noesis_dependency_object_set_property,
-    dm_noesis_dependency_object_thread_id, dm_noesis_expander_get_is_expanded,
-    dm_noesis_expander_set_is_expanded, dm_noesis_focus_element,
-    dm_noesis_framework_element_find_name, dm_noesis_framework_element_find_resource,
-    dm_noesis_framework_element_get_data_context, dm_noesis_framework_element_get_halign,
-    dm_noesis_framework_element_get_name, dm_noesis_framework_element_get_resources,
-    dm_noesis_framework_element_get_style, dm_noesis_framework_element_get_valign,
-    dm_noesis_framework_element_logical_parent, dm_noesis_framework_element_register_name,
-    dm_noesis_framework_element_set_data_context, dm_noesis_framework_element_set_halign,
-    dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_resources,
-    dm_noesis_framework_element_set_style, dm_noesis_framework_element_set_valign,
-    dm_noesis_framework_element_set_visibility, dm_noesis_framework_element_template_child,
-    dm_noesis_framework_element_unregister_name, dm_noesis_get_binding_expression,
-    dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml, dm_noesis_items_control_items_add,
-    dm_noesis_items_control_items_clear, dm_noesis_items_control_items_count,
-    dm_noesis_items_control_items_insert, dm_noesis_items_control_items_remove_at,
-    dm_noesis_items_control_realized_count, dm_noesis_items_control_set_items_source,
-    dm_noesis_logical_child, dm_noesis_logical_children_count, dm_noesis_passwordbox_get_password,
+    PropType, dm_noesis_base_component_add_reference, dm_noesis_base_component_release,
+    dm_noesis_binding_expression_update_source, dm_noesis_binding_expression_update_target,
+    dm_noesis_control_get_template, dm_noesis_control_set_template,
+    dm_noesis_dependency_object_check_access, dm_noesis_dependency_object_clear_value,
+    dm_noesis_dependency_object_get_attached, dm_noesis_dependency_object_get_base_value,
+    dm_noesis_dependency_object_get_property, dm_noesis_dependency_object_property_tag,
+    dm_noesis_dependency_object_set_attached, dm_noesis_dependency_object_set_current_value,
+    dm_noesis_dependency_object_set_property, dm_noesis_dependency_object_thread_id,
+    dm_noesis_expander_get_is_expanded, dm_noesis_expander_set_is_expanded,
+    dm_noesis_focus_element, dm_noesis_framework_element_find_name,
+    dm_noesis_framework_element_find_resource, dm_noesis_framework_element_get_data_context,
+    dm_noesis_framework_element_get_halign, dm_noesis_framework_element_get_name,
+    dm_noesis_framework_element_get_resources, dm_noesis_framework_element_get_style,
+    dm_noesis_framework_element_get_valign, dm_noesis_framework_element_logical_parent,
+    dm_noesis_framework_element_register_name, dm_noesis_framework_element_set_data_context,
+    dm_noesis_framework_element_set_halign, dm_noesis_framework_element_set_margin,
+    dm_noesis_framework_element_set_resources, dm_noesis_framework_element_set_style,
+    dm_noesis_framework_element_set_valign, dm_noesis_framework_element_set_visibility,
+    dm_noesis_framework_element_template_child, dm_noesis_framework_element_unregister_name,
+    dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml,
+    dm_noesis_items_control_items_add, dm_noesis_items_control_items_clear,
+    dm_noesis_items_control_items_count, dm_noesis_items_control_items_insert,
+    dm_noesis_items_control_items_remove_at, dm_noesis_items_control_realized_count,
+    dm_noesis_items_control_set_items_source, dm_noesis_logical_child,
+    dm_noesis_logical_children_count, dm_noesis_passwordbox_get_password,
     dm_noesis_passwordbox_set_password, dm_noesis_path_set_points, dm_noesis_popup_get_is_open,
     dm_noesis_popup_set_is_open, dm_noesis_rangebase_get, dm_noesis_rangebase_set,
     dm_noesis_render_options_get_bitmap_scaling_mode,
@@ -58,7 +59,9 @@ use crate::ffi::{
     dm_noesis_text_caret_to_end, dm_noesis_text_get, dm_noesis_text_set, dm_noesis_textbox_get_int,
     dm_noesis_textbox_get_selected_text, dm_noesis_textbox_select, dm_noesis_textbox_select_all,
     dm_noesis_textbox_set_int, dm_noesis_toggle_get_is_checked, dm_noesis_toggle_set_is_checked,
-    dm_noesis_view_activate, dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
+    dm_noesis_ui_element_get_render_transform_origin,
+    dm_noesis_ui_element_set_render_transform_origin, dm_noesis_view_activate,
+    dm_noesis_view_add_reference, dm_noesis_view_add_rendering_handler,
     dm_noesis_view_cancel_timer, dm_noesis_view_char, dm_noesis_view_create,
     dm_noesis_view_create_timer, dm_noesis_view_deactivate, dm_noesis_view_destroy,
     dm_noesis_view_get_content, dm_noesis_view_get_flags, dm_noesis_view_get_renderer,
@@ -77,7 +80,8 @@ use crate::ffi::{
     dm_noesis_view_set_tessellation_max_pixel_error, dm_noesis_view_touch_down,
     dm_noesis_view_touch_move, dm_noesis_view_touch_up, dm_noesis_view_update,
     dm_noesis_visual_child, dm_noesis_visual_children_count, dm_noesis_visual_hit_test,
-    dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
+    dm_noesis_visual_hit_test_filtered, dm_noesis_visual_parent,
+    dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
 use crate::transforms::Transform;
@@ -197,6 +201,27 @@ impl FrameworkElement {
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
+    }
+
+    /// Wrap a raw `BaseComponent*` that already carries a `+1` reference this
+    /// handle takes ownership of (released on drop). Crate-internal: used by
+    /// accessors that receive an owning pointer from the C side (e.g.
+    /// [`crate::name_scope::NameScope::find_name`]).
+    pub(crate) unsafe fn from_owned(ptr: NonNull<c_void>) -> Self {
+        Self { ptr }
+    }
+
+    /// Take a new owning handle to the same underlying component, bumping its
+    /// reference count (`AddReference`). Useful for keeping a handle whose
+    /// pointer was only borrowed — e.g. a hit-test visual handed to a callback.
+    #[must_use]
+    pub fn clone_ref(&self) -> Self {
+        // SAFETY: self.ptr is a live BaseComponent*; the C side AddRef's and
+        // returns it, and `Self`'s Drop releases the new reference.
+        let p = unsafe { dm_noesis_base_component_add_reference(self.ptr.as_ptr()) };
+        Self {
+            ptr: NonNull::new(p).expect("add_reference returned null on a live component"),
+        }
     }
 
     /// Look up a descendant by `x:Name`. Returns `None` if no element with
@@ -844,6 +869,100 @@ impl FrameworkElement {
         // VisualTreeHelper::HitTest and hands back a +1 hit or NULL.
         let ptr = unsafe { dm_noesis_visual_hit_test(self.ptr.as_ptr(), x, y) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
+    }
+
+    /// Filtered hit test at a point in this element's local space (DIPs), the
+    /// callback overload of `VisualTreeHelper::HitTest`. As the tree is walked
+    /// top-down, `filter` is called for each visual to steer the descent (skip
+    /// children/self, continue, or stop), and `result` is called for each hit
+    /// to keep collecting or stop. Both receive a **borrowed**
+    /// [`FrameworkElement`] valid only for that call — use
+    /// [`clone_ref`](Self::clone_ref) to keep one.
+    ///
+    /// Runs synchronously on the view-driving thread. See [`Self::hit_test_all`]
+    /// for the common "collect every hit" case.
+    pub fn hit_test_filtered<F, R>(&self, x: f32, y: f32, mut filter: F, mut result: R)
+    where
+        F: FnMut(&FrameworkElement) -> HitTestFilterBehavior,
+        R: FnMut(&FrameworkElement) -> HitTestResultBehavior,
+    {
+        // The closures are borrowed for the synchronous call only; bundle thin
+        // trait-object refs behind one userdata pointer.
+        struct Ctx<'a> {
+            filter: &'a mut dyn FnMut(&FrameworkElement) -> HitTestFilterBehavior,
+            result: &'a mut dyn FnMut(&FrameworkElement) -> HitTestResultBehavior,
+        }
+
+        // Wrap a borrowed visual pointer as a non-owning FrameworkElement (never
+        // dropped, so no spurious Release) and hand it to `f`.
+        unsafe fn with_borrowed<T>(
+            visual: *mut c_void,
+            f: impl FnOnce(&FrameworkElement) -> T,
+            default: T,
+        ) -> T {
+            match NonNull::new(visual) {
+                // SAFETY: from_owned just stores the ptr; ManuallyDrop prevents
+                // the Release, preserving borrowed semantics for the callback.
+                Some(p) => {
+                    let elem =
+                        core::mem::ManuallyDrop::new(unsafe { FrameworkElement::from_owned(p) });
+                    f(&elem)
+                }
+                None => default,
+            }
+        }
+
+        unsafe extern "C" fn filter_tramp(ud: *mut c_void, visual: *mut c_void) -> i32 {
+            // SAFETY: ud is the &mut Ctx passed below, live for the call.
+            let ctx = unsafe { &mut *ud.cast::<Ctx>() };
+            let behavior = unsafe {
+                with_borrowed(visual, |e| (ctx.filter)(e), HitTestFilterBehavior::Continue)
+            };
+            behavior as i32
+        }
+        unsafe extern "C" fn result_tramp(ud: *mut c_void, visual: *mut c_void) -> i32 {
+            // SAFETY: ud is the &mut Ctx passed below, live for the call.
+            let ctx = unsafe { &mut *ud.cast::<Ctx>() };
+            let behavior = unsafe {
+                with_borrowed(visual, |e| (ctx.result)(e), HitTestResultBehavior::Continue)
+            };
+            behavior as i32
+        }
+
+        let mut ctx = Ctx {
+            filter: &mut filter,
+            result: &mut result,
+        };
+        // SAFETY: trampolines match the C ABI; ctx outlives the synchronous
+        // call; self.ptr is a live Visual* (or the C side no-ops on mismatch).
+        unsafe {
+            dm_noesis_visual_hit_test_filtered(
+                self.ptr.as_ptr(),
+                x,
+                y,
+                filter_tramp,
+                result_tramp,
+                (&raw mut ctx).cast(),
+            );
+        }
+    }
+
+    /// Collect **every** visual hit at a point in this element's local space
+    /// (DIPs), topmost-first, descending the whole subtree. Built on
+    /// [`Self::hit_test_filtered`]; each returned element owns its own `+1`.
+    #[must_use]
+    pub fn hit_test_all(&self, x: f32, y: f32) -> Vec<FrameworkElement> {
+        let mut hits = Vec::new();
+        self.hit_test_filtered(
+            x,
+            y,
+            |_| HitTestFilterBehavior::Continue,
+            |hit| {
+                hits.push(hit.clone_ref());
+                HitTestResultBehavior::Continue
+            },
+        );
+        hits
     }
 
     /// Logical parent (`FrameworkElement::GetParent`), or `None` if this is not
@@ -1518,6 +1637,48 @@ impl FrameworkElement {
         // SAFETY: transform.transform_raw() is a live Transform* borrowed for
         // the call; Noesis stores its own reference.
         unsafe { self.set_component("RenderTransform", transform.transform_raw()) }
+    }
+
+    /// This element's current `RenderTransform` (`UIElement::GetRenderTransform`)
+    /// as an owning, type-erased [`AnyTransform`](crate::transforms::AnyTransform),
+    /// or `None` if no transform is set / this is not a `UIElement`. The handle
+    /// can be re-applied to another element via [`Self::set_render_transform`].
+    #[must_use]
+    pub fn render_transform(&self) -> Option<crate::transforms::AnyTransform> {
+        // get_component hands back a borrowed pointer; AddRef so the returned
+        // handle owns its reference.
+        let borrowed = self.get_component("RenderTransform")?;
+        // SAFETY: borrowed is a live Transform* (BaseComponent*); AddRef and
+        // wrap as an owning handle whose Drop releases the new reference.
+        let owned = unsafe { dm_noesis_base_component_add_reference(borrowed.as_ptr()) };
+        NonNull::new(owned).map(|p| unsafe { crate::transforms::AnyTransform::from_owned(p) })
+    }
+
+    /// This element's `RenderTransformOrigin` as `(x, y)` in the relative
+    /// `0.0..=1.0` space (`UIElement::GetRenderTransformOrigin`). Returns
+    /// `(0.0, 0.0)` when this is not a `UIElement`.
+    #[must_use]
+    pub fn render_transform_origin(&self) -> (f32, f32) {
+        let mut x = 0.0_f32;
+        let mut y = 0.0_f32;
+        // SAFETY: self.ptr is a live BaseComponent*; both out-pointers are valid
+        // for the call and always written by the C side.
+        unsafe {
+            dm_noesis_ui_element_get_render_transform_origin(
+                self.ptr.as_ptr(),
+                &raw mut x,
+                &raw mut y,
+            );
+        }
+        (x, y)
+    }
+
+    /// Set this element's `RenderTransformOrigin` (the relative `0.0..=1.0`
+    /// pivot the render transform rotates/scales around). Returns `false` if
+    /// this is not a `UIElement`.
+    pub fn set_render_transform_origin(&mut self, x: f32, y: f32) -> bool {
+        // SAFETY: self.ptr is a live BaseComponent*; thin pass-through.
+        unsafe { dm_noesis_ui_element_set_render_transform_origin(self.ptr.as_ptr(), x, y) }
     }
 
     /// Set this element's `Effect` to `effect` (e.g. a blur or drop shadow).
@@ -2564,6 +2725,36 @@ impl Drop for View {
         // SAFETY: produced by dm_noesis_view_create which returns +1 ref.
         unsafe { dm_noesis_view_destroy(self.ptr.as_ptr()) }
     }
+}
+
+/// Mirror of `Noesis::HitTestFilterBehavior` (`NsGui/Enums.h`) — the value the
+/// filter callback of [`FrameworkElement::hit_test_filtered`] returns to steer
+/// the tree walk.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum HitTestFilterBehavior {
+    /// Skip this visual and its subtree, continue elsewhere.
+    ContinueSkipSelfAndChildren = 0,
+    /// Test this visual but not its children.
+    ContinueSkipChildren = 1,
+    /// Test this visual's children but not the visual itself.
+    ContinueSkipSelf = 2,
+    /// Test this visual and descend into its children.
+    Continue = 3,
+    /// Stop the hit test entirely.
+    Stop = 4,
+}
+
+/// Mirror of `Noesis::HitTestResultBehavior` (`NsGui/Enums.h`) — the value the
+/// result callback of [`FrameworkElement::hit_test_filtered`] returns to keep
+/// collecting hits or stop.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum HitTestResultBehavior {
+    /// Stop the hit test after this hit.
+    Stop = 0,
+    /// Continue walking for more hits.
+    Continue = 1,
 }
 
 /// Mirror of `Noesis::MouseButton` from `NsGui/InputEnums.h`. Ordinals

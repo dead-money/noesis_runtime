@@ -10,13 +10,6 @@ sequencing is in [Suggested completion order](#suggested-completion-order); thin
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
-## 2. Element tree access
-
-- **`Dispatcher` queued invoke.** No dedicated dispatcher-queue wrapper yet; cross-thread/queued invoke can be built on the View timer API (`CreateTimer`, wrapped). (Thread-affinity queries `CheckAccess`/`thread_id` are already wrapped — see also [limitations](#known-sdk-limitations).)
-- **`Style` / `RenderTransform` first-class typed wrappers.** Reachable today via the generic component accessors; no dedicated sugar yet.
-- **Filtered hit testing.** Only the single-point `VisualTreeHelper::HitTest` is wrapped; the `HitTestFilterCallback` / result-callback overload is not.
-- **Standalone `INameScope` / `NameScope` object.** Registration goes through `FrameworkElement::RegisterName`/`UnregisterName`; the freestanding scope object isn't exposed.
-
 ## 3. Data binding
 
 Code-built bindings (`RelativeSource` incl. `FindAncestor`, `BindingExpression` update), Rust value

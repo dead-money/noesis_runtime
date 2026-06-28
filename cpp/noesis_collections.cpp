@@ -30,6 +30,7 @@
 
 #include <NsCore/Boxing.h>
 #include <NsCore/BaseComponent.h>
+#include <NsCore/Delegate.h>
 #include <NsCore/DynamicCast.h>
 #include <NsCore/Ptr.h>
 #include <NsDrawing/Point.h>
@@ -41,6 +42,9 @@
 #include <NsGui/ItemsControl.h>
 #include <NsGui/LogicalTreeHelper.h>
 #include <NsGui/ObservableCollection.h>
+#include <NsGui/INameScope.h>
+#include <NsGui/NameScope.h>
+#include <NsGui/UIElement.h>
 #include <NsGui/Visual.h>
 #include <NsGui/VisualTreeHelper.h>
 
@@ -246,6 +250,45 @@ extern "C" void* dm_noesis_visual_hit_test(void* element, float x, float y) {
     return static_cast<Noesis::BaseComponent*>(result.visualHit);
 }
 
+// Filtered hit test — the callback overload of VisualTreeHelper::HitTest. As the
+// tree is walked, `filter` is invoked for each visual (its return selects which
+// branches to descend), and `result` for each hit (its return continues or
+// stops the walk). The visual pointers handed to the callbacks are BORROWED and
+// valid only for that call; Rust AddRef's (via base_component_add_reference) if
+// it wants to keep one. Return codes are the raw Noesis enum values.
+namespace {
+struct HitTestBridge {
+    dm_noesis_hit_filter_fn filter;
+    dm_noesis_hit_result_fn result;
+    void* userdata;
+
+    Noesis::HitTestFilterBehavior OnFilter(Noesis::Visual* target) {
+        if (!filter) return Noesis::HitTestFilterBehavior_Continue;
+        return static_cast<Noesis::HitTestFilterBehavior>(
+            filter(userdata, static_cast<Noesis::BaseComponent*>(target)));
+    }
+    Noesis::HitTestResultBehavior OnResult(const Noesis::HitTestResult& r) {
+        if (!result) return Noesis::HitTestResultBehavior_Continue;
+        return static_cast<Noesis::HitTestResultBehavior>(
+            result(userdata, static_cast<Noesis::BaseComponent*>(r.visualHit)));
+    }
+};
+}  // namespace
+
+extern "C" void dm_noesis_visual_hit_test_filtered(
+    void* element, float x, float y, dm_noesis_hit_filter_fn filter,
+    dm_noesis_hit_result_fn result, void* userdata)
+{
+    if (!element || !result) return;
+    auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
+    if (!v) return;
+    HitTestBridge bridge{filter, result, userdata};
+    Noesis::VisualTreeHelper::HitTest(
+        v, Noesis::Point(x, y),
+        Noesis::MakeDelegate(&bridge, &HitTestBridge::OnFilter),
+        Noesis::MakeDelegate(&bridge, &HitTestBridge::OnResult));
+}
+
 extern "C" void* dm_noesis_framework_element_logical_parent(void* element) {
     if (!element) return nullptr;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
@@ -255,6 +298,124 @@ extern "C" void* dm_noesis_framework_element_logical_parent(void* element) {
     if (!parent) return nullptr;
     parent->AddReference();
     return static_cast<Noesis::BaseComponent*>(parent);
+}
+
+// ── RenderTransform origin (TODO §2) ────────────────────────────────────────
+// UIElement::Get/SetRenderTransformOrigin — the (0..1, 0..1) relative pivot the
+// RenderTransform rotates/scales around. `out_x`/`out_y` are written 0 when the
+// element is not a UIElement; the setter is a no-op then.
+
+extern "C" void dm_noesis_ui_element_get_render_transform_origin(
+    void* element, float* out_x, float* out_y)
+{
+    if (out_x) *out_x = 0.0f;
+    if (out_y) *out_y = 0.0f;
+    if (!element) return;
+    auto* ui = Noesis::DynamicCast<Noesis::UIElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!ui) return;
+    const Noesis::Point& p = ui->GetRenderTransformOrigin();
+    if (out_x) *out_x = p.x;
+    if (out_y) *out_y = p.y;
+}
+
+extern "C" bool dm_noesis_ui_element_set_render_transform_origin(
+    void* element, float x, float y)
+{
+    if (!element) return false;
+    auto* ui = Noesis::DynamicCast<Noesis::UIElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!ui) return false;
+    ui->SetRenderTransformOrigin(Noesis::Point(x, y));
+    return true;
+}
+
+// ── Standalone NameScope (TODO §2) ──────────────────────────────────────────
+// The freestanding NameScope object, distinct from the per-FrameworkElement
+// RegisterName path. All component pointers handed back are +1 (release via
+// dm_noesis_base_component_release).
+
+// Create an empty NameScope (+1).
+extern "C" void* dm_noesis_name_scope_create() {
+    Noesis::Ptr<Noesis::NameScope> scope = Noesis::MakePtr<Noesis::NameScope>();
+    return scope.GiveOwnership();
+}
+
+// Attached NameScope on `element` (NameScope::GetNameScope), +1, or NULL if the
+// element carries none / is not a DependencyObject.
+extern "C" void* dm_noesis_name_scope_get(void* element) {
+    if (!element) return nullptr;
+    auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!d) return nullptr;
+    Noesis::NameScope* scope = Noesis::NameScope::GetNameScope(d);
+    if (!scope) return nullptr;
+    scope->AddReference();
+    return static_cast<Noesis::BaseComponent*>(scope);
+}
+
+// Attach `scope` (may be NULL to clear) as `element`'s NameScope. Returns false
+// if `element` is not a DependencyObject.
+extern "C" bool dm_noesis_name_scope_set(void* element, void* scope) {
+    if (!element) return false;
+    auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!d) return false;
+    Noesis::NameScope::SetNameScope(d, static_cast<Noesis::NameScope*>(scope));
+    return true;
+}
+
+// INameScope operations on a NameScope*. find_name returns +1 or NULL.
+extern "C" void* dm_noesis_name_scope_find_name(void* scope, const char* name) {
+    if (!scope || !name) return nullptr;
+    auto* s = static_cast<Noesis::NameScope*>(scope);
+    Noesis::BaseComponent* obj = s->FindName(name);
+    if (!obj) return nullptr;
+    obj->AddReference();
+    return obj;
+}
+
+extern "C" void dm_noesis_name_scope_register_name(void* scope, const char* name, void* obj) {
+    if (!scope || !name || !obj) return;
+    static_cast<Noesis::NameScope*>(scope)->RegisterName(
+        name, static_cast<Noesis::BaseComponent*>(obj));
+}
+
+extern "C" void dm_noesis_name_scope_unregister_name(void* scope, const char* name) {
+    if (!scope || !name) return;
+    static_cast<Noesis::NameScope*>(scope)->UnregisterName(name);
+}
+
+extern "C" void dm_noesis_name_scope_update_name(void* scope, const char* name, void* obj) {
+    if (!scope || !name || !obj) return;
+    static_cast<Noesis::NameScope*>(scope)->UpdateName(
+        name, static_cast<Noesis::BaseComponent*>(obj));
+}
+
+// Reverse lookup: the registered name of `obj`, or NULL. The returned pointer is
+// owned by the NameScope (borrowed); copy it out before mutating the scope.
+extern "C" const char* dm_noesis_name_scope_find_object(void* scope, void* obj) {
+    if (!scope || !obj) return nullptr;
+    return static_cast<Noesis::NameScope*>(scope)->FindObject(
+        static_cast<Noesis::BaseComponent*>(obj));
+}
+
+// Enumerate every (name, object) pair. `cb` receives borrowed pointers valid
+// only for that call. No-op on NULL scope/cb.
+extern "C" void dm_noesis_name_scope_enum(
+    void* scope, dm_noesis_name_scope_enum_fn cb, void* userdata)
+{
+    if (!scope || !cb) return;
+    struct Ctx {
+        dm_noesis_name_scope_enum_fn cb;
+        void* userdata;
+    } ctx{cb, userdata};
+    static_cast<Noesis::NameScope*>(scope)->EnumNamedObjects(
+        [](const char* name, Noesis::BaseComponent* obj, void* ud) {
+            auto* c = static_cast<Ctx*>(ud);
+            c->cb(c->userdata, name, obj);
+        },
+        &ctx);
 }
 
 extern "C" uint32_t dm_noesis_logical_children_count(void* element) {
