@@ -13,6 +13,7 @@
 use std::ffi::{CStr, CString};
 
 pub mod binding;
+pub mod brushes;
 pub mod classes;
 pub mod commands;
 pub mod converters;
@@ -23,6 +24,7 @@ pub mod gui;
 pub mod markup;
 pub mod render_device;
 pub mod texture_provider;
+pub mod transforms;
 pub mod view;
 pub mod xaml_provider;
 

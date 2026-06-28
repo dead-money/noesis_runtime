@@ -18,6 +18,7 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
+use crate::brushes::{Brush, Effect};
 use crate::ffi::{
     PropType, dm_noesis_base_component_release, dm_noesis_binding_expression_update_source,
     dm_noesis_binding_expression_update_target, dm_noesis_dependency_object_check_access,
@@ -36,7 +37,9 @@ use crate::ffi::{
     dm_noesis_get_binding_expression, dm_noesis_gui_load_xaml, dm_noesis_gui_parse_xaml,
     dm_noesis_items_control_items_count, dm_noesis_items_control_realized_count,
     dm_noesis_items_control_set_items_source, dm_noesis_logical_child,
-    dm_noesis_logical_children_count, dm_noesis_path_set_points, dm_noesis_renderer_init,
+    dm_noesis_logical_children_count, dm_noesis_path_set_points,
+    dm_noesis_render_options_get_bitmap_scaling_mode,
+    dm_noesis_render_options_set_bitmap_scaling_mode, dm_noesis_renderer_init,
     dm_noesis_renderer_render, dm_noesis_renderer_render_offscreen, dm_noesis_renderer_shutdown,
     dm_noesis_renderer_update_render_tree, dm_noesis_text_caret_to_end, dm_noesis_text_get,
     dm_noesis_text_set, dm_noesis_view_activate, dm_noesis_view_cancel_timer, dm_noesis_view_char,
@@ -55,6 +58,7 @@ use crate::ffi::{
     dm_noesis_visual_parent, dm_noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
+use crate::transforms::Transform;
 
 /// A loaded XAML root. Holds a +1 refcount on the underlying
 /// `Noesis::FrameworkElement`; [`View::create`] consumes it and forwards the
@@ -1404,6 +1408,77 @@ impl FrameworkElement {
     pub fn thread_id(&self) -> u32 {
         // SAFETY: self.ptr is a live BaseComponent*; UINT32_MAX on non-DO.
         unsafe { dm_noesis_dependency_object_thread_id(self.ptr.as_ptr()) }
+    }
+
+    // ── Brushes / transforms / effects / RenderOptions (TODO §11) ────────────
+    //
+    // Thin typed sugar over the generic `set_component` DP path for the
+    // code-built objects in `crate::brushes` / `crate::transforms`. Each routes
+    // the object's borrowed `BaseComponent*` into the named DP; Noesis takes its
+    // own reference, so the builder handle may be dropped right after the call.
+    // These all return `false` if the property is absent on this element type
+    // (e.g. `set_fill` on a `Border`, which has no `Fill`).
+
+    /// Paint this element's `Background` with `brush` (a `Border`, `Panel`,
+    /// `Control`, …). Returns `false` if the element has no `Background` DP.
+    pub fn set_background<B: Brush>(&mut self, brush: &B) -> bool {
+        // SAFETY: brush.brush_raw() is a live Brush* borrowed for the call;
+        // Noesis stores its own reference.
+        unsafe { self.set_component("Background", brush.brush_raw()) }
+    }
+
+    /// Paint this element's `Foreground` with `brush` (text controls). Returns
+    /// `false` if the element has no `Foreground` DP.
+    pub fn set_foreground<B: Brush>(&mut self, brush: &B) -> bool {
+        // SAFETY: brush.brush_raw() is a live Brush* borrowed for the call.
+        unsafe { self.set_component("Foreground", brush.brush_raw()) }
+    }
+
+    /// Paint this `Shape`'s `Fill` with `brush` (e.g. a `Rectangle`,
+    /// `Ellipse`). Returns `false` if the element has no `Fill` DP.
+    pub fn set_fill<B: Brush>(&mut self, brush: &B) -> bool {
+        // SAFETY: brush.brush_raw() is a live Brush* borrowed for the call.
+        unsafe { self.set_component("Fill", brush.brush_raw()) }
+    }
+
+    /// Paint this `Shape`'s `Stroke` with `brush`. Returns `false` if the
+    /// element has no `Stroke` DP.
+    pub fn set_stroke<B: Brush>(&mut self, brush: &B) -> bool {
+        // SAFETY: brush.brush_raw() is a live Brush* borrowed for the call.
+        unsafe { self.set_component("Stroke", brush.brush_raw()) }
+    }
+
+    /// Set this element's `RenderTransform` to `transform`. Returns `false` if
+    /// the element has no `RenderTransform` DP (i.e. is not a `UIElement`).
+    pub fn set_render_transform<T: Transform>(&mut self, transform: &T) -> bool {
+        // SAFETY: transform.transform_raw() is a live Transform* borrowed for
+        // the call; Noesis stores its own reference.
+        unsafe { self.set_component("RenderTransform", transform.transform_raw()) }
+    }
+
+    /// Set this element's `Effect` to `effect` (e.g. a blur or drop shadow).
+    /// Returns `false` if the element has no `Effect` DP.
+    pub fn set_effect<E: Effect>(&mut self, effect: &E) -> bool {
+        // SAFETY: effect.effect_raw() is a live Effect* borrowed for the call.
+        unsafe { self.set_component("Effect", effect.effect_raw()) }
+    }
+
+    /// Set the `RenderOptions.BitmapScalingMode` attached property on this
+    /// element (ordinals match Noesis `BitmapScalingMode`: `0` `Unspecified`,
+    /// `1` `LowQuality`, `2` `HighQuality`). Returns `false` if this is not a
+    /// `DependencyObject`.
+    pub fn set_bitmap_scaling_mode(&mut self, mode: i32) -> bool {
+        // SAFETY: self.ptr is a live DependencyObject*; the C side DynamicCasts.
+        unsafe { dm_noesis_render_options_set_bitmap_scaling_mode(self.ptr.as_ptr(), mode) }
+    }
+
+    /// Read the `RenderOptions.BitmapScalingMode` attached property back as an
+    /// ordinal. `None` if this is not a `DependencyObject`.
+    #[must_use]
+    pub fn bitmap_scaling_mode(&self) -> Option<i32> {
+        // SAFETY: self.ptr is a live BaseComponent*; -1 on non-DO.
+        let v = unsafe { dm_noesis_render_options_get_bitmap_scaling_mode(self.ptr.as_ptr()) };
+        (v >= 0).then_some(v)
     }
 }
 
