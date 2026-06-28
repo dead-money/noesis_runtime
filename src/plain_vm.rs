@@ -1,6 +1,6 @@
-//! Plain (non-`DependencyObject`) view models for data binding (TODO §9 + §3).
+//! Plain (non-`DependencyObject`) view models for data binding.
 //!
-//! The bevy-bridge unblocker. A [`PlainViewModel`] is a Rust-owned binding
+//! The bevy-bridge unblocker. A plain view model is a Rust-owned binding
 //! source that is **not** a `DependencyObject`: a plain Noesis `BaseComponent`
 //! that implements `INotifyPropertyChanged` and carries a synthetic reflection
 //! type whose properties resolve — through reflection — to a per-instance value
@@ -162,8 +162,8 @@ impl PlainValueRef {
 
 /// A `TwoWay` / `OneWayToSource` writeback hook: fires when a binding pushes a
 /// value from the UI **back** to a plain-VM property. The value is already
-/// stored in the instance (a subsequent [`PlainInstance::get`] returns it); this
-/// callback just lets the model author observe the edit.
+/// stored in the instance (a subsequent `get_*` read returns it); this
+/// callback only lets the model author observe the edit.
 pub trait PlainSetHandler: Send + 'static {
     /// `prop_index` is the dense index from
     /// [`PlainVmBuilder::add_property`]; `value` is the boxed value the UI
@@ -235,7 +235,7 @@ impl PlainVmBuilder {
     }
 
     /// Append a reflected property. Returns the dense index used by
-    /// [`PlainInstance::set`] / [`PlainInstance::get`] and the
+    /// [`PlainInstance::set`], the `get_*` accessors, and the
     /// [`PlainSetHandler`]; indices grow from 0 in addition order.
     ///
     /// # Panics
@@ -398,7 +398,7 @@ impl PlainInstance {
 
     /// Raise `INotifyPropertyChanged.PropertyChanged` for `prop_name`, so every
     /// binding sourced from that property re-reads on the next pump. Returns
-    /// `false` only on a NUL-containing name.
+    /// `true` once the notification is raised.
     ///
     /// # Panics
     ///
@@ -414,7 +414,7 @@ impl PlainInstance {
     /// # Panics
     ///
     /// Panics if `prop_name` contains an interior NUL byte.
-    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
+    #[must_use = "a false return means the property was not set (prop_index out of range)"]
     pub fn set_and_notify(&self, prop_index: u32, prop_name: &str, value: PlainValue) -> bool {
         self.set(prop_index, value) && self.notify(prop_name)
     }
@@ -458,7 +458,7 @@ impl PlainInstance {
 
     /// Set this instance as `element`'s `DataContext`. Noesis takes its own
     /// reference. Returns `false` if `element` is not a `FrameworkElement`.
-    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
+    #[must_use = "a false return means the data context was not set (element is not a FrameworkElement)"]
     pub fn set_data_context(&self, element: &mut FrameworkElement) -> bool {
         // SAFETY: self.raw() is a live BaseComponent* valid for the call;
         // Noesis stores its own reference.

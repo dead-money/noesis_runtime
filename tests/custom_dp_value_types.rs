@@ -1,13 +1,7 @@
-//! TODO §9 — custom dependency-property value types beyond the original
-//! scalar/struct/string set: `Point`, `Size`, `Vector` (`Noesis::Vector2`), and a
-//! runtime-`enum`-typed DP.
+//! Custom dependency-property value types: Point, Size, Vector, and runtime enum.
 //!
-//! Every assertion reads the value back THROUGH the live Noesis object (either
-//! the `Instance` handle on a code-created instance, or the name-keyed
-//! `FrameworkElement` accessors on a parsed instance), so a stub that did not
-//! actually marshal the struct/enum across the FFI would fail. We also verify
-//! registered defaults apply, and that the dynamic tag inference
-//! (`FrameworkElement::property_tag` / `get_dynamic`) classifies the new types.
+//! Every assertion reads the value back through the live Noesis object, so a
+//! stub that did not actually marshal the struct/enum across the FFI would fail.
 
 use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyOptions, PropertyValue,
@@ -38,7 +32,6 @@ fn custom_dp_value_types() {
     }
     noesis_runtime::init();
     {
-        // A runtime enum used as a DP value type.
         let mode = register_enum("NzVT.Mode", &[("Off", 0), ("On", 1), ("Auto", 2)])
             .expect("register_enum failed");
         assert_eq!(mode.value_from_name("Auto"), Some(2));
@@ -61,7 +54,6 @@ fn custom_dp_value_types() {
         assert_eq!(h.get_point(pt), Some((0.0, 0.0)));
         assert_eq!(h.get_enum(m), Some(2), "enum DP default did not apply");
 
-        // Round-trip each new value type through the live object.
         h.set_point(pt, 3.5, -7.25);
         assert_eq!(h.get_point(pt), Some((3.5, -7.25)), "Point DP round-trip");
 
@@ -77,7 +69,6 @@ fn custom_dp_value_types() {
         drop(inst);
         drop(reg);
 
-        // ── Name-keyed FrameworkElement access on a parsed instance ──────────
         register_enum("NzVT2.Mode", &[("A", 0), ("B", 5)]).expect("register_enum");
 
         let mut b = ClassBuilder::new("NzVT.Thing2", ClassBase::FrameworkElement, Noop);
@@ -87,15 +78,12 @@ fn custom_dp_value_types() {
         let _m = b.add_enum_property("Mode", "NzVT2.Mode", 0, PropertyOptions::default());
         let _reg = b.register().expect("class registration failed");
 
-        // Parse + instantiate via the factory; drive the name-keyed
-        // FrameworkElement accessors (noesis_dependency_object_*).
         let root = {
             let xaml = THING_XAML.replace("nz:Thing", "nz:Thing2");
             FrameworkElement::parse(&xaml).expect("parse returned None")
         };
         let mut el = root.find_name("T").expect("find_name(T) returned None");
 
-        // Dynamic tag inference classifies the new value types.
         assert_eq!(el.property_tag("Pt"), Some(PropType::Point));
         assert_eq!(el.property_tag("Sz"), Some(PropType::Size));
         assert_eq!(el.property_tag("Vec"), Some(PropType::Vector));
@@ -121,10 +109,6 @@ fn custom_dp_value_types() {
         // A type-mismatched access is rejected (Point DP read as a Rect).
         assert_eq!(el.get_rect("Pt"), None, "tag mismatch must be rejected");
 
-        // ── SetCurrentValue / GetBaseValue for the new value types ───────────
-        // Mirrors the scalar pattern: the local value stays the *base* while the
-        // effective getter returns the SetCurrentValue override (TODO §9 —
-        // exercises apply_set(Current)/apply_get(Base) for Point/Size/Vector/Enum).
         // `el` already has Pt=[1,2], Sz=[10,20], Vec=[-3,4], Mode=5 set locally.
         assert!(el.set_current_point("Pt", [9.0, 8.0]));
         assert_eq!(el.get_point("Pt"), Some([9.0, 8.0]), "Point current value");

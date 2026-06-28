@@ -1,12 +1,5 @@
-//! Phase 5 — From/To animation builders (Double/Color/Thickness/Point/Rect/
-//! Size/Int16/Int32/Int64) covering from/to/by + the common Timeline knobs.
-//!
-//! Fail-if-stubbed: types exposing from/to/by getters (Rect / Size / Int*) are
-//! round-tripped through the live object; the Timeline `duration_secs` knob is
-//! read back for every builder (a real FFI crossing), proving the fluent chain
-//! applies. Builder output is also compared against the longhand form.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
+//! From/To animation builders (Double, Color, Thickness, Point, Rect, Size,
+//! Int16/32/64): round-trips from/to/by and Timeline knobs through the live FFI.
 
 use noesis_runtime::animation::{
     ColorAnimation, DoubleAnimation, FillBehavior, Int16Animation, Int32Animation, Int64Animation,
@@ -28,7 +21,6 @@ fn builder_animation_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── RectAnimation: full from/to/by + knobs read-back ─────────────────
         let rect = RectAnimation::builder()
             .from([0.0, 0.0, 1.0, 1.0])
             .to([2.0, 2.0, 3.0, 3.0])
@@ -48,7 +40,6 @@ fn builder_animation_round_trip() {
             "rect duration round-trip"
         );
 
-        // Equivalence with the longhand form.
         let mut longhand = RectAnimation::new();
         let _ = longhand.set_from(Some([0.0, 0.0, 1.0, 1.0]));
         let _ = longhand.set_to(Some([2.0, 2.0, 3.0, 3.0]));
@@ -58,7 +49,6 @@ fn builder_animation_round_trip() {
         assert_eq!(rect.to(), longhand.to(), "builder == longhand (to)");
         assert_eq!(rect.by(), longhand.by(), "builder == longhand (by)");
 
-        // ── SizeAnimation ────────────────────────────────────────────────────
         let size = SizeAnimation::builder()
             .from([1.0, 2.0])
             .to([3.0, 4.0])
@@ -68,7 +58,6 @@ fn builder_animation_round_trip() {
         assert_eq!(size.to(), Some([3.0, 4.0]), "size to");
         assert!(approx(size.duration_secs().expect("size duration"), 0.5));
 
-        // ── Int16 / Int32 / Int64 ────────────────────────────────────────────
         let i16a = Int16Animation::builder().from(1).to(10).by(2).build();
         assert_eq!(
             (i16a.from(), i16a.to(), i16a.by()),
@@ -87,8 +76,8 @@ fn builder_animation_round_trip() {
         let i64a = Int64Animation::builder().from(5).to(50_000_000_000).build();
         assert_eq!((i64a.from(), i64a.to()), (Some(5), Some(50_000_000_000)));
 
-        // ── Double / Color / Thickness / Point: no from/to getters exist, so
-        //    prove the chain crossed the FFI via the Timeline duration knob. ───
+        // Double/Color/Thickness/Point have no from/to getters; prove the chain
+        // crossed the FFI via the Timeline duration knob.
         let dbl = DoubleAnimation::builder()
             .from(0.0)
             .to(1.0)

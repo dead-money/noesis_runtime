@@ -1,9 +1,9 @@
-//! Input — finer control (TODO §16): keyboard/focus enums, input gestures and
-//! bindings, and the `FocusManager` / `KeyboardNavigation` static surfaces.
+//! Input — keyboard/focus enums, input gestures and bindings, and the
+//! `FocusManager` / `KeyboardNavigation` static surfaces.
 //!
 //! The per-element knobs (mouse/touch capture, keyboard-state queries,
 //! focus-state DPs, focus engagement, `MoveFocus` / `PredictFocus`) live as
-//! methods on [`FrameworkElement`](crate::view::FrameworkElement), mirroring its
+//! methods on [`FrameworkElement`], mirroring its
 //! existing [`focus`](crate::view::FrameworkElement::focus). This module holds
 //! the value types those methods speak in, plus the gesture/binding objects and
 //! the two attached-property static helpers.
@@ -12,7 +12,7 @@
 //! [`Command`](crate::commands::Command): each owns a `+1` reference released on
 //! drop. A [`KeyBinding`] / [`MouseBinding`] / [`InputBinding`] is added to an
 //! element's `InputBindings`, after which the element's collection holds its own
-//! reference and drives the bound [`AsCommand`](crate::commands::AsCommand) when
+//! reference and drives the bound [`AsCommand`] when
 //! the gesture is matched.
 //!
 //! # Threading
@@ -42,13 +42,9 @@ use crate::ffi::{
 };
 use crate::view::{FrameworkElement, Key};
 
-// ── Enums ────────────────────────────────────────────────────────────────────
-
-/// A typed bitset of `Noesis::ModifierKeys` (`NsGui/InputEnums.h`) — the
-/// chord modifiers held down (`Alt` / `Control` / `Shift` / `Windows`). Compose
-/// with [`Self::with`] / [`FromIterator`] and test with [`Self::contains`].
-/// Bit values are validated against the SDK by `static_assert` in
-/// `noesis_input.cpp`.
+/// A typed bitset of `Noesis::ModifierKeys` — the chord modifiers held down
+/// (`Alt` / `Control` / `Shift` / `Windows`). Compose with [`Self::with`] /
+/// [`FromIterator`] and test with [`Self::contains`].
 ///
 /// ```
 /// use noesis_runtime::input::ModifierKeys;
@@ -120,10 +116,9 @@ impl FromIterator<ModifierKeys> for ModifierKeys {
     }
 }
 
-/// A typed bitset of `Noesis::KeyStates` (`NsGui/InputEnums.h`) — the state of
-/// a key as reported by the keyboard: `Down` (currently pressed) and/or
-/// `Toggled` (the toggle is on, e.g. `CapsLock`). Bit values validated by
-/// `static_assert` in `noesis_input.cpp`.
+/// A typed bitset of `Noesis::KeyStates` — the state of a key as reported by
+/// the keyboard: `Down` (currently pressed) and/or `Toggled` (the toggle is on,
+/// e.g. `CapsLock`).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyStates(pub i32);
 
@@ -154,9 +149,8 @@ impl KeyStates {
     }
 }
 
-/// Mirror of `Noesis::MouseAction` (`NsGui/InputEnums.h`) — the pointer gesture
-/// a [`MouseGesture`] / [`MouseBinding`] matches. Ordinals validated by
-/// `static_assert` in `noesis_input.cpp`.
+/// Mirror of `Noesis::MouseAction` — the pointer gesture a [`MouseGesture`] /
+/// [`MouseBinding`] matches.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -171,8 +165,8 @@ pub enum MouseAction {
     MiddleDoubleClick = 7,
 }
 
-/// Mirror of `Noesis::CaptureMode` (`NsGui/Mouse.h`) — how an element captures
-/// the mouse via [`FrameworkElement::capture_mouse_mode`].
+/// Mirror of `Noesis::CaptureMode` — how an element captures the mouse via
+/// [`FrameworkElement::capture_mouse_mode`].
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -185,11 +179,10 @@ pub enum CaptureMode {
     SubTree = 2,
 }
 
-/// Mirror of `Noesis::FocusNavigationDirection` (top of `NsGui/UIElement.h`) —
-/// the direction for [`FrameworkElement::move_focus`] /
-/// [`FrameworkElement::predict_focus`]. Note `Next` / `Previous` / `First` /
-/// `Last` are tab-order traversal (not supported by `PredictFocus`), while
-/// `Left` / `Right` / `Up` / `Down` are directional.
+/// Mirror of `Noesis::FocusNavigationDirection` — the direction for
+/// [`FrameworkElement::move_focus`] / [`FrameworkElement::predict_focus`].
+/// `Next` / `Previous` / `First` / `Last` are tab-order traversal (not supported
+/// by `predict_focus`), while `Left` / `Right` / `Up` / `Down` are directional.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -204,10 +197,9 @@ pub enum FocusNavigationDirection {
     Down = 7,
 }
 
-/// Mirror of `Noesis::KeyboardNavigationMode` (`NsGui/Enums.h`) — how Tab /
-/// directional traversal behaves inside a container, for the
-/// [`KeyboardNavigation`] attached properties. Ordinals validated by
-/// `static_assert` in `noesis_input.cpp`.
+/// Mirror of `Noesis::KeyboardNavigationMode` — how Tab / directional traversal
+/// behaves inside a container, for the [`KeyboardNavigation`] attached
+/// properties.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -225,8 +217,6 @@ pub enum KeyboardNavigationMode {
     /// Tab cycles locally but, unlike `Cycle`, restarts at the container start.
     Local = 5,
 }
-
-// ── Input gestures ───────────────────────────────────────────────────────────
 
 /// A `Noesis::KeyGesture` — a [`Key`] plus chord [`ModifierKeys`] that, when
 /// matched, fires a bound command. Owns a `+1` reference released on drop;
@@ -297,8 +287,6 @@ impl Drop for MouseGesture {
         unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
-
-// ── Input bindings ───────────────────────────────────────────────────────────
 
 /// A `Noesis::KeyBinding` — a [`Key`] + [`ModifierKeys`] chord bound to a
 /// command. Add it to an element with [`Self::add_to`]; when the focused element
@@ -393,10 +381,10 @@ impl Drop for MouseBinding {
     }
 }
 
-/// A `Noesis::InputBinding` — a command bound to an arbitrary
-/// [`InputGesture`](KeyGesture) built separately. The general form of
-/// [`KeyBinding`] / [`MouseBinding`]; use it to reuse a single gesture across
-/// bindings. Owns a `+1` reference released on drop.
+/// A `Noesis::InputBinding` — a command bound to a [`KeyGesture`] or
+/// [`MouseGesture`] built separately. The general form of [`KeyBinding`] /
+/// [`MouseBinding`]; use it to reuse a single gesture across bindings. Owns a
+/// `+1` reference released on drop.
 pub struct InputBinding {
     ptr: NonNull<c_void>,
 }
@@ -405,11 +393,10 @@ pub struct InputBinding {
 unsafe impl Send for InputBinding {}
 
 impl InputBinding {
-    /// Bind `command` (any [`AsCommand`]) to `gesture` (a [`KeyGesture`] —
-    /// generalize to other gestures via the raw pointer overloads if needed).
-    /// Returns `None` if either pointer fails its `ICommand` / `InputGesture`
-    /// cast. The binding adds its own reference to the gesture, so `gesture`
-    /// may be dropped afterwards.
+    /// Bind `command` (any [`AsCommand`]) to a [`KeyGesture`]. Returns `None` if
+    /// either pointer fails its `ICommand` / `InputGesture` cast. The binding
+    /// adds its own reference to the gesture, so `gesture` may be dropped
+    /// afterwards.
     #[must_use]
     pub fn with_gesture<C: AsCommand>(command: &C, gesture: &KeyGesture) -> Option<Self> {
         // SAFETY: command/gesture pointers are borrowed live for the call; the C
@@ -446,8 +433,6 @@ impl Drop for InputBinding {
         unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
-
-// ── FocusManager statics ─────────────────────────────────────────────────────
 
 /// The `Noesis::FocusManager` static surface — attached-property helpers for
 /// querying and steering logical focus within a *focus scope*. A focus scope
@@ -506,8 +491,6 @@ impl FocusManager {
         NonNull::new(p)
     }
 }
-
-// ── KeyboardNavigation attached properties ───────────────────────────────────
 
 /// The `Noesis::KeyboardNavigation` static surface — attached properties that
 /// shape Tab / directional focus traversal (`TabIndex`, `IsTabStop`,
@@ -618,8 +601,7 @@ impl KeyboardNavigation {
         unsafe { noesis_keyboard_navigation_set_accepts_return(element.raw(), value) }
     }
 
-    /// Shared getter for the three `KeyboardNavigationMode`-typed properties:
-    /// read the raw ordinal and map it back to the enum.
+    /// Read a `KeyboardNavigationMode`-typed DP's ordinal and map it to the enum.
     fn get_mode(
         element: &FrameworkElement,
         getter: unsafe extern "C" fn(*mut c_void, *mut i32) -> bool,

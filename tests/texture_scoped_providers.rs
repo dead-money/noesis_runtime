@@ -1,25 +1,5 @@
-//! TODO §15 — scheme-/assembly-scoped **texture** providers (routing test).
-//!
-//! Companion to `xaml_scoped_providers.rs`, but for the texture-provider
-//! triple. Each of the three scoped texture setters maps to a DISTINCT Noesis
-//! call (`SetSchemeTextureProvider` / `SetAssemblyTextureProvider` /
-//! `SetSchemeAssemblyTextureProvider`), so a copy-paste bug routing one setter
-//! to the wrong Noesis function would not be caught by a compile-only test.
-//!
-//! The test installs four texture providers at once — a global one, a
-//! scheme-scoped one (`myassets`), an assembly-scoped one (`App`), and a
-//! scheme+assembly one (`packs` + `Skin`) — each a `Recorder` logging every
-//! URI its `info` (Noesis `GetTextureInfo`) callback is asked for. It then
-//! drives a single measure pass over a `<Grid>` of four `<Image Source=.../>`
-//! whose sources span the four scopes, and asserts Noesis routed each URI to
-//! exactly the right provider — and to NO other.
-//!
-//! `GetTextureInfo` is consulted during the measure pass to size the `Image`
-//! before any pixels are decoded, so this is fully headless: no GPU / render
-//! device is required (we never bind one to the `View`).
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test texture_scoped_providers -- --nocapture`
+//! Texture provider routing: verifies scheme-, assembly-, and scheme+assembly-scoped
+//! providers each receive only their URIs, with no cross-scope leakage.
 
 use std::sync::{Arc, Mutex};
 
@@ -107,13 +87,10 @@ fn texture_scoped_providers_route_by_scheme_and_assembly() {
             },
         );
 
-        // Parse the four-Image tree and drive a measure pass through a View.
-        // GetTextureInfo fires during layout to size each Image.
         let root = FrameworkElement::parse(TEX_XAML).expect("parse Image grid");
         let mut view = View::create(root);
         view.set_size(640, 480);
-        // A couple of updates: the first kicks off source resolution, the
-        // second guarantees layout settled. Neither needs a render device.
+        // First update kicks off source resolution; second guarantees layout settled.
         view.update(0.0);
         view.update(0.016);
 
@@ -124,7 +101,6 @@ fn texture_scoped_providers_route_by_scheme_and_assembly() {
              GetTextureInfo never fired — log = {entries:?}"
         );
 
-        // ── Each scoped URI landed on its own provider ──────────────────────
         assert!(
             entries
                 .iter()
@@ -150,29 +126,24 @@ fn texture_scoped_providers_route_by_scheme_and_assembly() {
             "global provider was not asked for the unscoped URI; log = {entries:?}"
         );
 
-        // ── Exclusivity: no provider saw a URI outside its scope ────────────
-        // The global provider must never be consulted for a scoped URI (no
-        // silent fallback through the global registration).
+        // No silent fallback: global must not be consulted for any scoped URI.
         assert!(
             !entries.iter().any(|(l, u)| *l == "global"
                 && (u.contains("myassets") || u.contains("App") || u.contains("Skin"))),
             "global provider was consulted for a scoped URI — routing leaked; log = {entries:?}"
         );
-        // The scheme provider must only ever see myassets URIs.
         assert!(
             !entries
                 .iter()
                 .any(|(l, u)| *l == "scheme" && (u.contains("App") || u.contains("Skin"))),
             "scheme provider saw an out-of-scope URI; log = {entries:?}"
         );
-        // The assembly provider must only ever see App URIs (not Skin/myassets).
         assert!(
             !entries
                 .iter()
                 .any(|(l, u)| *l == "assembly" && (u.contains("Skin") || u.contains("myassets"))),
             "assembly provider saw an out-of-scope URI; log = {entries:?}"
         );
-        // The scheme+assembly provider must only ever see Skin URIs.
         assert!(
             !entries
                 .iter()

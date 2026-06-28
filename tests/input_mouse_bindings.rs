@@ -1,17 +1,4 @@
-//! TODO §16 — mouse gestures + bindings, end-to-end across the FFI.
-//!
-//! Parallels `input_bindings.rs` (the keyboard half) for the mouse half of the
-//! §16 surface: a Rust [`Command`] whose `Execute` bumps an `Arc<AtomicUsize>`
-//! is bound to a `LeftClick` [`MouseBinding`] (and, in a second case, to an
-//! explicit [`MouseGesture`] wrapped in a generic [`InputBinding`] via
-//! [`InputBinding::with_mouse_gesture`]). The binding is added to a button's
-//! `InputBindings`; driving the matching pointer gesture through a live `View`
-//! must run the command — proving gesture → binding → command across the
-//! boundary. Negative cases (a non-matching button / action) must leave the
-//! counter at zero.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   cargo test --test `input_mouse_bindings` -- --nocapture
+//! Mouse gesture bindings fire bound commands end-to-end across the FFI.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -55,7 +42,6 @@ fn mouse_bindings_fire_bound_commands() {
     }
     noesis_runtime::init();
 
-    // ── Case 1: LeftClick MouseBinding ──────────────────────────────────────
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
@@ -70,7 +56,6 @@ fn mouse_bindings_fire_bound_commands() {
             c2.fetch_add(1, Ordering::SeqCst);
         });
 
-        // LeftClick → command, attached to the (full-window) target button.
         let binding = MouseBinding::new(&command, MouseAction::LeftClick, ModifierKeys::NONE)
             .expect("mouse binding");
         assert!(binding.add_to(&target), "add binding to InputBindings");
@@ -81,7 +66,6 @@ fn mouse_bindings_fire_bound_commands() {
         assert!(view.update(0.0), "first update builds tree");
         let _ = view.update(0.016);
 
-        // Negative: a RIGHT click must not match the LeftClick gesture.
         let _ = view.mouse_button_down(100, 100, MouseButton::Right);
         let _ = view.update(0.024);
         let _ = view.mouse_button_up(100, 100, MouseButton::Right);
@@ -92,7 +76,6 @@ fn mouse_bindings_fire_bound_commands() {
             "right click must not trigger the LeftClick binding"
         );
 
-        // A left click on the button must fire the bound command exactly once.
         let _ = view.mouse_button_down(100, 100, MouseButton::Left);
         let _ = view.update(0.04);
         let _ = view.mouse_button_up(100, 100, MouseButton::Left);
@@ -108,7 +91,6 @@ fn mouse_bindings_fire_bound_commands() {
         drop(command);
     }
 
-    // ── Case 2: explicit MouseGesture wrapped in a generic InputBinding ──────
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
@@ -123,9 +105,7 @@ fn mouse_bindings_fire_bound_commands() {
             c2.fetch_add(1, Ordering::SeqCst);
         });
 
-        // Build a standalone RightClick gesture and wrap it in a generic
-        // InputBinding via with_mouse_gesture; the gesture object can be dropped
-        // once the binding adds its own reference.
+        // The gesture can be dropped once the binding takes its own reference.
         let binding = {
             let gesture = MouseGesture::new(MouseAction::RightClick, ModifierKeys::NONE);
             InputBinding::with_mouse_gesture(&command, &gesture).expect("input binding")
@@ -138,7 +118,6 @@ fn mouse_bindings_fire_bound_commands() {
         assert!(view.update(0.0));
         let _ = view.update(0.016);
 
-        // Negative: a LEFT click must not match the RightClick gesture.
         let _ = view.mouse_button_down(100, 100, MouseButton::Left);
         let _ = view.update(0.024);
         let _ = view.mouse_button_up(100, 100, MouseButton::Left);
@@ -149,7 +128,6 @@ fn mouse_bindings_fire_bound_commands() {
             "left click must not trigger the RightClick gesture"
         );
 
-        // The matching right click fires the bound command once.
         let _ = view.mouse_button_down(100, 100, MouseButton::Right);
         let _ = view.update(0.04);
         let _ = view.mouse_button_up(100, 100, MouseButton::Right);

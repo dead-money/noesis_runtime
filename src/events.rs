@@ -1,12 +1,13 @@
-//! Subscribe Rust callbacks to Noesis routed events (Phase 5.B).
+//! Subscribe Rust callbacks to Noesis routed events.
 //!
-//! Exposes [`subscribe_click`] for `BaseButton::Click` and
-//! [`subscribe_keydown`] for `UIElement::KeyDown`. The shape generalizes —
-//! every routed event is a `Delegate<void(BaseComponent*, const
-//! RoutedEventArgs&)>` on the C++ side, and the FFI pattern
-//! (heap-allocated handler that owns its registration via RAII, holding a
-//! +1 ref on the source element) repeats. Add sibling functions when
-//! other events earn the surface.
+//! Start with [`subscribe_click`] for `BaseButton::Click` and
+//! [`subscribe_keydown`] for `UIElement::KeyDown`. For any other routed
+//! event reach for the generic [`subscribe_event`] (typed by [`RoutedEvent`])
+//! or its `&str` escape hatch [`subscribe_event_by_name`]. Non-routed
+//! lifecycle notifications (`Loaded`, `IsEnabledChanged`, and friends) go
+//! through [`subscribe_lifecycle`]. Every subscription returns an RAII token:
+//! a heap-allocated handler that owns its registration and holds a `+1` ref on
+//! the source element, so dropping the token unsubscribes.
 //!
 //! # Threading
 //!
@@ -49,8 +50,8 @@ use crate::ffi::{
 use crate::view::{FrameworkElement, Key, MouseButton};
 
 /// Rust-side click handler. Implementors receive a single `()` notification
-/// per fired click; if you need the sender / event args, extend the FFI
-/// before adding a richer trait method here.
+/// per fired click; if you need the sender or event args, subscribe through
+/// the generic [`subscribe_event`] / [`RoutedEventHandler`] instead.
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy
 /// `Resource` or be moved onto the render thread.
@@ -143,8 +144,6 @@ pub fn subscribe_click<H: ClickHandler>(
     }
 }
 
-// ── KeyDown subscription ────────────────────────────────────────────────────
-
 /// Rust-side keydown handler. Receives the pressed key plus a writable flag;
 /// setting the flag to `true` marks the routed event handled, stopping
 /// propagation (e.g. prevents the backtick keystroke that opens the console
@@ -193,11 +192,8 @@ unsafe extern "C" fn keydown_trampoline(userdata: *mut c_void, key: i32, out_han
 /// unmapped key fired. Add variants to [`Key`] (and the C++ `static_assert`s
 /// in `noesis_view.cpp`) when a missing key earns it.
 fn key_from_raw(raw: i32) -> Key {
-    // Roundtrip the explicit-discriminant enum through transmute would be
-    // sound but brittle (UB if `raw` falls outside the declared variants).
-    // A match table is verbose but safe; the compiler folds it into a
-    // jump table for the common path. Order mirrors the Key enum's
-    // declaration in src/view.rs for ease of audit.
+    // Match table rather than transmute: transmute would be UB for an ordinal
+    // outside the declared variants. Order mirrors the `Key` enum in src/view.rs.
     match raw {
         0 => Key::None,
         2 => Key::Back,
@@ -398,8 +394,6 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
     }
 }
 
-// ── Generic routed-event subscription (TODO §5) ─────────────────────────────
-
 /// Borrowed view over a routed event's arguments, handed to a
 /// [`RoutedEventHandler`] **by reference** for the duration of one callback.
 /// Backed by the opaque C++ `args` pointer; the typed accessors read whichever
@@ -524,8 +518,6 @@ impl EventArgs {
         (!p.is_null()).then_some(p)
     }
 
-    // ── Focus-changed accessors ────────────────────────────────────────────
-
     /// Borrowed pointer to the element that previously had focus
     /// (`KeyboardFocusChangedEventArgs::oldFocus`), for the `GotKeyboardFocus` /
     /// `LostKeyboardFocus` events (and their `Preview*` variants). `None` for
@@ -549,8 +541,6 @@ impl EventArgs {
         (!p.is_null()).then_some(p)
     }
 
-    // ── Drag accessors ─────────────────────────────────────────────────────
-
     /// Drag effect / allowed-effect / key-state bitsets for a drag event
     /// (`DragEnter` / `DragOver` / `DragLeave` / `Drop` and their `Preview*`
     /// variants). `None` for non-drag events. See [`DragEffects`] /
@@ -573,7 +563,7 @@ impl EventArgs {
     /// Set the drop result (`DragEventArgs::effects`) a `Drop` / `DragOver`
     /// handler reports back to the drag source. Returns `true` if written (i.e.
     /// the live args are a drag event).
-    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
+    #[must_use = "a false return means the effect was not set because the live args are not a drag event"]
     pub fn set_drag_effects(&self, effects: DragEffects) -> bool {
         // SAFETY: opaque handle; accessor validates the kind before writing.
         unsafe { noesis_routed_events_drag_set_effects(self.raw, effects.bits()) }
@@ -601,8 +591,6 @@ impl EventArgs {
         };
         ok.then_some((x, y))
     }
-
-    // ── Manipulation accessors ─────────────────────────────────────────────
 
     /// Manipulation origin point (`manipulationOrigin`), present on the
     /// `ManipulationStarted` / `Delta` / `Completed` / `InertiaStarting`
@@ -1208,13 +1196,11 @@ pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     }
 }
 
-// ── Non-routed lifecycle events (TODO §5) ───────────────────────────────────
-//
 // `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
 // notifications are NOT routed events — they ride Noesis's `Event_<T>`
 // mechanism (`AddEventHandler(Symbol, EventHandler)`), so they go through a
 // separate name-keyed entrypoint rather than the routed `subscribe_event` path.
-// They carry no arguments we surface, so the handler is a bare `FnMut()`.
+// They carry no arguments we surface, so the handler is a bare `Fn()`.
 
 /// Rust-side handler for a non-routed lifecycle event. These notifications
 /// carry no arguments we surface, so the callback takes none.
@@ -1397,14 +1383,12 @@ pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     }
 }
 
-// ── DragDrop source side (TODO §5) ──────────────────────────────────────────
-
 /// Initiate a drag-and-drop operation from `source`, carrying `data` as the
 /// drag payload and advertising `allowed_effects` (a [`DragEffects`] set).
 ///
 /// Wraps `Noesis::DragDrop::DoDragDrop`. The drag is subsequently driven by the
 /// host's pointer/drag input; there is no synchronous result and no headless
-/// completion (see the §5 operational note). `data` may be any element used as
+/// completion. `data` may be any element used as
 /// the transferred payload (this SDK exposes no `DataObject` *builder*, so an
 /// element stands in for the data object).
 ///
@@ -1419,8 +1403,6 @@ pub fn do_drag_drop(
     // it needs and does not retain the raw pointers past the call we make here.
     unsafe { noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects.bits()) }
 }
-
-// ── DataObject copy/paste handlers (TODO §5) ────────────────────────────────
 
 /// Rust-side handler for the `DataObject.Copying` / `.Pasting` attached events.
 /// Receives a borrowed pointer to the clipboard data object (`None` when none

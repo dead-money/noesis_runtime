@@ -1,19 +1,5 @@
-//! TODO §7 — parse a `<ControlTemplate>` / `<DataTemplate>` from a string and
-//! assign it, asserting an observable consequence.
-//!
-//! `ControlTemplate`: a `Button` is given a code-parsed template containing a
-//! named `Border` part. After a layout pump the part becomes resolvable both
-//! via `FrameworkElement::GetTemplateChild` and via `FrameworkTemplate::FindName`
-//! — and `GetTemplate` reads the assigned template back. A button WITHOUT the
-//! template finds no such part (negative discriminator). A stubbed `set_template`
-//! leaves the part unfindable and `control_template` empty.
-//!
-//! `DataTemplate`: a `ContentControl` gets a code-parsed `ContentTemplate`; the
-//! assignment round-trips through Noesis (`get_component("ContentTemplate")`
-//! returns the exact same object). A fresh control has no `ContentTemplate`.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test templates -- --nocapture`
+//! Parse `ControlTemplate` and `DataTemplate` from XAML strings and verify via live
+//! Noesis objects (`GetTemplate`, `GetTemplateChild`, `FindName`, component DPs).
 
 use std::collections::HashMap;
 
@@ -95,8 +81,6 @@ fn parse_and_assign_templates() {
             .and_then(|c| c.find_name("Host"))
             .expect("find Host");
 
-        // ── ControlTemplate ──────────────────────────────────────────────────
-        // Parsing the wrong root type fails cleanly.
         assert!(
             ControlTemplate::parse(DATA_TEMPLATE).is_none(),
             "a <DataTemplate> is not a ControlTemplate"
@@ -122,7 +106,6 @@ fn parse_and_assign_templates() {
             "GetTemplate returns the exact assigned ControlTemplate"
         );
 
-        // The named part is reachable through the applied template.
         let part = templated
             .template_child("PART_Root")
             .expect("PART_Root resolvable via GetTemplateChild after apply");
@@ -132,19 +115,16 @@ fn parse_and_assign_templates() {
             "resolved part carries the expected x:Name"
         );
 
-        // FrameworkTemplate::FindName resolves the same part against the parent.
         assert!(
             template.find_name("PART_Root", &templated).is_some(),
             "FrameworkTemplate::FindName finds PART_Root"
         );
 
-        // The bare button never had the template — no such part.
         assert!(
             bare.template_child("PART_Root").is_none(),
             "untemplated button has no PART_Root"
         );
 
-        // ── DataTemplate ─────────────────────────────────────────────────────
         assert!(
             DataTemplate::parse(CONTROL_TEMPLATE).is_none(),
             "a <ControlTemplate> is not a DataTemplate"

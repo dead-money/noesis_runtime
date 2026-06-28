@@ -1,24 +1,23 @@
-//! SVG / `SVGPath` parsing and geometry queries (TODO §12 "SVG").
+//! SVG parsing and geometry queries, all CPU-side and headless — no GPU
+//! `RenderDevice` or render pass is needed, so you can use these in tests,
+//! tooling, or hit-testing without standing up a renderer.
 //!
-//! Two real 3.2.13 surfaces, both fully CPU/headless (no GPU `RenderDevice` or
-//! render pass required):
+//! There are two surfaces:
 //!
-//! * [`SvgPath`] wraps `Noesis::SVGPath` — parse an SVG *path data* string
-//!   (`SVGPath::TryParse`) or build one with the path-builder statics
-//!   ([`SvgPath::move_to`], [`SvgPath::line_to`], [`SvgPath::add_rect`], …),
-//!   then query it with the static command-buffer API:
-//!   [`SvgPath::bounds`] (`CalculateBounds`), [`SvgPath::fill_contains`]
-//!   (`FillContains`), and [`SvgPath::stroke_contains`] (`StrokeContains`).
-//!   The getters re-read from the live Noesis object, so a stubbed parser /
-//!   bounds fn returning zeros fails the round-trip.
+//! * [`SvgPath`] wraps `Noesis::SVGPath`, a single outline. Parse it from an
+//!   SVG *path data* string with [`SvgPath::parse`], or build one up with
+//!   [`SvgPath::move_to`], [`SvgPath::line_to`], [`SvgPath::add_rect`], and
+//!   friends. Then query it: [`SvgPath::bounds`] for the bounding box,
+//!   [`SvgPath::fill_contains`] and [`SvgPath::stroke_contains`] for
+//!   hit-testing. The queries read back from the live Noesis object each call.
 //!
-//! * [`SvgImage`] wraps `Noesis::SVG::Image`, the struct populated by the free
-//!   function `Noesis::SVG::Parse(const char*, Image&)` from a whole `<svg>`
-//!   document. Exposes the parsed [`SvgImage::size`], [`SvgImage::shape_count`],
-//!   and per-shape [`SvgImage::shape_fill_type`].
+//! * [`SvgImage`] wraps `Noesis::SVG::Image`, the shape collection parsed from
+//!   a whole `<svg>` document via [`SvgImage::parse`]. Inspect it with
+//!   [`SvgImage::size`], [`SvgImage::shape_count`], and
+//!   [`SvgImage::shape_fill_type`].
 //!
 //! Neither underlying type is a `BaseComponent`; each handle owns a plain heap
-//! object freed on [`Drop`] via its dedicated `*_destroy` entrypoint.
+//! object freed on [`Drop`].
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
@@ -129,8 +128,8 @@ impl SvgPath {
         }
     }
 
-    /// Number of `uint32` entries in the command buffer. A parsed or built path
-    /// is non-empty.
+    /// Number of `uint32` entries in the command buffer. Zero for a freshly
+    /// [`SvgPath::new`] path; a successfully parsed path is non-empty.
     #[must_use]
     pub fn command_count(&self) -> u32 {
         // SAFETY: self.ptr is a live SVGPath*.

@@ -1,9 +1,12 @@
-//! Rust-side [`TextureProvider`] trait + [`set_texture_provider`]
-//! registration. Mirrors [`crate::xaml_provider`] and
-//! [`crate::font_provider`]: a boxed trait object is handed to the C++
-//! `RustTextureProvider` subclass via a vtable of trampolines; the
-//! returned [`Registered`] guard owns both the boxed impl and the C++
-//! provider handle.
+//! Supply image pixels to Noesis from Rust. Implement [`TextureProvider`]
+//! to resolve `Image.Source` / `ImageBrush.ImageSource` URIs into RGBA8
+//! textures, then register it with [`set_texture_provider`] (or one of the
+//! scheme/assembly-scoped variants). Your boxed impl is handed to a C++
+//! `RustTextureProvider` subclass through a vtable of trampolines, and the
+//! returned [`Registered`] guard owns both the boxed impl and the C++ handle.
+//!
+//! This parallels [`crate::xaml_provider`] and [`crate::font_provider`] if you
+//! have already used those.
 //!
 //! # How it works
 //!
@@ -44,8 +47,8 @@ use crate::ffi::{
 };
 
 /// Metadata a [`TextureProvider`] can report for a URI without decoding
-/// pixels. `x` / `y` default to `0`; set them only for atlas sub-rects.
-/// `dpi_scale` defaults to `1.0` (96dpi).
+/// pixels. [`new`](Self::new) leaves `x` / `y` at `0` (set them only for atlas
+/// sub-rects) and `dpi_scale` at `1.0` (96dpi).
 #[derive(Copy, Clone, Debug, Default)]
 pub struct TextureInfo {
     pub width: u32,
@@ -56,6 +59,8 @@ pub struct TextureInfo {
 }
 
 impl TextureInfo {
+    /// Metadata for a whole-image texture of the given size, at 96dpi
+    /// (`dpi_scale` 1.0) with no atlas offset.
     #[must_use]
     pub fn new(width: u32, height: u32) -> Self {
         Self {
@@ -76,12 +81,13 @@ pub struct ImageData<'a> {
     pub bytes: &'a [u8],
 }
 
-/// Rust-side texture provider. `info` returns metadata, `load` returns
-/// decoded pixels. Both are keyed by URI strings — Noesis passes the
-/// `ImageBrush.ImageSource` / `Image.Source` values through verbatim.
+/// Resolves image URIs to pixels for Noesis. Implement [`info`](Self::info)
+/// to report a texture's size during layout and [`load`](Self::load) to hand
+/// back the decoded RGBA8 bytes. Both are keyed by the URI string Noesis takes
+/// verbatim from `ImageBrush.ImageSource` / `Image.Source`.
 ///
-/// `Send + Sync` supertraits mirror [`crate::xaml_provider::XamlProvider`]
-/// so [`Registered`] can live in a Bevy `Resource`.
+/// The `Send + Sync` supertraits let the resulting [`Registered`] guard live in
+/// a Bevy `Resource`.
 pub trait TextureProvider: Send + Sync + 'static {
     /// Downcast escape hatch used by [`Registered::provider_mut`].
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
@@ -99,10 +105,6 @@ pub trait TextureProvider: Send + Sync + 'static {
     /// Return `None` to signal "not found".
     fn load(&mut self, uri: &str) -> Option<ImageData<'_>>;
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Trampolines
-// ────────────────────────────────────────────────────────────────────────────
 
 /// SAFETY: `userdata` must be a pointer produced by [`set_texture_provider`]
 /// and still alive.
@@ -154,8 +156,7 @@ unsafe extern "C" fn t_load_texture(
         let Some(img) = provider(userdata).load(&uri) else {
             return false;
         };
-        // Sanity: keep the expected-bytes contract enforced here so the C++
-        // shim can trust `len == w * h * 4` when it calls CreateTexture.
+        // Enforce `len == w * h * 4` here so the C++ shim can trust it at CreateTexture.
         let expected = img.width.saturating_mul(img.height).saturating_mul(4) as usize;
         if img.bytes.len() != expected {
             return false;
@@ -177,10 +178,6 @@ static VTABLE: TextureProviderVTable = TextureProviderVTable {
     get_info: t_get_info,
     load_texture: t_load_texture,
 };
-
-// ────────────────────────────────────────────────────────────────────────────
-// Registered — RAII wrapper holding the boxed impl and the C++ provider
-// ────────────────────────────────────────────────────────────────────────────
 
 /// Owns a Rust [`TextureProvider`] impl together with its C++
 /// `RustTextureProvider` instance. Parallel to
@@ -243,8 +240,7 @@ pub fn set_texture_provider<P: TextureProvider>(provider: P) -> Registered {
 
 /// Build the C++ `RustTextureProvider` wrapping `provider`, hand its handle to
 /// `install` (the only thing that differs between the global / scheme /
-/// assembly variants), and return the owning [`Registered`] guard. Keeps the
-/// four public setters DRY.
+/// assembly variants), and return the owning [`Registered`] guard.
 fn register_with<P: TextureProvider>(provider: P, install: impl FnOnce(*mut c_void)) -> Registered {
     let outer: Box<Box<dyn TextureProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);

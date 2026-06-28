@@ -1,10 +1,5 @@
-//! TODO §9 — READ-ONLY dependency properties of NEW value types (`Point`,
-//! `Enum`).
-//!
-//! Mirrors the read-only `Int32` case in `tests/custom_dp_metadata.rs`: the
-//! ordinary setter path is a no-op on a read-only DP, but the privileged
-//! key-path setter writes and reads back. Proves `apply_set_readonly` reaches
-//! the `Point` / enum arms (read back THROUGH Noesis on a code-created instance).
+//! Read-only dependency properties for `Point` and enum types: ordinary setter
+//! is a no-op; privileged key-path setter writes and reads back through Noesis.
 
 use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyDefault, PropertyOptions, PropertyValue,
@@ -55,7 +50,6 @@ fn custom_dp_readonly_value_types() {
         let inst = reg.create_instance().expect("create_instance");
         let h = inst.handle();
 
-        // Point: ordinary setter rejected; privileged key-path setter writes.
         h.set_point(pt, 9.0, 9.0); // ordinary path: ignored
         assert_eq!(
             h.get_point(pt),
@@ -72,7 +66,6 @@ fn custom_dp_readonly_value_types() {
             "read-only Point DP did not update via key path"
         );
 
-        // Enum: same contract.
         h.set_enum(mode, 7); // ordinary path: ignored
         assert_eq!(
             h.get_enum(mode),

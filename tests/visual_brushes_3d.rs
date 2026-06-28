@@ -1,17 +1,6 @@
-//! Integration tests for the remaining TODO §11 visual surface: `VisualBrush`,
-//! the full `TileBrush` tiling knobs (shared by `ImageBrush` + `VisualBrush`),
-//! and the 3D transforms (`CompositeTransform3D` / `MatrixTransform3D`) assigned
-//! to an element via `UIElement::SetTransform3D`.
-//!
-//! Every assertion reads at least one value BACK from the live Noesis object
-//! (enum read-back, `Viewport`/`Viewbox` Rect read-back, 3D float fields, or
-//! pointer identity through `get_component` / `GetVisual` / `GetTransform3D`), so
-//! a stubbed constructor/setter would fail the round-trip. No GPU is needed.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test visual_brushes_3d -- --nocapture`
+//! Integration tests for `VisualBrush`, the full `TileBrush` tiling knobs
+//! (shared by `ImageBrush` + `VisualBrush`), and the 3D transforms
+//! (`CompositeTransform3D` / `MatrixTransform3D`).
 
 use noesis_runtime::brushes::{
     AlignmentX, AlignmentY, BrushMappingMode, ImageBrush, Stretch, TileBrush, TileMode, VisualBrush,
@@ -40,16 +29,13 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
     noesis_runtime::init();
 
     {
-        // ── VisualBrush: source wiring round-trip ───────────────────────────
-        // A fresh VisualBrush has no visual; GetVisual returns null (proves a
-        // real VisualBrush, not a stub returning a dangling pointer).
+        // A fresh VisualBrush has no visual; GetVisual returns null rather than
+        // a dangling pointer.
         let mut vb = VisualBrush::new();
         assert!(vb.visual().is_none(), "fresh VisualBrush has no visual");
 
-        // Any element is a Visual: wire one and read the pointer back. The
         // Visual subobject sits at offset 0 of the element (single-inheritance
-        // chain to BaseComponent), so GetVisual round-trips the exact element
-        // pointer.
+        // chain to BaseComponent), so GetVisual round-trips the exact pointer.
         let source_xaml = format!("<Border {NS} Width=\"40\" Height=\"40\"/>");
         let source = FrameworkElement::parse(&source_xaml).expect("parse source");
         assert!(vb.set_visual(&source), "set_visual");
@@ -59,7 +45,6 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "GetVisual returns the exact element we assigned"
         );
 
-        // from_element constructor wires the source at creation time.
         let vb2 = VisualBrush::from_element(&source);
         assert_eq!(
             vb2.visual().expect("from_element visual").as_ptr(),
@@ -67,12 +52,10 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "from_element wires the visual"
         );
 
-        // clear_visual unsets it.
         assert!(vb.clear_visual(), "clear_visual");
         assert!(vb.visual().is_none(), "visual cleared");
         assert!(vb.set_visual(&source), "setter should succeed");
 
-        // Assign the VisualBrush to a target's Background; pointer identity.
         let target_xaml = format!("<Border {NS}/>");
         let mut target = FrameworkElement::parse(&target_xaml).expect("parse target");
         assert!(
@@ -89,9 +72,7 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "Background is the exact VisualBrush we assigned"
         );
 
-        // ── TileBrush tiling knobs on VisualBrush ───────────────────────────
-        // Defaults differ from our writes, so the read-backs prove the setters
-        // crossed the FFI.
+        // Non-default values ensure the read-backs prove the setters crossed the FFI.
         vb.set_alignment_x(AlignmentX::Right);
         vb.set_alignment_y(AlignmentY::Bottom);
         vb.set_stretch(Stretch::UniformToFill);
@@ -118,12 +99,9 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "vb viewbox_units"
         );
 
-        // ── Same tiling knobs on ImageBrush (it is also a TileBrush) ────────
         let mut ib = ImageBrush::new();
-        // Sanity: a fresh ImageBrush reads back the SDK's default AlignmentX
-        // (proves the TileBrush cast works on ImageBrush too, and that we read a
-        // real value, not just a valid variant). TileBrush.AlignmentXProperty
-        // defaults to AlignmentX::Center in Noesis (matching WPF).
+        // TileBrush.AlignmentXProperty defaults to Center in Noesis (matching WPF);
+        // reading it back proves the TileBrush cast works on ImageBrush.
         assert_eq!(
             ib.alignment_x(),
             Some(AlignmentX::Center),
@@ -155,11 +133,10 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "ib viewbox_units"
         );
 
-        // Mutate an enum a second time to prove setters aren't write-once.
+        // Second mutation proves setters aren't write-once.
         ib.set_stretch(Stretch::Uniform);
         assert_eq!(ib.stretch(), Some(Stretch::Uniform), "ib stretch re-set");
 
-        // ── CompositeTransform3D: 12-float round-trip ───────────────────────
         let fields = Composite3DFields {
             center_x: 200.0,
             center_y: 100.0,
@@ -177,7 +154,6 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
         let mut ct3d = CompositeTransform3D::new(fields);
         assert_eq!(ct3d.get(), fields, "composite3d round-trip");
 
-        // Mutate via set() and re-read.
         let fields2 = Composite3DFields {
             rotation_y: 90.0,
             translate_z: -7.0,
@@ -186,8 +162,7 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
         ct3d.set(fields2);
         assert_eq!(ct3d.get(), fields2, "composite3d set round-trip");
 
-        // ── MatrixTransform3D: 12-float (Transform3) round-trip ─────────────
-        // An affine 3D matrix: identity rotation rows + a translation row.
+        // Affine 3D matrix: identity rotation rows + a translation row.
         let m = [
             1.0, 0.0, 0.0, // row 0
             0.0, 1.0, 0.0, // row 1
@@ -210,10 +185,8 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "matrix3d set round-trip"
         );
 
-        // ── Element Transform3D assignment (UIElement::SetTransform3D) ───────
         let el_xaml = format!("<Border {NS} Width=\"100\" Height=\"100\"/>");
         let mut el = FrameworkElement::parse(&el_xaml).expect("parse el");
-        // No 3D transform set initially.
         assert!(el.transform3d().is_none(), "no Transform3D initially");
 
         assert!(el.set_transform3d(&ct3d), "set Transform3D (composite)");
@@ -224,7 +197,6 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "GetTransform3D returns the exact composite we assigned"
         );
 
-        // Re-apply the type-erased handle to another element.
         let mut el2 = FrameworkElement::parse(&el_xaml).expect("parse el2");
         assert!(el2.set_transform3d(&read), "re-apply AnyTransform3D");
         assert_eq!(
@@ -233,7 +205,6 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "re-applied transform identity"
         );
 
-        // Replace with the matrix transform, then clear.
         assert!(el.set_transform3d(&mt3d), "set Transform3D (matrix)");
         assert_eq!(
             el.transform3d().expect("matrix Transform3D set").raw(),

@@ -1,6 +1,6 @@
-//! Runtime registration of "other reflected entities" (TODO §9): custom enums,
-//! custom routed events on Rust-backed types, factory/metadata introspection,
-//! and Rust-backed reflection [`TypeConverter`]s.
+//! Runtime registration of "other reflected entities": custom enums, custom
+//! routed events on Rust-backed types, factory/metadata introspection, and the
+//! reflection `TypeConverter` string→value path.
 //!
 //! These complement [`crate::classes`] (Rust-backed XAML classes) and
 //! [`crate::converters`] (binding `IValueConverter`s). Everything here registers
@@ -301,7 +301,7 @@ pub fn get_depends_on(type_name: &str) -> Option<String> {
 // `TypeConverter::Get` resolves converters through an internal registry that
 // `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive at runtime
 // in 3.2.13 (a synthetic converter type registers in the Factory yet `Get` still
-// returns null). See TODO.md "Known SDK limitations".
+// returns null). See LIMITATIONS.md "Known SDK limitations".
 //
 // The *consumption* side below is fully exposed: [`convert_from_string`] drives
 // `TypeConverter::Get` + `TryConvertFromString`, the exact string→value path the
@@ -372,9 +372,9 @@ impl Drop for BoxedValue {
 /// `None` if the type / converter is unknown or the string does not convert.
 ///
 /// Works for any built-in / reflected type that has a converter (e.g. `Bool`,
-/// `Int32`, `Single`, `Color`, `Thickness`). Note: a custom [`register_enum`]'d
-/// enum does NOT get an auto-resolved converter here (`TypeConverter::Get`
-/// returns null for runtime-registered types) — query enum members via
+/// `Int32`, `Single`, `Color`, `Thickness`). A custom [`register_enum`]'d enum
+/// does NOT get an auto-resolved converter here (`TypeConverter::Get` returns
+/// null for runtime-registered types) — query enum members via
 /// [`EnumType::value_from_name`] instead.
 ///
 /// # Panics

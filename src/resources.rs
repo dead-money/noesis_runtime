@@ -1,4 +1,4 @@
-//! `ResourceDictionary` access + application resources (TODO §7).
+//! `ResourceDictionary` access + application resources.
 //!
 //! XAML authors put brushes, colours, styles and templates in a
 //! `<ResourceDictionary>` — either inline on an element's `Resources`, merged
@@ -124,7 +124,7 @@ impl ResourceDictionary {
 
     /// Add a `BaseComponent*` under `key`; the dictionary takes its own
     /// reference, so the caller retains ownership of `value`. Returns `false`
-    /// on a NULL `value` (or a key with no effect).
+    /// only if `value` is null.
     ///
     /// # Safety
     ///

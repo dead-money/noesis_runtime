@@ -1,14 +1,8 @@
-//! TODO §16 — input gestures + bindings, end-to-end across the FFI.
-//!
-//! The strong wiring proof: a Rust [`Command`] whose `Execute` bumps an
-//! `Arc<AtomicUsize>` is bound to a `Ctrl+Enter` [`KeyBinding`], added to a
-//! focused element's `InputBindings`. Driving `Ctrl+Enter` through a live `View`
-//! must run the command — proving gesture → binding → command across the
-//! boundary. A second case does the same with an explicit [`KeyGesture`] +
-//! [`InputBinding`] to exercise the general gesture path.
+//! Input gestures + bindings end-to-end: gesture → binding → Rust command
+//! across the FFI. Covers `KeyBinding` (Ctrl+Enter) and `InputBinding`/`KeyGesture` (F5).
 //!
 //! Run with `NOESIS_SDK_DIR` set:
-//!   cargo test --test `input_bindings` -- --nocapture
+//!   `cargo test -p noesis_runtime --test input_bindings -- --nocapture`
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,8 +34,6 @@ impl XamlProvider for InMem {
     }
 }
 
-// One #[test] per file (init once per process — the headless convention). Both
-// the KeyBinding and the explicit-gesture InputBinding cases run sequentially.
 #[test]
 fn input_bindings_fire_bound_commands() {
     if let (Ok(name), Ok(key)) = (
@@ -61,14 +53,12 @@ fn input_bindings_fire_bound_commands() {
         let root = FrameworkElement::load("scene.xaml").expect("load scene");
         let mut target = root.find_name("Target").expect("find Target");
 
-        // A Rust command that bumps a shared counter on Execute.
         let counter = Arc::new(AtomicUsize::new(0));
         let c2 = Arc::clone(&counter);
         let command = Command::new(move |_param| {
             c2.fetch_add(1, Ordering::SeqCst);
         });
 
-        // Ctrl+Enter → command, attached to the target element.
         let binding =
             KeyBinding::new(&command, Key::Return, ModifierKeys::CONTROL).expect("key binding");
         assert!(binding.add_to(&target), "add binding to InputBindings");
@@ -93,7 +83,6 @@ fn input_bindings_fire_bound_commands() {
             "plain Enter must not trigger Ctrl+Enter binding"
         );
 
-        // Now Ctrl+Enter: press Control (sets the modifier), then Enter.
         let _ = view.key_down(Key::LeftCtrl);
         let _ = view.update(0.04);
         let _ = view.key_down(Key::Return);
@@ -128,9 +117,7 @@ fn input_bindings_fire_bound_commands() {
             c2.fetch_add(1, Ordering::SeqCst);
         });
 
-        // Build a standalone gesture (F5, no modifiers) and wrap it in a generic
-        // InputBinding — the gesture object can be dropped once the binding adds
-        // its own reference.
+        // gesture can be dropped once the binding takes its own reference
         let binding = {
             let gesture = KeyGesture::new(Key::F5, ModifierKeys::NONE);
             InputBinding::with_gesture(&command, &gesture).expect("input binding")

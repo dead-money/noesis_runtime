@@ -1,20 +1,11 @@
-//! TODO §18 — error / assert / per-thread-error handlers.
+//! Error, assert, and per-thread error handler round-trips.
 //!
-//! Each handler is registered as a Rust closure that records what it saw into an
-//! `Arc<Mutex<..>>`; we then drive it through the real SDK invokers
-//! (`InvokeErrorHandler` / `InvokeAssertHandler`) and assert the exact values
-//! crossed the FFI. The RAII guards' restore-on-drop is exercised by a nested
-//! install/drop chain whose effect is observable: after a guard drops, the next
-//! invoke must reach the *previous* handler (or no handler), never the dropped
-//! one.
+//! All invokes use `fatal = false` — a fatal error or real assert can abort
+//! the process.
 //!
-//! Everything runs with `fatal = false` — a fatal error or a real assert can
-//! abort the process (see `diagnostics` module docs).
-//!
-//! Build note: this Release Noesis dylib compiles the assert subsystem out
-//! (`SetAssertHandler` / `InvokeAssertHandler` are aliased to a single no-op
-//! stub), so the assert *round-trip* can't be observed here. The assert section
-//! asserts whichever contract this build exposes and is strong on a Debug SDK.
+//! The assert round-trip cannot be observed on a Release Noesis build because
+//! the assert subsystem is compiled out (`SetAssertHandler`/`InvokeAssertHandler`
+//! are aliased to a no-op stub).
 
 use std::sync::{Arc, Mutex};
 
@@ -37,7 +28,6 @@ fn error_assert_thread_handlers() {
     noesis_runtime::init();
 
     {
-        // ── Global error handler: exact value round-trip ───────────────────
         let a: Rec<(String, u32, String, bool)> = rec();
         {
             let a2 = Arc::clone(&a);
@@ -63,7 +53,6 @@ fn error_assert_thread_handlers() {
                 );
             }
 
-            // ── Nested handler: takes over, leaves the outer record alone ───
             let b: Rec<(String, u32, String)> = rec();
             {
                 let b2 = Arc::clone(&b);
@@ -84,7 +73,6 @@ fn error_assert_thread_handlers() {
                 // _gb drops here → outer handler restored.
             }
 
-            // After the nested guard dropped, the OUTER handler is active again.
             diag::invoke_error("outer.cpp", 9, false, "outer again");
             {
                 let got = a.lock().unwrap();
@@ -115,7 +103,6 @@ fn error_assert_thread_handlers() {
             "no invoke may reach a handler after its guard dropped"
         );
 
-        // ── Per-thread error handler: ErrorContext{uri,line,column} round-trip
         let t: Rec<(String, u32, String, bool, Option<ErrorContext>)> = rec();
         {
             let t2 = Arc::clone(&t);
@@ -163,8 +150,8 @@ fn error_assert_thread_handlers() {
             // _gt drops here → per-thread handler removed.
         }
 
-        // After the thread guard dropped, a context invoke falls through to the
-        // global default and must NOT reach our dropped closure.
+        // After the guard dropped, invokes fall through to the default and must
+        // not reach the dropped closure.
         diag::invoke_error_with_context("parser.cpp", 99, false, "x.xaml", 1, 1, "post-drop");
         assert_eq!(
             t.lock().unwrap().len(),
@@ -172,7 +159,6 @@ fn error_assert_thread_handlers() {
             "dropped thread handler must receive nothing further"
         );
 
-        // ── Assert handler ─────────────────────────────────────────────────
         let s: Rec<(String, u32, String)> = rec();
         {
             let s2 = Arc::clone(&s);

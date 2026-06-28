@@ -1,20 +1,5 @@
-//! Integration tests for code-side element-tree construction (Phase 1): mutate a
-//! parsed `StackPanel`'s `Children`, a `Grid`'s row/column definitions, and a
-//! `Border`'s `Child` from Rust, then read every value BACK from the live Noesis
-//! object.
-//!
-//! The assertions are written to FAIL against a stub: a `Children.Add` that
-//! didn't grow `Count()`, a `SetChild` that dropped the element, a
-//! `RowDefinition` length that didn't reach Noesis, or a `DynamicCast` that
-//! returned the wrong collection would all break a round-trip here. Structure
-//! proofs use pointer identity between the element handed to a collection and the
-//! element read back out of it.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process);
-//! all owning handles drop inside the inner scope before `shutdown()`.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test element_tree_build -- --nocapture`
+//! Code-side element-tree construction: `StackPanel` children, `Grid` row/column
+//! definitions, and `Border` child — mutated from Rust and round-tripped by identity.
 
 use noesis_runtime::element_tree::{
     ColumnDefinition, GridLength, GridUnitType, RowDefinition, column_definitions, panel_children,
@@ -35,7 +20,6 @@ fn element_tree_build_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── Panel.Children: a parsed StackPanel grows/shrinks from code ───────
         let panel = FrameworkElement::parse(&format!("<StackPanel {NS}/>")).expect("parse panel");
         let mut children = panel_children(&panel).expect("StackPanel children");
         assert_eq!(children.count(), 0, "fresh StackPanel has no children");
@@ -48,14 +32,12 @@ fn element_tree_build_round_trip() {
         assert_eq!(children.add(&b2), Some(1), "second child at index 1");
         assert_eq!(children.count(), 2, "count grows after add");
 
-        // Insert b1 between them; pointer identity proves placement.
         assert!(children.insert(1, &b1), "insert b1 at index 1");
         assert_eq!(children.count(), 3, "count grows after insert");
         assert_eq!(children.get_raw(0), b0.raw(), "child[0] is b0");
         assert_eq!(children.get_raw(1), b1.raw(), "child[1] is the inserted b1");
         assert_eq!(children.get_raw(2), b2.raw(), "child[2] is b2");
 
-        // Owning getter hands back the same underlying object.
         let got = children.get(1).expect("get child 1");
         assert_eq!(got.raw(), b1.raw(), "owning get returns the same object");
         drop(got);
@@ -64,7 +46,6 @@ fn element_tree_build_round_trip() {
         assert_eq!(children.count(), 2, "count shrinks after remove");
         assert_eq!(children.get_raw(0), b1.raw(), "b1 shifted to index 0");
 
-        // Re-reading children sees the live collection (b1 still present).
         let children2 = panel_children(&panel).expect("children again");
         assert_eq!(children2.count(), 2, "live collection, not a fresh one");
         assert_eq!(children2.get_raw(0), b1.raw(), "b1 survives via live coll");
@@ -72,11 +53,9 @@ fn element_tree_build_round_trip() {
         assert!(children.clear(), "clear children");
         assert_eq!(children.count(), 0, "empty after clear");
 
-        // A non-Panel element has no children collection.
         let tb = FrameworkElement::parse(&format!("<TextBlock {NS}/>")).expect("parse tb");
         assert!(panel_children(&tb).is_none(), "TextBlock is not a Panel");
 
-        // ── Border.Child: set / read / clear from code ───────────────────────
         let mut border = FrameworkElement::parse(&format!("<Border {NS}/>")).expect("parse border");
         assert!(
             border.decorator_child().is_none(),
@@ -90,13 +69,11 @@ fn element_tree_build_round_trip() {
         drop(child);
         assert!(border.clear_decorator_child(), "clear Border child");
         assert!(border.decorator_child().is_none(), "Border child cleared");
-        // A non-Decorator element rejects the child.
         assert!(
             !tb.clone_ref().set_decorator_child(&inner),
             "TextBlock is not a Decorator"
         );
 
-        // ── Grid definitions + GridLength round-trip ─────────────────────────
         let grid = FrameworkElement::parse(&format!("<Grid {NS}/>")).expect("parse grid");
         let mut rows = row_definitions(&grid).expect("grid rows");
         let mut cols = column_definitions(&grid).expect("grid cols");
@@ -104,7 +81,7 @@ fn element_tree_build_round_trip() {
         assert_eq!(cols.count(), 0, "fresh Grid has no column defs");
 
         let mut r0 = RowDefinition::new();
-        // Default is 1* per the SDK docs.
+        // Default height is 1* (per the SDK).
         assert_eq!(
             r0.length(),
             Some(GridLength::star(1.0)),
@@ -145,7 +122,6 @@ fn element_tree_build_round_trip() {
         assert_eq!(cols.count(), 1, "one column def");
         assert_eq!(cols.get_raw(0), c0.raw(), "col[0] is c0 by identity");
 
-        // Re-read the live row collection: still two definitions.
         let rows2 = row_definitions(&grid).expect("rows again");
         assert_eq!(rows2.count(), 2, "live row collection persists");
 
@@ -155,7 +131,6 @@ fn element_tree_build_round_trip() {
         assert!(rows.clear(), "clear rows");
         assert_eq!(rows.count(), 0, "no rows after clear");
 
-        // A non-Grid Panel has no definition collections.
         assert!(
             row_definitions(&panel).is_none(),
             "StackPanel has no row defs"

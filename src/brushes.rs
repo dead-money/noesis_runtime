@@ -1,5 +1,5 @@
-//! Code-built brushes and effects (TODO §11): construct `Brush` / `Effect`
-//! objects from Rust and paint elements with them without authoring XAML.
+//! Code-built brushes and effects: construct `Brush` / `Effect` objects from
+//! Rust and paint elements with them without authoring XAML.
 //!
 //! Each type here is an owning handle over a freshly-created Noesis object
 //! holding a single `+1` reference, released on [`Drop`] — the same pattern as
@@ -11,8 +11,8 @@
 //! routes through the generic `set_component` DP path.
 //!
 //! Read-back getters ([`SolidColorBrush::color`], [`BlurEffect::radius`], …)
-//! re-read the value from the live Noesis object, so they prove a value crossed
-//! the FFI rather than echoing a Rust-side cache.
+//! re-read from the live Noesis object, so they reflect its current state rather
+//! than a Rust-side cache.
 
 use core::ptr::NonNull;
 use std::ffi::c_void;
@@ -85,8 +85,6 @@ macro_rules! base_component_handle {
     };
 }
 
-// ── SolidColorBrush ──────────────────────────────────────────────────────────
-
 /// A `SolidColorBrush` painting a flat `[r, g, b, a]` color (each `0..=1`).
 pub struct SolidColorBrush {
     ptr: NonNull<c_void>,
@@ -135,8 +133,6 @@ impl Brush for SolidColorBrush {
         self.raw()
     }
 }
-
-// ── Gradient stop (a plain value, not a handle) ──────────────────────────────
 
 /// A single gradient stop: a color at a normalized `offset` (`0..=1`).
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -204,7 +200,7 @@ fn gradient_mapping_mode(ptr: *mut c_void) -> Option<BrushMappingMode> {
     BrushMappingMode::from_ordinal(unsafe { noesis_gradient_brush_get_mapping_mode(ptr) })
 }
 
-/// `Noesis::GradientSpreadMethod` (`NsGui/Enums.h`): how a gradient paints the
+/// `Noesis::GradientSpreadMethod`: how a gradient paints the
 /// area outside its `[0, 1]` gradient vector. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -228,8 +224,6 @@ impl GradientSpreadMethod {
         }
     }
 }
-
-// ── LinearGradientBrush ──────────────────────────────────────────────────────
 
 /// A `LinearGradientBrush` painting a gradient along the line from `StartPoint`
 /// to `EndPoint` (default `(0,0)`..`(1,1)`, relative to the painted area).
@@ -389,8 +383,6 @@ impl Brush for LinearGradientBrush {
         self.raw()
     }
 }
-
-// ── RadialGradientBrush ──────────────────────────────────────────────────────
 
 /// A `RadialGradientBrush` painting a gradient from a focal `GradientOrigin`
 /// outward to the circle defined by `Center` + `RadiusX`/`RadiusY`.
@@ -571,9 +563,7 @@ impl Brush for RadialGradientBrush {
     }
 }
 
-// ── TileBrush tiling knobs (shared by ImageBrush + VisualBrush) ──────────────
-
-/// `Noesis::AlignmentX` (`NsGui/Enums.h`): horizontal alignment of a tile's
+/// `Noesis::AlignmentX`: horizontal alignment of a tile's
 /// content within its base tile. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -598,7 +588,7 @@ impl AlignmentX {
     }
 }
 
-/// `Noesis::AlignmentY` (`NsGui/Enums.h`): vertical alignment of a tile's content
+/// `Noesis::AlignmentY`: vertical alignment of a tile's content
 /// within its base tile. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -623,7 +613,7 @@ impl AlignmentY {
     }
 }
 
-/// `Noesis::Stretch` (`NsGui/Enums.h`): how content is resized to fill its
+/// `Noesis::Stretch`: how content is resized to fill its
 /// allocated space. Ordinals match the C++ enum.
 ///
 /// This is the crate's single `Stretch` type — used both by tile brushes here
@@ -654,7 +644,7 @@ impl Stretch {
     }
 }
 
-/// `Noesis::TileMode` (`NsGui/Enums.h`): how a base tile repeats to fill the
+/// `Noesis::TileMode`: how a base tile repeats to fill the
 /// painted area. Ordinals match the C++ enum.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -685,7 +675,7 @@ impl TileMode {
     }
 }
 
-/// `Noesis::BrushMappingMode` (`NsGui/Enums.h`): whether a `Viewport`/`Viewbox`
+/// `Noesis::BrushMappingMode`: whether a `Viewport`/`Viewbox`
 /// Rect is in absolute coordinates or relative to the bounding box. Ordinals
 /// match the C++ enum.
 #[repr(i32)]
@@ -713,8 +703,8 @@ impl BrushMappingMode {
 /// and the `Viewport`/`Viewbox` Rects with their mapping units.
 ///
 /// Each `Viewport`/`Viewbox` Rect is expressed as `[x, y, width, height]`.
-/// Getters re-read from the live Noesis object so they prove a value crossed the
-/// FFI rather than echoing a Rust cache.
+/// Getters re-read from the live Noesis object, so they reflect its current
+/// state rather than a Rust cache.
 pub trait TileBrush: Brush {
     /// Set the horizontal alignment of content within the base tile.
     fn set_alignment_x(&mut self, value: AlignmentX) {
@@ -817,14 +807,12 @@ pub trait TileBrush: Brush {
     }
 }
 
-// ── ImageBrush ───────────────────────────────────────────────────────────────
-
 /// An `ImageBrush` tiling/stretching an `ImageSource` over the painted area.
 ///
 /// Source wiring is via a borrowed `ImageSource*` — typically one obtained from
 /// [`FrameworkElement::get_component`](crate::view::FrameworkElement::get_component)
 /// on an element with a loaded image, since this crate does not yet build
-/// `ImageSource`s from raw pixels (that needs the imaging surface, TODO §12).
+/// `ImageSource`s from raw pixels (that needs the imaging surface).
 pub struct ImageBrush {
     ptr: NonNull<c_void>,
 }
@@ -896,19 +884,16 @@ impl Brush for ImageBrush {
 
 impl TileBrush for ImageBrush {}
 
-// ── VisualBrush ──────────────────────────────────────────────────────────────
-
-/// A `VisualBrush` (NsGui/VisualBrush.h) painting an area with a `Visual` — any
-/// element (a [`FrameworkElement`](crate::view::FrameworkElement)) is a Visual.
+/// A `VisualBrush` painting an area with a `Visual` — any element (a
+/// [`FrameworkElement`](crate::view::FrameworkElement)) is a Visual.
 ///
 /// It derives from [`TileBrush`], so the tiling knobs (alignment / stretch /
 /// tile mode / viewport / viewbox) apply here too.
 ///
-/// NOTE (SDK): the Noesis header states a `VisualBrush` only *renders* when its
-/// visual is part of the logical tree. The property assignment is nonetheless
-/// fully headless-verifiable: [`VisualBrush::visual`] reads the visual pointer
-/// back from the live brush, and assigning the brush to an element round-trips
-/// via `get_component` pointer identity.
+/// A `VisualBrush` only *renders* when its visual is part of the live element
+/// tree — the property still round-trips ([`VisualBrush::visual`] reads the
+/// pointer straight back from the brush), but nothing paints until the visual
+/// is parented.
 pub struct VisualBrush {
     ptr: NonNull<c_void>,
 }
@@ -987,8 +972,6 @@ impl Brush for VisualBrush {
 
 impl TileBrush for VisualBrush {}
 
-// ── BlurEffect ───────────────────────────────────────────────────────────────
-
 /// A `BlurEffect` blurring an element's visual by a `Radius` (in DIPs).
 pub struct BlurEffect {
     ptr: NonNull<c_void>,
@@ -1031,8 +1014,6 @@ impl Effect for BlurEffect {
         self.raw()
     }
 }
-
-// ── DropShadowEffect ─────────────────────────────────────────────────────────
 
 /// A `DropShadowEffect` casting a colored shadow behind an element's visual.
 pub struct DropShadowEffect {

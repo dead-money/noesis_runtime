@@ -1,5 +1,5 @@
-//! Code-built transforms (TODO §11): construct `Transform` objects from Rust
-//! and apply them as an element's `RenderTransform`.
+//! Build `Transform` objects from Rust and apply them as an element's
+//! `RenderTransform`.
 //!
 //! Each type owns a freshly-created Noesis object holding a single `+1`
 //! reference released on [`Drop`] (the [`crate::binding::Boxed`] pattern).
@@ -7,8 +7,8 @@
 //! [`FrameworkElement::set_render_transform`](crate::view::FrameworkElement::set_render_transform);
 //! Noesis takes its own reference, so the Rust handle may drop afterwards.
 //!
-//! Getters re-read field values from the live Noesis object, proving they
-//! crossed the FFI rather than echoing a Rust cache.
+//! Getters re-read field values from the live Noesis object, so they reflect
+//! the object's current state rather than a Rust-side cache.
 //!
 //! 3D transforms ([`CompositeTransform3D`] / [`MatrixTransform3D`], both
 //! implementing the [`Transform3D`] marker) are assigned to an element through
@@ -70,8 +70,6 @@ macro_rules! transform_handle {
     };
 }
 
-// ── AnyTransform ─────────────────────────────────────────────────────────────
-
 /// An owning, **type-erased** handle to a `Noesis::Transform` read back from an
 /// element — e.g. via
 /// [`FrameworkElement::render_transform`](crate::view::FrameworkElement::render_transform).
@@ -92,8 +90,6 @@ impl AnyTransform {
         Self { ptr }
     }
 }
-
-// ── TranslateTransform ───────────────────────────────────────────────────────
 
 /// Offsets an element by `(X, Y)`.
 pub struct TranslateTransform {
@@ -139,8 +135,6 @@ impl TranslateTransform {
     }
 }
 
-// ── ScaleTransform ───────────────────────────────────────────────────────────
-
 /// Scales an element by `(ScaleX, ScaleY)` about a center `(CenterX, CenterY)`.
 pub struct ScaleTransform {
     ptr: NonNull<c_void>,
@@ -179,8 +173,6 @@ impl ScaleTransform {
         out
     }
 }
-
-// ── RotateTransform ──────────────────────────────────────────────────────────
 
 /// Rotates an element by `Angle` (degrees) about `(CenterX, CenterY)`.
 pub struct RotateTransform {
@@ -225,8 +217,6 @@ impl RotateTransform {
     }
 }
 
-// ── SkewTransform ────────────────────────────────────────────────────────────
-
 /// Skews an element by `(AngleX, AngleY)` (degrees) about a center.
 pub struct SkewTransform {
     ptr: NonNull<c_void>,
@@ -257,8 +247,6 @@ impl SkewTransform {
         out
     }
 }
-
-// ── MatrixTransform ──────────────────────────────────────────────────────────
 
 /// Applies an arbitrary affine `Matrix` (`[m00, m01, m10, m11, m20, m21]`).
 pub struct MatrixTransform {
@@ -298,8 +286,6 @@ impl MatrixTransform {
         out
     }
 }
-
-// ── TransformGroup ───────────────────────────────────────────────────────────
 
 /// Composes several child transforms, applied in order.
 pub struct TransformGroup {
@@ -344,8 +330,6 @@ impl TransformGroup {
         n.max(0) as usize
     }
 }
-
-// ── CompositeTransform ───────────────────────────────────────────────────────
 
 /// The combined scale/skew/rotate/translate transform (the XAML
 /// `CompositeTransform`), applied in that canonical order about a center.
@@ -450,8 +434,6 @@ impl CompositeTransform {
         CompositeFields::from_array(out)
     }
 }
-
-// ── 3D transforms ────────────────────────────────────────────────────────────
 
 /// A handle to a Noesis `Transform3D`. Implemented by every 3D transform type
 /// here so

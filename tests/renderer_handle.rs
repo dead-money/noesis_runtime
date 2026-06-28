@@ -1,17 +1,4 @@
-//! TODO §1 — the owned, thread-movable [`RendererHandle`] (the render-thread /
-//! UI-thread split). Proves the two properties that make it more than the
-//! borrowed `Renderer<'a>`:
-//!   1. it keeps the renderer alive after the `View` wrapper is dropped (its own
-//!      `+1` ref on the `IView`), and
-//!   2. it is `Send` and actually drives a render pass from another thread.
-//!
-//! Single `#[test]` per file (Noesis can't be re-init'd in a process): all work
-//! happens in an inner scope so every owning wrapper drops before `shutdown()`.
-//! Reuses the headless `RenderDevice` harness from the sibling view tests, with
-//! a `draw_batch` counter so "rendering actually happened" is observable.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test --features test-utils --test renderer_handle -- --nocapture`
+//! [`RendererHandle`]: proves it outlives `View` (independent `IView` ref-count) and can drive a render pass from a moved-to thread.
 
 use std::collections::HashMap;
 use std::num::NonZeroU64;
@@ -46,8 +33,7 @@ impl XamlProvider for InMem {
     }
 }
 
-// Headless RenderDevice with a draw_batch counter (so a render pass is
-// observable). Matches the one in tests/view_renderer_extras.rs.
+// Headless RenderDevice with a draw_batch counter so a render pass is observable.
 struct NullDevice {
     next: u64,
     vb: Vec<u8>,
@@ -172,14 +158,13 @@ fn renderer_handle_outlives_view_and_renders_cross_thread() {
         view.set_size(200, 200);
         view.activate();
 
-        // Take the owned handle BEFORE driving frames. The IView now has two
-        // refs: this handle's and the `view` wrapper's.
+        // Take the owned handle before driving frames so the IView has two refs:
+        // this handle's and the `view` wrapper's.
         let mut handle = view.renderer_handle();
         handle.renderer().init(&device);
 
-        // Drive a few frames on the "UI thread" (here, the test thread) so a
-        // snapshot exists, then render through the handle to confirm it drives a
-        // real pass.
+        // Drive a few frames so a render-tree snapshot exists, then render through
+        // the handle to confirm it issues draw calls.
         let mut t = 0.0_f64;
         assert!(view.update(t), "first Update should report change");
         for _ in 0..3 {
@@ -198,10 +183,8 @@ fn renderer_handle_outlives_view_and_renders_cross_thread() {
             "rendering through the handle should issue draw batches, got {after_main_render}"
         );
 
-        // ── (2) Cross-thread: move the handle to a render thread and render
-        //        there. `update` already ran on this thread, so the snapshot is
-        //        ready; the scoped thread only consumes it. Returns the handle
-        //        so we keep ownership afterwards. ─────────────────────────────
+        // Move the handle to a render thread; update already ran so the snapshot
+        // is ready. The scoped thread returns the handle so we keep ownership.
         view.update(t); // fresh snapshot for the render thread to grab
         let mut handle = std::thread::scope(|s| {
             s.spawn(move || {
@@ -221,9 +204,8 @@ fn renderer_handle_outlives_view_and_renders_cross_thread() {
              ({after_main_render} -> {after_thread_render})"
         );
 
-        // ── (1) Independent lifetime: drop the `View` wrapper. The handle's own
-        //        IView ref must keep the view + renderer alive, so a render still
-        //        succeeds (a dangling renderer would crash / fail to draw). ────
+        // Drop the View wrapper; the handle's own IView ref must keep the renderer
+        // alive (a dangling renderer would crash / fail to draw).
         drop(view);
         let before_post_drop = draws.load(Ordering::SeqCst);
         {

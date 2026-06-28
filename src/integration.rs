@@ -8,7 +8,7 @@
 //!
 //! Each `set_*` registration boxes a Rust closure and hands a thin pointer to
 //! it across the FFI as Noesis's `void* user`, alongside an `extern "C"`
-//! trampoline. The C++ shim ([`cpp/noesis_integration.cpp`]) keeps a single
+//! trampoline. The C++ shim (`cpp/noesis_integration.cpp`) keeps a single
 //! static `(user, callback)` slot per hook and registers its own translating
 //! trampoline with Noesis (converting `Cursor*` → [`CursorType`], `const
 //! Uri&` → `&str`). The returned `*Callback` guard owns the boxed closure and
@@ -24,7 +24,7 @@
 //! and the older guard is then logically dead even though it is still alive.
 //!
 //! To make `Drop` safe under that reality, each registration is tagged with a
-//! unique generation id (see [`next_reg_id`]) and a per-hook atomic records the
+//! unique generation id (see `next_reg_id`) and a per-hook atomic records the
 //! id of the *currently active* registration. A guard's `Drop` clears the
 //! global slot **only if it is still the active registration** (its id still
 //! matches the per-hook atomic); otherwise it just frees its own boxed closure
@@ -68,10 +68,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ffi;
 
-// ────────────────────────────────────────────────────────────────────────────
-// Registration generation ids
-// ────────────────────────────────────────────────────────────────────────────
-
 /// Monotonic source of per-registration ids, shared across every hook. `0` is
 /// reserved as the "no active registration" sentinel, so ids start at `1`.
 static NEXT_REG_ID: AtomicU64 = AtomicU64::new(1);
@@ -80,10 +76,6 @@ static NEXT_REG_ID: AtomicU64 = AtomicU64::new(1);
 fn next_reg_id() -> u64 {
     NEXT_REG_ID.fetch_add(1, Ordering::Relaxed)
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// CursorType
-// ────────────────────────────────────────────────────────────────────────────
 
 /// Built-in cursor types, mirroring `Noesis::CursorType` in
 /// `NsGui/Cursor.h`. The discriminants match the C++ enum exactly so the
@@ -163,10 +155,6 @@ impl CursorType {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Shared helpers
-// ────────────────────────────────────────────────────────────────────────────
-
 /// Decode a Noesis-supplied string lossily — odd/non-UTF-8 engine input must not
 /// panic across the C ABI, so invalid bytes become U+FFFD rather than aborting.
 fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
@@ -176,10 +164,6 @@ fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
         unsafe { CStr::from_ptr(p) }.to_string_lossy()
     }
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Cursor callback
-// ────────────────────────────────────────────────────────────────────────────
 
 type CursorClosure = Box<dyn FnMut(*mut c_void, CursorType) + Send>;
 
@@ -243,10 +227,6 @@ where
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Software keyboard callback
-// ────────────────────────────────────────────────────────────────────────────
-
 type KeyboardClosure = Box<dyn FnMut(*mut c_void, bool) + Send>;
 
 /// Id of the keyboard hook's currently active registration (`0` = none).
@@ -303,10 +283,6 @@ where
         id,
     }
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Open-URL callback + trigger
-// ────────────────────────────────────────────────────────────────────────────
 
 type OpenUrlClosure = Box<dyn FnMut(&str) + Send>;
 
@@ -376,10 +352,6 @@ pub fn open_url(url: &str) {
     unsafe { ffi::noesis_open_url(c.as_ptr()) };
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Play-audio callback + trigger
-// ────────────────────────────────────────────────────────────────────────────
-
 type PlayAudioClosure = Box<dyn FnMut(&str, f32) + Send>;
 
 /// Id of the play-audio hook's currently active registration (`0` = none).
@@ -447,10 +419,6 @@ pub fn play_audio(uri: &str, volume: f32) {
     // SAFETY: pointer is valid for the duration of the synchronous call.
     unsafe { ffi::noesis_play_audio(c.as_ptr(), volume) };
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Culture
-// ────────────────────────────────────────────────────────────────────────────
 
 /// Set the default culture by BCP-47 name (e.g. `"en-US"`, `"fr-FR"`). The
 /// name backs Noesis's number / currency / date formatting. Round-trips

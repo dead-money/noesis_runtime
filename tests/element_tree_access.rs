@@ -1,16 +1,5 @@
-//! TODO §2 — the remaining element-tree-access surface:
-//!   * **Filtered hit testing** (`hit_test_filtered` / `hit_test_all`): multi-hit
-//!     collection, plus the filter/result behaviours that steer and stop the walk.
-//!   * **Standalone `NameScope`**: create / attach / look up / reverse-look-up /
-//!     enumerate / unregister.
-//!   * **`RenderTransform` read-back** (`render_transform`) and
-//!     **render-transform-origin** get/set.
-//!
-//! Single `#[test]` (Noesis can't be re-init'd in a process); all owning
-//! wrappers drop before `shutdown()`. Hit testing needs a laid-out view; the
-//! `NameScope` / transform parts work on detached elements.
-//!
-//!   `cargo test -p noesis_runtime --test element_tree_access -- --nocapture`
+//! Filtered hit testing, standalone `NameScope` operations, and `RenderTransform`
+//! get/set on `FrameworkElement`.
 
 use std::collections::HashMap;
 
@@ -74,8 +63,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
 
         let root = view.content().expect("View::content returned None");
 
-        // ── (3) Filtered hit testing ─────────────────────────────────────────
-        // (a) hit_test_all collects EVERY hit at the centre — both Borders.
         let all = root.hit_test_all(100.0, 100.0);
         let all_names = names(&all);
         assert!(
@@ -87,7 +74,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
             all_names.iter().any(|n| n == "Inner") && all_names.iter().any(|n| n == "Outer"),
             "hit_test_all should include Inner and Outer, got {all_names:?}"
         );
-        // Topmost-first: the inner (last-drawn) Border is reported before the outer.
+        // Topmost-first: Inner (last-drawn) is reported before Outer.
         let inner_pos = all_names.iter().position(|n| n == "Inner");
         let outer_pos = all_names.iter().position(|n| n == "Outer");
         assert!(
@@ -95,9 +82,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "topmost (Inner) should be reported before Outer, got {all_names:?}"
         );
 
-        // (b) A filter that returns Stop immediately must yield ZERO results —
-        //     proves the filter return value is honoured (a no-op bridge would
-        //     instead collect every hit).
+        // filter=Stop immediately yields zero results; a no-op bridge would collect every hit instead.
         let mut stop_hits = 0usize;
         root.hit_test_filtered(
             100.0,
@@ -110,8 +95,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
         );
         assert_eq!(stop_hits, 0, "filter=Stop must prevent any result callback");
 
-        // (c) A result callback that returns Stop after the first hit must yield
-        //     EXACTLY one — and it must be the topmost (Inner).
+        // result=Stop after the first hit yields exactly one — the topmost (Inner).
         let mut first: Vec<String> = Vec::new();
         root.hit_test_filtered(
             100.0,
@@ -130,8 +114,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "result=Stop after first hit"
         );
 
-        // (d) A filter that skips the Inner subtree must exclude Inner but keep
-        //     Outer — proves per-visual filter selectivity.
+        // Skipping the Inner subtree excludes Inner but keeps Outer — per-visual filter selectivity.
         let mut filtered: Vec<String> = Vec::new();
         root.hit_test_filtered(
             100.0,
@@ -159,7 +142,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "Outer should still be hit, got {filtered:?}"
         );
 
-        // ── (4) Standalone NameScope ─────────────────────────────────────────
         let alpha = FrameworkElement::parse(
             "<Border xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"/>",
         )
@@ -173,7 +155,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
         scope.register_name("alpha", &alpha);
         scope.register_name("beta", &beta);
 
-        // Forward lookup returns the same underlying object.
         let found = scope.find_name("alpha").expect("find_name(alpha)");
         assert_eq!(
             found.raw(),
@@ -182,35 +163,28 @@ fn filtered_hit_test_namescope_and_render_transform() {
         );
         assert!(scope.find_name("missing").is_none(), "absent name -> None");
 
-        // Reverse lookup.
         assert_eq!(
             scope.find_object(&beta).as_deref(),
             Some("beta"),
             "find_object(beta) should be \"beta\""
         );
 
-        // Enumeration sees both pairs.
         let mut enumerated: Vec<String> = Vec::new();
         scope.for_each(|name, _obj| enumerated.push(name.to_string()));
         enumerated.sort();
         assert_eq!(enumerated, vec!["alpha".to_string(), "beta".to_string()]);
 
-        // Unregister removes only that name.
         scope.unregister_name("alpha");
         assert!(scope.find_name("alpha").is_none(), "unregistered name gone");
         assert!(scope.find_name("beta").is_some(), "beta still registered");
 
-        // Attach / read back the scope on an element (round-trips by identity).
-        // Note: a parsed XAML root already carries its own (XAML) namescope, so
-        // we don't assert None up front — set_on must REPLACE whatever is there
-        // and of() must hand back exactly the scope we set.
+        // A parsed XAML root already carries a namescope; set_on must REPLACE it.
         let mut host = FrameworkElement::parse(
             "<Border xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"/>",
         )
         .expect("parse host");
         let pre = NameScope::of(&host).map(|s| s.raw());
-        // A parsed XAML root carries its own namescope, so `pre` is Some here —
-        // assert it so the replacement check below isn't a trivial Some != None.
+        // Assert pre.is_some() so the replacement check below isn't a trivial Some != None.
         assert!(
             pre.is_some(),
             "a parsed XAML root should already carry a namescope"
@@ -231,18 +205,14 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "set_on should have replaced the pre-existing namescope"
         );
 
-        // ── (2) RenderTransform read-back + origin ───────────────────────────
-        // Note: RenderTransform defaults to the (non-null) Identity transform,
-        // so a fresh element reads back Some(identity). We prove the round-trip
-        // by pointer identity: render_transform() must hand back exactly the
-        // transform object we set, and it must differ from the prior identity.
+        // RenderTransform defaults to the non-null Identity, so a fresh element returns Some.
+        // Pointer identity proves set_render_transform crossed the FFI.
         let mut t1 = FrameworkElement::parse(
             "<Border xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"/>",
         )
         .expect("parse t1");
         let identity = t1.render_transform().map(|t| t.raw());
-        // The default is the non-null Identity transform, so `identity` is Some
-        // — assert it so the `assert_ne!` below isn't a trivial Some != None.
+        // Default is non-null Identity (Some) — assert it so the assert_ne! below isn't trivially Some != None.
         assert!(
             identity.is_some(),
             "default RenderTransform should be the non-null Identity"
@@ -266,8 +236,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "the set transform must differ from the default Identity"
         );
 
-        // The read-back handle is itself a Transform: re-apply it to another
-        // element and confirm that element now reports the SAME transform.
         let mut t2 = FrameworkElement::parse(
             "<Border xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"/>",
         )
@@ -282,10 +250,7 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "t2 should report the same re-applied transform object"
         );
 
-        // Render-transform-origin round-trips numerically. The default is
-        // (0,0), but that alone can't tell a working getter from a constant-0
-        // stub — so we set TWO distinct non-default values and confirm the
-        // getter tracks each, proving it reads real state.
+        // Default origin (0,0) could pass a constant-zero stub; two distinct values confirm the getter reads real state.
         assert_eq!(
             t1.render_transform_origin(),
             (0.0, 0.0),

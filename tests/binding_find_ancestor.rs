@@ -1,19 +1,5 @@
-//! TODO §3 — `RelativeSource FindAncestor` (with `AncestorType` + `AncestorLevel`).
-//!
-//! One headless `#[test]` (Noesis inits once per process). Builds a tree with
-//! two nested `Border` ancestors over a `StackPanel` holding two leaf
-//! `TextBlock`s, then wires — from Rust — code-built bindings whose source is a
-//! `RelativeSource FindAncestor` resolving the `Border` type by name:
-//!
-//!   * `Leaf1.Text` ← `FindAncestor` `Border`, level 1, path `Name` → the
-//!     *nearest* Border ("Inner").
-//!   * `Leaf2.Text` ← `FindAncestor` `Border`, level 2, path `Name` → the *next*
-//!     Border up ("Outer").
-//!
-//! The assertions distinguish a working `FindAncestor` (and its level handling)
-//! from a Self / no-ancestor binding: a Self binding on `Name` would read each
-//! leaf's own name, and a wrong level would read the wrong Border. Also checks
-//! the graceful-failure contract: an unknown ancestor type name does not resolve.
+//! `RelativeSource FindAncestor` with `AncestorType` and `AncestorLevel`:
+//! level 1 resolves the nearest ancestor, level 2 the next one up.
 
 use std::collections::HashMap;
 

@@ -1,24 +1,6 @@
-//! Immediate-mode drawing via `OnRender` (TODO §10).
-//!
-//! Registers custom `FrameworkElement`s whose [`RenderHandler`] issues
-//! immediate-mode draw commands (`DrawLine` / `DrawRectangle` /
-//! `DrawRoundedRectangle` / `DrawEllipse` / `DrawGeometry`, plus `PushTransform`
-//! / `PushClip` / `PushBlendingMode` + `Pop`), places one in a `View`, binds a
-//! counting [`RenderDevice`], and drives a real update + offscreen + onscreen
-//! render pass so `OnRender` actually fires.
-//!
-//! Assertions (each fails against a stub):
-//!   * the render callback fired with a non-null `DrawingContext`,
-//!   * every draw / push / pop call reported success (the context + pen + brush +
-//!     geometry casts crossed the FFI),
-//!   * the filled draws produced real GPU geometry — a painting element records
-//!     STRICTLY MORE `draw_batch` calls than an otherwise-identical element that
-//!     draws nothing (this cancels the constant trial-watermark batches, so a
-//!     no-op draw fn — which adds zero batches — fails),
-//!   * a code-built `Pen` round-trips its thickness / line caps / join, and a
-//!     `RectangleGeometry` round-trips its rect, through the live Noesis object.
-//!
-//! A render handler that never fires, or draw fns that no-op, fail these.
+//! Immediate-mode drawing via `OnRender`: exercises every `DrawingContext` command
+//! in a real render pass and confirms the filled element produces more GPU batches
+//! than an empty baseline.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -52,19 +34,14 @@ struct Signals {
     image_null_rejected: Arc<AtomicBool>,
 }
 
-/// Render handler that owns its drawing resources (so they outlive each
-/// `OnRender`) and, when `draw` is set, exercises every `DrawingContext`
-/// entrypoint. With `draw` clear it records the same signals but issues no draw
-/// commands — the baseline used to cancel the trial watermark's batches.
+/// Owns drawing resources so they outlive each `OnRender` call. When `draw` is
+/// false, issues no commands and serves as the baseline that cancels the trial-watermark batches.
 struct PainterRender {
     draw: bool,
     signals: Signals,
     brush: SolidColorBrush,
     pen: Pen,
     geometry: RectangleGeometry,
-    // Rich code-built geometries from `crate::geometry`, drawn / clipped through
-    // the unified `geometry::Geometry` trait — proving `draw_geometry` /
-    // `push_clip` accept real built geometry, not just a drawing-local rect.
     path: PathGeometry,
     ellipse: EllipseGeometry,
     transform: TranslateTransform,
@@ -78,7 +55,6 @@ impl RenderHandler for PainterRender {
         }
 
         let mut ok = true;
-        // Fill + stroke shapes covering the element — produces real geometry.
         ok &= ctx.draw_rectangle(Some(&self.brush), Some(&self.pen), [0.0, 0.0, 100.0, 80.0]);
         ok &= ctx.draw_line(&self.pen, (0.0, 0.0), (100.0, 80.0));
         ok &= ctx.draw_rounded_rectangle(
@@ -91,17 +67,13 @@ impl RenderHandler for PainterRender {
         ok &= ctx.draw_ellipse(Some(&self.brush), Some(&self.pen), (50.0, 40.0), 20.0, 15.0);
         ok &= ctx.draw_geometry(Some(&self.brush), Some(&self.pen), &self.geometry);
 
-        // Draw real built geometry via the unified `geometry::Geometry` trait:
-        // a `PathGeometry` (triangle figure) and an `EllipseGeometry`.
         ok &= ctx.draw_geometry(Some(&self.brush), Some(&self.pen), &self.path);
         ok &= ctx.draw_geometry(Some(&self.brush), Some(&self.pen), &self.ellipse);
 
-        // Clip with the `EllipseGeometry`, draw inside it, then pop.
         ok &= ctx.push_clip(&self.ellipse);
         ok &= ctx.draw_geometry(Some(&self.brush), None, &self.path);
         ok &= ctx.pop(); // ellipse clip
 
-        // Push / draw / pop a transformed + clipped + blended layer.
         ok &= ctx.push_transform(&self.transform);
         ok &= ctx.push_clip(&self.geometry);
         ok &= ctx.push_blending_mode(BlendingMode::Additive);
@@ -112,9 +84,7 @@ impl RenderHandler for PainterRender {
 
         self.signals.all_draws_ok.store(ok, Ordering::SeqCst);
 
-        // DrawImage requires a real ImageSource (TODO §12); a null source must be
-        // rejected gracefully (false) rather than reaching Noesis.
-        // SAFETY: passing null is explicitly the rejected path under test.
+        // SAFETY: null source is the rejected path under test; must not reach Noesis.
         let rejected = !unsafe { ctx.draw_image(std::ptr::null_mut(), [0.0, 0.0, 10.0, 10.0]) };
         self.signals
             .image_null_rejected
@@ -133,10 +103,7 @@ fn xaml(ns_class: &str) -> String {
     )
 }
 
-/// Register `class_name`, mount it in a View, drive a full render pass with a
-/// fresh counting device, and return the number of `draw_batch` calls recorded.
 fn render_batches(class_name: &str, draw: bool, signals: Signals) -> u32 {
-    // Build a real PathGeometry: a closed triangle figure.
     let mut path = PathGeometry::new();
     let mut figure = PathFigure::new();
     figure.set_start_point(0.0, 0.0);
@@ -179,7 +146,6 @@ fn render_batches(class_name: &str, draw: bool, signals: Signals) -> u32 {
     {
         let mut renderer = view.renderer();
         renderer.init(&device);
-        // OnRender fires while the renderer collects the render tree.
         renderer.update_render_tree();
         renderer.render_offscreen();
         renderer.render(false, true);
@@ -205,7 +171,6 @@ fn on_render_fires_and_draws() {
     noesis_runtime::init();
 
     {
-        // ── Pen read-back round-trip (proves the create + setters crossed FFI).
         let stroke = SolidColorBrush::new([0.0, 0.0, 0.0, 1.0]);
         let mut pen = Pen::new(&stroke, 3.5);
         assert!(
@@ -230,7 +195,6 @@ fn on_render_fires_and_draws() {
         assert!(pen.brush().is_some(), "pen brush set at construction");
         drop(pen);
 
-        // RectangleGeometry read-back round-trip.
         let geo = RectangleGeometry::new(5.0, 6.0, 30.0, 20.0, 0.0, 0.0);
         let r = geo.rect();
         assert!(
@@ -239,7 +203,6 @@ fn on_render_fires_and_draws() {
         );
         drop(geo);
 
-        // ── OnRender drive: baseline (no draws) vs painter (full draws) ──────
         let blank = Signals::default();
         let baseline = render_batches("Blank", false, blank.clone());
         assert!(
@@ -274,12 +237,7 @@ fn on_render_fires_and_draws() {
     noesis_runtime::shutdown();
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// CountingDevice — a minimal RenderDevice that hands out monotonic handles and
-// counts draw batches, so the test can prove the immediate-mode draws produced
-// real geometry without coupling to a GPU backend.
-// ────────────────────────────────────────────────────────────────────────────
-
+// Minimal RenderDevice stub that counts draw_batch calls, decoupled from any GPU backend.
 struct CountingDevice {
     next_handle: u64,
     batches: Arc<AtomicU32>,

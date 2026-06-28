@@ -1,18 +1,5 @@
-//! Integration tests for the `FrameworkElement` convenience methods added in
-//! TODO §2.E/F/G:
-//!
-//! * **§E** — typed scalar sugar (`width`/`height`/`opacity`,
-//!   `is_enabled`/`focusable`, `tag`) plus the bespoke alignment path
-//!   (`horizontal_alignment` / `vertical_alignment` ↔ `HAlign`/`VAlign`) and
-//!   the laid-out `actual_width` / `actual_height` read-backs.
-//! * **§F** — namescope `register_name` / `unregister_name`, cross-checked
-//!   through `find_name`.
-//! * **§G** — thread affinity (`check_access` / `thread_id`).
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test element_props -- --nocapture`
+//! `FrameworkElement` property convenience methods: scalar getters/setters,
+//! alignment round-trips, namescope register/unregister, and thread affinity.
 
 use std::collections::HashMap;
 
@@ -75,12 +62,8 @@ fn element_props_round_trip() {
 
         let content = view.content().expect("View::content returned None");
 
-        // ── §E ActualSize. ───────────────────────────────────────────────────
-        // OBSERVED: Noesis lays the tree out eagerly (on content()/set_size),
-        // so `actual_width()` already reports the laid-out 120.0 here, BEFORE
-        // our explicit update(0.0). The "actual is ~0 before update" probe from
-        // the brief is therefore not observable in this runtime — record it and
-        // move on rather than asserting a falsehood.
+        // Noesis lays out eagerly on content()/set_size, so actual_width() may
+        // already be non-zero before update(0.0) — cap-check rather than assert zero.
         let mut sized = content.find_name("Sized").expect("Sized not found");
         if let Some(w) = sized.actual_width() {
             // Never larger than the declared Width for a non-stretched element.
@@ -92,9 +75,6 @@ fn element_props_round_trip() {
 
         assert!(view.update(0.0), "first update should report a change");
 
-        // `width()` is the *requested* Width; `actual_width()` is the laid-out
-        // width. For a Left/Top-aligned element with an explicit size they
-        // coincide.
         assert_eq!(sized.width(), Some(120.0), "requested Width mismatch");
         assert_eq!(sized.height(), Some(40.0), "requested Height mismatch");
         assert_eq!(
@@ -108,7 +88,6 @@ fn element_props_round_trip() {
             "ActualHeight should equal laid-out Height after update",
         );
 
-        // ── §E XAML → getter agreement (BEFORE any setter touches it) ────────
         let aligned = content.find_name("Aligned").expect("Aligned not found");
         assert_eq!(
             aligned.horizontal_alignment(),
@@ -132,8 +111,7 @@ fn element_props_round_trip() {
             "XAML Focusable=\"True\" mismatch",
         );
 
-        // ── §E Alignment round-trip: every ordinal, both axes. Catches an
-        //    off-by-one in the ordinal ↔ variant mapping. ─────────────────────
+        // Every ordinal tested; catches an off-by-one in the variant ↔ integer mapping.
         let haligns = [
             (0, HAlign::Left),
             (1, HAlign::Center),
@@ -165,9 +143,7 @@ fn element_props_round_trip() {
             assert_eq!(v as i32, ord, "VAlign discriminant drifted from ordinal");
         }
 
-        // ── §E Scalar set→get round-trips with concrete values ───────────────
-        // 0.5 and 0.25 are exactly representable in f32, so exact equality is
-        // safe here; if a future value isn't, switch to a tolerance.
+        // 0.5 and 0.25 are exactly representable in f32, so exact equality is valid here.
         assert!(sized.set_width(256.0), "set_width failed");
         assert_eq!(sized.width(), Some(256.0), "Width did not round-trip");
 
@@ -190,7 +166,6 @@ fn element_props_round_trip() {
             "IsEnabled back to true failed"
         );
 
-        // TextBlock.Focusable defaults to false; round-trip both directions.
         assert!(sized.set_focusable(true), "set_focusable(true) failed");
         assert_eq!(
             sized.focusable(),
@@ -204,8 +179,7 @@ fn element_props_round_trip() {
             "Focusable did not round-trip to false",
         );
 
-        // ── §E Tag: absence → None, then set → Some. No pointer-eq is exposed,
-        //    so presence/absence is the strongest available check. ────────────
+        // No pointer equality is exposed for Tag, so presence/absence is the strongest check.
         let anchor = content.find_name("Anchor").expect("Anchor not found");
         assert!(
             aligned.tag().is_none(),
@@ -217,11 +191,7 @@ fn element_props_round_trip() {
             "Tag should resolve to a component after set_tag",
         );
 
-        // ── §F Namescope register / unregister, cross-checked via find_name.
-        //    Register the Anchor element under a FRESH key on the content root
-        //    (which hosts the scope). find_name resolves the registered object;
-        //    we distinguish it by its x:Name (\"Anchor\"). ─────────────────────
-        let mut root = content; // the view content root hosts the namescope
+        let mut root = content; // the View content root hosts the namescope
         assert!(
             root.find_name("Dynamic").is_none(),
             "fresh key must not resolve before registration",
@@ -248,9 +218,6 @@ fn element_props_round_trip() {
             "find_name should stop resolving after unregister_name",
         );
 
-        // ── §G Thread affinity. The test thread created the view + elements,
-        //    so check_access() is true here and thread_id() is a stable
-        //    non-MAX value shared across elements of the same view. ───────────
         assert!(
             root.check_access(),
             "check_access() should be true on owner thread"
@@ -272,11 +239,8 @@ fn element_props_round_trip() {
             "two elements from the same view should share a thread id",
         );
 
-        // FrameworkElement is Send but NOT Sync (Noesis objects are
-        // thread-affine — see the crate-level "Thread affinity" docs). So we
-        // *move* ownership to another thread (not share `&root`), call the
-        // owner-query check_access() there — it must observe a DIFFERENT owner
-        // thread and return false — then move the element back for teardown.
+        // FrameworkElement is Send but NOT Sync, so we move (not share) ownership to
+        // a second thread to confirm check_access() returns false on a non-owner thread.
         let (root, off_access) = std::thread::spawn(move || {
             let access = root.check_access();
             (root, access)
@@ -288,7 +252,6 @@ fn element_props_round_trip() {
             "check_access() must be false on a non-owner thread",
         );
 
-        // ORDERED teardown — drop every handle before shutdown.
         drop(anchor);
         drop(aligned);
         drop(sized);

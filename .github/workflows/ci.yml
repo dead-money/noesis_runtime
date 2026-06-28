@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -13,11 +14,8 @@ env:
   # switch early so we're running on the same Node they'll default to.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
-# fmt is the only build-step we can run on a hosted runner: cargo
-# build / clippy / test all need the Noesis Native SDK (see README's
-# "Setup" section), which is closed-source and not available on
-# GitHub-hosted runners.
 jobs:
+  # Runs everywhere, including fork PRs — no SDK needed.
   fmt:
     name: fmt
     runs-on: ubuntu-latest
@@ -32,3 +30,23 @@ jobs:
 
       - name: cargo fmt
         run: cargo fmt --all --check
+
+  # build / clippy / test need the closed-source Noesis SDK, which only lives on
+  # our self-hosted runner. Never run untrusted fork-PR code there: skip any PR
+  # whose head is a fork. Same-repo branch PRs and pushes to main/tags are fine.
+  build-test:
+    name: build • clippy • test
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, noesis-sdk]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Keep target/ between runs for fast incremental builds.
+          clean: false
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo test
+        run: cargo test --all-features

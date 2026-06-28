@@ -1,23 +1,19 @@
-//! Code-built `TextBlock` inline content (TODO §13): construct the `Inline`
-//! element family that ships in 3.2.13 — [`Run`], [`Span`], [`Bold`],
-//! [`Italic`], [`Underline`], [`Hyperlink`], [`LineBreak`],
-//! [`InlineUIContainer`] — from Rust and assemble them into a `TextBlock`'s (or
-//! a `Span`'s) [`InlineCollection`].
+//! Code-built `TextBlock` inline content: construct the `Inline` element family
+//! — [`Run`], [`Span`], [`Bold`], [`Italic`], [`Underline`], [`Hyperlink`],
+//! [`LineBreak`], [`InlineUIContainer`] — from Rust and assemble them into a
+//! `TextBlock`'s (or a `Span`'s) [`InlineCollection`].
 //!
 //! Each inline is an owning handle over a freshly-created Noesis object holding
-//! a single `+1` reference, released on [`Drop`] — the same pattern as
-//! [`crate::brushes`] / [`crate::binding`]. Adding an inline to an
+//! a single `+1` reference, released on [`Drop`]. Adding an inline to an
 //! [`InlineCollection`] makes the collection take its own reference, so the
 //! builder handle may be dropped right after the add.
 //!
 //! Read-back getters ([`Run::text`], [`Hyperlink::navigate_uri`],
 //! [`InlineCollection::count`] / [`InlineCollection::get_raw`],
 //! [`InlineUIContainer::child_raw`], [`Inline::text_decorations`]) re-read from
-//! the
-//! live Noesis object, so they prove a value crossed the FFI rather than echoing
-//! a Rust-side cache: a stubbed constructor/setter fails the round-trip.
+//! the live Noesis object rather than echoing a Rust-side cache.
 //!
-//! The crate owns no `FontFamily` surface; that stays under TODO §13.
+//! The crate owns no `FontFamily` surface.
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
@@ -161,8 +157,8 @@ inline_handle!(
     LineBreak
 );
 inline_handle!(
-    /// An `InlineUIContainer`: embeds a `UIElement` ([`InlineUIContainer::child`])
-    /// inside flow content.
+    /// An `InlineUIContainer`: embeds a `UIElement` (via
+    /// [`InlineUIContainer::set_child`]) inside flow content.
     InlineUIContainer
 );
 

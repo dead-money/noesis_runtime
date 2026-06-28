@@ -1,13 +1,9 @@
-//! TODO §9 — property-change callback DECODE for the new DP value types
-//! (`Point`, `Size`, `Vector`, `Enum`).
+//! Property-change callback decoding for Point, Size, Vector, and Enum DP value types.
 //!
-//! The change callback only fires on a parsed / tree-attached instance (not on a
-//! code-created `create_instance` object — see TODO.md "Known SDK limitations"),
-//! so this mirrors `tests/classes.rs`: register the class, load it inside a live
-//! `View`, settle the tree, then mutate each new-type DP through the parsed
-//! instance and assert the recording handler decoded
-//! `PropertyValue::{Point|Size|Vector|Enum}` with the right payload. This is the
-//! only test exercising the `decode_value` arms for these tags.
+//! Change callbacks only fire on a parsed/tree-attached instance, not on a
+//! code-created one, so the test loads a live View, settles the tree, then
+//! mutates each DP and verifies the handler decoded the matching `PropertyValue`
+//! variant.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -109,11 +105,8 @@ fn custom_dp_value_type_callbacks() {
         let content = view.content().expect("View::content returned None");
         let widget = content.find_name("W").expect("find_name(W) returned None");
 
-        // The parsed instance is the raw FrameworkElement pointer.
         let inst = unsafe { Instance::from_raw(std::ptr::NonNull::new(widget.raw()).unwrap()) };
 
-        // Mutate each new-type DP; the change callback fires on the
-        // tree-attached instance and decodes the matching PropertyValue variant.
         inst.set_point(pt, 3.5, -7.25);
         inst.set_size(sz, 64.0, 48.0);
         inst.set_vector(vec, -1.5, 2.0);

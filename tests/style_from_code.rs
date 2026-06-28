@@ -1,17 +1,4 @@
-//! TODO §7 — build a `Style` from code, assign it to an element, and prove the
-//! setter actually applied by reading the property back THROUGH Noesis.
-//!
-//! Fail-if-stubbed: two sibling `TextBlock`s start with the same (default)
-//! `FontSize`. We build `Style{ TargetType=TextBlock, Setter FontSize=33 }` and
-//! assign it to ONE of them. After a layout pump the styled block reads
-//! `FontSize == 33` (the setter took effect) while the unstyled block still
-//! reads the default (`!= 33`). This discriminates "style applied" from "no-op"
-//! — a stubbed `add_setter` or `set_style` leaves both blocks at the default and
-//! fails the first assert. We also exercise `BasedOn` (inherited setter) and
-//! `style` read-back.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test style_from_code -- --nocapture`
+//! Build a `Style` from code, assign it to one element, and verify the setter applied by reading the property back through Noesis; also exercises `BasedOn`.
 
 use std::collections::HashMap;
 
@@ -82,7 +69,6 @@ fn style_setter_applies_to_assigned_element() {
             .and_then(|c| c.find_name("BasedStyled"))
             .expect("find BasedStyled");
 
-        // Baseline: all three share the same default FontSize.
         let default_size = plain.get_f32("FontSize").expect("Plain FontSize");
         assert!(
             (styled.get_f32("FontSize").unwrap() - default_size).abs() < 0.001,
@@ -93,10 +79,8 @@ fn style_setter_applies_to_assigned_element() {
             "default must differ from the setter value or the test proves nothing"
         );
 
-        // A fresh element has no Style assigned.
         assert!(styled.style().is_none(), "no style before assignment");
 
-        // ── Build + assign a Style ───────────────────────────────────────────
         let mut style = Style::new();
         assert!(
             style.set_target_type("TextBlock"),
@@ -128,7 +112,6 @@ fn style_setter_applies_to_assigned_element() {
             "unstyled sibling keeps the default FontSize"
         );
 
-        // ── BasedOn: a derived style inherits the base setter, overrides size ─
         let mut derived = Style::new();
         assert!(derived.set_target_type("TextBlock"));
         derived.set_based_on(&style);

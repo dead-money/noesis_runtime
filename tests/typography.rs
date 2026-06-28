@@ -1,19 +1,6 @@
-//! Integration tests for typography & text properties (TODO §13): the
-//! [`FontFamily`] wrapper, the `TextElement` attached font properties, a
-//! representative subset of the OpenType `Typography` attached DPs, and the IME
-//! `CompositionUnderline` list on a `TextBox`.
-//!
-//! Every assertion reads a value BACK from the live Noesis object (`font_size`,
-//! `font_weight`, `capitals`, the round-tripped `FontFamily::source`, the brush
-//! pointer identity, the stored `CompositionUnderline` fields, …), so a stubbed
-//! or hardcoded implementation fails the round-trip. Non-default values are used
-//! throughout so a no-op getter returning the default would fail too.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process):
-//! all owning wrappers drop inside the inner scope before `shutdown()`.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test typography -- --nocapture`
+//! Integration tests for `FontFamily`, `TextElement` attached font properties,
+//! the OpenType `Typography` attached DPs, and the IME `CompositionUnderline`
+//! list on a `TextBox`.
 
 use std::path::PathBuf;
 
@@ -27,17 +14,14 @@ use noesis_runtime::view::FrameworkElement;
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml""#;
 
-/// Minimal [`FontProvider`] that serves a single `(folder, filename)` face
-/// from in-memory bytes. Used to make [`FontFamily::num_fonts`] /
-/// [`FontFamily::font_name`] resolve to a real face so the per-family
-/// enumeration getters are exercised with a *positive* result — a stubbed
-/// `get_num_fonts` (→0) or `get_font_name` (→nullptr) then fails the test.
+/// Minimal [`FontProvider`] that resolves a single font face so the
+/// per-family enumeration getters yield a positive result.
 struct SingleFontProvider {
     folder: String,
     filename: String,
     bytes: Vec<u8>,
     /// Keeps the most recently opened bytes alive across the borrow that
-    /// `open_font` returns (same pattern as the other providers in-tree).
+    /// `open_font` returns.
     current: Option<Vec<u8>>,
 }
 
@@ -72,10 +56,8 @@ fn typography_round_trips() {
     }
     noesis_runtime::init();
 
-    // Register a font provider serving the trial SDK's `Bitter-Regular.ttf`
-    // so the per-family enumeration getters can be asserted with a positive
-    // result below. The guard is bound to the function scope so it outlives
-    // `shutdown()` (Noesis may call back into the provider during teardown).
+    // The guard is bound to the function scope so it outlives shutdown() —
+    // Noesis may call back into the provider during teardown.
     let sdk_dir =
         std::env::var("NOESIS_SDK_DIR").expect("NOESIS_SDK_DIR not set; required for this test");
     let mut bitter_path = PathBuf::from(&sdk_dir);
@@ -93,7 +75,6 @@ fn typography_round_trips() {
     registered.register_font("Fonts", "Bitter-Regular.ttf");
 
     {
-        // ── FontFamily: source round-trip ───────────────────────────────────
         let family = FontFamily::new("Arial, Verdana");
         assert_eq!(
             family.source().as_deref(),
@@ -107,10 +88,6 @@ fn typography_round_trips() {
             "font_name past num_fonts is None"
         );
 
-        // ── FontFamily: positive per-family enumeration ─────────────────────
-        // `Fonts/#Bitter` resolves through the registered provider to the real
-        // `Bitter` face. This drives a *positive* round-trip: a stubbed
-        // `get_num_fonts` (→0) or `get_font_name` (→nullptr) would fail here.
         let bitter = FontFamily::new("Fonts/#Bitter");
         assert!(
             bitter.num_fonts() >= 1,
@@ -123,11 +100,9 @@ fn typography_round_trips() {
             "font_name(0) reads back the registered family name from the live object"
         );
 
-        // ── TextElement attached font properties on a TextBlock ─────────────
         let tb_xaml = format!("<TextBlock {NS} Text=\"Hello\"/>");
         let tb = FrameworkElement::parse(&tb_xaml).expect("parse TextBlock");
 
-        // FontSize: non-default value must round-trip.
         assert!(typography::set_font_size(&tb, 37.5), "set FontSize");
         assert_eq!(
             typography::font_size(&tb),
@@ -135,7 +110,6 @@ fn typography_round_trips() {
             "FontSize round-trips a non-default value"
         );
 
-        // FontFamily attached DP: round-trip via source + pointer identity.
         assert!(typography::set_font_family(&tb, &family), "set FontFamily");
         let read_family = typography::get_font_family(&tb).expect("FontFamily set");
         assert_eq!(
@@ -149,7 +123,6 @@ fn typography_round_trips() {
             "assigned FontFamily is the exact object (AddRef, not clone)"
         );
 
-        // Foreground attached DP: reuse a SolidColorBrush, assert pointer identity.
         let brush = SolidColorBrush::new([0.2, 0.4, 0.6, 1.0]);
         assert!(typography::set_foreground(&tb, &brush), "set Foreground");
         assert_eq!(
@@ -160,7 +133,6 @@ fn typography_round_trips() {
             "Foreground is the exact brush we assigned"
         );
 
-        // FontWeight / FontStyle / FontStretch: non-default enum members.
         assert!(
             typography::set_font_weight(&tb, FontWeight::Bold),
             "set FontWeight"
@@ -189,7 +161,6 @@ fn typography_round_trips() {
             "FontStretch round-trips Condensed"
         );
 
-        // ── Typography attached DPs (representative subset) ─────────────────
         assert!(
             typography::set_capitals(&tb, FontCapitals::SmallCaps),
             "set Capitals"
@@ -255,7 +226,6 @@ fn typography_round_trips() {
             "set FontSize on Border"
         );
         assert_eq!(typography::font_size(&border), Some(22.0));
-        // But Border is not a TextBox: the IME underline API reports failure.
         assert_eq!(
             typography::num_composition_underlines(&border),
             None,
@@ -274,7 +244,6 @@ fn typography_round_trips() {
             "add_composition_underline fails on a non-TextBox"
         );
 
-        // ── CompositionUnderline (IME) on a TextBox ─────────────────────────
         let tbx_xaml = format!("<TextBox {NS} Text=\"compose\"/>");
         let tbx = FrameworkElement::parse(&tbx_xaml).expect("parse TextBox");
         assert_eq!(

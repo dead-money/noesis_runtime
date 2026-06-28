@@ -1,18 +1,18 @@
-//! The `RenderDevice` trait that Rust-side device implementations satisfy,
+//! The [`RenderDevice`] trait that Rust-side device implementations satisfy,
 //! plus the handle / desc / binding plain-data types that flow through it.
 //!
-//! This layer is pure Rust — no FFI. The C++ shim (Phase 1.4) translates
-//! Noesis's pure-virtual surface into calls on this trait via a vtable of
-//! extern "C" trampolines (Phase 1.5).
+//! Implement [`RenderDevice`] to back a Noesis view with your own GPU backend
+//! (a `wgpu` device, say). This layer is pure Rust — no FFI. A C++ shim
+//! translates Noesis's pure-virtual `RenderDevice` surface into calls on this
+//! trait through a vtable of `extern "C"` trampolines.
 
 use core::num::NonZeroU64;
 
 use crate::render_device::types::{Batch, DeviceCaps, TextureFormat, Tile};
 
 // ────────────────────────────────────────────────────────────────────────────
-// Handles — opaque IDs for resources the device owns. Created by the device,
-// passed back to it on subsequent calls. NonZeroU64 lets `Option<Handle>`
-// share the same niche as the handle itself.
+// Handles — opaque IDs the device owns. NonZeroU64 lets `Option<Handle>` reuse
+// the handle's niche.
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Opaque identifier for a Rust-owned texture resource (e.g. a `wgpu::Texture`
@@ -39,8 +39,7 @@ pub struct TextureRect {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Texture creation — descriptor + per-mip init data + the binding the C++
-// `RustTexture` wrapper needs to satisfy `Noesis::Texture`'s const-getters.
+// Texture creation
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Inputs to [`RenderDevice::create_texture`]. Borrowed for the duration of
@@ -78,8 +77,7 @@ pub struct TextureBinding {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Render-target creation — descriptor + binding (which carries the resolve
-// texture's binding alongside the RT handle).
+// Render-target creation
 // ────────────────────────────────────────────────────────────────────────────
 
 /// Inputs to [`RenderDevice::create_render_target`].
@@ -107,10 +105,6 @@ pub struct RenderTargetBinding {
     pub handle: RenderTargetHandle,
     pub resolve_texture: TextureBinding,
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// The trait
-// ────────────────────────────────────────────────────────────────────────────
 
 /// Rust-side implementation of `Noesis::RenderDevice`.
 ///
@@ -168,10 +162,8 @@ pub trait RenderDevice: Send + Sync + 'static {
     /// [`Registered::device_mut`]: crate::render_device::Registered::device_mut
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 
-    // ─── Capability query ─────────────────────────────────────────────────
-
-    /// Static device capabilities. Called once early in setup; the impl can
-    /// return a cached value.
+    /// Static device capabilities. Queried once early in setup, so returning a
+    /// cached value is fine.
     fn caps(&self) -> DeviceCaps;
 
     // ─── Texture lifecycle ────────────────────────────────────────────────
@@ -196,6 +188,8 @@ pub trait RenderDevice: Send + Sync + 'static {
 
     // ─── Render-target lifecycle ──────────────────────────────────────────
 
+    /// Allocate a render target matching `desc`. The returned binding carries
+    /// the resolve texture's own binding alongside the render-target handle.
     fn create_render_target(&mut self, desc: RenderTargetDesc<'_>) -> RenderTargetBinding;
 
     /// Create a render target that reuses transient buffers (stencil, MSAA
@@ -207,9 +201,14 @@ pub trait RenderDevice: Send + Sync + 'static {
 
     // ─── Frame phases ─────────────────────────────────────────────────────
 
+    /// Open the offscreen phase, in which Noesis renders to its own render
+    /// targets before compositing onto the screen.
     fn begin_offscreen_render(&mut self);
+    /// Close the offscreen phase.
     fn end_offscreen_render(&mut self);
+    /// Open the onscreen phase, in which Noesis renders to the back buffer.
     fn begin_onscreen_render(&mut self);
+    /// Close the onscreen phase.
     fn end_onscreen_render(&mut self);
 
     // ─── Render-target binding & tile sub-passes ──────────────────────────
@@ -222,6 +221,7 @@ pub trait RenderDevice: Send + Sync + 'static {
     /// all draws affect only that region. Good place to enable scissor.
     fn begin_tile(&mut self, handle: RenderTargetHandle, tile: Tile);
 
+    /// End the sub-pass opened by [`begin_tile`](Self::begin_tile).
     fn end_tile(&mut self, handle: RenderTargetHandle);
 
     /// Resolve the listed `tiles` of an MSAA render target into its resolve
@@ -231,19 +231,22 @@ pub trait RenderDevice: Send + Sync + 'static {
     // ─── Streaming geometry buffers ───────────────────────────────────────
 
     /// Reserve `bytes` of vertex storage and return a writable slice.
-    /// `bytes <= DYNAMIC_VB_SIZE` (512 KiB). Each frame issues at least one
-    /// pair of map / unmap. The slice must remain valid until [`unmap_vertices`].
+    /// `bytes` never exceeds Noesis's 512 KiB dynamic vertex-buffer cap. Each
+    /// frame issues at least one pair of map / unmap. The slice must remain
+    /// valid until [`unmap_vertices`].
     ///
     /// [`unmap_vertices`]: Self::unmap_vertices
     fn map_vertices(&mut self, bytes: u32) -> &mut [u8];
+    /// Finish the write started by [`map_vertices`](Self::map_vertices) and
+    /// release the slice back to the device.
     fn unmap_vertices(&mut self);
 
     /// Same as [`map_vertices`](Self::map_vertices), but for 16-bit indices.
-    /// `bytes <= DYNAMIC_IB_SIZE` (128 KiB).
+    /// `bytes` never exceeds the 128 KiB dynamic index-buffer cap.
     fn map_indices(&mut self, bytes: u32) -> &mut [u8];
+    /// Finish the write started by [`map_indices`](Self::map_indices) and
+    /// release the slice back to the device.
     fn unmap_indices(&mut self);
-
-    // ─── The actual draw call ─────────────────────────────────────────────
 
     /// Draw the indexed-triangle batch described by `batch`. The vertex /
     /// index data lives in the most recently mapped buffers; texture pointers

@@ -1,15 +1,5 @@
-//! TODO §7 — build style triggers, a `DataTemplateSelector`, and the
-//! Dynamic/Static resource markup extensions from code, then prove every value
-//! crossed the FFI by reading it back from the LIVE Noesis object.
-//!
-//! Fail-if-stubbed: each assertion re-reads a value (property name, boxed
-//! Value, setter/condition count, routed-event name, selected template pointer,
-//! resource key) out of the actual Noesis object — a stub returning a constant
-//! or no-op fails. The triggers are fetched back out of the Style's `Triggers`
-//! collection (`Style::get_trigger`) so the read crosses the FFI a second time.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test templates_triggers -- --nocapture`
+//! Style triggers, `DataTemplateSelector`, and `TemplateSelector` constructed from code
+//! and round-tripped through live Noesis objects.
 
 use std::collections::HashMap;
 
@@ -76,7 +66,6 @@ fn templates_and_triggers_roundtrip() {
     {
         let _view = register_types();
 
-        // ── Property Trigger ────────────────────────────────────────────────
         let mut trigger = Trigger::new();
         assert!(
             trigger.set_property("ToggleButton", "IsChecked"),
@@ -109,7 +98,6 @@ fn templates_and_triggers_roundtrip() {
         );
         assert_eq!(style.trigger_count(), 1, "Style.Triggers holds the trigger");
 
-        // Read the trigger back OUT of the live Triggers collection.
         let rb = style.get_trigger(0).expect("trigger 0");
         assert_eq!(
             rb.property_name().as_deref(),
@@ -124,7 +112,6 @@ fn templates_and_triggers_roundtrip() {
         assert_eq!(rb.setter_count(), 1, "trigger Setter count survived");
         assert!(style.get_trigger(1).is_none(), "only one trigger");
 
-        // ── Data Trigger ────────────────────────────────────────────────────
         let mut data_trigger = DataTrigger::new();
         assert!(data_trigger.set_binding(&Binding::new("IsEnabled")));
         assert!(
@@ -144,7 +131,6 @@ fn templates_and_triggers_roundtrip() {
         assert!(tb_style.add_trigger(&data_trigger));
         assert_eq!(tb_style.trigger_count(), 1);
 
-        // ── Multi Trigger ───────────────────────────────────────────────────
         let mut multi = MultiTrigger::new();
         assert!(multi.add_condition("ToggleButton", "IsChecked", &box_bool(true)));
         assert!(multi.add_condition("ToggleButton", "IsEnabled", &box_bool(false)));
@@ -168,7 +154,6 @@ fn templates_and_triggers_roundtrip() {
         assert!(multi_style.add_trigger(&multi));
         assert_eq!(multi_style.get_trigger(0).expect("mt").condition_count(), 2);
 
-        // ── Event Trigger ───────────────────────────────────────────────────
         let mut event_trigger = EventTrigger::new();
         assert!(
             event_trigger.set_routed_event("Button", "Click"),
@@ -202,13 +187,11 @@ fn templates_and_triggers_roundtrip() {
             Some("Click")
         );
 
-        // ── DataTemplateSelector from Rust ──────────────────────────────────
         let template = DataTemplate::parse(
             r##"<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><TextBlock Text="X"/></DataTemplate>"##,
         )
         .expect("parse DataTemplate");
         let template_ptr = template.raw() as usize;
-        // Pick the template only when an item is supplied; otherwise pick nothing.
         let selector = TemplateSelector::new(move |item: *mut std::ffi::c_void, _container| {
             if item.is_null() {
                 None

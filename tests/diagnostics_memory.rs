@@ -1,10 +1,8 @@
-//! TODO §17 — Noesis allocator counters.
+//! Noesis allocator counters: `allocated_memory`, `allocated_memory_accum`,
+//! `allocations_count`.
 //!
-//! `allocated_memory` / `allocated_memory_accum` / `allocations_count` are
-//! process-global, so the test asserts **deltas** and **monotonicity** rather
-//! than absolute values: hold a batch of freshly-parsed `FrameworkElement`s and
-//! the live-allocation count must rise; the cumulative `accum` counter must
-//! never decrease across reads.
+//! Counters are process-global, so the test asserts deltas and monotonicity
+//! rather than absolute values.
 
 use noesis_runtime::diagnostics as diag;
 use noesis_runtime::view::FrameworkElement;
@@ -45,8 +43,6 @@ fn allocator_counters_track_real_objects() {
         let count1 = diag::allocations_count();
         let bytes1 = diag::allocated_memory();
 
-        // accum is cumulative → never decreases, and allocating 32 trees must
-        // have pushed it up.
         assert!(
             accum1 >= accum0,
             "GetAllocatedMemoryAccum must be monotonic non-decreasing ({accum0} -> {accum1})"
@@ -56,13 +52,11 @@ fn allocator_counters_track_real_objects() {
             "allocating 32 element trees must increase the cumulative accum ({accum0} -> {accum1})"
         );
 
-        // Live allocation count must be strictly higher while the batch is held.
         assert!(
             count1 > count0,
             "live allocations_count must rise while 32 trees are held ({count0} -> {count1})"
         );
 
-        // Live byte usage must be strictly higher while the batch is held.
         assert!(
             bytes1 > bytes0,
             "live allocated_memory must rise while 32 trees are held ({bytes0} -> {bytes1})"

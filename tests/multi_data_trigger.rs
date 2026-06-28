@@ -1,17 +1,5 @@
-//! Phase 6 — `MultiDataTrigger` (binding-condition sibling of `MultiTrigger`)
-//! and `EventTrigger` action attachment (`BeginStoryboard`).
-//!
-//! Both build from code and read back out of the LIVE Noesis objects:
-//!   * `MultiDataTrigger` conditions carry a `Binding` + boxed `Value` (re-read
-//!     via `condition_has_binding` / `condition_value`); setters are counted. The
-//!     trigger is also attached to a `Style` to prove it is a real `BaseTrigger`.
-//!   * `EventTrigger` gains a `BeginStoryboard` action, observed through the live
-//!     `action_count` (which was previously read-only with no way to grow it).
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test multi_data_trigger -- --nocapture`
+//! `MultiDataTrigger` condition/setter round-trips and `EventTrigger` action
+//! attachment via `BeginStoryboard`.
 
 use std::collections::HashMap;
 
@@ -71,7 +59,6 @@ fn multi_data_trigger_and_event_actions_roundtrip() {
     {
         let _view = register_types();
 
-        // ── MultiDataTrigger ────────────────────────────────────────────────
         let mut mdt = MultiDataTrigger::new();
         assert!(
             mdt.add_condition(&Binding::new("IsEnabled"), &box_bool(true)),
@@ -119,7 +106,6 @@ fn multi_data_trigger_and_event_actions_roundtrip() {
         );
         assert_eq!(style.trigger_count(), 1, "Style.Triggers holds it");
 
-        // ── EventTrigger action attachment ──────────────────────────────────
         let mut et = EventTrigger::new();
         assert!(et.set_routed_event("Button", "Click"), "Click resolves");
         assert_eq!(et.action_count(), 0, "no actions yet");

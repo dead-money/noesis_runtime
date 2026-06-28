@@ -1,17 +1,5 @@
-//! Phase 5.E — `FrameworkElement::set_visibility` integration test.
-//!
-//! Loads a XAML where a named `<Border>` overlays a named `<Button>`,
-//! drives synthetic mouse clicks, and asserts that flipping the overlay
-//! between Visible and Collapsed via `set_visibility` correctly gates
-//! whether clicks reach the button.
-//!
-//! Lives in its own integration-test binary (rather than appended to
-//! `events.rs`) because each test crate calls
-//! `noesis_runtime::init()` / `shutdown()` once and Noesis can't be
-//! re-initialised inside a single process.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test visibility`
+//! Integration test for `FrameworkElement::set_visibility`: flipping an overlay
+//! between Visible and Collapsed gates whether clicks reach the element below.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -86,11 +74,9 @@ fn set_visibility_toggles_overlay_and_blocks_hit_test() {
         })
         .expect("subscribe_click returned None — HitButton not a button?");
 
-        // First update builds the render tree; required before hit-testing
-        // works.
+        // First update is required before hit-testing works.
         assert!(view.update(0.0), "first Update should report change");
 
-        // ── Phase 1: overlay starts Collapsed → clicks reach the button.
         let _ = view.mouse_move(100, 100);
         let _ = view.update(0.016);
         let _ = view.mouse_button_down(100, 100, MouseButton::Left);
@@ -103,7 +89,6 @@ fn set_visibility_toggles_overlay_and_blocks_hit_test() {
             "with overlay Collapsed, click should reach the button"
         );
 
-        // ── Phase 2: show the overlay → clicks no longer reach the button.
         let mut overlay = content.find_name("Overlay").expect("find_name Overlay");
         overlay.set_visibility(true);
         let _ = view.update(0.064);
@@ -117,7 +102,6 @@ fn set_visibility_toggles_overlay_and_blocks_hit_test() {
             "with overlay Visible, click should NOT reach the button"
         );
 
-        // ── Phase 3: hide it again → clicks reach the button once more.
         overlay.set_visibility(false);
         let _ = view.update(0.112);
         let _ = view.mouse_button_down(100, 100, MouseButton::Left);

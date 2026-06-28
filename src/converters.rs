@@ -1,4 +1,4 @@
-//! Rust value converters for data binding (TODO §3).
+//! Rust value converters for data binding.
 //!
 //! A [`Converter`] wraps a `Noesis::BaseValueConverter` subclass whose
 //! `TryConvert` / `TryConvertBack` forward into a Rust [`ValueConverter`]. This
@@ -32,8 +32,7 @@
 //! binding still references the converter (the common case while it's wired
 //! onto a live element), the underlying object — and the boxed handler — stay
 //! alive until that reference also drops. The handler is freed exactly once, by
-//! the C++ destructor, after the last reference goes away. Modelled on
-//! [`crate::commands::Command`].
+//! the C++ destructor, after the last reference goes away.
 //!
 //! # Threading
 //!
@@ -262,8 +261,7 @@ impl Converter {
     /// null for a valid vtable, which it never does).
     #[must_use]
     pub fn new<C: ValueConverter>(converter: C) -> Self {
-        // Double-Box for a stable thin pointer across the C ABI, matching the
-        // Command / ClickHandler pattern.
+        // Double-Box for a stable thin pointer across the C ABI.
         let boxed: Box<Box<dyn ValueConverter>> = Box::new(Box::new(converter));
         let userdata = Box::into_raw(boxed);
 

@@ -1,4 +1,4 @@
-//! `MultiBinding` + `IMultiValueConverter` from Rust (TODO §3).
+//! `MultiBinding` + `IMultiValueConverter` from Rust.
 //!
 //! A [`MultiBinding`] combines N child [`Binding`]s through a Rust
 //! [`MultiValueConverter`] into a single target value — the code-built
@@ -90,7 +90,6 @@ unsafe extern "C" fn multi_convert_trampoline(
     crate::panic_guard::guard(|| {
         let handler = &*userdata.cast::<Box<dyn MultiValueConverter>>();
 
-        // Materialise the borrowed args into a Vec<ConvertArg> the closure can index.
         let args: Vec<ConvertArg> = if values.is_null() || count == 0 {
             Vec::new()
         } else {

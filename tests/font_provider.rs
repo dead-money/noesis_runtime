@@ -1,37 +1,22 @@
-//! `Registered::register_font` smoke test — verifies that an eagerly
-//! registered face round-trips through the C++ `RustFontProvider` and
-//! ends up in the underlying `CachedFontProvider`'s cache, by observing
-//! that the provider's `open_font` callback fires for the eagerly
-//! registered `(folder, filename)` pair (Noesis opens the stream to scan
-//! face metadata as part of `RegisterFont`).
+//! `Registered::register_font` smoke test — verifies eager `RegisterFont`
+//! triggers `open_font` without `ScanFolder` (which caches after one call;
+//! faces absent at scan time are invisible forever without eager register).
 //!
-//! Without the FFI under test, the only path into the cache is the lazy
-//! `ScanFolder` callback — and `ScanFolder` runs at most once per folder,
-//! caches its result, so any face missing at that moment is invisible
-//! forever. The eager-register path makes scan timing irrelevant.
-//!
-//! Requires `NOESIS_SDK_DIR` (`Data/Fonts/Bitter-Regular.ttf` is read at
-//! test time).
+//! Requires `NOESIS_SDK_DIR` (`Data/Fonts/Bitter-Regular.ttf` is read at test time).
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use noesis_runtime::font_provider::{FontProvider, set_font_provider};
 
-/// Records every `(folder, filename)` pair `open_font` was asked for. Faked
-/// `scan_folder` returns nothing — so the only way an entry shows up here
-/// is if `RegisterFont` was invoked from outside the scan loop.
+// Records open_font pairs; scan_folder returns nothing, so opens only
+// accumulate if RegisterFont triggers open_font outside the scan loop.
 struct ObservedProvider {
-    /// `(folder, filename)` → bytes.
     bytes: std::collections::HashMap<(String, String), Vec<u8>>,
-    /// Pairs handed to `open_font`. Shared with the test body so the
-    /// assertion can read it after the FFI call returns.
-    opens: Arc<Mutex<Vec<(String, String)>>>,
-    /// Pairs handed to `scan_folder` — for diagnostics only.
+    opens: Arc<Mutex<Vec<(String, String)>>>, // shared with test body
     #[allow(dead_code)]
     scans: Arc<Mutex<Vec<String>>>,
-    /// Holds the bytes of the most recently opened file alive across the
-    /// borrow `open_font` returns (same pattern as `BevyFontProvider`).
+    // keeps the most recently opened bytes alive across the &[u8] borrow
     current: Option<Vec<u8>>,
 }
 
@@ -41,10 +26,7 @@ impl FontProvider for ObservedProvider {
     }
 
     fn scan_folder(&mut self, folder_uri: &str, _register: &mut dyn FnMut(&str)) {
-        // Deliberately register nothing — this is the failure mode the
-        // FFI under test exists to work around. The real BevyFontProvider
-        // would register every loaded font here; faking an empty scan
-        // proves eager-register works *without* a healthy scan_folder.
+        // deliberately empty — proves eager RegisterFont works without a healthy scan_folder
         self.scans.lock().unwrap().push(folder_uri.to_string());
     }
 
@@ -97,17 +79,13 @@ fn register_font_round_trips_through_open_font() {
     {
         let registered = set_font_provider(provider);
 
-        // Sanity: nothing has called open_font yet. Noesis hasn't been
-        // asked to resolve any font.
         assert!(
             opens.lock().unwrap().is_empty(),
             "open_font fired before any font lookup",
         );
 
-        // Eagerly register Bitter without going through ScanFolder.
-        // CachedFontProvider::RegisterFont opens the file synchronously
-        // to scan face metadata, so this must trigger an `open_font`
-        // call for the same pair.
+        // CachedFontProvider::RegisterFont scans face metadata synchronously,
+        // so this triggers open_font for the same (folder, filename) pair.
         registered.register_font("Fonts", "Bitter-Regular.ttf");
 
         let observed_opens = opens.lock().unwrap().clone();

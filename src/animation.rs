@@ -1,7 +1,8 @@
-//! Code-built animation & timing (TODO §6 / Phase C): construct `Storyboard`s,
+//! Code-built animation & timing: construct `Storyboard`s,
 //! the common animation classes (`DoubleAnimation` / `ColorAnimation` /
 //! `ThicknessAnimation` / `PointAnimation`), their key-frame variants, and the
-//! easing-function family from Rust, then run them off the [`View`] clock.
+//! easing-function family from Rust, then run them off the
+//! [`View`](crate::view::View) clock.
 //!
 //! Each handle here owns a freshly-created Noesis object holding a single `+1`
 //! reference, released on [`Drop`] via `noesis_base_component_release` — the
@@ -405,8 +406,6 @@ pub trait Animation: Timeline {
     }
 }
 
-// ── Storyboard ───────────────────────────────────────────────────────────────
-
 /// A `Storyboard` — a container timeline that targets and runs its child
 /// animations.
 pub struct Storyboard {
@@ -528,8 +527,6 @@ impl Storyboard {
     }
 }
 
-// ── Easing functions ─────────────────────────────────────────────────────────
-
 /// An easing function applied to a From/To animation or an easing key frame.
 pub struct EasingFunction {
     ptr: NonNull<c_void>,
@@ -590,8 +587,6 @@ impl EasingFunction {
         unsafe { noesis_easing_function_set_springiness(self.raw(), value) }
     }
 }
-
-// ── From/To/By animations ────────────────────────────────────────────────────
 
 macro_rules! animation_impls {
     ($name:ident) => {
@@ -825,8 +820,6 @@ impl PointAnimation {
     }
 }
 
-// ── Key-frame animations ─────────────────────────────────────────────────────
-
 /// A `DoubleAnimationUsingKeyFrames` — animates a `float` property through a
 /// sequence of discrete / linear / eased key frames.
 pub struct DoubleAnimationUsingKeyFrames {
@@ -933,8 +926,6 @@ impl ColorAnimationUsingKeyFrames {
         }
     }
 }
-
-// ── Rect / Size From/To animations ───────────────────────────────────────────
 
 /// A `RectAnimation` — interpolates a `Rect` property between `From` and `To`.
 /// Rects are `[x, y, width, height]`.
@@ -1097,8 +1088,6 @@ impl SizeAnimation {
         has.then_some(out)
     }
 }
-
-// ── Int16 / Int32 / Int64 From/To animations ─────────────────────────────────
 
 /// An `Int16Animation` — interpolates an `int16` property between `From` and
 /// `To` (Noesis rounds the interpolated value).
@@ -1372,8 +1361,6 @@ impl Int64Animation {
     }
 }
 
-// ── KeySpline ─────────────────────────────────────────────────────────────────
-
 /// A `KeySpline` — the two cubic-Bezier control points (each in the unit square)
 /// that shape a spline key frame's progress curve. Used with
 /// [`KeyFrameKind::Spline`] via [`KeyFrameInterp::Spline`].
@@ -1439,8 +1426,6 @@ impl KeySpline {
         ok.then_some((out[0], out[1]))
     }
 }
-
-// ── Rect / Size / Int key-frame animations ───────────────────────────────────
 
 /// A `RectAnimationUsingKeyFrames` — animates a `Rect` property through
 /// discrete / linear / eased / splined key frames.
@@ -1842,8 +1827,6 @@ impl Int64AnimationUsingKeyFrames {
     }
 }
 
-// ── Point / Thickness key-frame animations ───────────────────────────────────
-
 /// A `PointAnimationUsingKeyFrames` — animates a `Point` property (`(x, y)`)
 /// through discrete / linear / eased / splined key frames.
 pub struct PointAnimationUsingKeyFrames {
@@ -2013,8 +1996,6 @@ impl ThicknessAnimationUsingKeyFrames {
     }
 }
 
-// ── Boolean / String key-frame animations ────────────────────────────────────
-
 /// A `BooleanAnimationUsingKeyFrames` — animates a `bool` property through
 /// discrete key frames (a bool can't be interpolated, so only discrete frames
 /// exist).
@@ -2153,8 +2134,6 @@ impl StringAnimationUsingKeyFrames {
     }
 }
 
-// ── Object key-frame animation ───────────────────────────────────────────────
-
 /// An owned `Noesis::BaseComponent` handle handed back from an
 /// [`ObjectAnimationUsingKeyFrames`] key-frame value read.
 pub struct OwnedComponent {
@@ -2230,8 +2209,6 @@ impl ObjectAnimationUsingKeyFrames {
     }
 }
 
-// ── Matrix key-frame animation ───────────────────────────────────────────────
-
 /// A `MatrixAnimationUsingKeyFrames` — animates a `Matrix` (`MatrixTransform`)
 /// property through discrete key frames. A matrix is not componentwise
 /// interpolated, so only discrete frames exist. Matrices are
@@ -2297,8 +2274,6 @@ impl MatrixAnimationUsingKeyFrames {
         (t >= 0.0).then_some(t)
     }
 }
-
-// ── BeginStoryboard (trigger action) ──────────────────────────────────────────
 
 /// A `BeginStoryboard` trigger action — begins a [`Storyboard`] with a chosen
 /// [`HandoffBehavior`] when the owning trigger fires. Useful inside a trigger's
@@ -2398,8 +2373,6 @@ impl BeginStoryboard {
     }
 }
 
-// ── ParallelTimeline (timeline group) ─────────────────────────────────────────
-
 /// A `ParallelTimeline` — a code-built, nestable timeline group whose children
 /// (any [`Timeline`], including animations or nested `ParallelTimeline`s) run in
 /// parallel off the group's clock. Shares the [`Timeline`] knobs (duration,
@@ -2454,8 +2427,6 @@ impl ParallelTimeline {
         u32::try_from(n).ok()
     }
 }
-
-// ── From/To animation builders ────────────────────────────────────────────────
 
 /// Generates a fluent builder for a From/To/By animation type, covering
 /// `from`/`to`/`by`, the common [`Timeline`] knobs and an [`EasingFunction`], in

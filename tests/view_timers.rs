@@ -1,14 +1,5 @@
-//! TODO §1 — view timers, typed `RenderFlags` + `GetFlags`, `ViewStats`,
-//! tessellation quality, and `MouseHWheel`.
-//!
-//! Single `#[test]` per file (Noesis can't be re-init'd in a process): all
-//! work happens in an inner scope so every owning wrapper drops before
-//! `shutdown()`. Mirrors the harness in `tests/events.rs`, plus a minimal
-//! headless [`RenderDevice`] so the `ViewStats` assertion can observe real
-//! geometry from a render pass.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test --features test-utils --test view_timers -- --nocapture`
+//! Integration tests for view timers, typed `RenderFlags` + `GetFlags`,
+//! `ViewStats`, tessellation quality, and `MouseHWheel`.
 
 use std::collections::HashMap;
 use std::num::NonZeroU64;
@@ -23,9 +14,8 @@ use noesis_runtime::render_device::{
 use noesis_runtime::view::{FrameworkElement, Quality, RenderFlag, RenderFlags, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// A ScrollViewer with horizontally-overflowing content (so MouseHWheel has
-// something to handle) plus a TextBlock (so a render pass produces glyph
-// geometry the ViewStats counters reflect).
+// ScrollViewer with overflowing content so MouseHWheel has something to handle
+// and glyph geometry appears in ViewStats.
 const SCROLL_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <ScrollViewer xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -38,8 +28,7 @@ const SCROLL_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
   </StackPanel>
 </ScrollViewer>"##;
 
-// A plain Grid: no scrollable surface, so MouseHWheel bubbles unhandled — the
-// negative control for the hwheel assertion.
+// No scrollable surface — the negative control for the MouseHWheel assertion.
 const GRID_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -60,10 +49,9 @@ impl XamlProvider for InMem {
     }
 }
 
-// Minimal headless RenderDevice: hands out monotonic handles and valid scratch
-// buffers, dropping everything else on the floor. Enough to drive a real
-// Noesis render pass (which fills ViewStats) without a GPU. Modelled on the
-// MockDevice in tests/render_device.rs, trimmed of op recording.
+// Minimal headless RenderDevice: hands out monotonic handles and scratch
+// buffers, dropping everything else. Enough to drive a real Noesis render
+// pass (which fills ViewStats) without a GPU.
 struct NullDevice {
     next: u64,
     vb: Vec<u8>,
@@ -74,7 +62,7 @@ impl NullDevice {
     fn new() -> Self {
         Self {
             next: 1,
-            // DYNAMIC_VB_SIZE / DYNAMIC_IB_SIZE from RenderDevice.h.
+            // Sizes from DYNAMIC_VB_SIZE / DYNAMIC_IB_SIZE in RenderDevice.h.
             vb: vec![0; 512 * 1024],
             ib: vec![0; 128 * 1024],
         }
@@ -154,7 +142,7 @@ impl RenderDevice for NullDevice {
 }
 
 #[test]
-#[allow(clippy::too_many_lines)] // one test exercises the whole §1 batch
+#[allow(clippy::too_many_lines)]
 fn view_timers_flags_stats_quality_hwheel() {
     if let (Ok(name), Ok(key)) = (
         std::env::var("NOESIS_LICENSE_NAME"),
@@ -177,8 +165,6 @@ fn view_timers_flags_stats_quality_hwheel() {
         let provider = InMem { bytes };
         let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
-        // ── (E) MouseHWheel negative control: a plain Grid does not scroll, so
-        //        the horizontal wheel bubbles unhandled. ─────────────────────
         {
             let grid = FrameworkElement::load("grid.xaml").expect("grid.xaml load failed");
             let mut grid_view = View::create(grid);
@@ -208,7 +194,6 @@ fn view_timers_flags_stats_quality_hwheel() {
         // First update establishes the origin time the timer clock counts from.
         assert!(view.update(0.0), "first Update should report change");
 
-        // ── (B) typed RenderFlags + GetFlags round-trip ──────────────────────
         let flags = RenderFlags::from_iter([
             RenderFlag::Ppaa,
             RenderFlag::Wireframe,
@@ -223,7 +208,6 @@ fn view_timers_flags_stats_quality_hwheel() {
             !view.flags().contains(RenderFlag::Overdraw),
             "an unset flag must not be reported present"
         );
-        // The builder form composes the identical bitmask.
         let built = RenderFlags::empty()
             .with(RenderFlag::Ppaa)
             .with(RenderFlag::Wireframe)
@@ -232,7 +216,6 @@ fn view_timers_flags_stats_quality_hwheel() {
         view.set_flags(0);
         assert_eq!(view.get_flags(), 0, "flags should clear to 0");
 
-        // ── (D) tessellation quality set/get round-trip ──────────────────────
         view.set_quality(Quality::High);
         assert!(
             (view.tessellation_max_pixel_error() - 0.2).abs() < 1e-4,
@@ -249,11 +232,9 @@ fn view_timers_flags_stats_quality_hwheel() {
             (view.tessellation_max_pixel_error() - 0.55).abs() < 1e-4,
             "the raw setter should round-trip"
         );
-        // Reset to the recommended default for the render pass below.
+        // Reset to the default before the render pass below.
         view.set_quality(Quality::Medium);
 
-        // ── (A) timers ───────────────────────────────────────────────────────
-        // Constant-cadence timer: fires every 16 ms, reschedules itself.
         let c = Arc::clone(&const_ticks);
         let sub_const = view
             .create_timer(16, move || {
@@ -262,7 +243,7 @@ fn view_timers_flags_stats_quality_hwheel() {
             })
             .expect("create_timer returned None");
 
-        // One-shot timer: returns 0 after its first fire, so it must stop.
+        // Returning 0 from the callback stops the timer.
         let o = Arc::clone(&once_ticks);
         let _sub_once = view
             .create_timer(10, move || {
@@ -271,7 +252,6 @@ fn view_timers_flags_stats_quality_hwheel() {
             })
             .expect("create_timer returned None");
 
-        // Cancelled-before-any-update timer: must never fire.
         let cc = Arc::clone(&cancelled_ticks);
         let sub_cancel = view
             .create_timer(10, move || {
@@ -281,8 +261,7 @@ fn view_timers_flags_stats_quality_hwheel() {
             .expect("create_timer returned None");
         drop(sub_cancel);
 
-        // Pump the view clock forward in 50 ms steps for ~1 s. Each step clears
-        // the 16 ms / 10 ms intervals, so both live timers get a chance to fire.
+        // 50 ms steps cover both the 16 ms and 10 ms intervals each iteration.
         let mut t = 0.0_f64;
         for _ in 0..20 {
             t += 0.05;
@@ -305,11 +284,9 @@ fn view_timers_flags_stats_quality_hwheel() {
             "a timer cancelled before any update must never fire"
         );
 
-        // restart() keeps the timer alive with a new cadence — assert it keeps
-        // firing afterwards. (Necessary but not sufficient: the original 16 ms
-        // interval already fires once per 50 ms step, so this alone cannot
-        // distinguish a working restart from a no-op — see the dedicated
-        // huge→short restart below for that proof.)
+        // Necessary but not sufficient: the 16 ms interval already fires once
+        // per 50 ms step, so this alone cannot distinguish a working restart
+        // from a no-op — see the huge→short restart below for the real proof.
         sub_const.restart(8);
         for _ in 0..10 {
             t += 0.05;
@@ -320,12 +297,9 @@ fn view_timers_flags_stats_quality_hwheel() {
             "timer should keep firing after restart()"
         );
 
-        // restart() must actually reprogram the interval inside Noesis. Arm a
-        // timer at an interval so large (~10000 s) it can NEVER fire within the
-        // pumped window, confirm it stays silent, then restart() it down to
-        // 10 ms and confirm it begins firing. A no-op restart leaves the huge
-        // interval in place and the counter pinned at 0 — so this assertion
-        // fails iff RestartTimer never crossed into IView.
+        // A no-op restart() leaves the ~10000 s interval in place, so the
+        // counter stays 0 — this assertion fails iff RestartTimer did not cross
+        // into IView.
         let r = Arc::clone(&restart_ticks);
         let sub_restart = view
             .create_timer(10_000_000, move || {
@@ -333,7 +307,6 @@ fn view_timers_flags_stats_quality_hwheel() {
                 10_000_000
             })
             .expect("create_timer returned None");
-        // Pump at the existing 50 ms cadence; a ~10000 s interval must not fire.
         for _ in 0..10 {
             t += 0.05;
             view.update(t);
@@ -343,7 +316,7 @@ fn view_timers_flags_stats_quality_hwheel() {
             0,
             "huge-interval timer must not fire before restart"
         );
-        sub_restart.restart(10); // reprogram to 10 ms
+        sub_restart.restart(10);
         for _ in 0..10 {
             t += 0.05;
             view.update(t);
@@ -353,7 +326,6 @@ fn view_timers_flags_stats_quality_hwheel() {
             "timer must fire after restart() shortens the interval"
         );
 
-        // ── (E) MouseHWheel positive case: the ScrollViewer handles it. ───────
         let _ = view.mouse_move(100, 100);
         t += 0.05;
         view.update(t);
@@ -362,7 +334,6 @@ fn view_timers_flags_stats_quality_hwheel() {
             "MouseHWheel over a horizontally-scrollable ScrollViewer should be handled"
         );
 
-        // ── (C) ViewStats: a real render pass populates the counters. ─────────
         let device = register(NullDevice::new());
         {
             let mut renderer = view.renderer();

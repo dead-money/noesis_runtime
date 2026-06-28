@@ -1,21 +1,5 @@
-//! TODO §3 — `BindingExpression` inspection + explicit `UpdateSource`.
-//!
-//! One headless `#[test]` (Noesis inits once per process). Proves that
-//! `FrameworkElement::binding_expression(dp).update_source()` commits a `TwoWay`
-//! binding whose `UpdateSourceTrigger` is `Explicit` — the surface that was
-//! otherwise unusable (nothing previously committed an explicit-trigger
-//! binding).
-//!
-//! Two `TextBox`es share a Rust-backed view-model string property `Text`:
-//!   * `Editor` — bound `TwoWay`, `UpdateSourceTrigger=Explicit`.
-//!   * `Mirror` — bound `OneWay` (reflects the *source* value).
-//!
-//! Editing `Editor.Text` programmatically must NOT reach the source (so `Mirror`
-//! still shows the old value) until `update_source()` is called — at which point
-//! the source updates and `Mirror` follows. The before/after assertion on
-//! `Mirror` is what distinguishes a real explicit commit from "it updated
-//! anyway". Also checks the negative cases: an unbound / unknown property yields
-//! no `BindingExpression`.
+//! `BindingExpression::update_source` commits a `TwoWay`/`Explicit` binding;
+//! a `OneWay` mirror distinguishes a real explicit commit from an implicit one.
 
 use std::collections::HashMap;
 
@@ -61,7 +45,6 @@ fn binding_expression_explicit_update_source() {
     noesis_runtime::init();
 
     {
-        // View model with one string DP, `Text`, seeded with "init".
         let mut builder =
             ClassBuilder::new("Sample.ExprVM", ClassBase::ContentControl, NoopHandler);
         let text_idx = builder.add_property("Text", PropType::String);
@@ -90,7 +73,6 @@ fn binding_expression_explicit_update_source() {
         let mut editor = content.find_name("Editor").expect("find Editor");
         let mirror = content.find_name("Mirror").expect("find Mirror");
 
-        // Negative: no binding on Editor.Text yet → no BindingExpression.
         assert!(
             editor.binding_expression("Text").is_none(),
             "unbound property should have no BindingExpression"
@@ -113,11 +95,9 @@ fn binding_expression_explicit_update_source() {
         assert!(view.update(0.0), "first Update should report change");
         let _ = view.update(0.016);
 
-        // Both pull the initial source value.
         assert_eq!(editor.get_string("Text").as_deref(), Some("init"));
         assert_eq!(mirror.get_string("Text").as_deref(), Some("init"));
 
-        // Negative: an unknown DP name yields no BindingExpression.
         assert!(
             editor.binding_expression("NoSuchProperty").is_none(),
             "unknown DP name should have no BindingExpression"
@@ -141,8 +121,6 @@ fn binding_expression_explicit_update_source() {
             "explicit trigger: source (and OneWay mirror) must NOT change before update_source"
         );
 
-        // Commit the explicit binding. Now the source updates and the OneWay
-        // Mirror follows.
         let expr = editor
             .binding_expression("Text")
             .expect("Editor.Text should have a live BindingExpression");

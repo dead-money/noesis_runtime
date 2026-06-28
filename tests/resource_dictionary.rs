@@ -1,17 +1,4 @@
-//! TODO §7 — `ResourceDictionary` access: create/own a dictionary, add a boxed
-//! string under a key, look it up (hit + miss), wire a merged dictionary, parse
-//! a `<ResourceDictionary>` from XAML, and install + read back the process-wide
-//! application resources.
-//!
-//! Fail-if-stubbed: every assertion reads back THROUGH Noesis — the looked-up
-//! value is unboxed and compared to the original string; a miss returns `None`;
-//! a merged key resolves through the parent; the parsed dictionary's entry
-//! survives the round-trip; and the installed application resources are visible
-//! via `GUI::GetApplicationResources` (present + contains the key, including a
-//! merged one). A no-op stub of any entrypoint would flip one of these.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test resource_dictionary -- --nocapture`
+//! `ResourceDictionary`: create, look up (hit + miss), merge, parse from XAML, and install as application resources.
 
 use std::ffi::CStr;
 
@@ -57,7 +44,6 @@ fn resource_dictionary_roundtrips() {
     noesis_runtime::init();
 
     {
-        // ── Build a dictionary + key→boxed-string, look it up ────────────────
         let mut dict = ResourceDictionary::new();
         assert!(dict.is_empty(), "fresh dictionary should be empty");
         assert!(dict.add_string("K", "hello"), "add_string should succeed");
@@ -77,7 +63,6 @@ fn resource_dictionary_roundtrips() {
         assert!(dict.find("nope").is_none(), "missing key -> None");
         assert!(!dict.contains("nope"), "missing key -> contains false");
 
-        // ── Merged dictionary: parent resolves a child's key ─────────────────
         let merged = ResourceDictionary::parse(MERGED_XAML)
             .expect("parse of <ResourceDictionary> should succeed");
         assert!(
@@ -94,7 +79,6 @@ fn resource_dictionary_roundtrips() {
             "parent should resolve the merged key after add_merged"
         );
 
-        // ── Parse path: a standalone dictionary keeps its parsed entry ───────
         let parsed = ResourceDictionary::parse(PARSED_XAML).expect("parse should succeed");
         let parsed_hit = parsed
             .find("Parsed.Title")
@@ -113,7 +97,6 @@ fn resource_dictionary_roundtrips() {
             "parsing a non-ResourceDictionary root must be None"
         );
 
-        // ── Application resources: install + read back ───────────────────────
         // Noesis may pre-seed an empty application dictionary at init, so the
         // discriminating precondition is "K not yet resolvable", not absence.
         assert!(

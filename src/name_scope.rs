@@ -1,4 +1,4 @@
-//! Standalone `NameScope` (TODO §2) — the freestanding XAML namescope object,
+//! Standalone `NameScope` — the freestanding XAML namescope object,
 //! distinct from the per-`FrameworkElement` `RegisterName`/`UnregisterName`
 //! path (which routes through whatever scope already hosts the element).
 //!
@@ -56,7 +56,7 @@ impl NameScope {
     /// Attach `scope` to `element` as its namescope (`NameScope::SetNameScope`),
     /// or pass `None` to clear it. Returns `false` if `element` is not a
     /// `DependencyObject`.
-    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
+    #[must_use = "a false return means the scope was not set (element is not a DependencyObject)"]
     pub fn set_on(element: &mut FrameworkElement, scope: Option<&NameScope>) -> bool {
         let scope_ptr = scope.map_or(core::ptr::null_mut(), NameScope::raw);
         // SAFETY: both pointers are live (or null to clear); Noesis stores its
@@ -137,7 +137,6 @@ impl NameScope {
     /// and valid only for that call — use
     /// [`clone_ref`](FrameworkElement::clone_ref) to keep it.
     pub fn for_each<F: FnMut(&str, &FrameworkElement)>(&self, mut f: F) {
-        // The closure is borrowed for the synchronous enumeration only.
         let mut callback: &mut dyn FnMut(&str, &FrameworkElement) = &mut f;
 
         unsafe extern "C" fn tramp(ud: *mut c_void, name: *const c_char, obj: *mut c_void) {

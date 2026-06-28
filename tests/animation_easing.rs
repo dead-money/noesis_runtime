@@ -1,9 +1,5 @@
-//! TODO §6 — easing functions change the interpolation curve. Two `Border`s
-//! animate `Width` 0 -> 100 over the same 1s span via one `Storyboard`; one
-//! linear, one with a `QuadraticEase` in `EaseIn` mode. At the midpoint the
-//! eased value must trail the linear one (quadratic-in at t=0.5 yields ~25, vs
-//! linear ~50), and both must reach ~100 at the end. A stubbed easing (treated
-//! as linear) would make the two equal at the midpoint, so this discriminates.
+//! Easing changes the interpolation curve: a `QuadraticEase`-in animation
+//! trails a linear one at the midpoint; both reach the end value.
 
 use noesis_runtime::animation::{
     Animation, DoubleAnimation, EasingFunction, EasingKind, EasingMode, Storyboard, Timeline,
@@ -76,7 +72,6 @@ fn easing_changes_interpolation_curve() {
             "eased (quadratic-in) midpoint {ew} should clearly trail linear {lw}"
         );
 
-        // End: both reach ~100.
         view.update(1.1);
         let lw_end = lin.get_f32("Width").expect("lin width");
         let ew_end = eased.get_f32("Width").expect("eased width");

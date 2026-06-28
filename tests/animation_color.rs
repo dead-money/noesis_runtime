@@ -1,9 +1,5 @@
-//! TODO §6 — a `ColorAnimation` animates a `SolidColorBrush`'s `Color` (reusing
-//! the §11 code-built brushes from main). The brush is assigned as a `Border`'s
-//! `Background`; Noesis animates that same shared brush object, so reading the
-//! color back through our retained brush handle observes the live animated value
-//! crossing the FFI. From red to blue over 0.5s: midway the color is partway,
-//! at the end it is ~blue. A stubbed animation leaves the brush red.
+//! `ColorAnimation` in a `Storyboard` animates a code-built `SolidColorBrush`;
+//! reading back through the retained brush handle observes the live animated color.
 
 use noesis_runtime::animation::{Animation, ColorAnimation, Storyboard, Timeline};
 use noesis_runtime::brushes::SolidColorBrush;
@@ -36,13 +32,11 @@ fn color_animation_drives_brush_color() {
         let content = view.content().expect("content");
         let mut box_el = content.find_name("Box").expect("Box");
 
-        // Code-built brush (reused §11 surface), retained so we can read the
-        // live color back through Noesis as the animation runs.
+        // Retained so we can read the live animated color back through Noesis.
         let brush = SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]);
         assert!(box_el.set_background(&brush));
         assert_eq!(brush.color(), [1.0, 0.0, 0.0, 1.0]);
 
-        // Red -> blue over 0.5s.
         let mut anim = ColorAnimation::new();
         assert!(
             anim.set_from(Some([1.0, 0.0, 0.0, 1.0])),

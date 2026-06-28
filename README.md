@@ -1,5 +1,9 @@
 # noesis_runtime
 
+[![CI](https://github.com/dead-money/noesis_runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/dead-money/noesis_runtime/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/noesis_runtime.svg)](https://crates.io/crates/noesis_runtime)
+[![docs.rs](https://docs.rs/noesis_runtime/badge.svg)](https://docs.rs/noesis_runtime)
+
 Rust bindings for the [Noesis GUI Native SDK](https://www.noesisengine.com/), which brings XAML-driven UI to game engines. You load `.xaml` scenes, drive the View and renderer, implement a `RenderDevice` against your own GPU, and write Rust-backed custom controls and markup extensions that XAML can use by name.
 
 The crate is renderer-agnostic. It's built for Dead Money's own game projects and was mostly written by AI agents under human direction.
@@ -14,8 +18,10 @@ Set `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to apply your license. Withou
 
 ```toml
 [dependencies]
-noesis_runtime = { git = "https://github.com/dead-money/noesis_runtime" }
+noesis_runtime = "0.9"
 ```
+
+The crate is on crates.io, but it still links the Noesis SDK at build time — you need `NOESIS_SDK_DIR` set (see above) for it to compile.
 
 ```rust
 use noesis_runtime::view::{FrameworkElement, View};

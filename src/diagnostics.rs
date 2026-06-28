@@ -1,5 +1,4 @@
-//! Diagnostics: error / assert handlers (TODO §18) and memory-usage queries
-//! (TODO §17).
+//! Diagnostics: error / assert handlers and memory-usage queries.
 //!
 //! # Error & assert handlers
 //!
@@ -93,8 +92,6 @@ pub struct ErrorContext {
     pub column: u32,
 }
 
-// ── Global error handler ─────────────────────────────────────────────────────
-
 type ErrorClosure = Box<dyn FnMut(&str, u32, &str, bool) + Send + 'static>;
 
 /// SAFETY: `userdata` is the `Box<ErrorClosure>` leaked in [`set_error_handler`]
@@ -172,8 +169,6 @@ where
     }
 }
 
-// ── Global assert handler ─────────────────────────────────────────────────────
-
 type AssertClosure = Box<dyn FnMut(&str, u32, &str) -> bool + Send + 'static>;
 
 /// SAFETY: `userdata` is the `Box<AssertClosure>` leaked in
@@ -245,8 +240,6 @@ where
         prev_user,
     }
 }
-
-// ── Per-thread error handler (ErrorHandler2, carries an ErrorContext) ─────────
 
 type Error2Closure = Box<dyn FnMut(&str, u32, &str, bool, Option<&ErrorContext>) + Send + 'static>;
 
@@ -338,8 +331,6 @@ where
     }
 }
 
-// ── Invokers ──────────────────────────────────────────────────────────────────
-
 /// Run the registered error handler through Noesis's real dispatch
 /// (`InvokeErrorHandler`) with no [`ErrorContext`]. Routes to the per-thread
 /// handler if one is installed on this thread, else the global one.
@@ -420,8 +411,6 @@ pub fn invoke_assert(file: &str, line: u32, expr: &str) -> bool {
     // SAFETY: both C strings live for the call.
     unsafe { noesis_invoke_assert_handler(cf.as_ptr(), line, ce.as_ptr()) }
 }
-
-// ── Memory queries (TODO §17) ─────────────────────────────────────────────────
 
 /// Bytes currently allocated through Noesis's allocator
 /// (`Noesis::GetAllocatedMemory`). Rises and falls as objects are created and

@@ -1,19 +1,9 @@
-//! TODO §15 — `GUI::GetXamlDependencies` + typed component load.
+//! Integration tests for `get_xaml_dependencies` and `load_xaml_component`.
 //!
-//! [`get_xaml_dependencies`] is pinned by feeding it a XAML buffer whose
-//! dependencies are fully predictable: a `UserControl` root (Root) that sets a
-//! `FontFamily` (Font), hosts an `Image` with a relative `Source` (Filename),
-//! and a prefixed `local:CustomControl` node (`UserControl`). The test asserts
-//! the returned `Vec` contains each expected URI with the right kind, so the
-//! C++ trampoline and the int→enum mapping are both load-bearing.
-//!
-//! [`load_xaml_component`] is pinned by loading a bare `<ResourceDictionary>`
-//! through an in-memory provider and asserting the reflected `type_name()` is
-//! `ResourceDictionary` — the typed-load path the `FrameworkElement::load`
-//! narrowing rejects.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test xaml_dependencies -- --nocapture`
+//! `get_xaml_dependencies` is exercised with a XAML whose dependencies are
+//! fully predictable so the C++ trampoline and int→enum mapping are both
+//! load-bearing. `load_xaml_component` is exercised with a bare
+//! `<ResourceDictionary>` that `FrameworkElement::load` would reject.
 
 use std::collections::HashMap;
 
@@ -21,13 +11,8 @@ use noesis_runtime::view::FrameworkElement;
 use noesis_runtime::xaml::{XamlDependencyKind, get_xaml_dependencies, load_xaml_component};
 use noesis_runtime::xaml_provider::{XamlProvider, set_xaml_provider};
 
-// A UserControl that references exactly the dependencies we assert on:
-//   * Root          → "UserControl" (the root node's type)
-//   * Font          → the FontFamily reference "#Bitter"
-//   * Filename      → the Image Source "images/logo.png"
-//   * UserControl   → the prefixed node "local:CustomControl"
 // `local` maps to a clr-namespace so Noesis reports CustomControl as a
-// UserControl dependency rather than trying to resolve it as a known type.
+// UserControl dependency rather than trying to resolve it as a known built-in.
 const DEPS_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -39,9 +24,8 @@ const DEPS_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
   </Grid>
 </UserControl>"##;
 
-// A bare ResourceDictionary — a valid XAML object tree whose root is NOT a
-// FrameworkElement. FrameworkElement::load rejects it; load_xaml_component
-// keeps it and reports its type.
+// Root is NOT a FrameworkElement; load_xaml_component accepts it while
+// FrameworkElement::load rejects it.
 const DICT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -69,15 +53,12 @@ fn xaml_dependencies_and_typed_load() {
     noesis_runtime::init();
 
     {
-        // ── GetXamlDependencies ─────────────────────────────────────────────
         let deps = get_xaml_dependencies(DEPS_XAML.as_bytes(), "test.xaml");
         assert!(
             !deps.is_empty(),
             "GetXamlDependencies returned no dependencies for a XAML that has several"
         );
 
-        // Root: the root node's type is reported as a Root dependency naming
-        // "UserControl".
         let root = deps
             .iter()
             .find(|d| d.kind == XamlDependencyKind::Root)
@@ -88,7 +69,6 @@ fn xaml_dependencies_and_typed_load() {
             root.uri
         );
 
-        // Font: the FontFamily reference must be reported with the Bitter face.
         let font = deps
             .iter()
             .find(|d| d.kind == XamlDependencyKind::Font)
@@ -99,8 +79,8 @@ fn xaml_dependencies_and_typed_load() {
             font.uri
         );
 
-        // Filename: the Image Source resolves (relative to the base URI) to a
-        // path ending in the png we referenced.
+        // The Image Source resolves relative to the base URI, so the uri ends
+        // with the filename rather than matching it exactly.
         let file = deps
             .iter()
             .find(|d| d.kind == XamlDependencyKind::Filename && d.uri.contains("logo.png"))
@@ -113,8 +93,6 @@ fn xaml_dependencies_and_typed_load() {
             file.uri
         );
 
-        // UserControl: the prefixed node local:CustomControl is reported as a
-        // UserControl dependency naming CustomControl.
         let uc = deps
             .iter()
             .find(|d| d.kind == XamlDependencyKind::UserControl)
@@ -132,19 +110,15 @@ fn xaml_dependencies_and_typed_load() {
             "malformed XAML should yield no dependencies, got {none:?}"
         );
 
-        // ── Typed component load ────────────────────────────────────────────
         let mut map = HashMap::new();
         map.insert("dict.xaml".to_string(), DICT_XAML.as_bytes().to_vec());
         let _provider = set_xaml_provider(InMem(map));
 
-        // FrameworkElement::load narrows to FrameworkElement and so rejects a
-        // ResourceDictionary root.
         assert!(
             FrameworkElement::load("dict.xaml").is_none(),
             "FrameworkElement::load must reject a ResourceDictionary root"
         );
 
-        // load_xaml_component keeps the root and reports its reflected type.
         let loaded = load_xaml_component("dict.xaml")
             .expect("load_xaml_component returned None for a valid ResourceDictionary");
         assert!(

@@ -1,11 +1,8 @@
-//! Phase 5 — `Style::builder(target_type)` fluent construction.
+//! `Style::builder(target_type)` fluent construction.
 //!
-//! Fail-if-stubbed: a style built via the builder is assigned to one of three
-//! sibling `TextBlock`s and the `FontSize` setter is read back THROUGH Noesis
-//! after a layout pump (the styled block changes; the plain sibling keeps the
-//! default). `based_on` is exercised via a derived builder.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
+//! A built style is assigned to a `TextBlock` and `FontSize` is read back
+//! through Noesis after a layout pump; `based_on` is exercised via a derived
+//! builder.
 
 use std::collections::HashMap;
 
@@ -82,7 +79,6 @@ fn style_builder_applies_to_assigned_element() {
             "default must differ from the setter value or the test proves nothing"
         );
 
-        // ── Build a Style via the fluent builder ─────────────────────────────
         let style = Style::builder("TextBlock")
             .setter("FontSize", &box_f32(STYLED_SIZE))
             .build();
@@ -97,7 +93,6 @@ fn style_builder_applies_to_assigned_element() {
             "unstyled sibling keeps the default FontSize"
         );
 
-        // ── based_on via a derived builder ───────────────────────────────────
         let derived = Style::builder("TextBlock")
             .based_on(&style)
             .setter("FontSize", &box_f32(BASED_SIZE))

@@ -1,4 +1,4 @@
-//! Code-built geometry object model (TODO §10): construct `Geometry` objects —
+//! Code-built geometry object model: construct `Geometry` objects —
 //! `StreamGeometry`, `PathGeometry` (figures + segments), the primitive
 //! `Ellipse`/`Rectangle`/`Line` geometries, `CombinedGeometry`, and
 //! `GeometryGroup` — from Rust without authoring XAML.
@@ -19,12 +19,10 @@
 //! unsafe { path.set_component("Data", ellipse.geometry_raw()) };
 //! ```
 //!
-//! Read-back getters re-read from the live Noesis object — [`Geometry::bounds`]
-//! / [`Geometry::render_bounds`] prove a real path was built (a no-op
-//! constructor yields empty bounds), figure / segment / child counts prove the
-//! collection wiring crossed the FFI, and the `FillRule` / `GeometryCombineMode`
-//! accessors prove the enum round-trips. A stubbed implementation fails the
-//! tests in `tests/geometry.rs`.
+//! Getters such as [`Geometry::bounds`] / [`Geometry::render_bounds`] and the
+//! figure / segment / child counts re-read from the live Noesis object rather
+//! than from cached Rust state, so they reflect whatever the geometry currently
+//! holds (a freshly created, unpopulated geometry reports empty bounds).
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
@@ -179,7 +177,7 @@ impl SweepDirection {
 /// A handle to a Noesis `Geometry`. Implemented by every geometry type in this
 /// module so generic code (and the `Data` assignment sugar) can accept any of
 /// them while keeping non-geometry objects out. The base getters re-read from
-/// the live Noesis object, proving a real path was constructed.
+/// the live Noesis object.
 pub trait Geometry {
     /// Borrowed `Noesis::Geometry*` (a `BaseComponent*`), valid for `self`'s
     /// lifetime. Used by assignment / combination; not normally called directly.
@@ -288,8 +286,6 @@ macro_rules! segment_handle {
         }
     };
 }
-
-// ── StreamGeometry ───────────────────────────────────────────────────────────
 
 /// A `StreamGeometry`: a lightweight geometry described by drawing commands
 /// (via [`StreamGeometry::open`]) or an SVG path-data string.
@@ -477,8 +473,6 @@ impl Drop for StreamGeometryContext {
     }
 }
 
-// ── PathGeometry + PathFigure ────────────────────────────────────────────────
-
 /// A `PathGeometry`: a collection of [`PathFigure`]s describing the path.
 pub struct PathGeometry {
     ptr: NonNull<c_void>,
@@ -618,8 +612,6 @@ impl PathFigure {
         unsafe { noesis_path_figure_segment_count(self.ptr.as_ptr()) }.max(0) as usize
     }
 }
-
-// ── Path segments ────────────────────────────────────────────────────────────
 
 /// A straight `LineSegment` to a point.
 pub struct LineSegment {
@@ -879,8 +871,6 @@ poly_segment!(
     "A `PolyQuadraticBezierSegment`: a run of quadratic Béziers (points in pairs)."
 );
 
-// ── Primitive geometries ─────────────────────────────────────────────────────
-
 /// An `EllipseGeometry` defined by a center and radii.
 pub struct EllipseGeometry {
     ptr: NonNull<c_void>,
@@ -1007,8 +997,6 @@ impl LineGeometry {
     }
 }
 
-// ── CombinedGeometry ─────────────────────────────────────────────────────────
-
 /// A `CombinedGeometry` of two operand geometries combined by a
 /// [`GeometryCombineMode`].
 pub struct CombinedGeometry {
@@ -1079,7 +1067,8 @@ impl CombinedGeometry {
         unsafe { noesis_combined_geometry_set_mode(self.ptr.as_ptr(), mode.to_ordinal()) };
     }
 
-    /// Read the combine mode back from the live object.
+    /// Read the combine mode back from the live object, or `None` if Noesis
+    /// reports an unrecognized mode.
     #[must_use]
     pub fn mode(&self) -> Option<GeometryCombineMode> {
         // SAFETY: self.ptr is a live CombinedGeometry*.
@@ -1088,8 +1077,6 @@ impl CombinedGeometry {
         })
     }
 }
-
-// ── GeometryGroup ────────────────────────────────────────────────────────────
 
 /// A `GeometryGroup`: several child geometries combined by a [`FillRule`].
 pub struct GeometryGroup {

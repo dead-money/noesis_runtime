@@ -1,13 +1,6 @@
-//! Round-trip tests for code-built [`FormattedText`] measurement / layout
-//! (TODO §13).
-//!
-//! Text metrics require the font system to resolve real glyphs, so we register
-//! a [`FontProvider`] serving the SDK's bundled `Bitter-Regular.ttf` (same font
-//! `tests/font_provider.rs` drives) and measure against the `"Fonts/#Bitter"`
-//! family. A stubbed FFI that returns 0 or a constant fails the `width > 0`,
-//! `height > 0`, and "longer string measures wider" assertions because those
-//! numbers can only come from genuinely shaping glyphs in the live Noesis
-//! object.
+//! [`FormattedText`] measurement round-trips against real glyphs (`Bitter-Regular.ttf`);
+//! a stub returning zero or a constant fails the positive-width and
+//! "longer string measures wider" assertions.
 //!
 //! Requires `NOESIS_SDK_DIR` (`Data/Fonts/Bitter-Regular.ttf` is read here).
 
@@ -20,13 +13,10 @@ use noesis_runtime::formatted_text::{
     text_trimming, text_wrapping,
 };
 
-/// Serves a single bundled font (`Bitter`). `scan_folder` registers it so the
-/// `"Fonts/#Bitter"` family resolves; `open_font` returns its bytes.
+// Serves Bitter-Regular.ttf; scan_folder registers the face, open_font returns bytes.
 struct BitterProvider {
-    /// filename -> bytes.
     bytes: HashMap<String, Vec<u8>>,
-    /// Keeps the most recently opened file alive across the borrow `open_font`
-    /// hands back (same pattern as the other font providers in this crate).
+    // keeps bytes alive across the &[u8] borrow open_font returns
     current: Option<Vec<u8>>,
 }
 
@@ -74,7 +64,6 @@ fn formatted_text_measures_real_glyphs() {
         bytes,
         current: None,
     });
-    // Make the bare family resolve too, and act as the default font.
     set_font_fallbacks(&["Fonts/#Bitter"]);
 
     const FAMILY: &str = "Fonts/#Bitter";
@@ -83,7 +72,6 @@ fn formatted_text_measures_real_glyphs() {
     let short = FormattedText::builder("Hi", FAMILY, SIZE).build();
     let long = FormattedText::builder("Hello, world! This is a longer line.", FAMILY, SIZE).build();
 
-    // Core read-backs: genuine, non-zero metrics.
     let (sw, sh) = (short.width(), short.height());
     let (lw, lh) = (long.width(), long.height());
     assert!(sw > 0.0, "short width should be positive, got {sw}");
@@ -91,19 +79,16 @@ fn formatted_text_measures_real_glyphs() {
     assert!(lw > 0.0, "long width should be positive, got {lw}");
     assert!(lh > 0.0, "long height should be positive, got {lh}");
 
-    // The crux: a longer string at the same size must measure wider. A stub
-    // returning a constant fails here.
+    // longer string must measure wider — a stub returning a constant fails here
     assert!(
         lw > sw,
         "longer string ({lw}) should measure wider than shorter ({sw})",
     );
 
-    // bounds() agrees with the width()/height() convenience accessors.
     let b = short.bounds();
     assert_eq!(b[2], sw, "bounds width should match width()");
     assert_eq!(b[3], sh, "bounds height should match height()");
 
-    // Single unconstrained line.
     assert!(!short.is_empty(), "non-empty text should not report empty");
     assert!(
         !short.has_visual_brush(),
@@ -111,18 +96,14 @@ fn formatted_text_measures_real_glyphs() {
     );
     assert_eq!(short.num_lines(), 1, "short unconstrained text is one line");
 
-    // Line metrics: real height + baseline.
     let line = short.line_info(0).expect("line 0 exists");
     assert!(line.height > 0.0, "line height positive, got {line:?}");
     assert!(line.baseline > 0.0, "baseline positive, got {line:?}");
     assert!(line.num_glyphs >= 2, "\"Hi\" has >= 2 glyphs, got {line:?}");
     assert!(short.line_info(5).is_none(), "out-of-range line is None");
 
-    // Independent re-measure path: Measure() returns a real line height for the
-    // shaped runs (a stub returning a constant 0 fails this). Note that in
-    // 3.2.13 Measure() reports the *wrapped* width relative to the supplied
-    // constraint and yields 0 width for an unconstrained NoWrap measure, so we
-    // assert on the genuinely non-zero height here.
+    // In 3.2.13, Measure() yields 0 width for unconstrained NoWrap; assert
+    // the non-zero height instead.
     let (_mw, mh) = short.measure(
         text_alignment::LEFT,
         text_wrapping::NO_WRAP,
@@ -156,11 +137,8 @@ fn formatted_text_measures_real_glyphs() {
         wrapped.num_lines(),
     );
 
-    // Glyph geometry + hit-testing exercise the remaining surface. These depend
-    // on a full render Layout() (which the measurement-only ctor path does not
-    // populate), so we exercise the FFI round-trip without asserting
-    // render-dependent coordinates: Noesis returns (-10,-10) for a glyph outside
-    // the laid-out limits, which is a documented, valid result.
+    // measurement-only ctor doesn't run Layout(); (-10,-10) for out-of-layout
+    // glyphs is a documented valid result — don't assert on coordinates
     let (gx, gy) = short.glyph_position(0, false);
     assert!(gx.is_finite() && gy.is_finite(), "glyph pos finite");
     let hit = short.hit_test(sw + 1000.0, sh / 2.0);

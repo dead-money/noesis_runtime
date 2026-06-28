@@ -1,12 +1,5 @@
-//! Phase 5 — struct-arg geometry constructors (ergonomic alternatives to the
-//! high-arity positional ctors): `ArcSegment::from_fields` and
-//! `RectangleGeometry::from_rect`.
-//!
-//! Fail-if-stubbed: each struct-arg ctor is round-tripped through the live
-//! object's read-back accessors and compared against the equivalent positional
-//! ctor.
-//!
-//! Single `#[test]` per the harness convention (one Noesis init per process).
+//! Struct-arg geometry constructors (`ArcSegment::from_fields`,
+//! `RectangleGeometry::from_rect`): round-tripped and compared to the positional form.
 
 use noesis_runtime::geometry::{ArcFields, ArcSegment, Rect, RectangleGeometry, SweepDirection};
 
@@ -25,7 +18,6 @@ fn builder_geometry_struct_args_round_trip() {
     noesis_runtime::init();
 
     {
-        // ── ArcSegment::from_fields ──────────────────────────────────────────
         let fields = ArcFields {
             point: (10.0, 20.0),
             size: (5.0, 7.0),
@@ -48,7 +40,6 @@ fn builder_geometry_struct_args_round_trip() {
         assert_eq!(got.sweep, SweepDirection::Clockwise, "arc sweep");
         assert_eq!(got, fields, "from_fields round-trips with get()");
 
-        // Equivalent to the 7-positional-arg form.
         let positional =
             ArcSegment::new(10.0, 20.0, 5.0, 7.0, 45.0, true, SweepDirection::Clockwise);
         assert_eq!(
@@ -57,7 +48,6 @@ fn builder_geometry_struct_args_round_trip() {
             "from_fields == new() positional"
         );
 
-        // ── RectangleGeometry::from_rect ─────────────────────────────────────
         let r = Rect {
             x: 1.0,
             y: 2.0,
@@ -79,7 +69,6 @@ fn builder_geometry_struct_args_round_trip() {
             "from_rect radii round-trip"
         );
 
-        // Equivalent to the 6-positional-arg form.
         let positional_rect = RectangleGeometry::new(1.0, 2.0, 30.0, 40.0, 3.0, 4.0);
         assert_eq!(
             rg.rect(),

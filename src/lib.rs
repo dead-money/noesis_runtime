@@ -1,9 +1,26 @@
-//! FFI to the Noesis GUI Native SDK.
+//! Safe Rust bindings to the Noesis GUI native SDK — a XAML-based UI engine,
+//! wrapped here by a hand-written C ABI over opaque, reference-counted handles.
 //!
-//! Renderer-agnostic — Bevy/wgpu integration lives in the sibling crate
-//! `noesis_bevy`. See `../noesis_bevy/CLAUDE.md` for the phase plan.
+//! The crate is renderer-agnostic: it builds UI trees, drives input, and ticks
+//! the layout/animation engine, but leaves drawing to you through the
+//! [`render_device::RenderDevice`] trait. A ready-made Bevy/wgpu integration
+//! lives in the sibling crate `noesis_bevy`.
 //!
-//! Currently at Phase 0: lifecycle only.
+//! # Getting started
+//!
+//! The lifecycle is process-wide: call [`init`] exactly once at startup and
+//! [`shutdown`] once at exit, after every Noesis handle has been dropped. In
+//! between, a typical session looks like:
+//!
+//! 1. Install an asset source with [`xaml_provider::set_xaml_provider`] (plus
+//!    optional font and texture providers).
+//! 2. Build a UI root — [`view::FrameworkElement::load`] from a URI, or
+//!    [`view::FrameworkElement::parse`] from an in-memory XAML string.
+//! 3. Wrap it in a [`view::View`] with [`view::View::create`], then feed it the
+//!    surface size, input events, and per-frame time updates.
+//! 4. Render the view through your [`render_device::RenderDevice`].
+//!
+//! For a quick import of the types most code reaches for, glob the [`prelude`].
 //!
 //! # Setup
 //!
@@ -198,48 +215,38 @@ pub fn shutdown() {
 /// noesis_runtime::shutdown();
 /// ```
 pub mod prelude {
-    // Lifecycle & runtime free functions.
     pub use crate::{init, set_license, shutdown, version};
 
-    // Core view / element handles.
     pub use crate::view::{FrameworkElement, View};
 
-    // Data binding & collections.
     pub use crate::binding::{Binding, BindingMode, ObservableCollection, UpdateSourceTrigger};
 
-    // Brushes & effects (traits + common concrete types).
     pub use crate::brushes::{
         Brush, Effect, GradientStop, ImageBrush, LinearGradientBrush, RadialGradientBrush,
         SolidColorBrush, Stretch,
     };
 
-    // Transforms (trait + common concrete types).
     pub use crate::transforms::{
         RotateTransform, ScaleTransform, Transform, TransformGroup, TranslateTransform,
     };
 
-    // Geometry (trait + common concrete types).
     pub use crate::geometry::{
         EllipseGeometry, FillRule, Geometry, LineGeometry, PathGeometry, Rect, RectangleGeometry,
     };
 
-    // Resources, styles, templates.
     pub use crate::resources::ResourceDictionary;
     pub use crate::styles::{ControlTemplate, Style};
 
-    // Custom controls & markup extensions.
     pub use crate::classes::{
         ClassBuilder, ClassRegistration, PropertyChangeHandler, PropertyValue,
     };
     pub use crate::ffi::{ClassBase, PropType};
     pub use crate::markup::MarkupExtensionRegistration;
 
-    // Asset providers (traits + the XAML installer).
     pub use crate::font_provider::FontProvider;
     pub use crate::texture_provider::TextureProvider;
     pub use crate::xaml_provider::{XamlProvider, set_xaml_provider};
 
-    // Most-used enums.
     pub use crate::view::{HAlign, Key, MouseButton, VAlign};
 }
 

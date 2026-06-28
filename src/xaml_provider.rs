@@ -1,16 +1,15 @@
-//! Rust-side [`XamlProvider`] trait + the [`set_xaml_provider`] registration
-//! entrypoint. Mirrors `crate::render_device::vtable::register` — a boxed
-//! trait object is handed to the C++ `RustXamlProvider` subclass via a vtable
-//! of trampolines; the returned [`Registered`] guard owns both the boxed impl
-//! and the C++ provider handle.
+//! Teach Noesis where to find your XAML. Implement the [`XamlProvider`] trait,
+//! then call [`set_xaml_provider`] (or one of the scheme/assembly-scoped
+//! variants) to install it. Your boxed impl is handed to a C++
+//! `RustXamlProvider` subclass through a vtable of trampolines, and the returned
+//! [`Registered`] guard owns both the boxed impl and the C++ provider handle.
 //!
 //! # Lifetime
 //!
-//! The `Registered` guard must outlive every Noesis-internal reference that
-//! might call back into [`XamlProvider::load_xaml`]. In practice that means
-//! keeping it alive until after `noesis_runtime::shutdown()` returns — the latter
-//! releases Noesis's internal `Ptr<XamlProvider>`, after which the C++
-//! wrapper's refcount drops to 1 (ours). Dropping the guard then releases the
+//! Keep the [`Registered`] guard alive as long as Noesis might call back into
+//! [`XamlProvider::load_xaml`] — in practice, until after [`crate::shutdown`]
+//! returns. Shutdown releases Noesis's internal `Ptr<XamlProvider>`, dropping
+//! the C++ wrapper's refcount to 1 (ours); dropping the guard then releases the
 //! final ref, fires the C++ destructor, and frees the boxed Rust impl.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface — explicit blocks add noise
@@ -25,24 +24,28 @@ use crate::ffi::{
     noesis_xaml_provider_create, noesis_xaml_provider_destroy,
 };
 
-/// Rust-side XAML provider. The bytes returned from [`load_xaml`] are wrapped
-/// in a Noesis `MemoryStream` *without copying* and must stay valid until the
-/// XAML parse that triggered the lookup returns. Since Noesis parses
-/// synchronously inside `GUI::LoadXaml`, storing the bytes in `&self` (e.g.
-/// a `HashMap<String, Vec<u8>>`) and returning a borrow is sufficient.
+/// Resolves XAML URIs to bytes on demand. Implement this to serve XAML from
+/// memory, an archive, an asset pipeline, or anywhere else, then register it
+/// with [`set_xaml_provider`].
+///
+/// The bytes returned from [`load_xaml`] are wrapped in a Noesis `MemoryStream`
+/// *without copying*, so they must stay valid until the XAML parse that
+/// triggered the lookup returns. Noesis parses synchronously inside
+/// `GUI::LoadXaml`, so storing the bytes in `&self` (e.g. a
+/// `HashMap<String, Vec<u8>>`) and returning a borrow is enough.
 ///
 /// [`load_xaml`]: Self::load_xaml
 ///
-/// `Send + Sync` supertraits make the boxed impl `Send` (so the
-/// [`Registered`] guard can be *moved* across threads); the guard is `Send`
-/// but **not** `Sync` (it has `&self` Noesis accessors). Store it in a
-/// `NonSend` resource. Safety rationale identical to
+/// The `Send + Sync` supertraits make the boxed impl `Send`, so the
+/// [`Registered`] guard can be *moved* across threads; the guard is `Send` but
+/// **not** `Sync` (it exposes `&self` Noesis accessors), so store it in a
+/// `NonSend` resource. Same threading rationale as
 /// [`crate::render_device::RenderDevice`].
 ///
 /// [`Registered`]: Registered
 pub trait XamlProvider: Send + Sync + 'static {
-    /// Downcast escape hatch used by [`Registered::provider_mut`]. Standard
-    /// one-line body for every impl:
+    /// Downcast hook that powers [`Registered::provider_mut`]. Every impl is the
+    /// same one-liner:
     ///
     /// ```ignore
     /// fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
@@ -53,12 +56,8 @@ pub trait XamlProvider: Send + Sync + 'static {
     fn load_xaml(&mut self, uri: &str) -> Option<&[u8]>;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Trampoline
-// ────────────────────────────────────────────────────────────────────────────
-
-/// SAFETY: `userdata` must be a pointer produced by `register_xaml_provider`
-/// and still alive (the [`Registered`] guard hasn't been dropped).
+// SAFETY: `userdata` must be a pointer produced by `register_with` and still
+// alive (the `Registered` guard hasn't been dropped).
 unsafe fn provider<'a>(userdata: *mut c_void) -> &'a mut Box<dyn XamlProvider> {
     &mut *userdata.cast::<Box<dyn XamlProvider>>()
 }
@@ -95,10 +94,6 @@ static VTABLE: XamlProviderVTable = XamlProviderVTable {
     load_xaml: t_load_xaml,
 };
 
-// ────────────────────────────────────────────────────────────────────────────
-// Registered — RAII wrapper holding the boxed impl and the C++ provider
-// ────────────────────────────────────────────────────────────────────────────
-
 /// Owns a Rust [`XamlProvider`] impl together with its C++ `RustXamlProvider`
 /// instance. Dropping releases the +1 ref we hold on the C++ side and frees
 /// the boxed impl. The caller is responsible for having called
@@ -123,12 +118,13 @@ impl Registered {
     }
 
     /// Mutable access to the concrete [`XamlProvider`] impl behind the
-    /// registration. The type parameter `P` must match what was passed to
-    /// [`set_xaml_provider`]; enforced at runtime via `dyn Any` downcast.
+    /// registration. `P` must be the concrete type you registered (via
+    /// [`set_xaml_provider`] or a scoped variant); enforced at runtime via a
+    /// `dyn Any` downcast.
     ///
     /// # Panics
     ///
-    /// Panics if `P` is not the concrete type passed to `set_xaml_provider`.
+    /// Panics if `P` is not the concrete type that was registered.
     pub fn provider_mut<P: XamlProvider>(&mut self) -> &mut P {
         // SAFETY: userdata points at the live Box<dyn XamlProvider> produced
         // by set_xaml_provider(); borrow scoped to &mut self.
@@ -166,10 +162,9 @@ pub fn set_xaml_provider<P: XamlProvider + 'static>(provider: P) -> Registered {
     })
 }
 
-/// Build the C++ `RustXamlProvider` wrapping `provider`, hand its handle to
-/// `install` (the only thing that differs between the global / scheme /
-/// assembly variants), and return the owning [`Registered`] guard. Keeps the
-/// four public setters DRY.
+/// Shared construction for all four setters: build the C++ wrapper, run
+/// `install` to register the handle (the only step that varies), return the
+/// owning guard.
 fn register_with<P: XamlProvider + 'static>(
     provider: P,
     install: impl FnOnce(*mut c_void),
@@ -192,8 +187,6 @@ fn register_with<P: XamlProvider + 'static>(
 /// Install `provider` as the XAML provider for the URI `scheme` (the part
 /// before `://`, e.g. `"pack"` for `pack://...`). Noesis consults the
 /// scheme-scoped provider for matching URIs in preference to the global one.
-/// Reuses the same trampoline + [`Registered`] machinery as
-/// [`set_xaml_provider`]; only the install call differs.
 ///
 /// # Panics
 ///
@@ -212,7 +205,6 @@ pub fn set_scheme_xaml_provider<P: XamlProvider + 'static>(
 
 /// Install `provider` as the XAML provider for `assembly` (the assembly name in
 /// a pack URI, e.g. `MyApp` in `pack://application:,,,/MyApp;component/...`).
-/// Reuses [`set_xaml_provider`]'s machinery; only the install call differs.
 ///
 /// # Panics
 ///
@@ -230,8 +222,7 @@ pub fn set_assembly_xaml_provider<P: XamlProvider + 'static>(
 }
 
 /// Install `provider` as the XAML provider scoped to both a `scheme` and an
-/// `assembly`. Reuses [`set_xaml_provider`]'s machinery; only the install call
-/// differs.
+/// `assembly`.
 ///
 /// # Panics
 ///

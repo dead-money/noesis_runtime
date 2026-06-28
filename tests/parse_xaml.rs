@@ -1,20 +1,6 @@
-//! TODO §15 — `GUI::ParseXaml` + `GUI::LoadComponent` integration test.
-//!
-//! Exercises [`FrameworkElement::parse`] (in-memory XAML, no `XamlProvider` URI)
-//! and [`noesis_runtime::gui::load_component`]. Noesis can't be re-init'd
-//! per process, so both surfaces share one `#[test]` inside a single
-//! init/shutdown, with every owning wrapper dropped before `shutdown`.
-//!
-//! `LoadComponent` is pinned by its observable effect: a class registered as
-//! `Nz.LoadTarget` is instantiated, then XAML whose root carries
-//! `x:Class="Nz.LoadTarget"` and a named child is loaded into that instance;
-//! the test asserts the child is absent before and present after the call, so
-//! removing the `GUI::LoadComponent` invocation fails the test. The C-layer
-//! null-URI guard is exercised directly via the raw FFI (the Rust wrapper can
-//! never pass a null URI).
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test parse_xaml -- --nocapture`
+//! `FrameworkElement::parse` (in-memory XAML) and `gui::load_component`:
+//! parse well-formed / non-FrameworkElement / malformed XAML, and verify
+//! `LoadComponent` grafts a named child onto a registered class instance.
 
 use std::collections::HashMap;
 use std::ffi::{CString, c_void};
@@ -72,8 +58,6 @@ impl XamlProvider for InMem {
     }
 }
 
-// A no-op property handler — LoadComponent only needs a registered type to
-// instantiate; we don't assert on property changes here.
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
     fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
@@ -109,7 +93,6 @@ fn parse_xaml_and_load_component() {
     noesis_runtime::init();
 
     {
-        // ── ParseXaml: well-formed FrameworkElement tree ───────────────────
         let element = FrameworkElement::parse(GRID_XAML)
             .expect("parse() returned None for a well-formed Grid");
         let named = element
@@ -132,7 +115,6 @@ fn parse_xaml_and_load_component() {
             "first Update on parsed tree reported no change"
         );
         let _ = view.update(0.016);
-        // The button must still be findable through the live view content.
         let content = view.content().expect("View::content returned None");
         assert!(
             content.find_name("X").is_some(),
@@ -142,21 +124,17 @@ fn parse_xaml_and_load_component() {
         view.deactivate();
         drop(view);
 
-        // ── ParseXaml: non-FrameworkElement root → None ────────────────────
         assert!(
             FrameworkElement::parse(DICT_XAML).is_none(),
             "parse() must reject a ResourceDictionary root (not a FrameworkElement)"
         );
 
-        // ── ParseXaml: malformed XAML → None (no crash) ────────────────────
         assert!(
             FrameworkElement::parse(BROKEN_XAML).is_none(),
             "parse() must reject malformed XAML"
         );
 
-        // ── LoadComponent ──────────────────────────────────────────────────
-        // Null component → false, short-circuited in the Rust wrapper before
-        // any FFI call into Noesis.
+        // Null component is short-circuited in the Rust wrapper before any FFI call.
         // SAFETY: null is an explicitly-handled input for load_component.
         assert!(
             !unsafe { load_component(ptr::null_mut(), "component.xaml") },
@@ -180,11 +158,9 @@ fn parse_xaml_and_load_component() {
             "noesis_gui_load_component(instance, null uri) must be false"
         );
 
-        // The real grafting effect: with `x:Class=\"Nz.LoadTarget\"` matching the
-        // registered class, LoadComponent must populate the existing instance
-        // with the parsed body (a named Button). This is the observable proof
-        // the GUI::LoadComponent call actually ran — removing it leaves the
-        // instance empty and this assertion fails.
+        // With `x:Class="Nz.LoadTarget"` matching the registered class, LoadComponent
+        // grafts the parsed body onto the existing instance. Removing the call
+        // leaves the instance empty and the assertion below fails.
         let mut provider = HashMap::new();
         provider.insert(
             "component.xaml".to_string(),
@@ -193,7 +169,6 @@ fn parse_xaml_and_load_component() {
         let _registered_provider =
             noesis_runtime::xaml_provider::set_xaml_provider(InMem(provider));
 
-        // Before loading, the instance is empty — the named child does not exist.
         assert!(
             !instance_has_named_child(instance.raw(), "GRAFTED"),
             "instance must not contain the named child before LoadComponent"
@@ -207,8 +182,6 @@ fn parse_xaml_and_load_component() {
             "load_component on a live instance + valid URI returned false"
         );
 
-        // After loading, the parsed Button (x:Name=\"GRAFTED\") must be grafted
-        // onto the instance and resolvable through its namescope.
         assert!(
             instance_has_named_child(instance.raw(), "GRAFTED"),
             "LoadComponent did not graft the named child onto the instance"
