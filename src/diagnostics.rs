@@ -54,9 +54,9 @@ use std::os::raw::c_char;
 
 use crate::ffi::{
     AssertFn, Error2Fn, ErrorContext as FfiErrorContext, ErrorFn, noesis_get_allocated_memory,
-    noesis_get_allocated_memory_accum, noesis_get_allocations_count,
-    noesis_invoke_assert_handler, noesis_invoke_error_handler, noesis_set_assert_handler,
-    noesis_set_error_handler, noesis_set_thread_error_handler,
+    noesis_get_allocated_memory_accum, noesis_get_allocations_count, noesis_invoke_assert_handler,
+    noesis_invoke_error_handler, noesis_set_assert_handler, noesis_set_error_handler,
+    noesis_set_thread_error_handler,
 };
 
 /// A borrowed C string → owned `String`, empty on null.

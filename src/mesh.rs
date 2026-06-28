@@ -29,10 +29,9 @@ use crate::brushes::Brush;
 use crate::ffi::{
     noesis_base_component_release, noesis_mesh_create, noesis_mesh_data_create,
     noesis_mesh_data_get_bounds, noesis_mesh_data_get_indices, noesis_mesh_data_get_uvs,
-    noesis_mesh_data_get_vertices, noesis_mesh_data_set_bounds,
-    noesis_mesh_data_set_indices, noesis_mesh_data_set_uvs, noesis_mesh_data_set_vertices,
-    noesis_mesh_get_brush, noesis_mesh_get_data, noesis_mesh_set_brush,
-    noesis_mesh_set_data,
+    noesis_mesh_data_get_vertices, noesis_mesh_data_set_bounds, noesis_mesh_data_set_indices,
+    noesis_mesh_data_set_uvs, noesis_mesh_data_set_vertices, noesis_mesh_get_brush,
+    noesis_mesh_get_data, noesis_mesh_set_brush, noesis_mesh_set_data,
 };
 
 /// An owning handle to a Noesis `MeshData`: the CPU vertex / UV / index buffers

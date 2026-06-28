@@ -47,9 +47,9 @@ use core::ptr::{self, NonNull};
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    ValueConverterVTable, noesis_box_bool, noesis_box_double, noesis_box_int32,
-    noesis_box_string, noesis_unbox_bool, noesis_unbox_double, noesis_unbox_int32,
-    noesis_unbox_string, noesis_value_converter_create, noesis_value_converter_destroy,
+    ValueConverterVTable, noesis_box_bool, noesis_box_double, noesis_box_int32, noesis_box_string,
+    noesis_unbox_bool, noesis_unbox_double, noesis_unbox_int32, noesis_unbox_string,
+    noesis_value_converter_create, noesis_value_converter_destroy,
 };
 
 /// A borrowed, boxed binding value handed to a [`ValueConverter`]. `None`-valued
@@ -285,9 +285,7 @@ impl Converter {
                 // SAFETY: userdata came from Box::into_raw above; C++ never
                 // stored it (null return = nothing took ownership).
                 unsafe { drop(Box::from_raw(userdata)) };
-                unreachable!(
-                    "noesis_value_converter_create returned null for a non-null vtable"
-                );
+                unreachable!("noesis_value_converter_create returned null for a non-null vtable");
             }
         }
     }

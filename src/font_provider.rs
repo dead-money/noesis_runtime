@@ -34,9 +34,8 @@ use std::ffi::{CStr, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    FontProviderVTable, RegisterFontFn, noesis_font_provider_create,
-    noesis_font_provider_destroy, noesis_set_font_provider,
-    noesis_set_font_provider_assembly, noesis_set_font_provider_scheme,
+    FontProviderVTable, RegisterFontFn, noesis_font_provider_create, noesis_font_provider_destroy,
+    noesis_set_font_provider, noesis_set_font_provider_assembly, noesis_set_font_provider_scheme,
     noesis_set_font_provider_scheme_assembly,
 };
 

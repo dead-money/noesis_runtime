@@ -13,8 +13,8 @@ use std::os::raw::{c_char, c_void};
 use crate::ffi::{
     noesis_base_component_release, noesis_name_scope_create, noesis_name_scope_enum,
     noesis_name_scope_find_name, noesis_name_scope_find_object, noesis_name_scope_get,
-    noesis_name_scope_register_name, noesis_name_scope_set,
-    noesis_name_scope_unregister_name, noesis_name_scope_update_name,
+    noesis_name_scope_register_name, noesis_name_scope_set, noesis_name_scope_unregister_name,
+    noesis_name_scope_update_name,
 };
 use crate::view::FrameworkElement;
 

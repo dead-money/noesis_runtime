@@ -18,9 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use noesis_runtime::commands::Command;
-use noesis_runtime::input::{
-    InputBinding, ModifierKeys, MouseAction, MouseBinding, MouseGesture,
-};
+use noesis_runtime::input::{InputBinding, ModifierKeys, MouseAction, MouseBinding, MouseGesture};
 use noesis_runtime::view::{FrameworkElement, MouseButton, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 

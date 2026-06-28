@@ -24,30 +24,24 @@ use crate::ffi::{
     noesis_base_component_release, noesis_binding_expression_update_source,
     noesis_binding_expression_update_target, noesis_control_get_template,
     noesis_control_set_template, noesis_controls_contextmenu_get_is_open,
-    noesis_controls_contextmenu_set_is_open,
-    noesis_controls_contextmenuservice_get_context_menu,
+    noesis_controls_contextmenu_set_is_open, noesis_controls_contextmenuservice_get_context_menu,
     noesis_controls_contextmenuservice_set_context_menu, noesis_controls_fe_get_context_menu,
     noesis_controls_fe_get_tooltip, noesis_controls_fe_set_context_menu,
     noesis_controls_fe_set_tooltip, noesis_controls_fe_set_tooltip_string,
-    noesis_controls_generator_container_from_index,
-    noesis_controls_generator_container_from_item,
-    noesis_controls_generator_index_from_container,
-    noesis_controls_generator_item_from_container, noesis_controls_gridview_column_count,
-    noesis_controls_gridview_column_get_actual_width,
+    noesis_controls_generator_container_from_index, noesis_controls_generator_container_from_item,
+    noesis_controls_generator_index_from_container, noesis_controls_generator_item_from_container,
+    noesis_controls_gridview_column_count, noesis_controls_gridview_column_get_actual_width,
     noesis_controls_gridview_column_get_header, noesis_controls_gridview_column_get_width,
     noesis_controls_gridview_column_set_width, noesis_controls_image_get_source,
     noesis_controls_image_set_source, noesis_controls_listview_get_view,
     noesis_controls_scrollviewer_edge, noesis_controls_scrollviewer_line,
     noesis_controls_scrollviewer_metric, noesis_controls_scrollviewer_page,
-    noesis_controls_selector_get_selected_value,
-    noesis_controls_selector_get_selected_value_path,
-    noesis_controls_selector_set_selected_value,
-    noesis_controls_selector_set_selected_value_path, noesis_controls_tooltip_get_is_open,
-    noesis_controls_tooltip_set_is_open, noesis_controls_tooltipservice_get_tooltip,
-    noesis_controls_tooltipservice_set_tooltip, noesis_controls_treeview_get_selected_item,
-    noesis_controls_treeviewitem_get_is_expanded,
-    noesis_controls_treeviewitem_get_is_selected,
-    noesis_controls_treeviewitem_set_is_expanded,
+    noesis_controls_selector_get_selected_value, noesis_controls_selector_get_selected_value_path,
+    noesis_controls_selector_set_selected_value, noesis_controls_selector_set_selected_value_path,
+    noesis_controls_tooltip_get_is_open, noesis_controls_tooltip_set_is_open,
+    noesis_controls_tooltipservice_get_tooltip, noesis_controls_tooltipservice_set_tooltip,
+    noesis_controls_treeview_get_selected_item, noesis_controls_treeviewitem_get_is_expanded,
+    noesis_controls_treeviewitem_get_is_selected, noesis_controls_treeviewitem_set_is_expanded,
     noesis_controls_treeviewitem_set_is_selected, noesis_decorator_get_child,
     noesis_decorator_set_child, noesis_dependency_object_check_access,
     noesis_dependency_object_clear_value, noesis_dependency_object_get_attached,
@@ -56,68 +50,60 @@ use crate::ffi::{
     noesis_dependency_object_set_current_value, noesis_dependency_object_set_property,
     noesis_dependency_object_thread_id, noesis_element_get_transform3d,
     noesis_element_set_transform3d, noesis_expander_get_is_expanded,
-    noesis_expander_set_is_expanded, noesis_focus_element,
-    noesis_framework_element_find_name, noesis_framework_element_find_resource,
-    noesis_framework_element_get_data_context, noesis_framework_element_get_halign,
-    noesis_framework_element_get_name, noesis_framework_element_get_resources,
-    noesis_framework_element_get_style, noesis_framework_element_get_valign,
-    noesis_framework_element_logical_parent, noesis_framework_element_register_name,
-    noesis_framework_element_set_data_context, noesis_framework_element_set_halign,
-    noesis_framework_element_set_margin, noesis_framework_element_set_resources,
-    noesis_framework_element_set_style, noesis_framework_element_set_valign,
-    noesis_framework_element_set_visibility, noesis_framework_element_template_child,
-    noesis_framework_element_unregister_name, noesis_get_binding_expression,
-    noesis_gui_load_xaml, noesis_gui_parse_xaml, noesis_items_control_items_add,
-    noesis_items_control_items_clear, noesis_items_control_items_count,
-    noesis_items_control_items_insert, noesis_items_control_items_remove_at,
-    noesis_items_control_realized_count, noesis_items_control_set_items_source,
-    noesis_logical_child, noesis_logical_children_count, noesis_passwordbox_get_password,
-    noesis_passwordbox_set_password, noesis_path_set_points, noesis_popup_get_is_open,
-    noesis_popup_set_is_open, noesis_rangebase_get, noesis_rangebase_set,
-    noesis_render_options_get_bitmap_scaling_mode,
-    noesis_render_options_set_bitmap_scaling_mode, noesis_renderer_init,
-    noesis_renderer_render, noesis_renderer_render_offscreen,
-    noesis_renderer_render_stereo, noesis_renderer_render_stereo_both,
-    noesis_renderer_shutdown, noesis_renderer_update_render_tree, noesis_scrollviewer_get,
-    noesis_scrollviewer_scroll_to_end, noesis_scrollviewer_scroll_to_home,
-    noesis_scrollviewer_scroll_to_horizontal, noesis_scrollviewer_scroll_to_vertical,
-    noesis_selector_get_selected_index, noesis_selector_get_selected_item,
-    noesis_selector_set_selected_index, noesis_selector_set_selected_item,
-    noesis_text_caret_to_end, noesis_text_get, noesis_text_set, noesis_textbox_get_int,
-    noesis_textbox_get_selected_text, noesis_textbox_select, noesis_textbox_select_all,
-    noesis_textbox_set_int, noesis_toggle_get_is_checked, noesis_toggle_set_is_checked,
-    noesis_ui_element_capture_mouse, noesis_ui_element_capture_mouse_mode,
-    noesis_ui_element_capture_touch, noesis_ui_element_focus_engage,
-    noesis_ui_element_get_is_focused, noesis_ui_element_get_is_keyboard_focus_within,
-    noesis_ui_element_get_is_keyboard_focused, noesis_ui_element_get_is_mouse_captured,
-    noesis_ui_element_get_key_states, noesis_ui_element_get_keyboard_focused,
-    noesis_ui_element_get_modifiers, noesis_ui_element_get_mouse_captured,
-    noesis_ui_element_get_mouse_position, noesis_ui_element_get_render_transform_origin,
-    noesis_ui_element_is_key_down, noesis_ui_element_is_key_toggled,
-    noesis_ui_element_is_key_up, noesis_ui_element_move_focus,
+    noesis_expander_set_is_expanded, noesis_focus_element, noesis_framework_element_find_name,
+    noesis_framework_element_find_resource, noesis_framework_element_get_data_context,
+    noesis_framework_element_get_halign, noesis_framework_element_get_name,
+    noesis_framework_element_get_resources, noesis_framework_element_get_style,
+    noesis_framework_element_get_valign, noesis_framework_element_logical_parent,
+    noesis_framework_element_register_name, noesis_framework_element_set_data_context,
+    noesis_framework_element_set_halign, noesis_framework_element_set_margin,
+    noesis_framework_element_set_resources, noesis_framework_element_set_style,
+    noesis_framework_element_set_valign, noesis_framework_element_set_visibility,
+    noesis_framework_element_template_child, noesis_framework_element_unregister_name,
+    noesis_get_binding_expression, noesis_gui_load_xaml, noesis_gui_parse_xaml,
+    noesis_items_control_items_add, noesis_items_control_items_clear,
+    noesis_items_control_items_count, noesis_items_control_items_insert,
+    noesis_items_control_items_remove_at, noesis_items_control_realized_count,
+    noesis_items_control_set_items_source, noesis_logical_child, noesis_logical_children_count,
+    noesis_passwordbox_get_password, noesis_passwordbox_set_password, noesis_path_set_points,
+    noesis_popup_get_is_open, noesis_popup_set_is_open, noesis_rangebase_get, noesis_rangebase_set,
+    noesis_render_options_get_bitmap_scaling_mode, noesis_render_options_set_bitmap_scaling_mode,
+    noesis_renderer_init, noesis_renderer_render, noesis_renderer_render_offscreen,
+    noesis_renderer_render_stereo, noesis_renderer_render_stereo_both, noesis_renderer_shutdown,
+    noesis_renderer_update_render_tree, noesis_scrollviewer_get, noesis_scrollviewer_scroll_to_end,
+    noesis_scrollviewer_scroll_to_home, noesis_scrollviewer_scroll_to_horizontal,
+    noesis_scrollviewer_scroll_to_vertical, noesis_selector_get_selected_index,
+    noesis_selector_get_selected_item, noesis_selector_set_selected_index,
+    noesis_selector_set_selected_item, noesis_text_caret_to_end, noesis_text_get, noesis_text_set,
+    noesis_textbox_get_int, noesis_textbox_get_selected_text, noesis_textbox_select,
+    noesis_textbox_select_all, noesis_textbox_set_int, noesis_toggle_get_is_checked,
+    noesis_toggle_set_is_checked, noesis_ui_element_capture_mouse,
+    noesis_ui_element_capture_mouse_mode, noesis_ui_element_capture_touch,
+    noesis_ui_element_focus_engage, noesis_ui_element_get_is_focused,
+    noesis_ui_element_get_is_keyboard_focus_within, noesis_ui_element_get_is_keyboard_focused,
+    noesis_ui_element_get_is_mouse_captured, noesis_ui_element_get_key_states,
+    noesis_ui_element_get_keyboard_focused, noesis_ui_element_get_modifiers,
+    noesis_ui_element_get_mouse_captured, noesis_ui_element_get_mouse_position,
+    noesis_ui_element_get_render_transform_origin, noesis_ui_element_is_key_down,
+    noesis_ui_element_is_key_toggled, noesis_ui_element_is_key_up, noesis_ui_element_move_focus,
     noesis_ui_element_predict_focus, noesis_ui_element_release_mouse_capture,
-    noesis_ui_element_set_render_transform_origin, noesis_view_activate,
-    noesis_view_add_reference, noesis_view_add_rendering_handler,
-    noesis_view_cancel_timer, noesis_view_char, noesis_view_create,
-    noesis_view_create_timer, noesis_view_deactivate, noesis_view_destroy,
+    noesis_ui_element_set_render_transform_origin, noesis_view_activate, noesis_view_add_reference,
+    noesis_view_add_rendering_handler, noesis_view_cancel_timer, noesis_view_char,
+    noesis_view_create, noesis_view_create_timer, noesis_view_deactivate, noesis_view_destroy,
     noesis_view_get_content, noesis_view_get_flags, noesis_view_get_renderer,
-    noesis_view_get_stats, noesis_view_get_tessellation_max_pixel_error,
-    noesis_view_hscroll, noesis_view_key_down, noesis_view_key_up,
-    noesis_view_mouse_button_down, noesis_view_mouse_button_up,
-    noesis_view_mouse_double_click, noesis_view_mouse_hwheel, noesis_view_mouse_move,
-    noesis_view_mouse_wheel, noesis_view_remove_rendering_handler,
-    noesis_view_restart_timer, noesis_view_scroll,
-    noesis_view_set_double_tap_distance_threshold, noesis_view_set_double_tap_time_threshold,
-    noesis_view_set_emulate_touch, noesis_view_set_flags,
-    noesis_view_set_holding_distance_threshold, noesis_view_set_holding_time_threshold,
-    noesis_view_set_manipulation_distance_threshold, noesis_view_set_projection_matrix,
-    noesis_view_set_scale, noesis_view_set_size,
-    noesis_view_set_stereo_offscreen_scale_factor,
-    noesis_view_set_tessellation_max_pixel_error, noesis_view_touch_down,
-    noesis_view_touch_move, noesis_view_touch_up, noesis_view_update,
+    noesis_view_get_stats, noesis_view_get_tessellation_max_pixel_error, noesis_view_hscroll,
+    noesis_view_key_down, noesis_view_key_up, noesis_view_mouse_button_down,
+    noesis_view_mouse_button_up, noesis_view_mouse_double_click, noesis_view_mouse_hwheel,
+    noesis_view_mouse_move, noesis_view_mouse_wheel, noesis_view_remove_rendering_handler,
+    noesis_view_restart_timer, noesis_view_scroll, noesis_view_set_double_tap_distance_threshold,
+    noesis_view_set_double_tap_time_threshold, noesis_view_set_emulate_touch,
+    noesis_view_set_flags, noesis_view_set_holding_distance_threshold,
+    noesis_view_set_holding_time_threshold, noesis_view_set_manipulation_distance_threshold,
+    noesis_view_set_projection_matrix, noesis_view_set_scale, noesis_view_set_size,
+    noesis_view_set_stereo_offscreen_scale_factor, noesis_view_set_tessellation_max_pixel_error,
+    noesis_view_touch_down, noesis_view_touch_move, noesis_view_touch_up, noesis_view_update,
     noesis_visual_child, noesis_visual_children_count, noesis_visual_hit_test,
-    noesis_visual_hit_test_filtered, noesis_visual_parent,
-    noesis_visual_state_go_to_state,
+    noesis_visual_hit_test_filtered, noesis_visual_parent, noesis_visual_state_go_to_state,
 };
 use crate::render_device::Registered as RegisteredDevice;
 use crate::transforms::{Transform, Transform3D};
@@ -621,9 +607,7 @@ impl FrameworkElement {
         // call and is exactly `2*count` contiguous f32s; the C side null-checks,
         // DynamicCasts to Path, and copies the points into a Noesis-owned
         // StreamGeometry before returning.
-        unsafe {
-            noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count)
-        }
+        unsafe { noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count) }
     }
 
     /// Transition this control to the visual state named `state`, via
@@ -649,9 +633,7 @@ impl FrameworkElement {
         // the C side DynamicCasts to FrameworkElement*, interns the Symbol, and
         // calls VisualStateManager::GoToState, returning false on null / wrong
         // type / unknown state.
-        unsafe {
-            noesis_visual_state_go_to_state(self.ptr.as_ptr(), c.as_ptr(), use_transitions)
-        }
+        unsafe { noesis_visual_state_go_to_state(self.ptr.as_ptr(), c.as_ptr(), use_transitions) }
     }
 
     // ── Generic dependency-property access ──────────────────────────────────
@@ -688,9 +670,7 @@ impl FrameworkElement {
         let c = CString::new(name).expect("property name contained interior NUL");
         // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
         // `out` points at a buffer matching the per-type FFI layout.
-        unsafe {
-            noesis_dependency_object_get_property(self.ptr.as_ptr(), c.as_ptr(), kind, out)
-        }
+        unsafe { noesis_dependency_object_get_property(self.ptr.as_ptr(), c.as_ptr(), kind, out) }
     }
 
     /// Set an `Int32` dependency property by name.
@@ -1116,9 +1096,7 @@ impl FrameworkElement {
     /// not an `ItemsControl`. Clearing with null is always sound.
     pub fn clear_items_source(&mut self) -> bool {
         // SAFETY: self.ptr is a live FrameworkElement*; null is always valid.
-        unsafe {
-            noesis_items_control_set_items_source(self.ptr.as_ptr(), core::ptr::null_mut())
-        }
+        unsafe { noesis_items_control_set_items_source(self.ptr.as_ptr(), core::ptr::null_mut()) }
     }
 
     /// Set this element's `ItemsSource` to an arbitrary `Noesis::BaseComponent*`
@@ -1343,8 +1321,7 @@ impl FrameworkElement {
         let c = CString::new(name).expect("name contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c lives for the call; the
         // C side AddRefs the result so Rust owns the +1.
-        let ptr =
-            unsafe { noesis_framework_element_template_child(self.ptr.as_ptr(), c.as_ptr()) };
+        let ptr = unsafe { noesis_framework_element_template_child(self.ptr.as_ptr(), c.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
@@ -1527,9 +1504,7 @@ impl FrameworkElement {
         let c = CString::new(name).expect("property name contained interior NUL");
         // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
         // `out` matches the per-tag FFI layout.
-        unsafe {
-            noesis_dependency_object_get_base_value(self.ptr.as_ptr(), c.as_ptr(), kind, out)
-        }
+        unsafe { noesis_dependency_object_get_base_value(self.ptr.as_ptr(), c.as_ptr(), kind, out) }
     }
 
     /// Set the current value of an `Int32` dependency property
@@ -1801,8 +1776,7 @@ impl FrameworkElement {
         let c = CString::new(name).expect("property name contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c lives for the call; the
         // C side returns -1 or a valid tag ordinal.
-        let tag =
-            unsafe { noesis_dependency_object_property_tag(self.ptr.as_ptr(), c.as_ptr()) };
+        let tag = unsafe { noesis_dependency_object_property_tag(self.ptr.as_ptr(), c.as_ptr()) };
         match tag {
             0 => Some(PropType::Int32),
             1 => Some(PropType::Float),
@@ -2795,9 +2769,7 @@ impl FrameworkElement {
     pub fn set_selected_value_path(&mut self, path: &str) -> bool {
         let c = CString::new(path).expect("path contained interior NUL");
         // SAFETY: self.ptr is a live BaseComponent*; c.as_ptr() lives for the call.
-        unsafe {
-            noesis_controls_selector_set_selected_value_path(self.ptr.as_ptr(), c.as_ptr())
-        }
+        unsafe { noesis_controls_selector_set_selected_value_path(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
     // -- TreeView selection / TreeViewItem state --
@@ -2858,8 +2830,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn container_from_index(&self, index: i32) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p =
-            unsafe { noesis_controls_generator_container_from_index(self.ptr.as_ptr(), index) };
+        let p = unsafe { noesis_controls_generator_container_from_index(self.ptr.as_ptr(), index) };
         NonNull::new(p)
     }
 
@@ -2871,8 +2842,7 @@ impl FrameworkElement {
     #[must_use]
     pub unsafe fn container_from_item(&self, item: *mut c_void) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is live; `item` is live per contract.
-        let p =
-            unsafe { noesis_controls_generator_container_from_item(self.ptr.as_ptr(), item) };
+        let p = unsafe { noesis_controls_generator_container_from_item(self.ptr.as_ptr(), item) };
         NonNull::new(p)
     }
 
@@ -2886,9 +2856,8 @@ impl FrameworkElement {
     #[must_use]
     pub unsafe fn index_from_container(&self, container: *mut c_void) -> Option<i32> {
         // SAFETY: self.ptr is live; `container` is live per contract.
-        let idx = unsafe {
-            noesis_controls_generator_index_from_container(self.ptr.as_ptr(), container)
-        };
+        let idx =
+            unsafe { noesis_controls_generator_index_from_container(self.ptr.as_ptr(), container) };
         (idx >= 0).then_some(idx)
     }
 
@@ -2900,9 +2869,8 @@ impl FrameworkElement {
     #[must_use]
     pub unsafe fn item_from_container(&self, container: *mut c_void) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is live; `container` is live per contract.
-        let p = unsafe {
-            noesis_controls_generator_item_from_container(self.ptr.as_ptr(), container)
-        };
+        let p =
+            unsafe { noesis_controls_generator_item_from_container(self.ptr.as_ptr(), container) };
         NonNull::new(p)
     }
 
@@ -3056,8 +3024,7 @@ impl FrameworkElement {
     pub fn tooltip_is_open(&self) -> Option<bool> {
         let mut out = false;
         // SAFETY: self.ptr is a live BaseComponent*; writes `out` only on success.
-        unsafe { noesis_controls_tooltip_get_is_open(self.ptr.as_ptr(), &mut out) }
-            .then_some(out)
+        unsafe { noesis_controls_tooltip_get_is_open(self.ptr.as_ptr(), &mut out) }.then_some(out)
     }
 
     /// Set `ToolTip.IsOpen`. Returns `false` if not a `ToolTip` control.
@@ -3096,8 +3063,7 @@ impl FrameworkElement {
     #[must_use]
     pub fn context_menu_service_menu(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live BaseComponent*; borrowed pointer or null.
-        let p =
-            unsafe { noesis_controls_contextmenuservice_get_context_menu(self.ptr.as_ptr()) };
+        let p = unsafe { noesis_controls_contextmenuservice_get_context_menu(self.ptr.as_ptr()) };
         NonNull::new(p)
     }
 

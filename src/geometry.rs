@@ -31,19 +31,17 @@ use std::ffi::{CString, c_void};
 
 use crate::ffi::{
     noesis_arc_segment_create, noesis_arc_segment_get, noesis_base_component_release,
-    noesis_bezier_segment_create, noesis_bezier_segment_get,
-    noesis_combined_geometry_create, noesis_combined_geometry_get_geometry1,
-    noesis_combined_geometry_get_geometry2, noesis_combined_geometry_get_mode,
-    noesis_combined_geometry_set_geometry1, noesis_combined_geometry_set_geometry2,
-    noesis_combined_geometry_set_mode, noesis_ellipse_geometry_create,
-    noesis_ellipse_geometry_get, noesis_geometry_get_bounds,
+    noesis_bezier_segment_create, noesis_bezier_segment_get, noesis_combined_geometry_create,
+    noesis_combined_geometry_get_geometry1, noesis_combined_geometry_get_geometry2,
+    noesis_combined_geometry_get_mode, noesis_combined_geometry_set_geometry1,
+    noesis_combined_geometry_set_geometry2, noesis_combined_geometry_set_mode,
+    noesis_ellipse_geometry_create, noesis_ellipse_geometry_get, noesis_geometry_get_bounds,
     noesis_geometry_get_render_bounds, noesis_geometry_get_transform,
     noesis_geometry_group_add_child, noesis_geometry_group_child_count,
     noesis_geometry_group_create, noesis_geometry_group_get_fill_rule,
-    noesis_geometry_group_set_fill_rule, noesis_geometry_is_empty,
-    noesis_geometry_set_transform, noesis_line_geometry_create, noesis_line_geometry_get,
-    noesis_line_segment_create, noesis_line_segment_get_point,
-    noesis_path_figure_add_segment, noesis_path_figure_create,
+    noesis_geometry_group_set_fill_rule, noesis_geometry_is_empty, noesis_geometry_set_transform,
+    noesis_line_geometry_create, noesis_line_geometry_get, noesis_line_segment_create,
+    noesis_line_segment_get_point, noesis_path_figure_add_segment, noesis_path_figure_create,
     noesis_path_figure_get_is_closed, noesis_path_figure_get_is_filled,
     noesis_path_figure_get_start_point, noesis_path_figure_segment_count,
     noesis_path_figure_set_is_closed, noesis_path_figure_set_is_filled,
@@ -334,8 +332,7 @@ impl StreamGeometry {
         // SAFETY: `c` outlives the call; the C side copies the string.
         let ptr = unsafe { noesis_stream_geometry_create_from_data(c.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr)
-                .expect("noesis_stream_geometry_create_from_data returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_stream_geometry_create_from_data returned null"),
         }
     }
 
@@ -360,9 +357,7 @@ impl StreamGeometry {
     #[must_use]
     pub fn fill_rule(&self) -> FillRule {
         // SAFETY: self.ptr is a live StreamGeometry*.
-        FillRule::from_ordinal(unsafe {
-            noesis_stream_geometry_get_fill_rule(self.ptr.as_ptr())
-        })
+        FillRule::from_ordinal(unsafe { noesis_stream_geometry_get_fill_rule(self.ptr.as_ptr()) })
     }
 
     /// Open a [`StreamGeometryContext`] for defining the geometry with drawing
@@ -400,9 +395,7 @@ impl StreamGeometryContext {
     /// segments.
     pub fn begin_figure(&self, x: f32, y: f32, is_closed: bool) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
-        unsafe {
-            noesis_stream_geometry_context_begin_figure(self.ctx.as_ptr(), x, y, is_closed)
-        };
+        unsafe { noesis_stream_geometry_context_begin_figure(self.ctx.as_ptr(), x, y, is_closed) };
     }
 
     /// Draw a straight line to `(x, y)`.
@@ -431,13 +424,7 @@ impl StreamGeometryContext {
     pub fn quadratic_to(&self, p1: (f32, f32), p2: (f32, f32)) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
         unsafe {
-            noesis_stream_geometry_context_quadratic_to(
-                self.ctx.as_ptr(),
-                p1.0,
-                p1.1,
-                p2.0,
-                p2.1,
-            )
+            noesis_stream_geometry_context_quadratic_to(self.ctx.as_ptr(), p1.0, p1.1, p2.0, p2.1)
         };
     }
 
@@ -713,8 +700,7 @@ impl QuadraticBezierSegment {
     pub fn new(p1: (f32, f32), p2: (f32, f32)) -> Self {
         let ptr = unsafe { noesis_quadratic_bezier_segment_create(p1.0, p1.1, p2.0, p2.1) };
         Self {
-            ptr: NonNull::new(ptr)
-                .expect("noesis_quadratic_bezier_segment_create returned null"),
+            ptr: NonNull::new(ptr).expect("noesis_quadratic_bezier_segment_create returned null"),
         }
     }
 
@@ -869,11 +855,7 @@ macro_rules! poly_segment {
                 let mut out = [0.0f32; 2];
                 // SAFETY: self.ptr is a live poly segment*; `out` is 2 floats.
                 let ok = unsafe {
-                    noesis_poly_segment_get_point(
-                        self.ptr.as_ptr(),
-                        index as u32,
-                        out.as_mut_ptr(),
-                    )
+                    noesis_poly_segment_get_point(self.ptr.as_ptr(), index as u32, out.as_mut_ptr())
                 };
                 ok.then_some((out[0], out[1]))
             }

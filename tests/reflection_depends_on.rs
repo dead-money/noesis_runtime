@@ -32,28 +32,28 @@ fn depends_on_metadata() {
     }
     noesis_runtime::init();
     {
-        let mut b = ClassBuilder::new("DmDep.Widget", ClassBase::FrameworkElement, Noop);
+        let mut b = ClassBuilder::new("NzDep.Widget", ClassBase::FrameworkElement, Noop);
         b.add_property("First", PropType::Int32);
         b.add_property("Second", PropType::Int32);
         let _reg = b.register().expect("class registration failed");
 
         // No metadata yet.
-        assert_eq!(get_depends_on("DmDep.Widget"), None);
+        assert_eq!(get_depends_on("NzDep.Widget"), None);
 
         // Attach DependsOn(First) and read it straight back through reflection.
         assert!(
-            add_depends_on("DmDep.Widget", "First"),
+            add_depends_on("NzDep.Widget", "First"),
             "add_depends_on returned false"
         );
         assert_eq!(
-            get_depends_on("DmDep.Widget").as_deref(),
+            get_depends_on("NzDep.Widget").as_deref(),
             Some("First"),
             "DependsOn metadata did not round-trip through reflection"
         );
 
         // Unknown type fails for both attach and query.
-        assert!(!add_depends_on("DmDep.NoSuchType", "First"));
-        assert_eq!(get_depends_on("DmDep.NoSuchType"), None);
+        assert!(!add_depends_on("NzDep.NoSuchType", "First"));
+        assert_eq!(get_depends_on("NzDep.NoSuchType"), None);
 
         // A type with no DependsOn metadata returns None (built-in Button).
         assert_eq!(get_depends_on("Button"), None);
@@ -64,24 +64,24 @@ fn depends_on_metadata() {
         // contradicting the stale "can't have both" note in
         // ContentPropertyMetaData.h (which names a non-existent
         // DependsOnAttributeMetaData type).
-        let mut b2 = ClassBuilder::new("DmDep.Both", ClassBase::FrameworkElement, Noop);
+        let mut b2 = ClassBuilder::new("NzDep.Both", ClassBase::FrameworkElement, Noop);
         b2.add_property("Content", PropType::Int32);
         b2.add_property("Trigger", PropType::Int32);
         let _reg2 = b2.register().expect("class registration failed");
 
-        assert_eq!(get_content_property("DmDep.Both"), None);
-        assert_eq!(get_depends_on("DmDep.Both"), None);
+        assert_eq!(get_content_property("NzDep.Both"), None);
+        assert_eq!(get_depends_on("NzDep.Both"), None);
 
-        assert!(set_content_property("DmDep.Both", "Content"));
-        assert!(add_depends_on("DmDep.Both", "Trigger"));
+        assert!(set_content_property("NzDep.Both", "Content"));
+        assert!(add_depends_on("NzDep.Both", "Trigger"));
 
         assert_eq!(
-            get_content_property("DmDep.Both").as_deref(),
+            get_content_property("NzDep.Both").as_deref(),
             Some("Content"),
             "ContentProperty did not round-trip alongside DependsOn"
         );
         assert_eq!(
-            get_depends_on("DmDep.Both").as_deref(),
+            get_depends_on("NzDep.Both").as_deref(),
             Some("Trigger"),
             "DependsOn did not round-trip alongside ContentProperty"
         );

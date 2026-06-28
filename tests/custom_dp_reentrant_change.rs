@@ -25,9 +25,9 @@ use noesis_runtime::xaml_provider::XamlProvider;
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:dm="clr-namespace:DmRe"
+      xmlns:nz="clr-namespace:NzRe"
       Width="100" Height="100">
-  <dm:Widget x:Name="W"/>
+  <nz:Widget x:Name="W"/>
 </Grid>"##;
 
 struct InMem(HashMap<String, Vec<u8>>);
@@ -75,7 +75,7 @@ fn custom_dp_reentrant_change() {
     let log = Arc::new(Mutex::new(Vec::<(u32, f32)>::new()));
     {
         let mut b = ClassBuilder::new(
-            "DmRe.Widget",
+            "NzRe.Widget",
             ClassBase::FrameworkElement,
             Computed {
                 in_idx: 0,

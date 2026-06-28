@@ -35,25 +35,19 @@ use crate::ffi::{
     noesis_typography_font_family_get_source, noesis_typography_get_capitals,
     noesis_typography_get_fraction, noesis_typography_get_kerning,
     noesis_typography_get_numeral_style, noesis_typography_get_standard_ligatures,
-    noesis_typography_get_variants, noesis_typography_set_capitals,
-    noesis_typography_set_fraction, noesis_typography_set_kerning,
-    noesis_typography_set_numeral_style, noesis_typography_set_standard_ligatures,
-    noesis_typography_set_variants, noesis_typography_text_box_add_composition_underline,
+    noesis_typography_get_variants, noesis_typography_set_capitals, noesis_typography_set_fraction,
+    noesis_typography_set_kerning, noesis_typography_set_numeral_style,
+    noesis_typography_set_standard_ligatures, noesis_typography_set_variants,
+    noesis_typography_text_box_add_composition_underline,
     noesis_typography_text_box_clear_composition_underlines,
     noesis_typography_text_box_get_composition_underline,
     noesis_typography_text_box_num_composition_underlines,
-    noesis_typography_text_element_get_font_family,
-    noesis_typography_text_element_get_font_size,
-    noesis_typography_text_element_get_font_stretch,
-    noesis_typography_text_element_get_font_style,
-    noesis_typography_text_element_get_font_weight,
-    noesis_typography_text_element_get_foreground,
-    noesis_typography_text_element_set_font_family,
-    noesis_typography_text_element_set_font_size,
-    noesis_typography_text_element_set_font_stretch,
-    noesis_typography_text_element_set_font_style,
-    noesis_typography_text_element_set_font_weight,
-    noesis_typography_text_element_set_foreground,
+    noesis_typography_text_element_get_font_family, noesis_typography_text_element_get_font_size,
+    noesis_typography_text_element_get_font_stretch, noesis_typography_text_element_get_font_style,
+    noesis_typography_text_element_get_font_weight, noesis_typography_text_element_get_foreground,
+    noesis_typography_text_element_set_font_family, noesis_typography_text_element_set_font_size,
+    noesis_typography_text_element_set_font_stretch, noesis_typography_text_element_set_font_style,
+    noesis_typography_text_element_set_font_weight, noesis_typography_text_element_set_foreground,
 };
 use crate::view::FrameworkElement;
 
@@ -512,8 +506,7 @@ pub fn set_font_weight(element: &FrameworkElement, weight: FontWeight) -> bool {
 /// the live object. `None` if unset or the value is not a recognised weight.
 #[must_use]
 pub fn font_weight(element: &FrameworkElement) -> Option<FontWeight> {
-    read_i32(element, noesis_typography_text_element_get_font_weight)
-        .and_then(FontWeight::from_raw)
+    read_i32(element, noesis_typography_text_element_get_font_weight).and_then(FontWeight::from_raw)
 }
 
 /// Set `TextElement.FontStyle` on `element`.
@@ -527,8 +520,7 @@ pub fn set_font_style(element: &FrameworkElement, style: FontStyle) -> bool {
 /// the live object. `None` if unset or the ordinal is unrecognised.
 #[must_use]
 pub fn font_style(element: &FrameworkElement) -> Option<FontStyle> {
-    read_i32(element, noesis_typography_text_element_get_font_style)
-        .and_then(FontStyle::from_raw)
+    read_i32(element, noesis_typography_text_element_get_font_style).and_then(FontStyle::from_raw)
 }
 
 /// Set `TextElement.FontStretch` on `element`.

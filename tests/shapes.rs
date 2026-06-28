@@ -14,9 +14,7 @@
 //!   `cargo test -p noesis_runtime --test shapes -- --nocapture`
 
 use noesis_runtime::brushes::SolidColorBrush;
-use noesis_runtime::shapes::{
-    Ellipse, Line, PenLineCap, PenLineJoin, Rectangle, Shape, Stretch,
-};
+use noesis_runtime::shapes::{Ellipse, Line, PenLineCap, PenLineJoin, Rectangle, Shape, Stretch};
 
 fn approx(a: f32, b: f32) -> bool {
     (a - b).abs() < 1.0e-4

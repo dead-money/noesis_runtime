@@ -6,8 +6,8 @@
 //! init/shutdown, with every owning wrapper dropped before `shutdown`.
 //!
 //! `LoadComponent` is pinned by its observable effect: a class registered as
-//! `DM.LoadTarget` is instantiated, then XAML whose root carries
-//! `x:Class="DM.LoadTarget"` and a named child is loaded into that instance;
+//! `Nz.LoadTarget` is instantiated, then XAML whose root carries
+//! `x:Class="Nz.LoadTarget"` and a named child is loaded into that instance;
 //! the test asserts the child is absent before and present after the call, so
 //! removing the `GUI::LoadComponent` invocation fails the test. The C-layer
 //! null-URI guard is exercised directly via the raw FFI (the Rust wrapper can
@@ -51,12 +51,12 @@ const DICT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 const BROKEN_XAML: &str = "this is definitely not xaml @@@ <<< >>>";
 
 // XAML served by URI for the LoadComponent test. The `x:Class` names the
-// Rust-registered class (`DM.LoadTarget`, a ContentControl) so Noesis maps the
+// Rust-registered class (`Nz.LoadTarget`, a ContentControl) so Noesis maps the
 // root onto the supplied instance by type identity and grafts the parsed body
 // — here a single named Button — onto it. We then assert that named child is
 // reachable from the instance, which is the observable proof LoadComponent ran.
 const COMPONENT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
-<ContentControl x:Class="DM.LoadTarget"
+<ContentControl x:Class="Nz.LoadTarget"
                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Button x:Name="GRAFTED" Content="grafted"/>
@@ -167,7 +167,7 @@ fn parse_xaml_and_load_component() {
         // the Rust wrapper never reaches (it CStrings every &str). Call the raw
         // FFI directly with a valid component but a null uri.
         let registration =
-            ClassBuilder::new("DM.LoadTarget", ClassBase::ContentControl, NoopHandler)
+            ClassBuilder::new("Nz.LoadTarget", ClassBase::ContentControl, NoopHandler)
                 .register()
                 .expect("class registration failed");
         let instance = registration
@@ -180,7 +180,7 @@ fn parse_xaml_and_load_component() {
             "noesis_gui_load_component(instance, null uri) must be false"
         );
 
-        // The real grafting effect: with `x:Class=\"DM.LoadTarget\"` matching the
+        // The real grafting effect: with `x:Class=\"Nz.LoadTarget\"` matching the
         // registered class, LoadComponent must populate the existing instance
         // with the parsed body (a named Button). This is the observable proof
         // the GUI::LoadComponent call actually ran — removing it leaves the

@@ -33,8 +33,7 @@ use crate::ffi::{
     noesis_keyboard_navigation_get_control_tab_navigation,
     noesis_keyboard_navigation_get_directional_navigation,
     noesis_keyboard_navigation_get_is_tab_stop, noesis_keyboard_navigation_get_tab_index,
-    noesis_keyboard_navigation_get_tab_navigation,
-    noesis_keyboard_navigation_set_accepts_return,
+    noesis_keyboard_navigation_get_tab_navigation, noesis_keyboard_navigation_set_accepts_return,
     noesis_keyboard_navigation_set_control_tab_navigation,
     noesis_keyboard_navigation_set_directional_navigation,
     noesis_keyboard_navigation_set_is_tab_stop, noesis_keyboard_navigation_set_tab_index,
@@ -525,8 +524,7 @@ impl KeyboardNavigation {
     pub fn tab_index(element: &FrameworkElement) -> Option<i32> {
         let mut out = 0;
         // SAFETY: element.raw() is a live DependencyObject*; out is a valid i32.
-        unsafe { noesis_keyboard_navigation_get_tab_index(element.raw(), &mut out) }
-            .then_some(out)
+        unsafe { noesis_keyboard_navigation_get_tab_index(element.raw(), &mut out) }.then_some(out)
     }
 
     /// Set `KeyboardNavigation.TabIndex`. `false` if `element` is not a
@@ -582,9 +580,7 @@ impl KeyboardNavigation {
         mode: KeyboardNavigationMode,
     ) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe {
-            noesis_keyboard_navigation_set_control_tab_navigation(element.raw(), mode as i32)
-        }
+        unsafe { noesis_keyboard_navigation_set_control_tab_navigation(element.raw(), mode as i32) }
     }
 
     /// `KeyboardNavigation.DirectionalNavigation` — how arrow keys traverse.
@@ -602,9 +598,7 @@ impl KeyboardNavigation {
         mode: KeyboardNavigationMode,
     ) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
-        unsafe {
-            noesis_keyboard_navigation_set_directional_navigation(element.raw(), mode as i32)
-        }
+        unsafe { noesis_keyboard_navigation_set_directional_navigation(element.raw(), mode as i32) }
     }
 
     /// `KeyboardNavigation.AcceptsReturn` — whether the element consumes the

@@ -18,9 +18,8 @@ use core::ptr::NonNull;
 use std::ffi::c_void;
 
 use crate::ffi::{
-    noesis_base_component_release, noesis_blur_effect_create,
-    noesis_blur_effect_get_radius, noesis_blur_effect_set_radius,
-    noesis_drop_shadow_effect_create, noesis_drop_shadow_effect_get,
+    noesis_base_component_release, noesis_blur_effect_create, noesis_blur_effect_get_radius,
+    noesis_blur_effect_set_radius, noesis_drop_shadow_effect_create, noesis_drop_shadow_effect_get,
     noesis_drop_shadow_effect_set_blur_radius, noesis_drop_shadow_effect_set_color,
     noesis_drop_shadow_effect_set_direction, noesis_drop_shadow_effect_set_opacity,
     noesis_drop_shadow_effect_set_shadow_depth, noesis_gradient_brush_add_stop,
@@ -32,19 +31,18 @@ use crate::ffi::{
     noesis_linear_gradient_brush_get_points, noesis_linear_gradient_brush_set_end_point,
     noesis_linear_gradient_brush_set_start_point, noesis_radial_gradient_brush_create,
     noesis_radial_gradient_brush_get_radius, noesis_radial_gradient_brush_set_center,
-    noesis_radial_gradient_brush_set_gradient_origin,
-    noesis_radial_gradient_brush_set_radius, noesis_solid_color_brush_create,
-    noesis_solid_color_brush_get_color, noesis_solid_color_brush_set_color,
-    noesis_tile_brush_get_alignment_x, noesis_tile_brush_get_alignment_y,
-    noesis_tile_brush_get_stretch, noesis_tile_brush_get_tile_mode,
-    noesis_tile_brush_get_viewbox, noesis_tile_brush_get_viewbox_units,
-    noesis_tile_brush_get_viewport, noesis_tile_brush_get_viewport_units,
-    noesis_tile_brush_set_alignment_x, noesis_tile_brush_set_alignment_y,
-    noesis_tile_brush_set_stretch, noesis_tile_brush_set_tile_mode,
-    noesis_tile_brush_set_viewbox, noesis_tile_brush_set_viewbox_units,
-    noesis_tile_brush_set_viewport, noesis_tile_brush_set_viewport_units,
-    noesis_visual_brush_create, noesis_visual_brush_get_visual,
-    noesis_visual_brush_set_visual,
+    noesis_radial_gradient_brush_set_gradient_origin, noesis_radial_gradient_brush_set_radius,
+    noesis_solid_color_brush_create, noesis_solid_color_brush_get_color,
+    noesis_solid_color_brush_set_color, noesis_tile_brush_get_alignment_x,
+    noesis_tile_brush_get_alignment_y, noesis_tile_brush_get_stretch,
+    noesis_tile_brush_get_tile_mode, noesis_tile_brush_get_viewbox,
+    noesis_tile_brush_get_viewbox_units, noesis_tile_brush_get_viewport,
+    noesis_tile_brush_get_viewport_units, noesis_tile_brush_set_alignment_x,
+    noesis_tile_brush_set_alignment_y, noesis_tile_brush_set_stretch,
+    noesis_tile_brush_set_tile_mode, noesis_tile_brush_set_viewbox,
+    noesis_tile_brush_set_viewbox_units, noesis_tile_brush_set_viewport,
+    noesis_tile_brush_set_viewport_units, noesis_visual_brush_create,
+    noesis_visual_brush_get_visual, noesis_visual_brush_set_visual,
 };
 
 /// A handle to a Noesis `Brush`. Implemented by every brush type in this module

@@ -31,11 +31,10 @@ use std::ffi::{CStr, c_void};
 
 use crate::brushes::Brush;
 use crate::ffi::{
-    noesis_base_component_release, noesis_drawing_draw_ellipse,
-    noesis_drawing_draw_geometry, noesis_drawing_draw_image, noesis_drawing_draw_line,
-    noesis_drawing_draw_mesh, noesis_drawing_draw_rectangle,
-    noesis_drawing_draw_rounded_rectangle, noesis_drawing_draw_text, noesis_drawing_pop,
-    noesis_drawing_push_blending_mode, noesis_drawing_push_clip,
+    noesis_base_component_release, noesis_drawing_draw_ellipse, noesis_drawing_draw_geometry,
+    noesis_drawing_draw_image, noesis_drawing_draw_line, noesis_drawing_draw_mesh,
+    noesis_drawing_draw_rectangle, noesis_drawing_draw_rounded_rectangle, noesis_drawing_draw_text,
+    noesis_drawing_pop, noesis_drawing_push_blending_mode, noesis_drawing_push_clip,
     noesis_drawing_push_transform, noesis_pen_create, noesis_pen_get_brush,
     noesis_pen_get_dash_offset, noesis_pen_get_dashes, noesis_pen_get_line_caps,
     noesis_pen_get_line_join, noesis_pen_get_thickness, noesis_pen_set_brush,

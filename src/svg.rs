@@ -25,9 +25,8 @@ use std::ffi::{CString, c_void};
 
 use crate::ffi::{
     noesis_svg_image_destroy, noesis_svg_image_get_size, noesis_svg_image_parse,
-    noesis_svg_image_shape_count, noesis_svg_image_shape_fill_type,
-    noesis_svg_path_add_ellipse, noesis_svg_path_add_rect,
-    noesis_svg_path_calculate_bounds, noesis_svg_path_close,
+    noesis_svg_image_shape_count, noesis_svg_image_shape_fill_type, noesis_svg_path_add_ellipse,
+    noesis_svg_path_add_rect, noesis_svg_path_calculate_bounds, noesis_svg_path_close,
     noesis_svg_path_command_count, noesis_svg_path_create, noesis_svg_path_destroy,
     noesis_svg_path_fill_contains, noesis_svg_path_line_to, noesis_svg_path_move_to,
     noesis_svg_path_parse, noesis_svg_path_stroke_contains,

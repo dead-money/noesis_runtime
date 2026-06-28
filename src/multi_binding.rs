@@ -246,9 +246,7 @@ impl MultiBinding {
     #[must_use]
     pub fn converter_parameter(self, parameter: &crate::binding::Boxed) -> Self {
         // SAFETY: both pointers are live; the binding stores its own ref.
-        unsafe {
-            noesis_multi_binding_set_converter_parameter(self.ptr.as_ptr(), parameter.raw())
-        };
+        unsafe { noesis_multi_binding_set_converter_parameter(self.ptr.as_ptr(), parameter.raw()) };
         self
     }
 

@@ -97,8 +97,8 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
 /// the root element back onto the supplied instance by type identity; a
 /// mismatch leaves the instance untouched (and Noesis logs a type error).
 /// The custom-class registration surface ([`crate::classes`]) supplies exactly
-/// such a type: register a class as `"DM.LoadTarget"`, instantiate it, and load
-/// XAML whose root carries `x:Class="DM.LoadTarget"` — the parsed children and
+/// such a type: register a class as `"Nz.LoadTarget"`, instantiate it, and load
+/// XAML whose root carries `x:Class="Nz.LoadTarget"` — the parsed children and
 /// named fields are grafted onto that instance (verified by `tests/parse_xaml`,
 /// which asserts a named child becomes resolvable through the instance only
 /// after this call). The caller is responsible for ensuring the registered type

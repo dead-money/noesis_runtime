@@ -48,9 +48,8 @@ use crate::ffi::{
     PlainSetFn, noesis_base_component_release, noesis_box_bool, noesis_box_double,
     noesis_box_int32, noesis_box_string, noesis_plain_vm_create_instance,
     noesis_plain_vm_get_value, noesis_plain_vm_notify, noesis_plain_vm_register,
-    noesis_plain_vm_register_property, noesis_plain_vm_set_value,
-    noesis_plain_vm_unregister, noesis_unbox_bool, noesis_unbox_double,
-    noesis_unbox_int32, noesis_unbox_string,
+    noesis_plain_vm_register_property, noesis_plain_vm_set_value, noesis_plain_vm_unregister,
+    noesis_unbox_bool, noesis_unbox_double, noesis_unbox_int32, noesis_unbox_string,
 };
 use crate::view::FrameworkElement;
 
@@ -282,8 +281,7 @@ impl PlainVmBuilder {
         } else {
             Some(plain_free_trampoline as crate::ffi::PlainFreeFn)
         };
-        let token =
-            unsafe { noesis_plain_vm_register(self.name.as_ptr(), on_set, userdata, free) };
+        let token = unsafe { noesis_plain_vm_register(self.name.as_ptr(), on_set, userdata, free) };
 
         let Some(token) = NonNull::new(token) else {
             // Registration failed — reclaim the leaked handler box, since C++

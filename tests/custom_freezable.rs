@@ -34,7 +34,7 @@ fn custom_freezable() {
     }
     noesis_runtime::init();
     {
-        let mut b = ClassBuilder::new("DmFz.Recipe", ClassBase::Freezable, Noop);
+        let mut b = ClassBuilder::new("NzFz.Recipe", ClassBase::Freezable, Noop);
         let amount = b.add_property("Amount", PropType::Int32);
         let reg = b.register().expect("Freezable class registration failed");
         assert_eq!(reg.num_properties(), 1);

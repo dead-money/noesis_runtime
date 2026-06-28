@@ -22,11 +22,10 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    noesis_base_component_release, noesis_formatted_text_create,
-    noesis_formatted_text_get_bounds, noesis_formatted_text_get_glyph_position,
-    noesis_formatted_text_get_line_info, noesis_formatted_text_get_num_lines,
-    noesis_formatted_text_has_visual_brush, noesis_formatted_text_hit_test,
-    noesis_formatted_text_is_empty, noesis_formatted_text_measure,
+    noesis_base_component_release, noesis_formatted_text_create, noesis_formatted_text_get_bounds,
+    noesis_formatted_text_get_glyph_position, noesis_formatted_text_get_line_info,
+    noesis_formatted_text_get_num_lines, noesis_formatted_text_has_visual_brush,
+    noesis_formatted_text_hit_test, noesis_formatted_text_is_empty, noesis_formatted_text_measure,
 };
 
 /// Font weight ordinals (`NsGui/FontProperties.h`). The numeric value is the

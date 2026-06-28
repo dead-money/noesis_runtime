@@ -20,8 +20,8 @@ use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
-    noesis_base_component_release, noesis_base_component_type_name,
-    noesis_get_xaml_dependencies, noesis_gui_load_xaml_component,
+    noesis_base_component_release, noesis_base_component_type_name, noesis_get_xaml_dependencies,
+    noesis_gui_load_xaml_component,
 };
 
 /// Classifies a dependency reported by [`get_xaml_dependencies`]. Mirrors

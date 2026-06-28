@@ -314,11 +314,7 @@ pub fn set_scheme_assembly_texture_provider<P: TextureProvider>(
     register_with(provider, move |handle| {
         // SAFETY: handle is a live RustTextureProvider*; both CStrings outlive the call.
         unsafe {
-            noesis_set_texture_provider_scheme_assembly(
-                scheme.as_ptr(),
-                assembly.as_ptr(),
-                handle,
-            )
+            noesis_set_texture_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
         }
     })
 }

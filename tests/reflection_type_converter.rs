@@ -51,7 +51,7 @@ fn type_converter_string_coercion_round_trips() {
 
         // An unregistered type name resolves no converter.
         assert!(
-            convert_from_string("DmTest.NoSuchType", "x").is_none(),
+            convert_from_string("NzTest.NoSuchType", "x").is_none(),
             "unknown type should resolve no converter"
         );
     }

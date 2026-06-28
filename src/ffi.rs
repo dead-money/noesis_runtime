@@ -187,10 +187,7 @@ unsafe extern "C" {
 
     // System integration callbacks (Section 14).
     pub fn noesis_set_cursor_callback(user: *mut c_void, cb: Option<CursorCb>);
-    pub fn noesis_set_software_keyboard_callback(
-        user: *mut c_void,
-        cb: Option<SoftwareKeyboardCb>,
-    );
+    pub fn noesis_set_software_keyboard_callback(user: *mut c_void, cb: Option<SoftwareKeyboardCb>);
     pub fn noesis_set_open_url_callback(user: *mut c_void, cb: Option<OpenUrlCb>);
     pub fn noesis_open_url(url: *const c_char);
     pub fn noesis_set_play_audio_callback(user: *mut c_void, cb: Option<PlayAudioCb>);
@@ -202,10 +199,7 @@ unsafe extern "C" {
     pub fn noesis_gui_parse_xaml(text: *const c_char) -> *mut c_void;
     pub fn noesis_gui_load_component(component: *mut c_void, uri: *const c_char) -> bool;
     pub fn noesis_gui_load_application_resources(uri: *const c_char) -> bool;
-    pub fn noesis_gui_install_app_resources_chain(
-        uris: *const *const c_char,
-        count: u32,
-    ) -> bool;
+    pub fn noesis_gui_install_app_resources_chain(uris: *const *const c_char, count: u32) -> bool;
     pub fn noesis_base_component_release(obj: *mut c_void);
     pub fn noesis_base_component_add_reference(obj: *mut c_void) -> *mut c_void;
     pub fn noesis_base_component_get_num_references(obj: *mut c_void) -> i32;
@@ -243,15 +237,9 @@ unsafe extern "C" {
     );
 
     pub fn noesis_view_mouse_move(view: *mut c_void, x: i32, y: i32) -> bool;
-    pub fn noesis_view_mouse_button_down(view: *mut c_void, x: i32, y: i32, button: i32)
-    -> bool;
+    pub fn noesis_view_mouse_button_down(view: *mut c_void, x: i32, y: i32, button: i32) -> bool;
     pub fn noesis_view_mouse_button_up(view: *mut c_void, x: i32, y: i32, button: i32) -> bool;
-    pub fn noesis_view_mouse_double_click(
-        view: *mut c_void,
-        x: i32,
-        y: i32,
-        button: i32,
-    ) -> bool;
+    pub fn noesis_view_mouse_double_click(view: *mut c_void, x: i32, y: i32, button: i32) -> bool;
     pub fn noesis_view_mouse_wheel(view: *mut c_void, x: i32, y: i32, delta: i32) -> bool;
     pub fn noesis_view_scroll(view: *mut c_void, x: i32, y: i32, value: f32) -> bool;
     pub fn noesis_view_hscroll(view: *mut c_void, x: i32, y: i32, value: f32) -> bool;
@@ -382,11 +370,8 @@ unsafe extern "C" {
         x: *mut f32,
         y: *mut f32,
     ) -> bool;
-    pub fn noesis_routed_events_manip_origin(
-        args: *const c_void,
-        x: *mut f32,
-        y: *mut f32,
-    ) -> bool;
+    pub fn noesis_routed_events_manip_origin(args: *const c_void, x: *mut f32, y: *mut f32)
+    -> bool;
     pub fn noesis_routed_events_manip_delta(
         args: *const c_void,
         tx: *mut f32,
@@ -502,13 +487,7 @@ unsafe extern "C" {
         free_handler: RenderFreeFn,
     );
     pub fn noesis_uielement_measure(element: *mut c_void, avail_w: f32, avail_h: f32) -> bool;
-    pub fn noesis_uielement_arrange(
-        element: *mut c_void,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) -> bool;
+    pub fn noesis_uielement_arrange(element: *mut c_void, x: f32, y: f32, w: f32, h: f32) -> bool;
     pub fn noesis_uielement_desired_size(
         element: *mut c_void,
         out_w: *mut f32,
@@ -575,10 +554,7 @@ unsafe extern "C" {
 
     // ── ICollectionView current-item navigation (Phase 6) ────────────────────
     pub fn noesis_collection_view_source_create() -> *mut c_void;
-    pub fn noesis_collection_view_source_set_source(
-        cvs: *mut c_void,
-        source: *mut c_void,
-    ) -> bool;
+    pub fn noesis_collection_view_source_set_source(cvs: *mut c_void, source: *mut c_void) -> bool;
     pub fn noesis_collection_view_source_get_view(cvs: *mut c_void) -> *mut c_void;
     pub fn noesis_collection_view_count(view: *mut c_void) -> i32;
     pub fn noesis_collection_view_current_position(view: *mut c_void) -> i32;
@@ -607,10 +583,7 @@ unsafe extern "C" {
     ) -> bool;
     pub fn noesis_framework_element_get_data_context(element: *mut c_void) -> *mut c_void;
 
-    pub fn noesis_items_control_set_items_source(
-        element: *mut c_void,
-        items: *mut c_void,
-    ) -> bool;
+    pub fn noesis_items_control_set_items_source(element: *mut c_void, items: *mut c_void) -> bool;
     pub fn noesis_items_control_items_count(element: *mut c_void) -> i32;
     pub fn noesis_items_control_realized_count(element: *mut c_void) -> i32;
 
@@ -710,17 +683,9 @@ unsafe extern "C" {
         obj: *mut c_void,
     );
     pub fn noesis_name_scope_unregister_name(scope: *mut c_void, name: *const c_char);
-    pub fn noesis_name_scope_update_name(
-        scope: *mut c_void,
-        name: *const c_char,
-        obj: *mut c_void,
-    );
+    pub fn noesis_name_scope_update_name(scope: *mut c_void, name: *const c_char, obj: *mut c_void);
     pub fn noesis_name_scope_find_object(scope: *mut c_void, obj: *mut c_void) -> *const c_char;
-    pub fn noesis_name_scope_enum(
-        scope: *mut c_void,
-        cb: NameScopeEnumFn,
-        userdata: *mut c_void,
-    );
+    pub fn noesis_name_scope_enum(scope: *mut c_void, cb: NameScopeEnumFn, userdata: *mut c_void);
 
     // G. Thread affinity.
     pub fn noesis_dependency_object_check_access(obj: *mut c_void) -> bool;
@@ -862,10 +827,7 @@ unsafe extern "C" {
         multi_binding: *mut c_void,
         binding: *mut c_void,
     ) -> bool;
-    pub fn noesis_multi_binding_set_converter(
-        multi_binding: *mut c_void,
-        converter: *mut c_void,
-    );
+    pub fn noesis_multi_binding_set_converter(multi_binding: *mut c_void, converter: *mut c_void);
     pub fn noesis_multi_binding_set_converter_parameter(
         multi_binding: *mut c_void,
         parameter: *mut c_void,
@@ -925,10 +887,7 @@ unsafe extern "C" {
     pub fn noesis_textbox_select_all(element: *mut c_void) -> bool;
     pub fn noesis_textbox_get_selected_text(element: *mut c_void) -> *const c_char;
     pub fn noesis_passwordbox_get_password(element: *mut c_void) -> *const c_char;
-    pub fn noesis_passwordbox_set_password(
-        element: *mut c_void,
-        password: *const c_char,
-    ) -> bool;
+    pub fn noesis_passwordbox_set_password(element: *mut c_void, password: *const c_char) -> bool;
 
     // ── §8 remainder (noesis_controls_) ──────────────────────────────────
     // Selector.SelectedValue / SelectedValuePath
@@ -937,9 +896,7 @@ unsafe extern "C" {
         element: *mut c_void,
         value: *mut c_void,
     ) -> bool;
-    pub fn noesis_controls_selector_get_selected_value_path(
-        element: *mut c_void,
-    ) -> *const c_char;
+    pub fn noesis_controls_selector_get_selected_value_path(element: *mut c_void) -> *const c_char;
     pub fn noesis_controls_selector_set_selected_value_path(
         element: *mut c_void,
         path: *const c_char,
@@ -1008,10 +965,8 @@ unsafe extern "C" {
     // ToolTip / ToolTipService
     pub fn noesis_controls_fe_get_tooltip(element: *mut c_void) -> *mut c_void;
     pub fn noesis_controls_fe_set_tooltip(element: *mut c_void, tooltip: *mut c_void) -> bool;
-    pub fn noesis_controls_fe_set_tooltip_string(
-        element: *mut c_void,
-        text: *const c_char,
-    ) -> bool;
+    pub fn noesis_controls_fe_set_tooltip_string(element: *mut c_void, text: *const c_char)
+    -> bool;
     pub fn noesis_controls_tooltipservice_get_tooltip(obj: *mut c_void) -> *mut c_void;
     pub fn noesis_controls_tooltipservice_set_tooltip(
         obj: *mut c_void,
@@ -1028,8 +983,7 @@ unsafe extern "C" {
         obj: *mut c_void,
         menu: *mut c_void,
     ) -> bool;
-    pub fn noesis_controls_contextmenu_get_is_open(element: *mut c_void, out: *mut bool)
-    -> bool;
+    pub fn noesis_controls_contextmenu_get_is_open(element: *mut c_void, out: *mut bool) -> bool;
     pub fn noesis_controls_contextmenu_set_is_open(element: *mut c_void, open: bool) -> bool;
 
     // ScrollViewer line/page/edge + IScrollInfo
@@ -1060,20 +1014,15 @@ unsafe extern "C" {
         value: *mut c_void,
     ) -> bool;
     pub fn noesis_resource_dictionary_contains(dict: *mut c_void, key: *const c_char) -> bool;
-    pub fn noesis_resource_dictionary_find(dict: *mut c_void, key: *const c_char)
-    -> *mut c_void;
-    pub fn noesis_resource_dictionary_add_merged(dict: *mut c_void, merged: *mut c_void)
-    -> bool;
+    pub fn noesis_resource_dictionary_find(dict: *mut c_void, key: *const c_char) -> *mut c_void;
+    pub fn noesis_resource_dictionary_add_merged(dict: *mut c_void, merged: *mut c_void) -> bool;
 
     pub fn noesis_gui_set_application_resources(dict: *mut c_void);
     pub fn noesis_gui_get_application_resources() -> *mut c_void;
     pub fn noesis_gui_register_default_styles(uri: *const c_char) -> bool;
 
     pub fn noesis_framework_element_get_resources(element: *mut c_void) -> *mut c_void;
-    pub fn noesis_framework_element_set_resources(
-        element: *mut c_void,
-        dict: *mut c_void,
-    ) -> bool;
+    pub fn noesis_framework_element_set_resources(element: *mut c_void, dict: *mut c_void) -> bool;
     pub fn noesis_framework_element_find_resource(
         element: *mut c_void,
         key: *const c_char,
@@ -1181,8 +1130,7 @@ unsafe extern "C" {
         trigger: *mut c_void,
         name: *const c_char,
     ) -> bool;
-    pub fn noesis_templates_event_trigger_get_source_name(trigger: *mut c_void)
-    -> *const c_char;
+    pub fn noesis_templates_event_trigger_get_source_name(trigger: *mut c_void) -> *const c_char;
     pub fn noesis_templates_event_trigger_action_count(trigger: *mut c_void) -> i32;
     pub fn noesis_templates_event_trigger_add_action(
         trigger: *mut c_void,
@@ -1242,16 +1190,9 @@ unsafe extern "C" {
 
     // LinearGradientBrush
     pub fn noesis_linear_gradient_brush_create() -> *mut c_void;
-    pub fn noesis_linear_gradient_brush_set_start_point(
-        brush: *mut c_void,
-        x: f32,
-        y: f32,
-    ) -> bool;
-    pub fn noesis_linear_gradient_brush_set_end_point(
-        brush: *mut c_void,
-        x: f32,
-        y: f32,
-    ) -> bool;
+    pub fn noesis_linear_gradient_brush_set_start_point(brush: *mut c_void, x: f32, y: f32)
+    -> bool;
+    pub fn noesis_linear_gradient_brush_set_end_point(brush: *mut c_void, x: f32, y: f32) -> bool;
     pub fn noesis_linear_gradient_brush_get_points(brush: *mut c_void, out: *mut f32) -> bool;
 
     // RadialGradientBrush
@@ -1262,8 +1203,7 @@ unsafe extern "C" {
         x: f32,
         y: f32,
     ) -> bool;
-    pub fn noesis_radial_gradient_brush_set_radius(brush: *mut c_void, rx: f32, ry: f32)
-    -> bool;
+    pub fn noesis_radial_gradient_brush_set_radius(brush: *mut c_void, rx: f32, ry: f32) -> bool;
     pub fn noesis_radial_gradient_brush_get_radius(
         brush: *mut c_void,
         rx: *mut f32,
@@ -1334,11 +1274,8 @@ unsafe extern "C" {
     // Transforms
     pub fn noesis_translate_transform_create(x: f32, y: f32) -> *mut c_void;
     pub fn noesis_translate_transform_set(transform: *mut c_void, x: f32, y: f32) -> bool;
-    pub fn noesis_translate_transform_get(
-        transform: *mut c_void,
-        x: *mut f32,
-        y: *mut f32,
-    ) -> bool;
+    pub fn noesis_translate_transform_get(transform: *mut c_void, x: *mut f32, y: *mut f32)
+    -> bool;
 
     pub fn noesis_scale_transform_create(sx: f32, sy: f32, cx: f32, cy: f32) -> *mut c_void;
     pub fn noesis_scale_transform_set(
@@ -1401,10 +1338,8 @@ unsafe extern "C" {
         out_opacity: *mut f32,
     ) -> bool;
     pub fn noesis_drop_shadow_effect_set_color(effect: *mut c_void, color: *const f32) -> bool;
-    pub fn noesis_drop_shadow_effect_set_blur_radius(
-        effect: *mut c_void,
-        blur_radius: f32,
-    ) -> bool;
+    pub fn noesis_drop_shadow_effect_set_blur_radius(effect: *mut c_void, blur_radius: f32)
+    -> bool;
     pub fn noesis_drop_shadow_effect_set_direction(effect: *mut c_void, direction: f32) -> bool;
     pub fn noesis_drop_shadow_effect_set_shadow_depth(
         effect: *mut c_void,
@@ -1459,8 +1394,7 @@ unsafe extern "C" {
         shape: *mut c_void,
         dashes: *const std::os::raw::c_char,
     ) -> bool;
-    pub fn noesis_shape_get_stroke_dash_array(shape: *mut c_void)
-    -> *const std::os::raw::c_char;
+    pub fn noesis_shape_get_stroke_dash_array(shape: *mut c_void) -> *const std::os::raw::c_char;
 
     pub fn noesis_rectangle_set_radius_x(shape: *mut c_void, value: f32) -> bool;
     pub fn noesis_rectangle_get_radius_x(shape: *mut c_void, out: *mut f32) -> bool;
@@ -1522,10 +1456,7 @@ unsafe extern "C" {
         is_large_arc: bool,
         sweep_direction: i32,
     ) -> bool;
-    pub fn noesis_stream_geometry_context_set_is_closed(
-        ctx: *mut c_void,
-        is_closed: bool,
-    ) -> bool;
+    pub fn noesis_stream_geometry_context_set_is_closed(ctx: *mut c_void, is_closed: bool) -> bool;
     pub fn noesis_stream_geometry_context_close(ctx: *mut c_void) -> bool;
     pub fn noesis_stream_geometry_context_destroy(ctx: *mut c_void);
 
@@ -1583,18 +1514,13 @@ unsafe extern "C" {
         out_sweep_direction: *mut i32,
     ) -> bool;
     pub fn noesis_poly_line_segment_create(points: *const f32, num_points: u32) -> *mut c_void;
-    pub fn noesis_poly_bezier_segment_create(points: *const f32, num_points: u32)
-    -> *mut c_void;
+    pub fn noesis_poly_bezier_segment_create(points: *const f32, num_points: u32) -> *mut c_void;
     pub fn noesis_poly_quadratic_bezier_segment_create(
         points: *const f32,
         num_points: u32,
     ) -> *mut c_void;
     pub fn noesis_poly_segment_point_count(segment: *mut c_void) -> i32;
-    pub fn noesis_poly_segment_get_point(
-        segment: *mut c_void,
-        index: u32,
-        out: *mut f32,
-    ) -> bool;
+    pub fn noesis_poly_segment_get_point(segment: *mut c_void, index: u32, out: *mut f32) -> bool;
 
     // EllipseGeometry / RectangleGeometry / LineGeometry
     pub fn noesis_ellipse_geometry_create(cx: f32, cy: f32, rx: f32, ry: f32) -> *mut c_void;
@@ -1621,14 +1547,8 @@ unsafe extern "C" {
         geometry1: *mut c_void,
         geometry2: *mut c_void,
     ) -> *mut c_void;
-    pub fn noesis_combined_geometry_set_geometry1(
-        geometry: *mut c_void,
-        g1: *mut c_void,
-    ) -> bool;
-    pub fn noesis_combined_geometry_set_geometry2(
-        geometry: *mut c_void,
-        g2: *mut c_void,
-    ) -> bool;
+    pub fn noesis_combined_geometry_set_geometry1(geometry: *mut c_void, g1: *mut c_void) -> bool;
+    pub fn noesis_combined_geometry_set_geometry2(geometry: *mut c_void, g2: *mut c_void) -> bool;
     pub fn noesis_combined_geometry_get_geometry1(geometry: *mut c_void) -> *mut c_void;
     pub fn noesis_combined_geometry_get_geometry2(geometry: *mut c_void) -> *mut c_void;
     pub fn noesis_combined_geometry_set_mode(geometry: *mut c_void, mode: i32) -> bool;
@@ -1657,12 +1577,8 @@ unsafe extern "C" {
     pub fn noesis_svg_path_add_ellipse(path: *mut c_void, x: f32, y: f32, rx: f32, ry: f32);
 
     pub fn noesis_svg_path_calculate_bounds(path: *mut c_void, out: *mut f32) -> bool;
-    pub fn noesis_svg_path_fill_contains(
-        path: *mut c_void,
-        x: f32,
-        y: f32,
-        fill_rule: i32,
-    ) -> bool;
+    pub fn noesis_svg_path_fill_contains(path: *mut c_void, x: f32, y: f32, fill_rule: i32)
+    -> bool;
     pub fn noesis_svg_path_stroke_contains(
         path: *mut c_void,
         x: f32,
@@ -1676,11 +1592,8 @@ unsafe extern "C" {
 
     pub fn noesis_svg_image_parse(svg: *const c_char) -> *mut c_void;
     pub fn noesis_svg_image_destroy(image: *mut c_void);
-    pub fn noesis_svg_image_get_size(
-        image: *mut c_void,
-        width: *mut f32,
-        height: *mut f32,
-    ) -> bool;
+    pub fn noesis_svg_image_get_size(image: *mut c_void, width: *mut f32, height: *mut f32)
+    -> bool;
     pub fn noesis_svg_image_shape_count(image: *mut c_void) -> u32;
     pub fn noesis_svg_image_shape_fill_type(image: *mut c_void, index: u32) -> i32;
 }
@@ -1766,8 +1679,7 @@ unsafe extern "C" {
         index: u32,
     ) -> *const c_char;
 
-    pub fn noesis_typography_text_element_set_font_size(element: *mut c_void, size: f32)
-    -> bool;
+    pub fn noesis_typography_text_element_set_font_size(element: *mut c_void, size: f32) -> bool;
     pub fn noesis_typography_text_element_get_font_size(
         element: *mut c_void,
         out: *mut f32,
@@ -1790,10 +1702,7 @@ unsafe extern "C" {
         element: *mut c_void,
         out: *mut i32,
     ) -> bool;
-    pub fn noesis_typography_text_element_set_font_style(
-        element: *mut c_void,
-        style: i32,
-    ) -> bool;
+    pub fn noesis_typography_text_element_set_font_style(element: *mut c_void, style: i32) -> bool;
     pub fn noesis_typography_text_element_get_font_style(
         element: *mut c_void,
         out: *mut i32,
@@ -1816,10 +1725,7 @@ unsafe extern "C" {
     pub fn noesis_typography_set_variants(element: *mut c_void, value: i32) -> bool;
     pub fn noesis_typography_get_variants(element: *mut c_void, out: *mut i32) -> bool;
     pub fn noesis_typography_set_standard_ligatures(element: *mut c_void, value: bool) -> bool;
-    pub fn noesis_typography_get_standard_ligatures(
-        element: *mut c_void,
-        out: *mut bool,
-    ) -> bool;
+    pub fn noesis_typography_get_standard_ligatures(element: *mut c_void, out: *mut bool) -> bool;
     pub fn noesis_typography_set_kerning(element: *mut c_void, value: bool) -> bool;
     pub fn noesis_typography_get_kerning(element: *mut c_void, out: *mut bool) -> bool;
 
@@ -1839,8 +1745,7 @@ unsafe extern "C" {
         out_style: *mut i32,
         out_bold: *mut bool,
     ) -> bool;
-    pub fn noesis_typography_text_box_clear_composition_underlines(element: *mut c_void)
-    -> bool;
+    pub fn noesis_typography_text_box_clear_composition_underlines(element: *mut c_void) -> bool;
 }
 
 // ── Immediate-mode drawing: Pen + DrawingContext (TODO §10) ──────────────────
@@ -1970,30 +1875,17 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn noesis_mesh_data_create() -> *mut c_void;
     pub fn noesis_mesh_data_set_vertices(mesh: *mut c_void, xy: *const f32, count: u32) -> bool;
-    pub fn noesis_mesh_data_get_vertices(
-        mesh: *mut c_void,
-        out_xy: *mut f32,
-        count: u32,
-    ) -> bool;
+    pub fn noesis_mesh_data_get_vertices(mesh: *mut c_void, out_xy: *mut f32, count: u32) -> bool;
     pub fn noesis_mesh_data_set_uvs(mesh: *mut c_void, uv: *const f32, count: u32) -> bool;
     pub fn noesis_mesh_data_get_uvs(mesh: *mut c_void, out_uv: *mut f32, count: u32) -> bool;
-    pub fn noesis_mesh_data_set_indices(
-        mesh: *mut c_void,
-        indices: *const u16,
-        count: u32,
-    ) -> bool;
+    pub fn noesis_mesh_data_set_indices(mesh: *mut c_void, indices: *const u16, count: u32)
+    -> bool;
     pub fn noesis_mesh_data_get_indices(
         mesh: *mut c_void,
         out_indices: *mut u16,
         count: u32,
     ) -> bool;
-    pub fn noesis_mesh_data_set_bounds(
-        mesh: *mut c_void,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) -> bool;
+    pub fn noesis_mesh_data_set_bounds(mesh: *mut c_void, x: f32, y: f32, w: f32, h: f32) -> bool;
     pub fn noesis_mesh_data_get_bounds(mesh: *mut c_void, out: *mut f32) -> bool;
     pub fn noesis_mesh_create() -> *mut c_void;
     pub fn noesis_mesh_set_data(mesh: *mut c_void, data: *mut c_void) -> bool;
@@ -2294,15 +2186,13 @@ unsafe extern "C" {
     pub fn noesis_storyboard_create() -> *mut c_void;
     pub fn noesis_storyboard_add_child(sb: *mut c_void, timeline: *mut c_void) -> bool;
     pub fn noesis_storyboard_child_count(sb: *mut c_void) -> i32;
-    pub fn noesis_storyboard_set_target_name(timeline: *mut c_void, name: *const c_char)
-    -> bool;
+    pub fn noesis_storyboard_set_target_name(timeline: *mut c_void, name: *const c_char) -> bool;
     pub fn noesis_storyboard_set_target_property(
         timeline: *mut c_void,
         path: *const c_char,
     ) -> bool;
     pub fn noesis_storyboard_set_target(timeline: *mut c_void, target: *mut c_void) -> bool;
-    pub fn noesis_storyboard_begin(sb: *mut c_void, fe: *mut c_void, controllable: bool)
-    -> bool;
+    pub fn noesis_storyboard_begin(sb: *mut c_void, fe: *mut c_void, controllable: bool) -> bool;
     pub fn noesis_storyboard_begin_handoff(
         sb: *mut c_void,
         fe: *mut c_void,
@@ -2336,42 +2226,19 @@ unsafe extern "C" {
     pub fn noesis_double_animation_set_by(anim: *mut c_void, has: bool, v: f32) -> bool;
 
     pub fn noesis_color_animation_create() -> *mut c_void;
-    pub fn noesis_color_animation_set_from(
-        anim: *mut c_void,
-        has: bool,
-        color: *const f32,
-    ) -> bool;
-    pub fn noesis_color_animation_set_to(
-        anim: *mut c_void,
-        has: bool,
-        color: *const f32,
-    ) -> bool;
-    pub fn noesis_color_animation_set_by(
-        anim: *mut c_void,
-        has: bool,
-        color: *const f32,
-    ) -> bool;
+    pub fn noesis_color_animation_set_from(anim: *mut c_void, has: bool, color: *const f32)
+    -> bool;
+    pub fn noesis_color_animation_set_to(anim: *mut c_void, has: bool, color: *const f32) -> bool;
+    pub fn noesis_color_animation_set_by(anim: *mut c_void, has: bool, color: *const f32) -> bool;
 
     pub fn noesis_thickness_animation_create() -> *mut c_void;
-    pub fn noesis_thickness_animation_set_from(
-        anim: *mut c_void,
-        has: bool,
-        t: *const f32,
-    ) -> bool;
-    pub fn noesis_thickness_animation_set_to(
-        anim: *mut c_void,
-        has: bool,
-        t: *const f32,
-    ) -> bool;
-    pub fn noesis_thickness_animation_set_by(
-        anim: *mut c_void,
-        has: bool,
-        t: *const f32,
-    ) -> bool;
+    pub fn noesis_thickness_animation_set_from(anim: *mut c_void, has: bool, t: *const f32)
+    -> bool;
+    pub fn noesis_thickness_animation_set_to(anim: *mut c_void, has: bool, t: *const f32) -> bool;
+    pub fn noesis_thickness_animation_set_by(anim: *mut c_void, has: bool, t: *const f32) -> bool;
 
     pub fn noesis_point_animation_create() -> *mut c_void;
-    pub fn noesis_point_animation_set_from(anim: *mut c_void, has: bool, x: f32, y: f32)
-    -> bool;
+    pub fn noesis_point_animation_set_from(anim: *mut c_void, has: bool, x: f32, y: f32) -> bool;
     pub fn noesis_point_animation_set_to(anim: *mut c_void, has: bool, x: f32, y: f32) -> bool;
     pub fn noesis_point_animation_set_by(anim: *mut c_void, has: bool, x: f32, y: f32) -> bool;
 
@@ -2454,44 +2321,26 @@ unsafe extern "C" {
 
     // Int16 / Int32 From-To animations (value crosses as i32)
     pub fn noesis_animation_int16_animation_create() -> *mut c_void;
-    pub fn noesis_animation_int16_animation_set_from(
-        anim: *mut c_void,
-        has: bool,
-        v: i32,
-    ) -> bool;
-    pub fn noesis_animation_int16_animation_set_to(anim: *mut c_void, has: bool, v: i32)
-    -> bool;
-    pub fn noesis_animation_int16_animation_set_by(anim: *mut c_void, has: bool, v: i32)
-    -> bool;
+    pub fn noesis_animation_int16_animation_set_from(anim: *mut c_void, has: bool, v: i32) -> bool;
+    pub fn noesis_animation_int16_animation_set_to(anim: *mut c_void, has: bool, v: i32) -> bool;
+    pub fn noesis_animation_int16_animation_set_by(anim: *mut c_void, has: bool, v: i32) -> bool;
     pub fn noesis_animation_int16_animation_get_from(anim: *mut c_void, out: *mut i32) -> bool;
     pub fn noesis_animation_int16_animation_get_to(anim: *mut c_void, out: *mut i32) -> bool;
     pub fn noesis_animation_int16_animation_get_by(anim: *mut c_void, out: *mut i32) -> bool;
 
     pub fn noesis_animation_int32_animation_create() -> *mut c_void;
-    pub fn noesis_animation_int32_animation_set_from(
-        anim: *mut c_void,
-        has: bool,
-        v: i32,
-    ) -> bool;
-    pub fn noesis_animation_int32_animation_set_to(anim: *mut c_void, has: bool, v: i32)
-    -> bool;
-    pub fn noesis_animation_int32_animation_set_by(anim: *mut c_void, has: bool, v: i32)
-    -> bool;
+    pub fn noesis_animation_int32_animation_set_from(anim: *mut c_void, has: bool, v: i32) -> bool;
+    pub fn noesis_animation_int32_animation_set_to(anim: *mut c_void, has: bool, v: i32) -> bool;
+    pub fn noesis_animation_int32_animation_set_by(anim: *mut c_void, has: bool, v: i32) -> bool;
     pub fn noesis_animation_int32_animation_get_from(anim: *mut c_void, out: *mut i32) -> bool;
     pub fn noesis_animation_int32_animation_get_to(anim: *mut c_void, out: *mut i32) -> bool;
     pub fn noesis_animation_int32_animation_get_by(anim: *mut c_void, out: *mut i32) -> bool;
 
     // Int64 From-To animation (value crosses as i64)
     pub fn noesis_animation_int64_animation_create() -> *mut c_void;
-    pub fn noesis_animation_int64_animation_set_from(
-        anim: *mut c_void,
-        has: bool,
-        v: i64,
-    ) -> bool;
-    pub fn noesis_animation_int64_animation_set_to(anim: *mut c_void, has: bool, v: i64)
-    -> bool;
-    pub fn noesis_animation_int64_animation_set_by(anim: *mut c_void, has: bool, v: i64)
-    -> bool;
+    pub fn noesis_animation_int64_animation_set_from(anim: *mut c_void, has: bool, v: i64) -> bool;
+    pub fn noesis_animation_int64_animation_set_to(anim: *mut c_void, has: bool, v: i64) -> bool;
+    pub fn noesis_animation_int64_animation_set_by(anim: *mut c_void, has: bool, v: i64) -> bool;
     pub fn noesis_animation_int64_animation_get_from(anim: *mut c_void, out: *mut i64) -> bool;
     pub fn noesis_animation_int64_animation_get_to(anim: *mut c_void, out: *mut i64) -> bool;
     pub fn noesis_animation_int64_animation_get_by(anim: *mut c_void, out: *mut i64) -> bool;
@@ -2610,26 +2459,12 @@ unsafe extern "C" {
     pub fn noesis_animation_matrix_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
 
     // KeySpline
-    pub fn noesis_animation_keyspline_create(
-        c1x: f32,
-        c1y: f32,
-        c2x: f32,
-        c2y: f32,
-    ) -> *mut c_void;
-    pub fn noesis_animation_keyspline_set_control_point1(
-        ks: *mut c_void,
-        x: f32,
-        y: f32,
-    ) -> bool;
-    pub fn noesis_animation_keyspline_set_control_point2(
-        ks: *mut c_void,
-        x: f32,
-        y: f32,
-    ) -> bool;
-    pub fn noesis_animation_keyspline_get_control_point1(ks: *mut c_void, out: *mut f32)
-    -> bool;
-    pub fn noesis_animation_keyspline_get_control_point2(ks: *mut c_void, out: *mut f32)
-    -> bool;
+    pub fn noesis_animation_keyspline_create(c1x: f32, c1y: f32, c2x: f32, c2y: f32)
+    -> *mut c_void;
+    pub fn noesis_animation_keyspline_set_control_point1(ks: *mut c_void, x: f32, y: f32) -> bool;
+    pub fn noesis_animation_keyspline_set_control_point2(ks: *mut c_void, x: f32, y: f32) -> bool;
+    pub fn noesis_animation_keyspline_get_control_point1(ks: *mut c_void, out: *mut f32) -> bool;
+    pub fn noesis_animation_keyspline_get_control_point2(ks: *mut c_void, out: *mut f32) -> bool;
 
     // BeginStoryboard trigger action
     pub fn noesis_animation_begin_storyboard_create() -> *mut c_void;
@@ -2638,13 +2473,10 @@ unsafe extern "C" {
         sb: *mut c_void,
     ) -> bool;
     pub fn noesis_animation_begin_storyboard_get_storyboard(bs: *mut c_void) -> *mut c_void;
-    pub fn noesis_animation_begin_storyboard_set_handoff(bs: *mut c_void, behavior: i32)
-    -> bool;
+    pub fn noesis_animation_begin_storyboard_set_handoff(bs: *mut c_void, behavior: i32) -> bool;
     pub fn noesis_animation_begin_storyboard_get_handoff(bs: *mut c_void) -> i32;
-    pub fn noesis_animation_begin_storyboard_set_name(
-        bs: *mut c_void,
-        name: *const c_char,
-    ) -> bool;
+    pub fn noesis_animation_begin_storyboard_set_name(bs: *mut c_void, name: *const c_char)
+    -> bool;
     pub fn noesis_animation_begin_storyboard_get_name(bs: *mut c_void) -> *const c_char;
 
     // Point key-frame animation
@@ -2679,10 +2511,7 @@ unsafe extern "C" {
         index: i32,
         out: *mut f32,
     ) -> bool;
-    pub fn noesis_animation_thickness_keyframes_get_key_time(
-        anim: *mut c_void,
-        index: i32,
-    ) -> f64;
+    pub fn noesis_animation_thickness_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
 
     // Boolean key-frame animation (discrete only)
     pub fn noesis_animation_boolean_keyframes_create() -> *mut c_void;
@@ -2697,8 +2526,7 @@ unsafe extern "C" {
         index: i32,
         out: *mut bool,
     ) -> bool;
-    pub fn noesis_animation_boolean_keyframes_get_key_time(anim: *mut c_void, index: i32)
-    -> f64;
+    pub fn noesis_animation_boolean_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
 
     // String key-frame animation (discrete only)
     pub fn noesis_animation_string_keyframes_create() -> *mut c_void;
@@ -2841,10 +2669,7 @@ unsafe extern "C" {
         type_name: *const c_char,
         out_name: *mut *const c_char,
     ) -> bool;
-    pub fn noesis_type_add_depends_on(
-        type_name: *const c_char,
-        prop_name: *const c_char,
-    ) -> bool;
+    pub fn noesis_type_add_depends_on(type_name: *const c_char, prop_name: *const c_char) -> bool;
     pub fn noesis_type_get_depends_on(
         type_name: *const c_char,
         out_name: *mut *const c_char,
@@ -2887,10 +2712,7 @@ unsafe extern "C" {
 
     pub fn noesis_text_inlines_collection_add(collection: *mut c_void, inl: *mut c_void) -> i32;
     pub fn noesis_text_inlines_collection_count(collection: *mut c_void) -> i32;
-    pub fn noesis_text_inlines_collection_get(
-        collection: *mut c_void,
-        index: u32,
-    ) -> *mut c_void;
+    pub fn noesis_text_inlines_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
 
     // Code-side element-tree construction (Phase 1): Decorator/Border Child,
     // Panel Children, Grid row/column definitions. Collections hand out a +1
@@ -2901,11 +2723,7 @@ unsafe extern "C" {
 
     pub fn noesis_panel_children_get(panel: *mut c_void) -> *mut c_void;
     pub fn noesis_panel_children_add(coll: *mut c_void, child: *mut c_void) -> i32;
-    pub fn noesis_panel_children_insert(
-        coll: *mut c_void,
-        index: u32,
-        child: *mut c_void,
-    ) -> bool;
+    pub fn noesis_panel_children_insert(coll: *mut c_void, index: u32, child: *mut c_void) -> bool;
     pub fn noesis_panel_children_remove_at(coll: *mut c_void, index: u32) -> bool;
     pub fn noesis_panel_children_clear(coll: *mut c_void) -> bool;
     pub fn noesis_panel_children_count(coll: *mut c_void) -> i32;
@@ -2913,21 +2731,14 @@ unsafe extern "C" {
 
     pub fn noesis_grid_row_definition_create() -> *mut c_void;
     pub fn noesis_grid_column_definition_create() -> *mut c_void;
-    pub fn noesis_grid_row_definition_set_height(
-        def: *mut c_void,
-        value: f32,
-        unit: i32,
-    ) -> bool;
+    pub fn noesis_grid_row_definition_set_height(def: *mut c_void, value: f32, unit: i32) -> bool;
     pub fn noesis_grid_row_definition_get_height(
         def: *mut c_void,
         out_value: *mut f32,
         out_unit: *mut i32,
     ) -> bool;
-    pub fn noesis_grid_column_definition_set_width(
-        def: *mut c_void,
-        value: f32,
-        unit: i32,
-    ) -> bool;
+    pub fn noesis_grid_column_definition_set_width(def: *mut c_void, value: f32, unit: i32)
+    -> bool;
     pub fn noesis_grid_column_definition_get_width(
         def: *mut c_void,
         out_value: *mut f32,
@@ -3052,11 +2863,7 @@ unsafe extern "C" {
 
     // Keyboard state / modifiers
     pub fn noesis_ui_element_get_modifiers(element: *mut c_void, out: *mut i32) -> bool;
-    pub fn noesis_ui_element_get_key_states(
-        element: *mut c_void,
-        key: i32,
-        out: *mut i32,
-    ) -> bool;
+    pub fn noesis_ui_element_get_key_states(element: *mut c_void, key: i32, out: *mut i32) -> bool;
     pub fn noesis_ui_element_is_key_down(element: *mut c_void, key: i32) -> bool;
     pub fn noesis_ui_element_is_key_up(element: *mut c_void, key: i32) -> bool;
     pub fn noesis_ui_element_is_key_toggled(element: *mut c_void, key: i32) -> bool;
@@ -3087,23 +2894,16 @@ unsafe extern "C" {
     pub fn noesis_focus_manager_get_focus_scope(element: *mut c_void) -> *mut c_void;
 
     // KeyboardNavigation attached properties
-    pub fn noesis_keyboard_navigation_get_tab_index(element: *mut c_void, out: *mut i32)
-    -> bool;
+    pub fn noesis_keyboard_navigation_get_tab_index(element: *mut c_void, out: *mut i32) -> bool;
     pub fn noesis_keyboard_navigation_set_tab_index(element: *mut c_void, value: i32) -> bool;
-    pub fn noesis_keyboard_navigation_get_is_tab_stop(
-        element: *mut c_void,
-        out: *mut bool,
-    ) -> bool;
-    pub fn noesis_keyboard_navigation_set_is_tab_stop(element: *mut c_void, value: bool)
+    pub fn noesis_keyboard_navigation_get_is_tab_stop(element: *mut c_void, out: *mut bool)
     -> bool;
+    pub fn noesis_keyboard_navigation_set_is_tab_stop(element: *mut c_void, value: bool) -> bool;
     pub fn noesis_keyboard_navigation_get_tab_navigation(
         element: *mut c_void,
         out: *mut i32,
     ) -> bool;
-    pub fn noesis_keyboard_navigation_set_tab_navigation(
-        element: *mut c_void,
-        mode: i32,
-    ) -> bool;
+    pub fn noesis_keyboard_navigation_set_tab_navigation(element: *mut c_void, mode: i32) -> bool;
     pub fn noesis_keyboard_navigation_get_control_tab_navigation(
         element: *mut c_void,
         out: *mut i32,
@@ -3124,32 +2924,21 @@ unsafe extern "C" {
         element: *mut c_void,
         out: *mut bool,
     ) -> bool;
-    pub fn noesis_keyboard_navigation_set_accepts_return(
-        element: *mut c_void,
-        value: bool,
-    ) -> bool;
+    pub fn noesis_keyboard_navigation_set_accepts_return(element: *mut c_void, value: bool)
+    -> bool;
 
     // Input gestures + bindings
     pub fn noesis_key_gesture_create(key: i32, modifiers: i32) -> *mut c_void;
     pub fn noesis_mouse_gesture_create(action: i32, modifiers: i32) -> *mut c_void;
-    pub fn noesis_key_binding_create(
-        command: *mut c_void,
-        key: i32,
-        modifiers: i32,
-    ) -> *mut c_void;
+    pub fn noesis_key_binding_create(command: *mut c_void, key: i32, modifiers: i32)
+    -> *mut c_void;
     pub fn noesis_mouse_binding_create(
         command: *mut c_void,
         action: i32,
         modifiers: i32,
     ) -> *mut c_void;
-    pub fn noesis_input_binding_create(
-        command: *mut c_void,
-        gesture: *mut c_void,
-    ) -> *mut c_void;
-    pub fn noesis_ui_element_add_input_binding(
-        element: *mut c_void,
-        binding: *mut c_void,
-    ) -> bool;
+    pub fn noesis_input_binding_create(command: *mut c_void, gesture: *mut c_void) -> *mut c_void;
+    pub fn noesis_ui_element_add_input_binding(element: *mut c_void, binding: *mut c_void) -> bool;
 }
 
 // ────────────────────────────────────────────────────────────────────────────

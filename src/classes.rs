@@ -45,14 +45,12 @@ use std::sync::Mutex;
 
 use crate::drawing::DrawingContext;
 use crate::ffi::{
-    ClassBase, LayoutVtable, PropType, noesis_base_component_release,
-    noesis_class_create_instance, noesis_class_register,
-    noesis_class_register_enum_property, noesis_class_register_property_ex,
+    ClassBase, LayoutVtable, PropType, noesis_base_component_release, noesis_class_create_instance,
+    noesis_class_register, noesis_class_register_enum_property, noesis_class_register_property_ex,
     noesis_class_set_coerce, noesis_class_set_layout, noesis_class_set_render,
     noesis_class_unregister, noesis_freezable_can_freeze, noesis_freezable_freeze,
-    noesis_freezable_is_frozen, noesis_image_source_get_size,
-    noesis_instance_get_property, noesis_instance_set_property,
-    noesis_instance_set_readonly_property, noesis_uielement_arrange,
+    noesis_freezable_is_frozen, noesis_image_source_get_size, noesis_instance_get_property,
+    noesis_instance_set_property, noesis_instance_set_readonly_property, noesis_uielement_arrange,
     noesis_uielement_desired_size, noesis_uielement_measure, noesis_visual_child,
     noesis_visual_children_count,
 };
@@ -914,22 +912,14 @@ impl Instance {
     pub fn get_int32(self, prop_index: u32) -> Option<i32> {
         let mut out: i32 = 0;
         let ok = unsafe {
-            noesis_instance_get_property(
-                self.0.as_ptr(),
-                prop_index,
-                (&mut out as *mut i32).cast(),
-            )
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, (&mut out as *mut i32).cast())
         };
         ok.then_some(out)
     }
     pub fn get_float(self, prop_index: u32) -> Option<f32> {
         let mut out: f32 = 0.0;
         let ok = unsafe {
-            noesis_instance_get_property(
-                self.0.as_ptr(),
-                prop_index,
-                (&mut out as *mut f32).cast(),
-            )
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, (&mut out as *mut f32).cast())
         };
         ok.then_some(out)
     }
@@ -994,11 +984,7 @@ impl Instance {
     pub fn get_enum(self, prop_index: u32) -> Option<i32> {
         let mut out: i32 = 0;
         let ok = unsafe {
-            noesis_instance_get_property(
-                self.0.as_ptr(),
-                prop_index,
-                (&mut out as *mut i32).cast(),
-            )
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, (&mut out as *mut i32).cast())
         };
         ok.then_some(out)
     }
@@ -1505,11 +1491,7 @@ impl Instance {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
         unsafe {
-            noesis_instance_set_readonly_property(
-                self.0.as_ptr(),
-                prop_index,
-                arr.as_ptr().cast(),
-            )
+            noesis_instance_set_readonly_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast())
         }
     }
     /// Read-only setter for a `Size` DP. See [`Self::set_readonly_int32`].
@@ -1518,11 +1500,7 @@ impl Instance {
         let arr = [width, height];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
         unsafe {
-            noesis_instance_set_readonly_property(
-                self.0.as_ptr(),
-                prop_index,
-                arr.as_ptr().cast(),
-            )
+            noesis_instance_set_readonly_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast())
         }
     }
     /// Read-only setter for a `Vector` DP. See [`Self::set_readonly_int32`].
@@ -1531,11 +1509,7 @@ impl Instance {
         let arr = [x, y];
         // SAFETY: self.0 is a live instance pointer; arr outlives the call.
         unsafe {
-            noesis_instance_set_readonly_property(
-                self.0.as_ptr(),
-                prop_index,
-                arr.as_ptr().cast(),
-            )
+            noesis_instance_set_readonly_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast())
         }
     }
     /// Read-only setter for an enum DP (underlying `int32` member value). See

@@ -107,8 +107,7 @@ impl EnumType {
         let cn = CString::new(variant_name).ok()?;
         let mut out = 0i32;
         // SAFETY: both pointers are valid for the call; out is written only on success.
-        let ok =
-            unsafe { noesis_enum_value_from_name(self.name.as_ptr(), cn.as_ptr(), &mut out) };
+        let ok = unsafe { noesis_enum_value_from_name(self.name.as_ptr(), cn.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 

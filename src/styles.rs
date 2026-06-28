@@ -45,15 +45,14 @@ use crate::animation::BeginStoryboard;
 use crate::binding::{Binding, Boxed};
 use crate::ffi::{
     TemplateSelectorVTable, noesis_base_component_release, noesis_control_template_parse,
-    noesis_data_template_parse, noesis_framework_template_find_name,
-    noesis_style_add_setter, noesis_style_create, noesis_style_destroy,
-    noesis_style_set_based_on, noesis_style_set_target_type,
-    noesis_templates_data_trigger_add_setter, noesis_templates_data_trigger_create,
-    noesis_templates_data_trigger_get_binding, noesis_templates_data_trigger_get_value,
-    noesis_templates_data_trigger_set_binding, noesis_templates_data_trigger_set_value,
-    noesis_templates_data_trigger_setter_count, noesis_templates_event_trigger_action_count,
-    noesis_templates_event_trigger_add_action, noesis_templates_event_trigger_create,
-    noesis_templates_event_trigger_get_routed_event_name,
+    noesis_data_template_parse, noesis_framework_template_find_name, noesis_style_add_setter,
+    noesis_style_create, noesis_style_destroy, noesis_style_set_based_on,
+    noesis_style_set_target_type, noesis_templates_data_trigger_add_setter,
+    noesis_templates_data_trigger_create, noesis_templates_data_trigger_get_binding,
+    noesis_templates_data_trigger_get_value, noesis_templates_data_trigger_set_binding,
+    noesis_templates_data_trigger_set_value, noesis_templates_data_trigger_setter_count,
+    noesis_templates_event_trigger_action_count, noesis_templates_event_trigger_add_action,
+    noesis_templates_event_trigger_create, noesis_templates_event_trigger_get_routed_event_name,
     noesis_templates_event_trigger_get_source_name,
     noesis_templates_event_trigger_set_routed_event,
     noesis_templates_event_trigger_set_source_name,
@@ -63,9 +62,9 @@ use crate::ffi::{
     noesis_templates_multi_data_trigger_condition_has_binding,
     noesis_templates_multi_data_trigger_create,
     noesis_templates_multi_data_trigger_get_condition_value,
-    noesis_templates_multi_data_trigger_setter_count,
-    noesis_templates_multi_trigger_add_condition, noesis_templates_multi_trigger_add_setter,
-    noesis_templates_multi_trigger_condition_count, noesis_templates_multi_trigger_create,
+    noesis_templates_multi_data_trigger_setter_count, noesis_templates_multi_trigger_add_condition,
+    noesis_templates_multi_trigger_add_setter, noesis_templates_multi_trigger_condition_count,
+    noesis_templates_multi_trigger_create,
     noesis_templates_multi_trigger_get_condition_property_name,
     noesis_templates_multi_trigger_get_condition_value,
     noesis_templates_multi_trigger_setter_count, noesis_templates_selector_create,
@@ -74,8 +73,8 @@ use crate::ffi::{
     noesis_templates_style_trigger_count, noesis_templates_trigger_add_setter,
     noesis_templates_trigger_create, noesis_templates_trigger_get_property_name,
     noesis_templates_trigger_get_value, noesis_templates_trigger_set_property,
-    noesis_templates_trigger_set_value, noesis_templates_trigger_setter_count,
-    noesis_unbox_bool, noesis_unbox_int32, noesis_unbox_string,
+    noesis_templates_trigger_set_value, noesis_templates_trigger_setter_count, noesis_unbox_bool,
+    noesis_unbox_int32, noesis_unbox_string,
 };
 use crate::view::FrameworkElement;
 
@@ -601,9 +600,7 @@ impl Trigger {
             return false;
         };
         // SAFETY: self.ptr live; the CStrings live for the call.
-        unsafe {
-            noesis_templates_trigger_set_property(self.ptr.as_ptr(), t.as_ptr(), d.as_ptr())
-        }
+        unsafe { noesis_templates_trigger_set_property(self.ptr.as_ptr(), t.as_ptr(), d.as_ptr()) }
     }
 
     /// Name of the trigger's `Property`, read back from the live object, or

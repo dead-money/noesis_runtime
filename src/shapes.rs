@@ -30,12 +30,11 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::brushes::Brush;
 use crate::ffi::{
-    noesis_base_component_release, noesis_ellipse_create, noesis_line_create,
-    noesis_line_get, noesis_line_set, noesis_rectangle_create,
-    noesis_rectangle_get_radius_x, noesis_rectangle_get_radius_y,
-    noesis_rectangle_set_radius_x, noesis_rectangle_set_radius_y, noesis_shape_get_fill,
-    noesis_shape_get_height, noesis_shape_get_stretch, noesis_shape_get_stroke,
-    noesis_shape_get_stroke_dash_array, noesis_shape_get_stroke_dash_cap,
+    noesis_base_component_release, noesis_ellipse_create, noesis_line_create, noesis_line_get,
+    noesis_line_set, noesis_rectangle_create, noesis_rectangle_get_radius_x,
+    noesis_rectangle_get_radius_y, noesis_rectangle_set_radius_x, noesis_rectangle_set_radius_y,
+    noesis_shape_get_fill, noesis_shape_get_height, noesis_shape_get_stretch,
+    noesis_shape_get_stroke, noesis_shape_get_stroke_dash_array, noesis_shape_get_stroke_dash_cap,
     noesis_shape_get_stroke_dash_offset, noesis_shape_get_stroke_end_line_cap,
     noesis_shape_get_stroke_line_join, noesis_shape_get_stroke_miter_limit,
     noesis_shape_get_stroke_start_line_cap, noesis_shape_get_stroke_thickness,
@@ -45,8 +44,8 @@ use crate::ffi::{
     noesis_shape_set_stroke_dash_cap, noesis_shape_set_stroke_dash_offset,
     noesis_shape_set_stroke_end_line_cap, noesis_shape_set_stroke_line_join,
     noesis_shape_set_stroke_miter_limit, noesis_shape_set_stroke_start_line_cap,
-    noesis_shape_set_stroke_thickness, noesis_shape_set_trim_end,
-    noesis_shape_set_trim_offset, noesis_shape_set_trim_start, noesis_shape_set_width,
+    noesis_shape_set_stroke_thickness, noesis_shape_set_trim_end, noesis_shape_set_trim_offset,
+    noesis_shape_set_trim_start, noesis_shape_set_width,
 };
 
 /// How the ends of a dash (or a line) are drawn. Ordinals mirror
@@ -320,9 +319,7 @@ pub trait Shape {
     #[must_use]
     fn stroke_end_line_cap(&self) -> Option<PenLineCap> {
         // SAFETY: shape_raw() is live.
-        PenLineCap::from_ordinal(unsafe {
-            noesis_shape_get_stroke_end_line_cap(self.shape_raw())
-        })
+        PenLineCap::from_ordinal(unsafe { noesis_shape_get_stroke_end_line_cap(self.shape_raw()) })
     }
 
     /// Set the join used at the vertices of the stroke.

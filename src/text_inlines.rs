@@ -26,8 +26,7 @@ use crate::ffi::{
     noesis_base_component_release, noesis_text_inlines_bold_create,
     noesis_text_inlines_collection_add, noesis_text_inlines_collection_count,
     noesis_text_inlines_collection_get, noesis_text_inlines_hyperlink_create,
-    noesis_text_inlines_hyperlink_get_navigate_uri,
-    noesis_text_inlines_hyperlink_set_navigate_uri,
+    noesis_text_inlines_hyperlink_get_navigate_uri, noesis_text_inlines_hyperlink_set_navigate_uri,
     noesis_text_inlines_inline_get_text_decorations,
     noesis_text_inlines_inline_set_text_decorations, noesis_text_inlines_italic_create,
     noesis_text_inlines_line_break_create, noesis_text_inlines_run_create,
@@ -84,10 +83,7 @@ pub trait Inline {
     fn set_text_decorations(&self, decorations: TextDecorations) -> bool {
         // SAFETY: `inline_raw()` is a live Inline* for `self`'s lifetime.
         unsafe {
-            noesis_text_inlines_inline_set_text_decorations(
-                self.inline_raw(),
-                decorations as i32,
-            )
+            noesis_text_inlines_inline_set_text_decorations(self.inline_raw(), decorations as i32)
         }
     }
 
@@ -421,9 +417,8 @@ impl InlineCollection {
     pub fn add<I: Inline>(&mut self, inline: &I) -> Option<usize> {
         // SAFETY: self.ptr is a live InlineCollection*; inline_raw() is a live
         // Inline* for the call.
-        let idx = unsafe {
-            noesis_text_inlines_collection_add(self.ptr.as_ptr(), inline.inline_raw())
-        };
+        let idx =
+            unsafe { noesis_text_inlines_collection_add(self.ptr.as_ptr(), inline.inline_raw()) };
         (idx >= 0).then_some(idx as usize)
     }
 

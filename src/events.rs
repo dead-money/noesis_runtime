@@ -126,8 +126,7 @@ pub fn subscribe_click<H: ClickHandler>(
     // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
     // element pointer is borrowed for the call duration only — Noesis copies
     // whatever it needs into the routed-event handler list.
-    let token =
-        unsafe { noesis_subscribe_click(element.raw(), click_trampoline, userdata.cast()) };
+    let token = unsafe { noesis_subscribe_click(element.raw(), click_trampoline, userdata.cast()) };
 
     if let Some(token) = NonNull::new(token) {
         Some(ClickSubscription {
@@ -562,12 +561,7 @@ impl EventArgs {
         let mut key_states = 0u32;
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
         let ok = unsafe {
-            noesis_routed_events_drag_effects(
-                self.raw,
-                &mut effects,
-                &mut allowed,
-                &mut key_states,
-            )
+            noesis_routed_events_drag_effects(self.raw, &mut effects, &mut allowed, &mut key_states)
         };
         ok.then_some(DragInfo {
             effects: DragEffects(effects),
@@ -1423,9 +1417,7 @@ pub fn do_drag_drop(
 ) -> bool {
     // SAFETY: both pointers are borrowed live elements; DoDragDrop copies what
     // it needs and does not retain the raw pointers past the call we make here.
-    unsafe {
-        noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects.bits())
-    }
+    unsafe { noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects.bits()) }
 }
 
 // ── DataObject copy/paste handlers (TODO §5) ────────────────────────────────

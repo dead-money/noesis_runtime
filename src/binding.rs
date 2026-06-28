@@ -30,19 +30,17 @@ use crate::converters::Converter;
 use crate::ffi::{
     noesis_base_component_release, noesis_binding_create, noesis_binding_destroy,
     noesis_binding_set_converter, noesis_binding_set_converter_parameter,
-    noesis_binding_set_element_name, noesis_binding_set_fallback_value,
-    noesis_binding_set_mode, noesis_binding_set_relative_source_find_ancestor,
-    noesis_binding_set_relative_source_previous_data,
-    noesis_binding_set_relative_source_self,
+    noesis_binding_set_element_name, noesis_binding_set_fallback_value, noesis_binding_set_mode,
+    noesis_binding_set_relative_source_find_ancestor,
+    noesis_binding_set_relative_source_previous_data, noesis_binding_set_relative_source_self,
     noesis_binding_set_relative_source_templated_parent, noesis_binding_set_source,
-    noesis_binding_set_string_format, noesis_binding_set_update_source_trigger,
-    noesis_box_bool, noesis_box_double, noesis_box_float, noesis_box_int32,
-    noesis_box_string, noesis_framework_element_add_resource,
-    noesis_observable_collection_add, noesis_observable_collection_clear,
-    noesis_observable_collection_count, noesis_observable_collection_create,
-    noesis_observable_collection_get, noesis_observable_collection_insert,
-    noesis_observable_collection_remove_at, noesis_observable_collection_set,
-    noesis_set_binding,
+    noesis_binding_set_string_format, noesis_binding_set_update_source_trigger, noesis_box_bool,
+    noesis_box_double, noesis_box_float, noesis_box_int32, noesis_box_string,
+    noesis_framework_element_add_resource, noesis_observable_collection_add,
+    noesis_observable_collection_clear, noesis_observable_collection_count,
+    noesis_observable_collection_create, noesis_observable_collection_get,
+    noesis_observable_collection_insert, noesis_observable_collection_remove_at,
+    noesis_observable_collection_set, noesis_set_binding,
 };
 use crate::view::FrameworkElement;
 
@@ -455,11 +453,7 @@ impl Binding {
         // SAFETY: self.ptr is a live Binding*; c lives for the call. The C side
         // resolves the type by name and returns false (no-op) if it is unknown.
         unsafe {
-            noesis_binding_set_relative_source_find_ancestor(
-                self.ptr.as_ptr(),
-                c.as_ptr(),
-                level,
-            )
+            noesis_binding_set_relative_source_find_ancestor(self.ptr.as_ptr(), c.as_ptr(), level)
         }
     }
 

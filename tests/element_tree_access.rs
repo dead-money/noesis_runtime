@@ -16,9 +16,7 @@ use std::collections::HashMap;
 
 use noesis_runtime::name_scope::NameScope;
 use noesis_runtime::transforms::ScaleTransform;
-use noesis_runtime::view::{
-    FrameworkElement, HitTestFilterBehavior, HitTestResultBehavior, View,
-};
+use noesis_runtime::view::{FrameworkElement, HitTestFilterBehavior, HitTestResultBehavior, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
 // Two concentric, both-hit-testable Borders so a point at the centre is hit by

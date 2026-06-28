@@ -177,9 +177,7 @@ impl CroppedBitmap {
     pub fn set_source<S: BitmapSource>(&mut self, source: &S) -> bool {
         // SAFETY: self.ptr is a live CroppedBitmap*; source raw is a live
         // BitmapSource* (Noesis AddRefs it).
-        unsafe {
-            noesis_cropped_bitmap_set_source(self.ptr.as_ptr(), source.bitmap_source_raw())
-        }
+        unsafe { noesis_cropped_bitmap_set_source(self.ptr.as_ptr(), source.bitmap_source_raw()) }
     }
 
     /// Borrowed `BitmapSource*` currently set as the source, or `None`. The

@@ -238,26 +238,23 @@ fn typed_args_focus_drag_manipulation() {
 
             // ---- Manipulation delta ----
             let mut md_seen = 0u32;
-            run_raise(
-                noesis_routed_events_test_raise_manip_delta,
-                &mut |args| {
-                    assert_eq!(args.manip_origin(), Some((100.0, 200.0)), "origin");
-                    let d = args.manip_delta().expect("manip_delta Some");
-                    assert_eq!(d.translation, (5.0, 7.0), "delta translation");
-                    assert_eq!(d.scale, 2.0, "delta scale");
-                    assert_eq!(d.rotation, 15.0, "delta rotation");
-                    assert_eq!(d.expansion, (3.0, 4.0), "delta expansion");
-                    let c = args.manip_cumulative().expect("manip_cumulative Some");
-                    assert_eq!(c.translation, (50.0, 70.0), "cumulative translation");
-                    assert_eq!(c.scale, 4.0, "cumulative scale");
-                    let v = args.manip_velocities().expect("manip_velocities Some");
-                    assert_eq!(v.angular, 1.5, "angular velocity");
-                    assert_eq!(v.linear, (0.5, 0.6), "linear velocity");
-                    assert_eq!(v.expansion, (0.1, 0.2), "expansion velocity");
-                    assert_eq!(args.manip_is_inertial(), Some(true), "isInertial");
-                    md_seen += 1;
-                },
-            );
+            run_raise(noesis_routed_events_test_raise_manip_delta, &mut |args| {
+                assert_eq!(args.manip_origin(), Some((100.0, 200.0)), "origin");
+                let d = args.manip_delta().expect("manip_delta Some");
+                assert_eq!(d.translation, (5.0, 7.0), "delta translation");
+                assert_eq!(d.scale, 2.0, "delta scale");
+                assert_eq!(d.rotation, 15.0, "delta rotation");
+                assert_eq!(d.expansion, (3.0, 4.0), "delta expansion");
+                let c = args.manip_cumulative().expect("manip_cumulative Some");
+                assert_eq!(c.translation, (50.0, 70.0), "cumulative translation");
+                assert_eq!(c.scale, 4.0, "cumulative scale");
+                let v = args.manip_velocities().expect("manip_velocities Some");
+                assert_eq!(v.angular, 1.5, "angular velocity");
+                assert_eq!(v.linear, (0.5, 0.6), "linear velocity");
+                assert_eq!(v.expansion, (0.1, 0.2), "expansion velocity");
+                assert_eq!(args.manip_is_inertial(), Some(true), "isInertial");
+                md_seen += 1;
+            });
             assert_eq!(md_seen, 1, "manip-delta fired once");
 
             // ---- Manipulation completed ----

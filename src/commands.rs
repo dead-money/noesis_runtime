@@ -46,13 +46,11 @@ use std::os::raw::c_char;
 
 use crate::ffi::{
     CommandVTable, noesis_application_command, noesis_base_component_release,
-    noesis_command_binding_attach, noesis_command_binding_create,
-    noesis_command_binding_destroy, noesis_command_create, noesis_command_destroy,
-    noesis_command_raise_can_execute_changed, noesis_component_command,
-    noesis_routed_command_can_execute, noesis_routed_command_create,
-    noesis_routed_command_execute, noesis_routed_command_get_name,
-    noesis_routed_ui_command_create, noesis_routed_ui_command_get_text,
-    noesis_routed_ui_command_set_text,
+    noesis_command_binding_attach, noesis_command_binding_create, noesis_command_binding_destroy,
+    noesis_command_create, noesis_command_destroy, noesis_command_raise_can_execute_changed,
+    noesis_component_command, noesis_routed_command_can_execute, noesis_routed_command_create,
+    noesis_routed_command_execute, noesis_routed_command_get_name, noesis_routed_ui_command_create,
+    noesis_routed_ui_command_get_text, noesis_routed_ui_command_set_text,
 };
 use crate::view::FrameworkElement;
 
@@ -336,8 +334,7 @@ impl RoutedUICommand {
         let ct = CString::new(text).expect("text contained interior NUL");
         let co = CString::new(owner_type).expect("owner_type contained interior NUL");
         // SAFETY: all C strings live for the call; C returns +1 or NULL.
-        let ptr =
-            unsafe { noesis_routed_ui_command_create(cn.as_ptr(), ct.as_ptr(), co.as_ptr()) };
+        let ptr = unsafe { noesis_routed_ui_command_create(cn.as_ptr(), ct.as_ptr(), co.as_ptr()) };
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 

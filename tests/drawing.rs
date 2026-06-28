@@ -31,9 +31,7 @@ use noesis_runtime::drawing::{
     BlendingMode, DrawingContext, Pen, PenLineCap, PenLineJoin, RectangleGeometry,
 };
 use noesis_runtime::ffi::ClassBase;
-use noesis_runtime::geometry::{
-    EllipseGeometry, Geometry, LineSegment, PathFigure, PathGeometry,
-};
+use noesis_runtime::geometry::{EllipseGeometry, Geometry, LineSegment, PathFigure, PathGeometry};
 use noesis_runtime::render_device::types::{Batch, DeviceCaps, Tile};
 use noesis_runtime::render_device::{
     RenderDevice, RenderTargetBinding, RenderTargetDesc, RenderTargetHandle, TextureBinding,

@@ -140,9 +140,7 @@ fn resource_dictionary_roundtrips() {
 
         // Clear app resources before teardown so nothing dangles past shutdown.
         // SAFETY: passing null clears the installed dictionary (documented).
-        unsafe {
-            noesis_runtime::ffi::noesis_gui_set_application_resources(std::ptr::null_mut())
-        };
+        unsafe { noesis_runtime::ffi::noesis_gui_set_application_resources(std::ptr::null_mut()) };
     }
 
     noesis_runtime::shutdown();

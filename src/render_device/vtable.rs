@@ -23,16 +23,12 @@ use crate::render_device::ffi::{
     noesis_render_device_destroy, noesis_render_device_get_glyph_cache_height,
     noesis_render_device_get_glyph_cache_width,
     noesis_render_device_get_offscreen_default_num_surfaces,
-    noesis_render_device_get_offscreen_height,
-    noesis_render_device_get_offscreen_max_num_surfaces,
-    noesis_render_device_get_offscreen_sample_count,
-    noesis_render_device_get_offscreen_width, noesis_render_device_set_glyph_cache_height,
-    noesis_render_device_set_glyph_cache_width,
+    noesis_render_device_get_offscreen_height, noesis_render_device_get_offscreen_max_num_surfaces,
+    noesis_render_device_get_offscreen_sample_count, noesis_render_device_get_offscreen_width,
+    noesis_render_device_set_glyph_cache_height, noesis_render_device_set_glyph_cache_width,
     noesis_render_device_set_offscreen_default_num_surfaces,
-    noesis_render_device_set_offscreen_height,
-    noesis_render_device_set_offscreen_max_num_surfaces,
-    noesis_render_device_set_offscreen_sample_count,
-    noesis_render_device_set_offscreen_width,
+    noesis_render_device_set_offscreen_height, noesis_render_device_set_offscreen_max_num_surfaces,
+    noesis_render_device_set_offscreen_sample_count, noesis_render_device_set_offscreen_width,
 };
 use crate::render_device::types::{Batch, DeviceCaps, TextureFormat, Tile};
 

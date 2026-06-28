@@ -24,8 +24,8 @@ impl PropertyChangeHandler for Noop {
 const THING_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:dm="clr-namespace:DmVT">
-  <dm:Thing x:Name="T"/>
+      xmlns:nz="clr-namespace:NzVT">
+  <nz:Thing x:Name="T"/>
 </Grid>"##;
 
 #[test]
@@ -39,16 +39,16 @@ fn custom_dp_value_types() {
     noesis_runtime::init();
     {
         // A runtime enum used as a DP value type.
-        let mode = register_enum("DmVT.Mode", &[("Off", 0), ("On", 1), ("Auto", 2)])
+        let mode = register_enum("NzVT.Mode", &[("Off", 0), ("On", 1), ("Auto", 2)])
             .expect("register_enum failed");
         assert_eq!(mode.value_from_name("Auto"), Some(2));
 
-        let mut b = ClassBuilder::new("DmVT.Thing", ClassBase::FrameworkElement, Noop);
+        let mut b = ClassBuilder::new("NzVT.Thing", ClassBase::FrameworkElement, Noop);
         let pt = b.add_property("Pt", PropType::Point);
         let sz = b.add_property("Sz", PropType::Size);
         let vec = b.add_property("Vec", PropType::Vector);
         // Enum DP with a non-zero default so the default round-trip is meaningful.
-        let m = b.add_enum_property("Mode", "DmVT.Mode", 2, PropertyOptions::default());
+        let m = b.add_enum_property("Mode", "NzVT.Mode", 2, PropertyOptions::default());
         assert_eq!((pt, sz, vec, m), (0, 1, 2, 3));
 
         let reg = b.register().expect("class registration failed");
@@ -78,19 +78,19 @@ fn custom_dp_value_types() {
         drop(reg);
 
         // ── Name-keyed FrameworkElement access on a parsed instance ──────────
-        register_enum("DmVT2.Mode", &[("A", 0), ("B", 5)]).expect("register_enum");
+        register_enum("NzVT2.Mode", &[("A", 0), ("B", 5)]).expect("register_enum");
 
-        let mut b = ClassBuilder::new("DmVT.Thing2", ClassBase::FrameworkElement, Noop);
+        let mut b = ClassBuilder::new("NzVT.Thing2", ClassBase::FrameworkElement, Noop);
         let _pt = b.add_property("Pt", PropType::Point);
         let _sz = b.add_property("Sz", PropType::Size);
         let _vec = b.add_property("Vec", PropType::Vector);
-        let _m = b.add_enum_property("Mode", "DmVT2.Mode", 0, PropertyOptions::default());
+        let _m = b.add_enum_property("Mode", "NzVT2.Mode", 0, PropertyOptions::default());
         let _reg = b.register().expect("class registration failed");
 
         // Parse + instantiate via the factory; drive the name-keyed
         // FrameworkElement accessors (noesis_dependency_object_*).
         let root = {
-            let xaml = THING_XAML.replace("dm:Thing", "dm:Thing2");
+            let xaml = THING_XAML.replace("nz:Thing", "nz:Thing2");
             FrameworkElement::parse(&xaml).expect("parse returned None")
         };
         let mut el = root.find_name("T").expect("find_name(T) returned None");

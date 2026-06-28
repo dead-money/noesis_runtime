@@ -15,9 +15,7 @@
 
 use std::collections::HashMap;
 
-use noesis_runtime::input::{
-    KeyStates, KeyboardNavigation, KeyboardNavigationMode, ModifierKeys,
-};
+use noesis_runtime::input::{KeyStates, KeyboardNavigation, KeyboardNavigationMode, ModifierKeys};
 use noesis_runtime::view::{FrameworkElement, Key, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
