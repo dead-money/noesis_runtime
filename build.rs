@@ -13,6 +13,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/noesis_reflection_meta.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_controls.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_commands.cpp");
+    println!("cargo:rerun-if-changed=cpp/noesis_input.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_binding.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_plain_vm.cpp");
     println!("cargo:rerun-if-changed=cpp/noesis_resources.cpp");
@@ -94,6 +95,7 @@ fn main() {
         .file("cpp/noesis_collections.cpp")
         .file("cpp/noesis_controls.cpp")
         .file("cpp/noesis_commands.cpp")
+        .file("cpp/noesis_input.cpp")
         .file("cpp/noesis_binding.cpp")
         .file("cpp/noesis_plain_vm.cpp")
         .file("cpp/noesis_resources.cpp")

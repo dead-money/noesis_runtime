@@ -3011,6 +3011,100 @@ bool dm_noesis_formatted_text_get_glyph_position(void* ft, uint32_t ch_index, bo
 bool dm_noesis_formatted_text_hit_test(void* ft, float x, float y, uint32_t* out_index,
     bool* out_is_inside, bool* out_is_trailing);
 
+// ── Input — finer control (TODO §16) ───────────────────────────────────────
+//
+// Element-level mouse/touch capture, keyboard-state queries, focus-state DPs,
+// focus engagement + traversal, the FocusManager / KeyboardNavigation static +
+// attached-property surfaces, and input gestures/bindings. Every entrypoint
+// DynamicCasts the opaque pointer to the concrete type it needs and null-checks
+// first, returning false / null / a no-op on mismatch. Borrowed getters return
+// no extra reference; the gesture/binding creates return a fresh object at +1
+// that Rust releases on drop. See cpp/noesis_input.cpp for the full contract.
+
+// Capture the mouse to `element` (UIElement::CaptureMouse). False if not a
+// UIElement or capture is refused (no live View). Requires a View.
+bool dm_noesis_ui_element_capture_mouse(void* element);
+
+// Release mouse capture from `element` (no-op if not a UIElement / not captured).
+void dm_noesis_ui_element_release_mouse_capture(void* element);
+
+// Whether `element` currently holds mouse capture (UIElement::GetIsMouseCaptured).
+bool dm_noesis_ui_element_get_is_mouse_captured(void* element);
+
+// Capture the given touch device to `element` (UIElement::CaptureTouch).
+bool dm_noesis_ui_element_capture_touch(void* element, uint64_t touch_device);
+
+// Capture `element` via its View's Mouse with a CaptureMode (0 None, 1 Element,
+// 2 SubTree). False if not a UIElement or there is no live View.
+bool dm_noesis_ui_element_capture_mouse_mode(void* element, int32_t mode);
+
+// Borrowed UIElement* currently holding mouse capture in `element`'s View
+// (Mouse::GetCaptured), or null.
+void* dm_noesis_ui_element_get_mouse_captured(void* element);
+
+// ModifierKeys bitmask currently held, into *out. False if no UIElement/Keyboard.
+bool dm_noesis_ui_element_get_modifiers(void* element, int32_t* out);
+
+// KeyStates bitmask for `key`, into *out. False if no UIElement/Keyboard.
+bool dm_noesis_ui_element_get_key_states(void* element, int32_t key, int32_t* out);
+
+// Keyboard::IsKeyDown/IsKeyUp/IsKeyToggled for `key` through `element`'s Keyboard.
+bool dm_noesis_ui_element_is_key_down(void* element, int32_t key);
+bool dm_noesis_ui_element_is_key_up(void* element, int32_t key);
+bool dm_noesis_ui_element_is_key_toggled(void* element, int32_t key);
+
+// Borrowed UIElement* with keyboard focus in `element`'s View (Keyboard::GetFocused).
+void* dm_noesis_ui_element_get_keyboard_focused(void* element);
+
+// Focus-state DPs (UIElement::GetIsFocused / GetIsKeyboardFocused /
+// GetIsKeyboardFocusWithin). False if not a UIElement.
+bool dm_noesis_ui_element_get_is_focused(void* element);
+bool dm_noesis_ui_element_get_is_keyboard_focused(void* element);
+bool dm_noesis_ui_element_get_is_keyboard_focus_within(void* element);
+
+// UIElement::Focus(bool engage) — the gamepad focus-engagement knob.
+bool dm_noesis_ui_element_focus_engage(void* element, bool engage);
+
+// UIElement::MoveFocus(TraversalRequest{direction, wrapped}).
+bool dm_noesis_ui_element_move_focus(void* element, int32_t direction, bool wrapped);
+
+// Borrowed DependencyObject* UIElement::PredictFocus(direction) lands on, or null.
+void* dm_noesis_ui_element_predict_focus(void* element, int32_t direction);
+
+// FocusManager statics. Getters return borrowed pointers / values; the focused-
+// element setter accepts null to clear and requires a UIElement otherwise.
+void* dm_noesis_focus_manager_get_focused_element(void* scope);
+bool dm_noesis_focus_manager_set_focused_element(void* scope, void* element);
+bool dm_noesis_focus_manager_get_is_focus_scope(void* element);
+bool dm_noesis_focus_manager_set_is_focus_scope(void* element, bool value);
+void* dm_noesis_focus_manager_get_focus_scope(void* element);
+
+// KeyboardNavigation attached properties (get writes *out + returns success;
+// set returns false only if `element` is not a DependencyObject). Navigation
+// modes are KeyboardNavigationMode ordinals.
+bool dm_noesis_keyboard_navigation_get_tab_index(void* element, int32_t* out);
+bool dm_noesis_keyboard_navigation_set_tab_index(void* element, int32_t value);
+bool dm_noesis_keyboard_navigation_get_is_tab_stop(void* element, bool* out);
+bool dm_noesis_keyboard_navigation_set_is_tab_stop(void* element, bool value);
+bool dm_noesis_keyboard_navigation_get_tab_navigation(void* element, int32_t* out);
+bool dm_noesis_keyboard_navigation_set_tab_navigation(void* element, int32_t mode);
+bool dm_noesis_keyboard_navigation_get_control_tab_navigation(void* element, int32_t* out);
+bool dm_noesis_keyboard_navigation_set_control_tab_navigation(void* element, int32_t mode);
+bool dm_noesis_keyboard_navigation_get_directional_navigation(void* element, int32_t* out);
+bool dm_noesis_keyboard_navigation_set_directional_navigation(void* element, int32_t mode);
+bool dm_noesis_keyboard_navigation_get_accepts_return(void* element, bool* out);
+bool dm_noesis_keyboard_navigation_set_accepts_return(void* element, bool value);
+
+// Input gestures + bindings. Creates return +1 (released by Rust on drop) or
+// null on a bad command/gesture pointer. `add_input_binding` adds the binding to
+// the element's InputBindingCollection (which takes its own reference).
+void* dm_noesis_key_gesture_create(int32_t key, int32_t modifiers);
+void* dm_noesis_mouse_gesture_create(int32_t action, int32_t modifiers);
+void* dm_noesis_key_binding_create(void* command, int32_t key, int32_t modifiers);
+void* dm_noesis_mouse_binding_create(void* command, int32_t action, int32_t modifiers);
+void* dm_noesis_input_binding_create(void* command, void* gesture);
+bool dm_noesis_ui_element_add_input_binding(void* element, void* binding);
+
 #ifdef __cplusplus
 }
 #endif

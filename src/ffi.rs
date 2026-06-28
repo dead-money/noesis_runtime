@@ -2661,3 +2661,119 @@ unsafe extern "C" {
         userdata: *mut c_void,
     );
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Input — finer control (TODO §16). Element-level capture, keyboard/focus
+// state, focus traversal, FocusManager / KeyboardNavigation statics, and input
+// gestures + bindings. See cpp/noesis_shim.h for the full contracts.
+// ────────────────────────────────────────────────────────────────────────────
+unsafe extern "C" {
+    // Mouse / touch capture (element-level)
+    pub fn dm_noesis_ui_element_capture_mouse(element: *mut c_void) -> bool;
+    pub fn dm_noesis_ui_element_release_mouse_capture(element: *mut c_void);
+    pub fn dm_noesis_ui_element_get_is_mouse_captured(element: *mut c_void) -> bool;
+    pub fn dm_noesis_ui_element_capture_touch(element: *mut c_void, touch_device: u64) -> bool;
+    pub fn dm_noesis_ui_element_capture_mouse_mode(element: *mut c_void, mode: i32) -> bool;
+    pub fn dm_noesis_ui_element_get_mouse_captured(element: *mut c_void) -> *mut c_void;
+
+    // Keyboard state / modifiers
+    pub fn dm_noesis_ui_element_get_modifiers(element: *mut c_void, out: *mut i32) -> bool;
+    pub fn dm_noesis_ui_element_get_key_states(
+        element: *mut c_void,
+        key: i32,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_ui_element_is_key_down(element: *mut c_void, key: i32) -> bool;
+    pub fn dm_noesis_ui_element_is_key_up(element: *mut c_void, key: i32) -> bool;
+    pub fn dm_noesis_ui_element_is_key_toggled(element: *mut c_void, key: i32) -> bool;
+    pub fn dm_noesis_ui_element_get_keyboard_focused(element: *mut c_void) -> *mut c_void;
+
+    // Focus-state DPs
+    pub fn dm_noesis_ui_element_get_is_focused(element: *mut c_void) -> bool;
+    pub fn dm_noesis_ui_element_get_is_keyboard_focused(element: *mut c_void) -> bool;
+    pub fn dm_noesis_ui_element_get_is_keyboard_focus_within(element: *mut c_void) -> bool;
+
+    // Focus engagement + traversal
+    pub fn dm_noesis_ui_element_focus_engage(element: *mut c_void, engage: bool) -> bool;
+    pub fn dm_noesis_ui_element_move_focus(
+        element: *mut c_void,
+        direction: i32,
+        wrapped: bool,
+    ) -> bool;
+    pub fn dm_noesis_ui_element_predict_focus(element: *mut c_void, direction: i32) -> *mut c_void;
+
+    // FocusManager statics
+    pub fn dm_noesis_focus_manager_get_focused_element(scope: *mut c_void) -> *mut c_void;
+    pub fn dm_noesis_focus_manager_set_focused_element(
+        scope: *mut c_void,
+        element: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_focus_manager_get_is_focus_scope(element: *mut c_void) -> bool;
+    pub fn dm_noesis_focus_manager_set_is_focus_scope(element: *mut c_void, value: bool) -> bool;
+    pub fn dm_noesis_focus_manager_get_focus_scope(element: *mut c_void) -> *mut c_void;
+
+    // KeyboardNavigation attached properties
+    pub fn dm_noesis_keyboard_navigation_get_tab_index(element: *mut c_void, out: *mut i32)
+    -> bool;
+    pub fn dm_noesis_keyboard_navigation_set_tab_index(element: *mut c_void, value: i32) -> bool;
+    pub fn dm_noesis_keyboard_navigation_get_is_tab_stop(
+        element: *mut c_void,
+        out: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_set_is_tab_stop(element: *mut c_void, value: bool)
+    -> bool;
+    pub fn dm_noesis_keyboard_navigation_get_tab_navigation(
+        element: *mut c_void,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_set_tab_navigation(
+        element: *mut c_void,
+        mode: i32,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_get_control_tab_navigation(
+        element: *mut c_void,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_set_control_tab_navigation(
+        element: *mut c_void,
+        mode: i32,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_get_directional_navigation(
+        element: *mut c_void,
+        out: *mut i32,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_set_directional_navigation(
+        element: *mut c_void,
+        mode: i32,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_get_accepts_return(
+        element: *mut c_void,
+        out: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_keyboard_navigation_set_accepts_return(
+        element: *mut c_void,
+        value: bool,
+    ) -> bool;
+
+    // Input gestures + bindings
+    pub fn dm_noesis_key_gesture_create(key: i32, modifiers: i32) -> *mut c_void;
+    pub fn dm_noesis_mouse_gesture_create(action: i32, modifiers: i32) -> *mut c_void;
+    pub fn dm_noesis_key_binding_create(
+        command: *mut c_void,
+        key: i32,
+        modifiers: i32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_mouse_binding_create(
+        command: *mut c_void,
+        action: i32,
+        modifiers: i32,
+    ) -> *mut c_void;
+    pub fn dm_noesis_input_binding_create(
+        command: *mut c_void,
+        gesture: *mut c_void,
+    ) -> *mut c_void;
+    pub fn dm_noesis_ui_element_add_input_binding(
+        element: *mut c_void,
+        binding: *mut c_void,
+    ) -> bool;
+}
