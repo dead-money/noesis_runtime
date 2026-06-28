@@ -87,17 +87,6 @@ Remaining:
 - **Transforms.** Remaining: 3D transforms (`Transform3D`, `CompositeTransform3D`, `MatrixTransform3D`). Done: `TranslateTransform`/`ScaleTransform`/`RotateTransform`/`SkewTransform`/`MatrixTransform`/`TransformGroup`/`CompositeTransform` (code-built in `src/transforms.rs`, assigned via `FrameworkElement::set_render_transform`).
 - **Effects.** Remaining: custom `ShaderEffect` (`Batch.pixelShader` path — out-of-scope per README). Done: `BlurEffect`, `DropShadowEffect` (in `src/brushes.rs`, assigned via `set_effect`).
 
-## 14. System integration callbacks
-
-From `IntegrationAPI.h`, none are wired:
-
-- **`SetCursorCallback`** (host updates the OS cursor).
-- **`SetSoftwareKeyboardCallback`** (show/hide on-screen keyboard — important on console/mobile).
-- **`SetOpenUrlCallback`** / `OpenUrl` (hyperlink navigation).
-- **`SetPlayAudioCallback`** / `PlayAudio` (UI sound effects).
-- **`SetClipboard`**-style data object exchange (via `DataObject`).
-- **`SetCulture` / `GetCulture`** (`CultureInfo`) for localization/formatting.
-
 ## 15. XAML loading variants
 
 - **`LoadXaml<T>`** typed variants and `GetXamlDependencies` (asset dependency discovery / preloading).
@@ -131,7 +120,6 @@ text) — the §-sections above track only their leftover remainders. What's lef
 crate with the least rework:
 
 **Phase E — platform & finer input.**
-2. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
 3. §16 Finer input (mouse capture, `FocusManager`/keyboard nav, input gestures, **gamepad / focus engagement**).
 4. §4 Routed commands (`RoutedCommand`/`CommandBinding`/built-in libraries) — pairs with §16 input bindings; the Rust `ICommand` already covers simple cases, so this is late.
 
@@ -164,4 +152,5 @@ Recorded so they aren't re-attempted — 3.2.13 doesn't expose these; the workar
 - **`FormattedText` font resolution (§13).** Metrics are only non-zero when the named `FontFamily` resolves to a real face: register a `FontProvider` (or set font fallbacks) before measuring. With no font system configured Noesis cannot shape glyphs and all metrics collapse to zero — this is a configuration dependency, not a stub. `tests/formatted_text.rs` drives the SDK's bundled `Bitter-Regular.ttf` to get genuine metrics.
 - **Font-family enumeration (§13).** No SDK API enumerates the set of *available family names* from the font system. `FontFamily` offers per-family enumeration only (`GetNumFonts`/`GetFontName`/`GetFontPath`, resolved through the registered provider — wrapped as `FontFamily::num_fonts`/`font_name`), and `Fonts::GetTypefaces(Stream*, cb)` enumerates the faces inside *one supplied font file*, not the registry. Workaround: the host font provider (`scan_folder` / `register_font`, already wrapped) is the authority on which families it serves, so the host can enumerate its own families.
 - **No public Drawing object model / `DrawingVisual::RenderOpen` (§10).** In 3.2.13 `DrawingContext` has a private constructor (`friend UIElement`) and is delivered ONLY to `UIElement::OnRender(DrawingContext*)`; there is no public `DrawingVisual`/`RenderOpen` and no `Drawing`/`DrawingGroup`/`GeometryDrawing`/`ImageDrawing`/`DrawingImage`/`DrawingBrush` headers. So immediate-mode drawing is reachable only by overriding `OnRender` — which the §10 PR wires through a `render` callback on the custom-element trampolines (`ClassBuilder::set_render` → a borrowed `DrawingContext`). Retained/recorded drawings and drawing-as-a-brush are not expressible.
+- **Clipboard / `DataObject` data exchange (§14).** 3.2.13 ships no process-global clipboard API: there is no `Clipboard` class and no `SetClipboard`/`GetClipboard` in `NsGui/IntegrationAPI.h` (verified — the only integration callbacks are cursor / software-keyboard / open-url / play-audio / culture, all wrapped in `src/integration.rs`). `NsGui/DataObject.h` exists but is *only* the WPF `DataObject.Copying`/`DataObject.Pasting` attached-routed-event plumbing (`AddCopyingHandler`/`AddPastingHandler` + the `CopyingEvent`/`PastingEvent` `RoutedEvent`s); the struct exposes **no** `SetData`/`GetData`/`GetFormats` payload accessors (grepped: no `SetData`/`GetData`/`class Clipboard` anywhere under `Include/`). So format-independent clipboard data transfer is not expressible. Workaround: the host owns the OS clipboard and bridges it — hook the `Copying`/`Pasting` routed events (the §5 routed-event surface) to observe copy/paste intent, and read/write the platform clipboard with host code (e.g. `arboard` on desktop).
 - **`DrawingContext::DrawImage` source (§10).** `DrawImage` needs a live `ImageSource`, which this crate cannot build headlessly yet (TODO §12 imaging); the wrapper accepts a borrowed `ImageSource*` but rejects null. `DrawText`/`DrawMesh` are likewise un-exercisable without a `FormattedText` / `MeshData` builder and are not wrapped.

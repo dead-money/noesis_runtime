@@ -60,6 +60,15 @@ pub struct XamlProviderVTable {
 /// Rust — pass it back verbatim.
 pub type RegisterFontFn = unsafe extern "C" fn(register_cx: *mut c_void, filename: *const c_char);
 
+// System integration callback function pointers (Section 14). Each matches a
+// `dm_noesis_*_cb` typedef in `cpp/noesis_shim.h`. `view` / `focused` are
+// borrowed opaque `Noesis::IView*` / `Noesis::UIElement*` pointers.
+pub type CursorCb = unsafe extern "C" fn(user: *mut c_void, view: *mut c_void, cursor_type: i32);
+pub type SoftwareKeyboardCb =
+    unsafe extern "C" fn(user: *mut c_void, focused: *mut c_void, open: bool);
+pub type OpenUrlCb = unsafe extern "C" fn(user: *mut c_void, url: *const c_char);
+pub type PlayAudioCb = unsafe extern "C" fn(user: *mut c_void, uri: *const c_char, volume: f32);
+
 #[repr(C)]
 pub struct FontProviderVTable {
     pub scan_folder: unsafe extern "C" fn(
@@ -133,6 +142,19 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn dm_noesis_texture_provider_destroy(provider: *mut c_void);
     pub fn dm_noesis_set_texture_provider(provider: *mut c_void);
+
+    // System integration callbacks (Section 14).
+    pub fn dm_noesis_set_cursor_callback(user: *mut c_void, cb: Option<CursorCb>);
+    pub fn dm_noesis_set_software_keyboard_callback(
+        user: *mut c_void,
+        cb: Option<SoftwareKeyboardCb>,
+    );
+    pub fn dm_noesis_set_open_url_callback(user: *mut c_void, cb: Option<OpenUrlCb>);
+    pub fn dm_noesis_open_url(url: *const c_char);
+    pub fn dm_noesis_set_play_audio_callback(user: *mut c_void, cb: Option<PlayAudioCb>);
+    pub fn dm_noesis_play_audio(uri: *const c_char, volume: f32);
+    pub fn dm_noesis_set_culture(name: *const c_char);
+    pub fn dm_noesis_get_culture() -> *const c_char;
 
     pub fn dm_noesis_gui_load_xaml(uri: *const c_char) -> *mut c_void;
     pub fn dm_noesis_gui_parse_xaml(text: *const c_char) -> *mut c_void;
