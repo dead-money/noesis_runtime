@@ -51,6 +51,18 @@ pub enum MarkupValue<'a> {
 
 /// Per-extension callback. Receives the positional `key` argument the XAML
 /// parser populated and returns a [`MarkupValue`] for Noesis to substitute.
+///
+/// # Re-entrancy
+///
+/// `provide_value` takes `&mut self` because its return value borrows
+/// handler-owned scratch storage (the [`MarkupValue::String`] case). Unlike the
+/// other callback traits in this crate it is therefore **not** re-entrant-safe:
+/// do not drive a nested XAML parse that resolves this same extension from
+/// inside `provide_value` (e.g. calling [`crate::xaml::parse_xaml`] /
+/// `FrameworkElement::load` on markup that uses this extension). Doing so would
+/// alias the handler box. The parser itself never re-enters `provide_value`
+/// — multiple `{Ext ...}` usages in one document are resolved sequentially, not
+/// nested — so ordinary usage is sound.
 pub trait MarkupExtensionHandler: Send + 'static {
     fn provide_value(&mut self, key: &str) -> MarkupValue<'_>;
 }

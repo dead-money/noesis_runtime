@@ -22,7 +22,7 @@ use dm_noesis_runtime::xaml_provider::XamlProvider;
 // doesn't crash when callbacks fire.
 struct QuietHandler;
 impl PropertyChangeHandler for QuietHandler {
-    fn on_changed(&mut self, _instance: Instance, _idx: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _idx: u32, _value: PropertyValue<'_>) {}
 }
 
 #[derive(Default)]
@@ -474,7 +474,7 @@ fn safety_smoke() {
             output_idx: u32,
         }
         impl PropertyChangeHandler for ReentrantHandler {
-            fn on_changed(&mut self, instance: Instance, idx: u32, value: PropertyValue<'_>) {
+            fn on_changed(&self, instance: Instance, idx: u32, value: PropertyValue<'_>) {
                 if idx == self.input_idx
                     && let PropertyValue::Float(f) = value
                 {

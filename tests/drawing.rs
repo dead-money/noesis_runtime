@@ -41,7 +41,7 @@ use dm_noesis_runtime::view::{FrameworkElement, View};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
 #[derive(Clone, Default)]
@@ -65,7 +65,7 @@ struct PainterRender {
 }
 
 impl RenderHandler for PainterRender {
-    fn render(&mut self, _instance: Instance, ctx: DrawingContext<'_>) {
+    fn render(&self, _instance: Instance, ctx: DrawingContext<'_>) {
         self.signals.renders.fetch_add(1, Ordering::SeqCst);
         if !self.draw {
             return;

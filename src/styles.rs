@@ -838,13 +838,15 @@ pub trait SelectTemplate: Send + 'static {
     /// `container` is the borrowed item container (`DependencyObject*`, may be
     /// null). Return the chosen template (its reference is **borrowed** — the
     /// selector keeps its candidate templates alive).
-    fn select(&mut self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void>;
+    ///
+    /// Takes `&self` (re-entrant: selecting a template for an item that itself
+    /// hosts items routed through the same selector re-enters this box; use
+    /// interior mutability for handler state).
+    fn select(&self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void>;
 }
 
-impl<F: FnMut(*mut c_void, *mut c_void) -> Option<*mut c_void> + Send + 'static> SelectTemplate
-    for F
-{
-    fn select(&mut self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void> {
+impl<F: Fn(*mut c_void, *mut c_void) -> Option<*mut c_void> + Send + 'static> SelectTemplate for F {
+    fn select(&self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void> {
         self(item, container)
     }
 }
@@ -935,8 +937,9 @@ unsafe extern "C" fn selector_select_trampoline(
             return core::ptr::null_mut();
         }
         // SAFETY: userdata is the Box<Box<dyn SelectTemplate>> leaked in `new`, alive
-        // until selector_free_trampoline runs.
-        let handler = unsafe { &mut *userdata.cast::<Box<dyn SelectTemplate>>() };
+        // until selector_free_trampoline runs. Shared `&`: re-entrant handler box
+        // (see `SelectTemplate::select`).
+        let handler = unsafe { &*userdata.cast::<Box<dyn SelectTemplate>>() };
         handler
             .select(item, container)
             .unwrap_or(core::ptr::null_mut())

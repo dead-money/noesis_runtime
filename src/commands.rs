@@ -84,15 +84,20 @@ pub trait CommandHandler: Send + 'static {
 
     /// Invoke the command. Called when the bound control is activated (e.g. a
     /// `Button` click) — but only if [`Self::can_execute`] returned `true`.
-    fn execute(&mut self, param: CommandParameter);
+    ///
+    /// Takes `&self`: a single handler box backs the command, and `execute` may
+    /// re-enter the same box (it can trigger a synchronous `can_execute` requery,
+    /// or activate another control bound to the same command). Use interior
+    /// mutability for handler state.
+    fn execute(&self, param: CommandParameter);
 }
 
 /// Adapter so a bare `FnMut` closure is a fire-always [`CommandHandler`]
 /// (`can_execute` is always `true`). Use [`Command::new`] with a struct
 /// implementing [`CommandHandler`] when you need a controllable
 /// `can_execute`.
-impl<F: FnMut(CommandParameter) + Send + 'static> CommandHandler for F {
-    fn execute(&mut self, param: CommandParameter) {
+impl<F: Fn(CommandParameter) + Send + 'static> CommandHandler for F {
+    fn execute(&self, param: CommandParameter) {
         self(param);
     }
 }
@@ -111,7 +116,7 @@ unsafe extern "C" fn command_can_execute_trampoline(
     param: *mut c_void,
 ) -> bool {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
+        let handler = &*userdata.cast::<Box<dyn CommandHandler>>();
         handler.can_execute(NonNull::new(param))
     })
 }
@@ -119,7 +124,8 @@ unsafe extern "C" fn command_can_execute_trampoline(
 /// SAFETY: see [`command_can_execute_trampoline`].
 unsafe extern "C" fn command_execute_trampoline(userdata: *mut c_void, param: *mut c_void) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn CommandHandler>>();
+        // Shared `&`: re-entrant handler box (see `CommandHandler::execute`).
+        let handler = &*userdata.cast::<Box<dyn CommandHandler>>();
         handler.execute(NonNull::new(param));
     })
 }
@@ -574,11 +580,14 @@ pub trait CommandBindingHandler: Send + 'static {
     }
 
     /// Run the command's action.
-    fn execute(&mut self, param: CommandParameter);
+    ///
+    /// Takes `&self` (re-entrant per the same reasoning as
+    /// [`CommandHandler::execute`]; use interior mutability for handler state).
+    fn execute(&self, param: CommandParameter);
 }
 
-impl<F: FnMut(CommandParameter) + Send + 'static> CommandBindingHandler for F {
-    fn execute(&mut self, param: CommandParameter) {
+impl<F: Fn(CommandParameter) + Send + 'static> CommandBindingHandler for F {
+    fn execute(&self, param: CommandParameter) {
         self(param);
     }
 }
@@ -587,7 +596,8 @@ impl<F: FnMut(CommandParameter) + Send + 'static> CommandBindingHandler for F {
 /// [`CommandBinding::new`], alive until the free trampoline runs.
 unsafe extern "C" fn cb_executed_trampoline(userdata: *mut c_void, param: *mut c_void) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
+        // Shared `&`: re-entrant handler box (see `CommandBindingHandler`).
+        let handler = &*userdata.cast::<Box<dyn CommandBindingHandler>>();
         handler.execute(NonNull::new(param));
     })
 }
@@ -595,7 +605,7 @@ unsafe extern "C" fn cb_executed_trampoline(userdata: *mut c_void, param: *mut c
 /// SAFETY: see [`cb_executed_trampoline`].
 unsafe extern "C" fn cb_can_execute_trampoline(userdata: *mut c_void, param: *mut c_void) -> bool {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn CommandBindingHandler>>();
+        let handler = &*userdata.cast::<Box<dyn CommandBindingHandler>>();
         handler.can_execute(NonNull::new(param))
     })
 }

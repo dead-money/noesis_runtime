@@ -54,12 +54,15 @@ use crate::view::{FrameworkElement, Key, MouseButton};
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy
 /// `Resource` or be moved onto the render thread.
+/// Takes `&self` (re-entrant: a handler may re-raise the subscribed event on
+/// the same element via [`crate::reflection::raise_event`], re-entering this
+/// same box; use interior mutability for handler state).
 pub trait ClickHandler: Send + 'static {
-    fn on_click(&mut self);
+    fn on_click(&self);
 }
 
-impl<F: FnMut() + Send + 'static> ClickHandler for F {
-    fn on_click(&mut self) {
+impl<F: Fn() + Send + 'static> ClickHandler for F {
+    fn on_click(&self) {
         self();
     }
 }
@@ -68,7 +71,8 @@ impl<F: FnMut() + Send + 'static> ClickHandler for F {
 /// still alive (the [`ClickSubscription`] hasn't been dropped).
 unsafe extern "C" fn click_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn ClickHandler>>();
+        // Shared `&`: re-entrant handler box (see `ClickHandler`).
+        let handler = &*userdata.cast::<Box<dyn ClickHandler>>();
         handler.on_click();
     })
 }
@@ -153,11 +157,14 @@ pub trait KeyDownHandler: Send + 'static {
     /// Called once per `KeyDown` event on the subscribed element. Return
     /// value: `true` to mark the routed event handled, `false` to let it
     /// continue propagating.
-    fn on_keydown(&mut self, key: Key) -> bool;
+    ///
+    /// Takes `&self` (re-entrant per [`ClickHandler`]; use interior mutability
+    /// for handler state).
+    fn on_keydown(&self, key: Key) -> bool;
 }
 
-impl<F: FnMut(Key) -> bool + Send + 'static> KeyDownHandler for F {
-    fn on_keydown(&mut self, key: Key) -> bool {
+impl<F: Fn(Key) -> bool + Send + 'static> KeyDownHandler for F {
+    fn on_keydown(&self, key: Key) -> bool {
         self(key)
     }
 }
@@ -168,7 +175,8 @@ impl<F: FnMut(Key) -> bool + Send + 'static> KeyDownHandler for F {
 /// shim guarantees this).
 unsafe extern "C" fn keydown_trampoline(userdata: *mut c_void, key: i32, out_handled: *mut bool) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn KeyDownHandler>>();
+        // Shared `&`: re-entrant handler box (see `KeyDownHandler`).
+        let handler = &*userdata.cast::<Box<dyn KeyDownHandler>>();
         // Best-effort map of the raw ordinal back to our safe `Key` mirror.
         // Anything outside the mirrored set arrives as `Key::None` — callers
         // can still observe the event and choose to ignore unmapped keys.
@@ -756,12 +764,15 @@ pub struct ManipulationVelocities {
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
 /// or be moved onto the render thread.
+/// Takes `&self` (re-entrant: a handler may re-raise the same event via
+/// [`crate::reflection::raise_event`], re-entering this box; use interior
+/// mutability for handler state).
 pub trait RoutedEventHandler: Send + 'static {
-    fn on_event(&mut self, args: &EventArgs) -> bool;
+    fn on_event(&self, args: &EventArgs) -> bool;
 }
 
-impl<F: FnMut(&EventArgs) -> bool + Send + 'static> RoutedEventHandler for F {
-    fn on_event(&mut self, args: &EventArgs) -> bool {
+impl<F: Fn(&EventArgs) -> bool + Send + 'static> RoutedEventHandler for F {
+    fn on_event(&self, args: &EventArgs) -> bool {
         self(args)
     }
 }
@@ -776,7 +787,8 @@ unsafe extern "C" fn event_trampoline(
     out_handled: *mut bool,
 ) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn RoutedEventHandler>>();
+        // Shared `&`: re-entrant handler box (see `RoutedEventHandler`).
+        let handler = &*userdata.cast::<Box<dyn RoutedEventHandler>>();
         let ev = EventArgs {
             raw: args,
             _not_send: PhantomData,
@@ -884,12 +896,15 @@ pub fn subscribe_event<H: RoutedEventHandler>(
 ///
 /// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
 /// or be moved onto the render thread.
+/// Takes `&self` (re-entrant: a lifecycle handler that re-parents its element
+/// can trigger another lifecycle event synchronously on the same box; use
+/// interior mutability for handler state).
 pub trait LifecycleHandler: Send + 'static {
-    fn on_event(&mut self);
+    fn on_event(&self);
 }
 
-impl<F: FnMut() + Send + 'static> LifecycleHandler for F {
-    fn on_event(&mut self) {
+impl<F: Fn() + Send + 'static> LifecycleHandler for F {
+    fn on_event(&self) {
         self();
     }
 }
@@ -898,7 +913,8 @@ impl<F: FnMut() + Send + 'static> LifecycleHandler for F {
 /// still alive (the [`LifecycleSubscription`] hasn't been dropped).
 unsafe extern "C" fn lifecycle_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn LifecycleHandler>>();
+        // Shared `&`: re-entrant handler box (see `LifecycleHandler`).
+        let handler = &*userdata.cast::<Box<dyn LifecycleHandler>>();
         handler.on_event();
     })
 }
@@ -1016,11 +1032,14 @@ pub trait DataObjectHandler: Send + 'static {
     /// Called when the copy/paste fires. `data_object` is borrowed (valid only
     /// for the call); `is_drag_drop` distinguishes a drag-drop transfer from a
     /// clipboard one. Return `true` to cancel.
-    fn on_data_object(&mut self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool;
+    ///
+    /// Takes `&self` (re-entrant per [`ClickHandler`]; use interior mutability
+    /// for handler state).
+    fn on_data_object(&self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool;
 }
 
-impl<F: FnMut(Option<*mut c_void>, bool) -> bool + Send + 'static> DataObjectHandler for F {
-    fn on_data_object(&mut self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool {
+impl<F: Fn(Option<*mut c_void>, bool) -> bool + Send + 'static> DataObjectHandler for F {
+    fn on_data_object(&self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool {
         self(data_object, is_drag_drop)
     }
 }
@@ -1035,7 +1054,8 @@ unsafe extern "C" fn data_object_trampoline(
     out_cancel: *mut bool,
 ) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn DataObjectHandler>>();
+        // Shared `&`: re-entrant handler box (see `DataObjectHandler`).
+        let handler = &*userdata.cast::<Box<dyn DataObjectHandler>>();
         let data = (!data_object.is_null()).then_some(data_object);
         let cancel = handler.on_data_object(data, is_drag_drop);
         if !out_cancel.is_null() {

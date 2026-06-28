@@ -56,7 +56,7 @@ impl XamlProvider for InMem {
 // VM class registration needs a property-change handler; this one is inert.
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
-    fn on_changed(&mut self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
+    fn on_changed(&self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
 }
 
 // i32 -> "EVEN"/"ODD". A deliberately non-identity mapping: if the binding

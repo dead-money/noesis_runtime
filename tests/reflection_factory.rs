@@ -16,7 +16,7 @@ use dm_noesis_runtime::view::FrameworkElement;
 
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
-    fn on_changed(&mut self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
+    fn on_changed(&self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
 }
 
 const CARD_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>

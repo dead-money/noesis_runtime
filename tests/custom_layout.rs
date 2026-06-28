@@ -22,7 +22,7 @@ use dm_noesis_runtime::view::{FrameworkElement, View};
 
 struct NoopChange;
 impl PropertyChangeHandler for NoopChange {
-    fn on_changed(&mut self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
+    fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
 #[derive(Clone, Default)]
@@ -35,7 +35,7 @@ struct StackLayout {
     counters: Counters,
 }
 impl LayoutHandler for StackLayout {
-    fn measure(&mut self, instance: Instance, _available: Size) -> Size {
+    fn measure(&self, instance: Instance, _available: Size) -> Size {
         self.counters.measures.fetch_add(1, Ordering::SeqCst);
         // Measure every child with unbounded space so DesiredSize is known.
         let n = instance.layout_child_count();
@@ -48,7 +48,7 @@ impl LayoutHandler for StackLayout {
         Size::new(150.0, 80.0)
     }
 
-    fn arrange(&mut self, instance: Instance, final_size: Size) -> Size {
+    fn arrange(&self, instance: Instance, final_size: Size) -> Size {
         self.counters.arranges.fetch_add(1, Ordering::SeqCst);
         let mut y = 0.0f32;
         let n = instance.layout_child_count();

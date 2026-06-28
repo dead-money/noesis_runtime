@@ -105,8 +105,21 @@ pub unsafe fn image_source_size(image_source: NonNull<c_void>) -> Option<(f32, f
 /// Per-instance Rust callback. Implementations receive a stable instance
 /// pointer (see [`Instance`]) and the index of the changed property — index
 /// matches the order in which DPs were added to the class.
+///
+/// # Re-entrancy
+///
+/// `on_changed` takes `&self`, not `&mut self`, because it is *re-entrant*: a
+/// single handler box is shared by every instance of the class, and the
+/// documented "computed property" pattern has a handler write *another* DP from
+/// inside `on_changed` (e.g. `SliceThickness` changes → recompute viewboxes →
+/// `instance.set_rect(...)`). That synchronous write re-enters Noesis, which
+/// re-invokes this same handler before the outer call has returned. Holding a
+/// `&mut self` across the user callback would alias on re-entry — undefined
+/// behaviour. Handlers that need mutable state must use interior mutability
+/// (`Cell` / `RefCell` / `Mutex` / atomics); re-entering a `RefCell` borrow is a
+/// controlled panic, never UB.
 pub trait PropertyChangeHandler: Send + 'static {
-    fn on_changed(&mut self, instance: Instance, prop_index: u32, value: PropertyValue<'_>);
+    fn on_changed(&self, instance: Instance, prop_index: u32, value: PropertyValue<'_>);
 }
 
 /// Property value as observed by the change callback. Variant matches the
@@ -985,7 +998,10 @@ unsafe extern "C" fn prop_changed_trampoline(
     value_ptr: *const c_void,
 ) {
     crate::panic_guard::guard(|| {
-        let handler = &mut *userdata.cast::<Box<dyn PropertyChangeHandler>>();
+        // Shared `&`, never `&mut`: the handler is re-entrant (a `set_*` inside
+        // `on_changed` re-invokes this trampoline with the same `userdata`
+        // box). See `PropertyChangeHandler` docs.
+        let handler = &*userdata.cast::<Box<dyn PropertyChangeHandler>>();
         let Some(instance) = NonNull::new(instance) else {
             return;
         };
@@ -1245,8 +1261,12 @@ pub enum Coerced {
 /// value, or [`Coerced::Unchanged`] to pass it through. A no-op coerce yields
 /// the input verbatim, so a clamp to `[0, 100]` that returns `100` for an input
 /// of `999` is observable through a read-back.
+///
+/// Takes `&self` (re-entrant: coercion runs inside the value pipeline and a
+/// handler that reads or writes other coerced DPs can re-enter this same
+/// per-class handler box; use interior mutability for handler state).
 pub trait CoerceHandler: Send + 'static {
-    fn coerce(&mut self, instance: Instance, prop_index: u32, value: PropertyValue<'_>) -> Coerced;
+    fn coerce(&self, instance: Instance, prop_index: u32, value: PropertyValue<'_>) -> Coerced;
 }
 
 /// A width/height pair in DIPs, used by [`LayoutHandler`].
@@ -1278,15 +1298,20 @@ impl Size {
 ///
 /// Default impls make the element take zero space (measure) and accept the
 /// final size (arrange) — override the half you need.
+///
+/// Methods take `&self` (re-entrant: a single handler box is shared by every
+/// instance of the class, so a panel that lays out children of its own type
+/// re-enters `measure`/`arrange` on the same box synchronously; use interior
+/// mutability for handler state).
 pub trait LayoutHandler: Send + 'static {
     /// Return the element's desired size given the available size.
-    fn measure(&mut self, instance: Instance, available: Size) -> Size {
+    fn measure(&self, instance: Instance, available: Size) -> Size {
         let _ = (instance, available);
         Size::ZERO
     }
 
     /// Position children within `final_size` and return the size actually used.
-    fn arrange(&mut self, instance: Instance, final_size: Size) -> Size {
+    fn arrange(&self, instance: Instance, final_size: Size) -> Size {
         let _ = instance;
         final_size
     }
@@ -1482,7 +1507,8 @@ unsafe extern "C" fn coerce_trampoline(
         if userdata.is_null() {
             return;
         }
-        let handler = &mut *userdata.cast::<Box<dyn CoerceHandler>>();
+        // Shared `&`: re-entrant per-class handler box (see `CoerceHandler`).
+        let handler = &*userdata.cast::<Box<dyn CoerceHandler>>();
         let Some(inst) = NonNull::new(instance) else {
             return;
         };
@@ -1592,7 +1618,8 @@ unsafe extern "C" fn layout_measure_trampoline(
         if userdata.is_null() {
             return;
         }
-        let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
+        // Shared `&`: re-entrant per-class handler box (see `LayoutHandler`).
+        let handler = &*userdata.cast::<Box<dyn LayoutHandler>>();
         let size = match NonNull::new(instance) {
             Some(inst) => handler.measure(Instance(inst), Size::new(avail_w, avail_h)),
             None => Size::ZERO,
@@ -1618,7 +1645,8 @@ unsafe extern "C" fn layout_arrange_trampoline(
         if userdata.is_null() {
             return;
         }
-        let handler = &mut *userdata.cast::<Box<dyn LayoutHandler>>();
+        // Shared `&`: re-entrant per-class handler box (see `LayoutHandler`).
+        let handler = &*userdata.cast::<Box<dyn LayoutHandler>>();
         let size = match NonNull::new(instance) {
             Some(inst) => handler.arrange(Instance(inst), Size::new(final_w, final_h)),
             None => Size::new(final_w, final_h),
@@ -1654,12 +1682,16 @@ unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
 /// [`View`](crate::view::View) + [`Renderer`](crate::view::Renderer) bound to a
 /// [`RenderDevice`](crate::render_device::RenderDevice) — see `tests/drawing.rs`).
 /// Like the layout callbacks it runs on the view-driving thread; keep work small.
+///
+/// Takes `&self` (re-entrant: one handler box is shared by every instance of
+/// the class, so rendering a nested element of the same type re-enters `render`
+/// on the same box; use interior mutability for handler state).
 pub trait RenderHandler: Send + 'static {
     /// Record this element's visual content into `ctx`. The element's render
     /// size is available via [`Instance::layout_child`] / the element's own
     /// `ActualWidth`/`ActualHeight` (read through a
     /// [`FrameworkElement`](crate::view::FrameworkElement)).
-    fn render(&mut self, instance: Instance, ctx: DrawingContext<'_>);
+    fn render(&self, instance: Instance, ctx: DrawingContext<'_>);
 }
 
 unsafe extern "C" fn render_trampoline(
@@ -1671,7 +1703,8 @@ unsafe extern "C" fn render_trampoline(
         if userdata.is_null() {
             return;
         }
-        let handler = &mut *userdata.cast::<Box<dyn RenderHandler>>();
+        // Shared `&`: re-entrant per-class handler box (see `RenderHandler`).
+        let handler = &*userdata.cast::<Box<dyn RenderHandler>>();
         let (Some(inst), Some(ctx)) = (NonNull::new(instance), NonNull::new(context)) else {
             return;
         };
