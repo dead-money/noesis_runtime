@@ -15,8 +15,8 @@
 //!   `cargo test -p dm_noesis_runtime --test brushes_transforms -- --nocapture`
 
 use dm_noesis_runtime::brushes::{
-    BlurEffect, DropShadowEffect, GradientStop, LinearGradientBrush, RadialGradientBrush,
-    SolidColorBrush,
+    BlurEffect, DropShadowEffect, GradientStop, ImageBrush, LinearGradientBrush,
+    RadialGradientBrush, SolidColorBrush,
 };
 use dm_noesis_runtime::transforms::{
     CompositeFields, CompositeTransform, MatrixTransform, RotateTransform, ScaleTransform,
@@ -127,6 +127,54 @@ fn brushes_transforms_effects_round_trip() {
         );
         radial.add_stop(GradientStop::new(0.5, [0.2, 0.2, 0.2, 1.0]));
         assert_eq!(radial.stop_count(), 1);
+
+        // ── ImageBrush ──────────────────────────────────────────────────────
+        // No GPU/imaging surface needed: construct, read the source back through
+        // Noesis GetImageSource (None proves it's a real ImageBrush, not a stub),
+        // then assign it and verify pointer identity through get_component.
+        let ib = ImageBrush::new();
+        assert!(
+            ib.image_source().is_none(),
+            "fresh ImageBrush has no source"
+        );
+        let border2_xaml = format!("<Border {NS}/>");
+        let mut border2 = FrameworkElement::parse(&border2_xaml).expect("parse Border2");
+        assert!(
+            border2.get_component("Background").is_none(),
+            "Border2 Background starts unset"
+        );
+        assert!(border2.set_background(&ib), "set Background (ImageBrush)");
+        assert_eq!(
+            border2
+                .get_component("Background")
+                .expect("Background set after set_background")
+                .as_ptr(),
+            ib.raw(),
+            "Background is the exact ImageBrush we assigned"
+        );
+        // Source-wiring read-back (setting a real ImageSource* and reading it
+        // back) is deferred to §12 imaging, which provides a headless way to
+        // construct an ImageSource. `set_image_source` is exercised there.
+
+        // ── Foreground / Stroke typed sugar ─────────────────────────────────
+        // set_background and set_fill are covered above; close the gap on the
+        // remaining thin wrappers with pointer-identity read-back.
+        let tb_xaml = format!("<TextBlock {NS} Text=\"x\"/>");
+        let mut tb = FrameworkElement::parse(&tb_xaml).expect("parse TextBlock");
+        assert!(tb.set_foreground(&brush), "set Foreground");
+        assert_eq!(
+            tb.get_component("Foreground")
+                .expect("Foreground set")
+                .as_ptr(),
+            brush.raw(),
+            "Foreground is the exact brush we assigned"
+        );
+        assert!(rect.set_stroke(&radial), "set Stroke");
+        assert_eq!(
+            rect.get_component("Stroke").expect("Stroke set").as_ptr(),
+            radial.raw(),
+            "Stroke is the exact radial brush we assigned"
+        );
 
         // ── Transforms ──────────────────────────────────────────────────────
         let translate = TranslateTransform::new(3.0, -4.0);
