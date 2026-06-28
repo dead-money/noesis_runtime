@@ -37,8 +37,10 @@
 #include <NsCore/ReflectionImplement.h>
 #include <NsCore/String.h>
 #include <NsCore/Symbol.h>
+#include <NsGui/BaseBindingExpression.h>
 #include <NsGui/BaseValueConverter.h>
 #include <NsGui/Binding.h>
+#include <NsGui/BindingExpression.h>
 #include <NsGui/BindingOperations.h>
 #include <NsGui/Enums.h>  // BindingMode
 #include <NsGui/DependencyObject.h>
@@ -264,6 +266,85 @@ extern "C" void dm_noesis_binding_set_update_source_trigger(void* binding, int32
 extern "C" void dm_noesis_binding_set_relative_source_self(void* binding) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetSelf());
+}
+
+// FindAncestor: resolve `type_name` through the reflection registry, then build
+// a `RelativeSource(FindAncestor, type, level)`. The ancestor type must already
+// be registered with Reflection (referencing it from XAML forces registration);
+// an unknown name fails gracefully (no-op, returns false) rather than crashing.
+// `level` is the 1-based ancestor index (0 is coerced to 1, the nearest match).
+extern "C" bool dm_noesis_binding_set_relative_source_find_ancestor(
+    void* binding, const char* type_name, uint32_t level) {
+    Noesis::Binding* b = as_binding(binding);
+    if (!b || !type_name) return false;
+
+    // NullIfNotFound avoids interning a junk symbol for a never-seen name.
+    Noesis::Symbol sym(type_name, Noesis::Symbol::NullIfNotFound());
+    if (sym.IsNull()) return false;
+    const Noesis::Type* type = Noesis::Reflection::GetType(sym);
+    if (!type) return false;
+
+    const int lvl = level == 0 ? 1 : static_cast<int>(level);
+    // new RelativeSource starts at refcount 1; the local Ptr adopts that and
+    // releases on scope exit — SetRelativeSource takes its own reference.
+    Noesis::Ptr<Noesis::RelativeSource> rs = *new Noesis::RelativeSource(
+        Noesis::RelativeSourceMode_FindAncestor, type, lvl);
+    b->SetRelativeSource(rs.GetPtr());
+    return true;
+}
+
+// PreviousData: bind to the previous item in a data-bound collection (the
+// idiom behind delta columns). Uses the shared static RelativeSource singleton.
+extern "C" void dm_noesis_binding_set_relative_source_previous_data(void* binding) {
+    Noesis::Binding* b = as_binding(binding);
+    if (b) b->SetRelativeSource(Noesis::RelativeSource::GetPreviousData());
+}
+
+// TemplatedParent: bind to the control a ControlTemplate is applied to (the
+// code-built equivalent of `{Binding RelativeSource={RelativeSource
+// TemplatedParent}}`). Shared static singleton.
+extern "C" void dm_noesis_binding_set_relative_source_templated_parent(void* binding) {
+    Noesis::Binding* b = as_binding(binding);
+    if (b) b->SetRelativeSource(Noesis::RelativeSource::GetTemplatedParent());
+}
+
+// ── BindingExpression inspection (TODO §3) ───────────────────────────────────
+
+// Borrowed BindingExpression* for the binding on `element`'s `dp_name` property,
+// via BindingOperations::GetBindingExpression. The expression is OWNED by the
+// target object — the caller must NOT release it, and it is valid only while the
+// binding stays live on that property. Returns NULL if `element` is not a
+// DependencyObject, the DP name is unknown, or no binding is set on it. The
+// pointer is returned as the BaseBindingExpression base (upcast) so the
+// update entrypoints below can call the virtuals uniformly.
+extern "C" void* dm_noesis_get_binding_expression(void* element, const char* dp_name) {
+    if (!element || !dp_name) return nullptr;
+    auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!d) return nullptr;
+
+    const Noesis::DependencyProperty* dp =
+        Noesis::FindDependencyProperty(d->GetClassType(), Noesis::Symbol(dp_name));
+    if (!dp) return nullptr;
+
+    // Implicit upcast BindingExpression* -> BaseBindingExpression* (adjusts the
+    // pointer for the compiler); borrowed, no AddReference.
+    Noesis::BaseBindingExpression* be = Noesis::BindingOperations::GetBindingExpression(d, dp);
+    return be;
+}
+
+// Force a source -> target data transfer (re-pull the source value).
+extern "C" void dm_noesis_binding_expression_update_target(void* expr) {
+    if (!expr) return;
+    static_cast<Noesis::BaseBindingExpression*>(expr)->UpdateTarget();
+}
+
+// Push the current target value back to the source. No-op (per Noesis) unless
+// the binding's Mode is TwoWay / OneWayToSource — this is what commits a binding
+// whose UpdateSourceTrigger is Explicit.
+extern "C" void dm_noesis_binding_expression_update_source(void* expr) {
+    if (!expr) return;
+    static_cast<Noesis::BaseBindingExpression*>(expr)->UpdateSource();
 }
 
 extern "C" bool dm_noesis_set_binding(void* element, const char* dp_name, void* binding) {
