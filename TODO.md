@@ -109,8 +109,9 @@ Remaining:
 Only `Path.set_points` is exposed.
 
 - **Geometry construction.** `StreamGeometry`/`StreamGeometryContext`, `PathGeometry` + figures/segments (Line/Bezier/Arc/Poly*), `EllipseGeometry`/`RectangleGeometry`/`LineGeometry`, `CombinedGeometry`, `GeometryGroup`.
-- **Shapes.** `Rectangle`/`Ellipse`/`Line`/`Polygon`/`Polyline` property access; `Shape` stroke/fill/`Pen`/`DashStyle`.
 - **`DrawingContext`** immediate-mode drawing.
+
+Shapes done: `Rectangle` (`RadiusX`/`RadiusY`), `Ellipse`, `Line` (`X1`/`Y1`/`X2`/`Y2`), plus the full `Shape` base surface — `Fill`/`Stroke` (reusing the `src/brushes.rs` wrappers), `StrokeThickness`, `StrokeDashArray` (string form), `StrokeDashCap`/`StrokeStartLineCap`/`StrokeEndLineCap`/`StrokeLineJoin`, `StrokeMiterLimit`, `StrokeDashOffset`, `Stretch`, `TrimStart`/`TrimEnd`/`TrimOffset`, and inherited `Width`/`Height` — code-built in `src/shapes.rs`.
 
 ## 11. Brushes, transforms, visual properties
 
@@ -198,3 +199,4 @@ Recorded so they aren't re-attempted — 3.2.12 doesn't expose these; the workar
 - **Coerced-property count (§9).** `CoerceValueCallback` carries no DP identity (signature is `(d, baseValue, coercedValue)`), forcing a static pool of per-slot thunk functions. The pool is 32, so only a class's first 32 dependency properties can opt into coercion; coercion is value/struct only (no object/string tags).
 - **Custom `TypeConverter` registration (§9).** `TypeConverter::Get` resolves converters through an internal Core registry that runtime `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive (verified: a synthetic converter type registers in the Factory yet `Get` returns null). The *consumption* path (`convert_from_string` via `TryConvertFromString`) and binding-side `IValueConverter` work; string→custom-type conversion during XAML parse is not runtime-registerable.
 - **Detached `Clock` / `AnimationClock` controller (§6).** Seek / `SpeedRatio` / `CurrentState` on a standalone (non-`Storyboard`) clock aren't exposed in 3.2.13; use the `Storyboard` controllable actions (Pause/Resume/Stop/Seek) instead.
+- **`Polygon` / `Polyline` shape elements (§10).** Noesis 3.2.13 ships only `Path`/`Rectangle`/`Ellipse`/`Line` shape elements — there is no `Polygon.h`/`Polyline.h`. Build a polygon/polyline as a `PathGeometry`/`StreamGeometry` (the §10 geometry path) and host it in a `Path`.

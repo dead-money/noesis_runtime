@@ -1634,6 +1634,75 @@ bool dm_noesis_drop_shadow_effect_get(void* effect, float out_color[4], float* o
 // get returns the ordinal or -1 if `obj` is not a DependencyObject.
 bool dm_noesis_render_options_set_bitmap_scaling_mode(void* obj, int32_t mode);
 int32_t dm_noesis_render_options_get_bitmap_scaling_mode(void* obj);
+
+// ── Shape elements (TODO §10 / Phase D) ─────────────────────────────────────
+//
+// Implemented in cpp/noesis_shapes.cpp. *_create hands out a freshly-built
+// shape with one owned +1 reference (the brushes handout() idiom); the Rust
+// handle's Drop releases it. `shape` is a Shape* / FrameworkElement* /
+// BaseComponent* (the same opaque handle used elsewhere); every entrypoint
+// DynamicCasts and fails gracefully (false / null / -1) on a type mismatch.
+// Noesis 3.2.13 ships only Rectangle/Ellipse/Line/Path shape elements — there
+// is no Polygon/Polyline (see TODO §10 + Known SDK limitations).
+void* dm_noesis_rectangle_create(void);
+void* dm_noesis_ellipse_create(void);
+void* dm_noesis_line_create(void);
+
+// FrameworkElement Width/Height (a Shape's own size lives on these inherited DPs).
+bool dm_noesis_shape_set_width(void* shape, float width);
+bool dm_noesis_shape_get_width(void* shape, float* out);
+bool dm_noesis_shape_set_height(void* shape, float height);
+bool dm_noesis_shape_get_height(void* shape, float* out);
+
+// Fill/Stroke reuse the brush wrappers: setters take any Brush* (null clears),
+// getters return the live Brush* BORROWED (no +1) so tests can match by identity.
+bool dm_noesis_shape_set_fill(void* shape, void* brush);
+void* dm_noesis_shape_get_fill(void* shape);
+bool dm_noesis_shape_set_stroke(void* shape, void* brush);
+void* dm_noesis_shape_get_stroke(void* shape);
+
+// Stroke scalar properties.
+bool dm_noesis_shape_set_stroke_thickness(void* shape, float value);
+bool dm_noesis_shape_get_stroke_thickness(void* shape, float* out);
+bool dm_noesis_shape_set_stroke_miter_limit(void* shape, float value);
+bool dm_noesis_shape_get_stroke_miter_limit(void* shape, float* out);
+bool dm_noesis_shape_set_stroke_dash_offset(void* shape, float value);
+bool dm_noesis_shape_get_stroke_dash_offset(void* shape, float* out);
+bool dm_noesis_shape_set_trim_start(void* shape, float value);
+bool dm_noesis_shape_get_trim_start(void* shape, float* out);
+bool dm_noesis_shape_set_trim_end(void* shape, float value);
+bool dm_noesis_shape_get_trim_end(void* shape, float* out);
+bool dm_noesis_shape_set_trim_offset(void* shape, float value);
+bool dm_noesis_shape_get_trim_offset(void* shape, float* out);
+
+// Stroke enum properties: set returns false on type mismatch, get returns the
+// ordinal or -1. Ordinals match Noesis::PenLineCap / PenLineJoin / Stretch.
+bool dm_noesis_shape_set_stroke_dash_cap(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_dash_cap(void* shape);
+bool dm_noesis_shape_set_stroke_start_line_cap(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_start_line_cap(void* shape);
+bool dm_noesis_shape_set_stroke_end_line_cap(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_end_line_cap(void* shape);
+bool dm_noesis_shape_set_stroke_line_join(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stroke_line_join(void* shape);
+bool dm_noesis_shape_set_stretch(void* shape, int32_t value);
+int32_t dm_noesis_shape_get_stretch(void* shape);
+
+// StrokeDashArray — Noesis exposes this as a string ("2 1 3"); get returns a
+// borrowed pointer owned by the Shape (null if unset / not a Shape).
+bool dm_noesis_shape_set_stroke_dash_array(void* shape, const char* dashes);
+const char* dm_noesis_shape_get_stroke_dash_array(void* shape);
+
+// Rectangle::RadiusX / RadiusY.
+bool dm_noesis_rectangle_set_radius_x(void* shape, float value);
+bool dm_noesis_rectangle_get_radius_x(void* shape, float* out);
+bool dm_noesis_rectangle_set_radius_y(void* shape, float value);
+bool dm_noesis_rectangle_get_radius_y(void* shape, float* out);
+
+// Line::X1/Y1/X2/Y2 (set/get all four; out = {x1, y1, x2, y2}).
+bool dm_noesis_line_set(void* shape, float x1, float y1, float x2, float y2);
+bool dm_noesis_line_get(void* shape, float out[4]);
+
 // ── Controls — programmatic access (TODO §8 / Phase B) ──────────────────────
 //
 // Implemented in cpp/noesis_controls.cpp. Each entrypoint DynamicCasts to the
