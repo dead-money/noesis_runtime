@@ -1434,6 +1434,95 @@ bool dm_noesis_set_binding(void* element, const char* dp_name, void* binding);
 bool dm_noesis_framework_element_add_resource(
     void* element, const char* key, void* object);
 
+// ── ResourceDictionary, Style, templates (TODO §7) ──────────────────────────
+//
+// ResourceDictionary create/own + key→component add + borrowed lookup + merged
+// dictionaries + parse-from-XAML; application resources install/query; Style
+// from code (target type + setters + based-on) with element assign/read-back;
+// ControlTemplate / DataTemplate parse + assign + FrameworkTemplate::FindName.
+//
+// OWNERSHIP: *_create / *_parse return a +1-owned object (release via the
+// matching *_destroy or the generic dm_noesis_base_component_release). The
+// *_get_resources / *_get_style / *_get_template getters AddRef before handing
+// out, so the caller owns a +1 too. *_find / *_find_resource /
+// *_find_name / *_get_application_resources hand out BORROWED pointers (no +1) —
+// do NOT release; valid only transiently.
+
+// Box a float as a BoxedValue<float> (+1 ref). Companion to the bool/int32/
+// double boxers in the binding section — float DPs (FontSize, Opacity, …) need
+// a float box for a Style Setter / resource value to apply.
+void* dm_noesis_box_float(float value);
+
+// Create an empty ResourceDictionary (+1 ref for the caller).
+void* dm_noesis_resource_dictionary_create(void);
+void dm_noesis_resource_dictionary_destroy(void* dict);
+// Parse a bare <ResourceDictionary> from an in-memory XAML string. +1 ref for
+// the caller; NULL if malformed or the root is not a ResourceDictionary.
+void* dm_noesis_resource_dictionary_parse(const char* xaml);
+// Number of base-dictionary entries (excludes merged dictionaries).
+uint32_t dm_noesis_resource_dictionary_count(void* dict);
+// Add a borrowed `value` under `key`; the dictionary stores its own reference.
+// false on a NULL/non-dictionary handle or NULL key/value.
+bool dm_noesis_resource_dictionary_add(void* dict, const char* key, void* value);
+// Whether the dictionary (or a merged one) contains `key`.
+bool dm_noesis_resource_dictionary_contains(void* dict, const char* key);
+// Borrowed (no +1) lookup by key; NULL if absent (non-throwing Find).
+void* dm_noesis_resource_dictionary_find(void* dict, const char* key);
+// Add `merged` to `dict`'s MergedDictionaries collection (takes its own ref).
+bool dm_noesis_resource_dictionary_add_merged(void* dict, void* merged);
+
+// Install `dict` as the process-global application resources (Noesis takes its
+// own reference). NULL clears them.
+void dm_noesis_gui_set_application_resources(void* dict);
+// Borrowed (no +1) application ResourceDictionary*, or NULL if none installed.
+void* dm_noesis_gui_get_application_resources(void);
+// Register `uri`'s dictionary in the internal theme (default styles). false on
+// a NULL/empty uri.
+bool dm_noesis_gui_register_default_styles(const char* uri);
+
+// +1-owned ResourceDictionary* for `element`'s local Resources (AddRef'd), or
+// NULL if none / not a FrameworkElement.
+void* dm_noesis_framework_element_get_resources(void* element);
+// Replace `element`'s local Resources with `dict`. false if `element` is not a
+// FrameworkElement or `dict` not a ResourceDictionary.
+bool dm_noesis_framework_element_set_resources(void* element, void* dict);
+// Non-throwing FindResource walking the logical parent chain + app resources.
+// Borrowed (no +1); NULL if not found / not a FrameworkElement.
+void* dm_noesis_framework_element_find_resource(void* element, const char* key);
+
+// Create an empty Style (+1 ref for the caller).
+void* dm_noesis_style_create(void);
+void dm_noesis_style_destroy(void* style);
+// Resolve `type_name` via reflection and set it as the style's TargetType.
+// false on a NULL/non-Style handle or an unknown type name.
+bool dm_noesis_style_set_target_type(void* style, const char* type_name);
+// Append a Setter: resolve `dp_name` on the style's TargetType, store the boxed
+// `value` (the setter takes its own ref). false if no TargetType, unknown DP,
+// NULL value, or non-Style handle.
+bool dm_noesis_style_add_setter(void* style, const char* dp_name, void* value);
+// Set the BasedOn style (NULL clears). No-op on a NULL/non-Style handle.
+void dm_noesis_style_set_based_on(void* style, void* base);
+
+// Assign `style` to `element` (FrameworkElement::SetStyle). false if `element`
+// is not a FrameworkElement or `style` not a Style.
+bool dm_noesis_framework_element_set_style(void* element, void* style);
+// +1-owned Style* for `element`'s assigned Style (AddRef'd), or NULL.
+void* dm_noesis_framework_element_get_style(void* element);
+
+// Parse a bare <ControlTemplate> / <DataTemplate> from a string. +1 ref for the
+// caller; NULL if malformed or the root is the wrong type.
+void* dm_noesis_control_template_parse(const char* xaml);
+void* dm_noesis_data_template_parse(const char* xaml);
+// Assign a ControlTemplate to a Control (Control::SetTemplate). false if
+// `control` is not a Control or `tmpl` not a ControlTemplate.
+bool dm_noesis_control_set_template(void* control, void* tmpl);
+// +1-owned ControlTemplate* for `control`'s assigned Template, or NULL.
+void* dm_noesis_control_get_template(void* control);
+// FrameworkTemplate::FindName within `tmpl` applied to `templated_parent`.
+// Borrowed (no +1); NULL if not found / wrong types.
+void* dm_noesis_framework_template_find_name(
+    void* tmpl, const char* name, void* templated_parent);
+
 #ifdef __cplusplus
 }
 #endif

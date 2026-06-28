@@ -51,12 +51,25 @@ Nothing here is exposed. Leans on §1 View timers for scheduling.
 
 ## 7. Styles, resources, templates
 
-Only `LoadApplicationResources` is wired.
+`ResourceDictionary` access (create/own, key→component add, borrowed lookup,
+merged dictionaries, parse-from-XAML, app-resources set/get, per-element
+`Resources` + non-throwing `FindResource`, `RegisterDefaultStyles`), `Style`
+from code (target type + setters + `BasedOn`, element assign/read-back), and
+template parse+assign (`ControlTemplate` via `SetTemplate`, `DataTemplate` via
+the component-DP path, `FrameworkTemplate::FindName`) are wired (`src/resources.rs`,
+`src/styles.rs`, `cpp/noesis_resources.cpp`).
 
-- **`ResourceDictionary` access.** `GUI::SetApplicationResources`/`GetApplicationResources`, per-element `Resources`, `FindResource`/`TryFindResource`, merged dictionaries, `RegisterDefaultStyles`.
-- **`Style`** construction/assignment, setters, triggers (`Trigger`, `DataTrigger`, `EventTrigger`, multi-triggers) from code.
-- **Templates.** `ControlTemplate` / `DataTemplate` / `ItemsPanelTemplate` / `HierarchicalDataTemplate` runtime creation; `DataTemplateSelector` from Rust; `FrameworkTemplate::FindName`.
-- **Dynamic resources.** `DynamicResourceExtension`, `StaticResourceExtension` (built-ins; we have custom markup extensions but not these).
+- **`Style` triggers** from code: `Trigger`, `DataTrigger`, `EventTrigger`,
+  `MultiTrigger` (property triggers + their setters/conditions). The
+  `GetTriggers()` collection is reachable; the per-trigger construction surface
+  is not built yet.
+- **Templates — code-built factories.** `ControlTemplate` / `DataTemplate` /
+  `ItemsPanelTemplate` / `HierarchicalDataTemplate` built from a programmatic
+  `VisualTree` (factory trees), and `DataTemplateSelector` from Rust. The
+  parse-from-XAML + assign path covers the common case today.
+- **Dynamic resources.** `DynamicResourceExtension`, `StaticResourceExtension`
+  (built-ins; we have custom markup extensions but not these). Reachable from
+  XAML already; a code path is low priority.
 
 ## 8. Controls — programmatic access
 

@@ -36,12 +36,13 @@ use crate::ffi::{
     dm_noesis_binding_set_relative_source_self,
     dm_noesis_binding_set_relative_source_templated_parent, dm_noesis_binding_set_source,
     dm_noesis_binding_set_string_format, dm_noesis_binding_set_update_source_trigger,
-    dm_noesis_box_bool, dm_noesis_box_double, dm_noesis_box_int32, dm_noesis_box_string,
-    dm_noesis_framework_element_add_resource, dm_noesis_observable_collection_add,
-    dm_noesis_observable_collection_clear, dm_noesis_observable_collection_count,
-    dm_noesis_observable_collection_create, dm_noesis_observable_collection_get,
-    dm_noesis_observable_collection_insert, dm_noesis_observable_collection_remove_at,
-    dm_noesis_observable_collection_set, dm_noesis_set_binding,
+    dm_noesis_box_bool, dm_noesis_box_double, dm_noesis_box_float, dm_noesis_box_int32,
+    dm_noesis_box_string, dm_noesis_framework_element_add_resource,
+    dm_noesis_observable_collection_add, dm_noesis_observable_collection_clear,
+    dm_noesis_observable_collection_count, dm_noesis_observable_collection_create,
+    dm_noesis_observable_collection_get, dm_noesis_observable_collection_insert,
+    dm_noesis_observable_collection_remove_at, dm_noesis_observable_collection_set,
+    dm_noesis_set_binding,
 };
 use crate::view::FrameworkElement;
 
@@ -247,6 +248,20 @@ pub fn box_f64(value: f64) -> Boxed {
     let ptr = unsafe { dm_noesis_box_double(value) };
     Boxed {
         ptr: NonNull::new(ptr).expect("dm_noesis_box_double returned null"),
+    }
+}
+
+/// Box an `f32` as a `Noesis::BoxedValue<float>`. Prefer this over [`box_f64`]
+/// for `float`-typed dependency properties (`FontSize`, `Opacity`, …): a
+/// `BoxedValue<double>` does **not** apply to a `float` DP through a
+/// [`Style`](crate::styles::Style) setter or a resource entry (no implicit
+/// unbox-coercion), so the value would be silently ignored.
+#[must_use]
+pub fn box_f32(value: f32) -> Boxed {
+    // SAFETY: no preconditions; returns a +1-owned BoxedValue<float>.
+    let ptr = unsafe { dm_noesis_box_float(value) };
+    Boxed {
+        ptr: NonNull::new(ptr).expect("dm_noesis_box_float returned null"),
     }
 }
 
