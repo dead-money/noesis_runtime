@@ -32,6 +32,8 @@
 #include <NsGui/BackEase.h>
 #include <NsGui/BaseKeyFrame.h>
 #include <NsGui/BeginStoryboard.h>
+#include <NsGui/BooleanAnimationUsingKeyFrames.h>
+#include <NsGui/BooleanKeyFrame.h>
 #include <NsGui/BounceEase.h>
 #include <NsGui/CircleEase.h>
 #include <NsGui/ColorAnimation.h>
@@ -39,6 +41,7 @@
 #include <NsGui/ColorKeyFrame.h>
 #include <NsGui/CubicEase.h>
 #include <NsGui/DependencyProperty.h>
+#include <NsGui/DiscreteBooleanKeyFrame.h>
 #include <NsGui/DiscreteColorKeyFrame.h>
 #include <NsGui/DiscreteDoubleKeyFrame.h>
 #include <NsGui/DiscreteInt16KeyFrame.h>
@@ -46,8 +49,11 @@
 #include <NsGui/DiscreteInt64KeyFrame.h>
 #include <NsGui/DiscreteMatrixKeyFrame.h>
 #include <NsGui/DiscreteObjectKeyFrame.h>
+#include <NsGui/DiscretePointKeyFrame.h>
 #include <NsGui/DiscreteRectKeyFrame.h>
 #include <NsGui/DiscreteSizeKeyFrame.h>
+#include <NsGui/DiscreteStringKeyFrame.h>
+#include <NsGui/DiscreteThicknessKeyFrame.h>
 #include <NsGui/DoubleAnimation.h>
 #include <NsGui/DoubleAnimationUsingKeyFrames.h>
 #include <NsGui/DoubleKeyFrame.h>
@@ -58,8 +64,10 @@
 #include <NsGui/EasingInt16KeyFrame.h>
 #include <NsGui/EasingInt32KeyFrame.h>
 #include <NsGui/EasingInt64KeyFrame.h>
+#include <NsGui/EasingPointKeyFrame.h>
 #include <NsGui/EasingRectKeyFrame.h>
 #include <NsGui/EasingSizeKeyFrame.h>
+#include <NsGui/EasingThicknessKeyFrame.h>
 #include <NsGui/ElasticEase.h>
 #include <NsGui/ExponentialEase.h>
 #include <NsGui/FrameworkElement.h>
@@ -82,13 +90,18 @@
 #include <NsGui/LinearInt16KeyFrame.h>
 #include <NsGui/LinearInt32KeyFrame.h>
 #include <NsGui/LinearInt64KeyFrame.h>
+#include <NsGui/LinearPointKeyFrame.h>
 #include <NsGui/LinearRectKeyFrame.h>
 #include <NsGui/LinearSizeKeyFrame.h>
+#include <NsGui/LinearThicknessKeyFrame.h>
 #include <NsGui/MatrixAnimationUsingKeyFrames.h>
 #include <NsGui/MatrixKeyFrame.h>
 #include <NsGui/ObjectAnimationUsingKeyFrames.h>
 #include <NsGui/ObjectKeyFrame.h>
+#include <NsGui/ParallelTimeline.h>
 #include <NsGui/PointAnimation.h>
+#include <NsGui/PointAnimationUsingKeyFrames.h>
+#include <NsGui/PointKeyFrame.h>
 #include <NsGui/PowerEase.h>
 #include <NsGui/PropertyPath.h>
 #include <NsGui/QuadraticEase.h>
@@ -102,13 +115,21 @@
 #include <NsGui/SizeAnimation.h>
 #include <NsGui/SizeAnimationUsingKeyFrames.h>
 #include <NsGui/SizeKeyFrame.h>
+#include <NsGui/SplineColorKeyFrame.h>
+#include <NsGui/SplineDoubleKeyFrame.h>
 #include <NsGui/SplineInt16KeyFrame.h>
 #include <NsGui/SplineInt32KeyFrame.h>
 #include <NsGui/SplineInt64KeyFrame.h>
+#include <NsGui/SplinePointKeyFrame.h>
 #include <NsGui/SplineRectKeyFrame.h>
 #include <NsGui/SplineSizeKeyFrame.h>
+#include <NsGui/SplineThicknessKeyFrame.h>
+#include <NsGui/StringAnimationUsingKeyFrames.h>
+#include <NsGui/StringKeyFrame.h>
 #include <NsGui/Storyboard.h>
 #include <NsGui/ThicknessAnimation.h>
+#include <NsGui/ThicknessAnimationUsingKeyFrames.h>
+#include <NsGui/ThicknessKeyFrame.h>
 #include <NsGui/TimeSpan.h>
 #include <NsGui/Timeline.h>
 #include <NsGui/TimelineGroup.h>
@@ -674,29 +695,21 @@ extern "C" void* dm_noesis_double_animation_keyframes_create() {
     return handout(a.GetPtr());
 }
 
-// kind: 0 Discrete, 1 Linear, 2 Easing (uses `easing` if non-null).
+// kind: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3 Spline
+// (`extra` = KeySpline*).
 extern "C" bool dm_noesis_double_animation_add_keyframe(void* anim, int32_t kind,
                                                         double key_time_seconds, float value,
-                                                        void* easing) {
+                                                        void* extra) {
     auto* a = cast<Noesis::DoubleAnimationUsingKeyFrames>(anim);
     if (!a) return false;
     Noesis::DoubleKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames) return false;
-
-    Noesis::Ptr<Noesis::DoubleKeyFrame> kf;
-    switch (kind) {
-        case 0: kf = *new Noesis::DiscreteDoubleKeyFrame(); break;
-        case 1: kf = *new Noesis::LinearDoubleKeyFrame(); break;
-        case 2: {
-            Noesis::Ptr<Noesis::EasingDoubleKeyFrame> ekf = *new Noesis::EasingDoubleKeyFrame();
-            if (auto* e = cast<Noesis::EasingFunctionBase>(easing)) ekf->SetEasingFunction(e);
-            kf = ekf;
-            break;
-        }
-        default: return false;
-    }
+    Noesis::Ptr<Noesis::DoubleKeyFrame> kf =
+        makeKeyFrame<Noesis::DoubleKeyFrame, Noesis::DiscreteDoubleKeyFrame,
+                     Noesis::LinearDoubleKeyFrame, Noesis::EasingDoubleKeyFrame,
+                     Noesis::SplineDoubleKeyFrame>(kind, key_time_seconds, extra);
+    if (!kf) return false;
     kf->SetValue(value);
-    kf->SetKeyTime(Noesis::KeyTime::FromTimeSpan(Noesis::TimeSpan(key_time_seconds)));
     frames->Add(kf.GetPtr());
     return true;
 }
@@ -707,28 +720,21 @@ extern "C" void* dm_noesis_color_animation_keyframes_create() {
     return handout(a.GetPtr());
 }
 
+// kind: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3 Spline
+// (`extra` = KeySpline*).
 extern "C" bool dm_noesis_color_animation_add_keyframe(void* anim, int32_t kind,
                                                        double key_time_seconds,
-                                                       const float color[4], void* easing) {
+                                                       const float color[4], void* extra) {
     auto* a = cast<Noesis::ColorAnimationUsingKeyFrames>(anim);
     if (!a || !color) return false;
     Noesis::ColorKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames) return false;
-
-    Noesis::Ptr<Noesis::ColorKeyFrame> kf;
-    switch (kind) {
-        case 0: kf = *new Noesis::DiscreteColorKeyFrame(); break;
-        case 1: kf = *new Noesis::LinearColorKeyFrame(); break;
-        case 2: {
-            Noesis::Ptr<Noesis::EasingColorKeyFrame> ekf = *new Noesis::EasingColorKeyFrame();
-            if (auto* e = cast<Noesis::EasingFunctionBase>(easing)) ekf->SetEasingFunction(e);
-            kf = ekf;
-            break;
-        }
-        default: return false;
-    }
+    Noesis::Ptr<Noesis::ColorKeyFrame> kf =
+        makeKeyFrame<Noesis::ColorKeyFrame, Noesis::DiscreteColorKeyFrame,
+                     Noesis::LinearColorKeyFrame, Noesis::EasingColorKeyFrame,
+                     Noesis::SplineColorKeyFrame>(kind, key_time_seconds, extra);
+    if (!kf) return false;
     kf->SetValue(Noesis::Color(color[0], color[1], color[2], color[3]));
-    kf->SetKeyTime(Noesis::KeyTime::FromTimeSpan(Noesis::TimeSpan(key_time_seconds)));
     frames->Add(kf.GetPtr());
     return true;
 }
@@ -1040,6 +1046,119 @@ extern "C" double dm_noesis_animation_size_keyframes_get_key_time(void* anim, in
     return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
 }
 
+// ── Point key-frame animation ─────────────────────────────────────────────────
+//
+// `kind`: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3
+// Spline (`extra` = KeySpline*). Points cross the ABI as {x, y} float[2].
+
+extern "C" void* dm_noesis_animation_point_keyframes_create() {
+    Noesis::Ptr<Noesis::PointAnimationUsingKeyFrames> a =
+        *new Noesis::PointAnimationUsingKeyFrames();
+    return handout(a.GetPtr());
+}
+
+extern "C" bool dm_noesis_animation_point_keyframes_add(void* anim, int32_t kind,
+                                                        double key_time_seconds, const float p[2],
+                                                        void* extra) {
+    auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
+    if (!a || !p) return false;
+    Noesis::PointKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames) return false;
+    Noesis::Ptr<Noesis::PointKeyFrame> kf =
+        makeKeyFrame<Noesis::PointKeyFrame, Noesis::DiscretePointKeyFrame,
+                     Noesis::LinearPointKeyFrame, Noesis::EasingPointKeyFrame,
+                     Noesis::SplinePointKeyFrame>(kind, key_time_seconds, extra);
+    if (!kf) return false;
+    kf->SetValue(Noesis::Point(p[0], p[1]));
+    frames->Add(kf.GetPtr());
+    return true;
+}
+
+extern "C" int32_t dm_noesis_animation_point_keyframes_count(void* anim) {
+    auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
+    if (!a) return -1;
+    Noesis::PointKeyFrameCollection* frames = a->GetKeyFrames();
+    return frames ? frames->Count() : 0;
+}
+
+extern "C" bool dm_noesis_animation_point_keyframes_get_value(void* anim, int32_t index,
+                                                              float out[2]) {
+    auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
+    if (!a || !out) return false;
+    Noesis::PointKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return false;
+    const Noesis::Point& v = frames->Get(static_cast<uint32_t>(index))->GetValue();
+    out[0] = v.x;
+    out[1] = v.y;
+    return true;
+}
+
+extern "C" double dm_noesis_animation_point_keyframes_get_key_time(void* anim, int32_t index) {
+    auto* a = cast<Noesis::PointAnimationUsingKeyFrames>(anim);
+    if (!a) return -1.0;
+    Noesis::PointKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return -1.0;
+    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+}
+
+// ── Thickness key-frame animation ─────────────────────────────────────────────
+//
+// `kind`: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3
+// Spline (`extra` = KeySpline*). Thicknesses cross as {left, top, right, bottom}
+// float[4].
+
+extern "C" void* dm_noesis_animation_thickness_keyframes_create() {
+    Noesis::Ptr<Noesis::ThicknessAnimationUsingKeyFrames> a =
+        *new Noesis::ThicknessAnimationUsingKeyFrames();
+    return handout(a.GetPtr());
+}
+
+extern "C" bool dm_noesis_animation_thickness_keyframes_add(void* anim, int32_t kind,
+                                                            double key_time_seconds,
+                                                            const float t[4], void* extra) {
+    auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
+    if (!a || !t) return false;
+    Noesis::ThicknessKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames) return false;
+    Noesis::Ptr<Noesis::ThicknessKeyFrame> kf =
+        makeKeyFrame<Noesis::ThicknessKeyFrame, Noesis::DiscreteThicknessKeyFrame,
+                     Noesis::LinearThicknessKeyFrame, Noesis::EasingThicknessKeyFrame,
+                     Noesis::SplineThicknessKeyFrame>(kind, key_time_seconds, extra);
+    if (!kf) return false;
+    kf->SetValue(Noesis::Thickness(t[0], t[1], t[2], t[3]));
+    frames->Add(kf.GetPtr());
+    return true;
+}
+
+extern "C" int32_t dm_noesis_animation_thickness_keyframes_count(void* anim) {
+    auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
+    if (!a) return -1;
+    Noesis::ThicknessKeyFrameCollection* frames = a->GetKeyFrames();
+    return frames ? frames->Count() : 0;
+}
+
+extern "C" bool dm_noesis_animation_thickness_keyframes_get_value(void* anim, int32_t index,
+                                                                  float out[4]) {
+    auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
+    if (!a || !out) return false;
+    Noesis::ThicknessKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return false;
+    const Noesis::Thickness& v = frames->Get(static_cast<uint32_t>(index))->GetValue();
+    out[0] = v.left;
+    out[1] = v.top;
+    out[2] = v.right;
+    out[3] = v.bottom;
+    return true;
+}
+
+extern "C" double dm_noesis_animation_thickness_keyframes_get_key_time(void* anim, int32_t index) {
+    auto* a = cast<Noesis::ThicknessAnimationUsingKeyFrames>(anim);
+    if (!a) return -1.0;
+    Noesis::ThicknessKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return -1.0;
+    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+}
+
 // ── Int16 / Int32 / Int64 key-frame animations ───────────────────────────────
 
 #define DM_INT_KEYFRAMES(SUFFIX, ANIM, COLL, KF, DISC, LIN, EAS, SPL, T, ABIT)                  \
@@ -1149,6 +1268,105 @@ extern "C" double dm_noesis_animation_object_keyframes_get_key_time(void* anim, 
     return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
 }
 
+// ── Boolean key-frame animation ───────────────────────────────────────────────
+//
+// BooleanAnimationUsingKeyFrames has no From-To form and only discrete frames (a
+// bool can't be interpolated). The value crosses the ABI as a C bool.
+
+extern "C" void* dm_noesis_animation_boolean_keyframes_create() {
+    Noesis::Ptr<Noesis::BooleanAnimationUsingKeyFrames> a =
+        *new Noesis::BooleanAnimationUsingKeyFrames();
+    return handout(a.GetPtr());
+}
+
+extern "C" bool dm_noesis_animation_boolean_keyframes_add(void* anim, double key_time_seconds,
+                                                          bool value) {
+    auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
+    if (!a) return false;
+    Noesis::BooleanKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames) return false;
+    Noesis::Ptr<Noesis::DiscreteBooleanKeyFrame> kf = *new Noesis::DiscreteBooleanKeyFrame();
+    kf->SetValue(value);
+    kf->SetKeyTime(Noesis::KeyTime::FromTimeSpan(Noesis::TimeSpan(key_time_seconds)));
+    frames->Add(kf.GetPtr());
+    return true;
+}
+
+extern "C" int32_t dm_noesis_animation_boolean_keyframes_count(void* anim) {
+    auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
+    if (!a) return -1;
+    Noesis::BooleanKeyFrameCollection* frames = a->GetKeyFrames();
+    return frames ? frames->Count() : 0;
+}
+
+// Returns the frame value into *out; returns false on a bad handle / index.
+extern "C" bool dm_noesis_animation_boolean_keyframes_get_value(void* anim, int32_t index,
+                                                                bool* out) {
+    auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
+    if (!a || !out) return false;
+    Noesis::BooleanKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return false;
+    *out = frames->Get(static_cast<uint32_t>(index))->GetValue();
+    return true;
+}
+
+extern "C" double dm_noesis_animation_boolean_keyframes_get_key_time(void* anim, int32_t index) {
+    auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
+    if (!a) return -1.0;
+    Noesis::BooleanKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return -1.0;
+    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+}
+
+// ── String key-frame animation ────────────────────────────────────────────────
+//
+// StringAnimationUsingKeyFrames has no From-To form and only discrete frames (a
+// string can't be interpolated). The value crosses as a NUL-terminated C string;
+// the getter returns a pointer borrowed from the live key frame (copy it
+// immediately) or NULL on a bad handle / index.
+
+extern "C" void* dm_noesis_animation_string_keyframes_create() {
+    Noesis::Ptr<Noesis::StringAnimationUsingKeyFrames> a =
+        *new Noesis::StringAnimationUsingKeyFrames();
+    return handout(a.GetPtr());
+}
+
+extern "C" bool dm_noesis_animation_string_keyframes_add(void* anim, double key_time_seconds,
+                                                         const char* value) {
+    auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
+    if (!a || !value) return false;
+    Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames) return false;
+    Noesis::Ptr<Noesis::DiscreteStringKeyFrame> kf = *new Noesis::DiscreteStringKeyFrame();
+    kf->SetValue(value);
+    kf->SetKeyTime(Noesis::KeyTime::FromTimeSpan(Noesis::TimeSpan(key_time_seconds)));
+    frames->Add(kf.GetPtr());
+    return true;
+}
+
+extern "C" int32_t dm_noesis_animation_string_keyframes_count(void* anim) {
+    auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
+    if (!a) return -1;
+    Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
+    return frames ? frames->Count() : 0;
+}
+
+extern "C" const char* dm_noesis_animation_string_keyframes_get_value(void* anim, int32_t index) {
+    auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
+    if (!a) return nullptr;
+    Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return nullptr;
+    return frames->Get(static_cast<uint32_t>(index))->GetValue();
+}
+
+extern "C" double dm_noesis_animation_string_keyframes_get_key_time(void* anim, int32_t index) {
+    auto* a = cast<Noesis::StringAnimationUsingKeyFrames>(anim);
+    if (!a) return -1.0;
+    Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
+    if (!frames || index < 0 || index >= frames->Count()) return -1.0;
+    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+}
+
 // ── Matrix key-frame animation ───────────────────────────────────────────────
 //
 // MatrixAnimationUsingKeyFrames has no From-To form and only discrete frames (a
@@ -1241,6 +1459,39 @@ extern "C" bool dm_noesis_animation_keyspline_get_control_point2(void* ks, float
     out[0] = p.x;
     out[1] = p.y;
     return true;
+}
+
+// ── ParallelTimeline (timeline group) ─────────────────────────────────────────
+//
+// A code-built nestable timeline container. Children (any Timeline, including
+// animations or nested ParallelTimelines) run in parallel off the group's clock.
+// The children collection takes its own reference; the caller keeps ownership of
+// each added child.
+
+extern "C" void* dm_noesis_animation_parallel_timeline_create() {
+    Noesis::Ptr<Noesis::ParallelTimeline> p = *new Noesis::ParallelTimeline();
+    return handout(p.GetPtr());
+}
+
+extern "C" bool dm_noesis_animation_parallel_timeline_add_child(void* group, void* timeline) {
+    auto* g = cast<Noesis::TimelineGroup>(group);
+    auto* t = cast<Noesis::Timeline>(timeline);
+    if (!g || !t) return false;
+    Noesis::TimelineCollection* children = g->GetChildren();
+    if (!children) {
+        Noesis::Ptr<Noesis::TimelineCollection> created = *new Noesis::TimelineCollection();
+        g->SetChildren(created.GetPtr());
+        children = created.GetPtr();
+    }
+    children->Add(t);
+    return true;
+}
+
+extern "C" int32_t dm_noesis_animation_parallel_timeline_child_count(void* group) {
+    auto* g = cast<Noesis::TimelineGroup>(group);
+    if (!g) return -1;
+    Noesis::TimelineCollection* children = g->GetChildren();
+    return children ? children->Count() : 0;
 }
 
 // ── BeginStoryboard (trigger action) ─────────────────────────────────────────

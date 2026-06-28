@@ -2314,7 +2314,7 @@ unsafe extern "C" {
         kind: i32,
         key_time_seconds: f64,
         value: f32,
-        easing: *mut c_void,
+        extra: *mut c_void,
     ) -> bool;
     pub fn dm_noesis_color_animation_keyframes_create() -> *mut c_void;
     pub fn dm_noesis_color_animation_add_keyframe(
@@ -2322,7 +2322,7 @@ unsafe extern "C" {
         kind: i32,
         key_time_seconds: f64,
         color: *const f32,
-        easing: *mut c_void,
+        extra: *mut c_void,
     ) -> bool;
 
     // Storyboard-less direct animation
@@ -2568,6 +2568,81 @@ unsafe extern "C" {
         name: *const c_char,
     ) -> bool;
     pub fn dm_noesis_animation_begin_storyboard_get_name(bs: *mut c_void) -> *const c_char;
+
+    // Point key-frame animation
+    pub fn dm_noesis_animation_point_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_point_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        p: *const f32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_point_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_point_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_point_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    // Thickness key-frame animation
+    pub fn dm_noesis_animation_thickness_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_thickness_keyframes_add(
+        anim: *mut c_void,
+        kind: i32,
+        key_time_seconds: f64,
+        t: *const f32,
+        extra: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_thickness_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_thickness_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut f32,
+    ) -> bool;
+    pub fn dm_noesis_animation_thickness_keyframes_get_key_time(
+        anim: *mut c_void,
+        index: i32,
+    ) -> f64;
+
+    // Boolean key-frame animation (discrete only)
+    pub fn dm_noesis_animation_boolean_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_boolean_keyframes_add(
+        anim: *mut c_void,
+        key_time_seconds: f64,
+        value: bool,
+    ) -> bool;
+    pub fn dm_noesis_animation_boolean_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_boolean_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+        out: *mut bool,
+    ) -> bool;
+    pub fn dm_noesis_animation_boolean_keyframes_get_key_time(anim: *mut c_void, index: i32)
+    -> f64;
+
+    // String key-frame animation (discrete only)
+    pub fn dm_noesis_animation_string_keyframes_create() -> *mut c_void;
+    pub fn dm_noesis_animation_string_keyframes_add(
+        anim: *mut c_void,
+        key_time_seconds: f64,
+        value: *const c_char,
+    ) -> bool;
+    pub fn dm_noesis_animation_string_keyframes_count(anim: *mut c_void) -> i32;
+    pub fn dm_noesis_animation_string_keyframes_get_value(
+        anim: *mut c_void,
+        index: i32,
+    ) -> *const c_char;
+    pub fn dm_noesis_animation_string_keyframes_get_key_time(anim: *mut c_void, index: i32) -> f64;
+
+    // ParallelTimeline (timeline group)
+    pub fn dm_noesis_animation_parallel_timeline_create() -> *mut c_void;
+    pub fn dm_noesis_animation_parallel_timeline_add_child(
+        group: *mut c_void,
+        timeline: *mut c_void,
+    ) -> bool;
+    pub fn dm_noesis_animation_parallel_timeline_child_count(group: *mut c_void) -> i32;
 }
 
 // ── FormattedText measurement / layout (TODO §13) ───────────────────────────

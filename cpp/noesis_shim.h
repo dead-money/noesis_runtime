@@ -2641,13 +2641,16 @@ bool dm_noesis_easing_function_set_oscillations(void* easing, int32_t value); //
 bool dm_noesis_easing_function_set_springiness(void* easing, float value);    // Elastic/Bounce
 
 // Key-frame animations. add_keyframe kind: 0 Discrete, 1 Linear, 2 Easing
-// (uses `easing` if non-null). key_time is in seconds.
+// (`extra` = EasingFunctionBase*), 3 Spline (`extra` = KeySpline*). key_time is
+// in seconds. (The Rect/Size/Int/Point/Thickness/Object/Matrix/Boolean/String
+// key-frame entry points and the Parallel/BeginStoryboard helpers are declared
+// alongside their externs in src/ffi.rs — see cpp/noesis_animation.cpp.)
 void* dm_noesis_double_animation_keyframes_create(void);
 bool dm_noesis_double_animation_add_keyframe(void* anim, int32_t kind, double key_time_seconds,
-                                             float value, void* easing);
+                                             float value, void* extra);
 void* dm_noesis_color_animation_keyframes_create(void);
 bool dm_noesis_color_animation_add_keyframe(void* anim, int32_t kind, double key_time_seconds,
-                                            const float color[4], void* easing);
+                                            const float color[4], void* extra);
 
 // Storyboard-less direct animation: start `anim` on `target`'s `dp_name`
 // property using the target's view TimeManager. `target` must be a
