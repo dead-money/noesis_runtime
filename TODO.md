@@ -5,8 +5,7 @@ C ABI (`cpp/noesis_shim.h`) and Rust wrappers — the remaining gap between the 
 and what we wrap today.
 
 The goal is to **complete the crate**: cover the whole reachable SDK surface. Sections below
-list only outstanding work (finished work is removed, not annotated). The recommended
-sequencing is in [Suggested completion order](#suggested-completion-order); things 3.2.13
+list only outstanding work (finished work is removed, not annotated). Things 3.2.13
 genuinely cannot do are recorded under [Known SDK limitations](#known-sdk-limitations) so we
 don't keep re-discovering them.
 
@@ -123,20 +122,6 @@ From `IntegrationAPI.h`, none are wired:
 - **`Ptr<T>` / `BaseComponent` lifetime helpers** beyond `base_component_release` (AddReference/GetNumReferences for advanced ownership).
 
 ---
-
-## Suggested completion order
-
-Phases A–D are complete (core + cheap wins; presentation; custom types + motion; drawing / media /
-text) — the §-sections above track only their leftover remainders. What's left, ordered to finish the
-crate with the least rework:
-
-**Phase E — platform & finer input.**
-2. §14 System integration callbacks (cursor / soft-keyboard / open-url / audio / clipboard / culture).
-3. §16 Finer input (mouse capture, `FocusManager`/keyboard nav, input gestures, **gamepad / focus engagement**).
-4. §4 Routed commands (`RoutedCommand`/`CommandBinding`/built-in libraries) — pairs with §16 input bindings; the Rust `ICommand` already covers simple cases, so this is late.
-
-**Phase F — robustness & profiling.**
-5. §18 `SetErrorHandler`/`SetAssertHandler` + memory/lifetime hooks, and §17 profiling (`CpuProfiler`, `ViewStats` overlay).
 
 ## Known SDK limitations
 
