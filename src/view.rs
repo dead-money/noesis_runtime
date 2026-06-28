@@ -19,7 +19,8 @@ use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
-    dm_noesis_base_component_release, dm_noesis_focus_element,
+    PropType, dm_noesis_base_component_release, dm_noesis_dependency_object_get_property,
+    dm_noesis_dependency_object_set_property, dm_noesis_focus_element,
     dm_noesis_framework_element_find_name, dm_noesis_framework_element_get_name,
     dm_noesis_framework_element_set_margin, dm_noesis_framework_element_set_visibility,
     dm_noesis_gui_load_xaml, dm_noesis_path_set_points, dm_noesis_renderer_init,
@@ -232,6 +233,262 @@ impl FrameworkElement {
         unsafe {
             dm_noesis_path_set_points(self.ptr.as_ptr(), points.as_ptr().cast::<f32>(), count)
         }
+    }
+
+    // ── Generic dependency-property access ──────────────────────────────────
+    //
+    // Set / get any `DependencyProperty` on this element by name, mirroring the
+    // index-keyed [`crate::classes::Instance`] accessors but resolving the
+    // property from a name string (`FindDependencyProperty`) rather than a
+    // dense registration index. The `PropType` tag the wrapper passes is
+    // validated against the property's real reflected type on the C++ side, so
+    // calling the wrong-typed accessor for a property fails gracefully
+    // (returns `false` / `None`) instead of corrupting memory.
+    //
+    // Thread affinity: like every other accessor here (`text`, `set_margin`),
+    // these do not call `VerifyAccess()` and must be used on the thread driving
+    // the `View`. Getter results that borrow Noesis-owned storage (strings,
+    // components) are copied / wrapped immediately before returning.
+
+    /// Internal: resolve `name` to a C string and forward a typed set. Returns
+    /// `false` if the property is unknown, the tag mismatches the real type, or
+    /// the property is read-only.
+    fn set_prop(&self, name: &str, kind: PropType, value_ptr: *const c_void) -> bool {
+        let c = CString::new(name).expect("property name contained interior NUL");
+        // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
+        // `value_ptr` points at a stack value in the per-type FFI layout that
+        // the C++ side reads synchronously (or null for "type default").
+        unsafe {
+            dm_noesis_dependency_object_set_property(self.ptr.as_ptr(), c.as_ptr(), kind, value_ptr)
+        }
+    }
+
+    /// Internal: resolve `name` to a C string and forward a typed get into
+    /// `out`. Returns `false` on unknown name / tag mismatch / not-a-DO.
+    fn get_prop(&self, name: &str, kind: PropType, out: *mut c_void) -> bool {
+        let c = CString::new(name).expect("property name contained interior NUL");
+        // SAFETY: self.ptr is a live DependencyObject*; c lives for the call;
+        // `out` points at a buffer matching the per-type FFI layout.
+        unsafe {
+            dm_noesis_dependency_object_get_property(self.ptr.as_ptr(), c.as_ptr(), kind, out)
+        }
+    }
+
+    /// Set an `Int32` dependency property by name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_i32(&mut self, name: &str, value: i32) -> bool {
+        self.set_prop(name, PropType::Int32, (&value as *const i32).cast())
+    }
+
+    /// Set a `Float` (single-precision) dependency property by name. Most
+    /// `FrameworkElement` scalars Noesis exposes — `Width`, `Height`,
+    /// `Opacity` — are `float`, so this is the common case.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_f32(&mut self, name: &str, value: f32) -> bool {
+        self.set_prop(name, PropType::Float, (&value as *const f32).cast())
+    }
+
+    /// Set a `Double` (double-precision) dependency property by name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_f64(&mut self, name: &str, value: f64) -> bool {
+        self.set_prop(name, PropType::Double, (&value as *const f64).cast())
+    }
+
+    /// Set a `Bool` dependency property by name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_bool(&mut self, name: &str, value: bool) -> bool {
+        self.set_prop(name, PropType::Bool, (&value as *const bool).cast())
+    }
+
+    /// Set a `String` dependency property by name. Noesis copies the bytes
+    /// into its own storage.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` or `value` contains an interior NUL byte.
+    pub fn set_string(&mut self, name: &str, value: &str) -> bool {
+        let v = CString::new(value).expect("string value contained interior NUL");
+        let ptr: *const i8 = v.as_ptr();
+        self.set_prop(name, PropType::String, (&ptr as *const *const i8).cast())
+    }
+
+    /// Set a `Thickness` dependency property (`left, top, right, bottom`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_thickness(&mut self, name: &str, value: [f32; 4]) -> bool {
+        self.set_prop(name, PropType::Thickness, value.as_ptr().cast())
+    }
+
+    /// Set a `Color` dependency property (`r, g, b, a`, each in `0..=1`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_color(&mut self, name: &str, rgba: [f32; 4]) -> bool {
+        self.set_prop(name, PropType::Color, rgba.as_ptr().cast())
+    }
+
+    /// Set a `Rect` dependency property (`x, y, width, height`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    pub fn set_rect(&mut self, name: &str, value: [f32; 4]) -> bool {
+        self.set_prop(name, PropType::Rect, value.as_ptr().cast())
+    }
+
+    /// Read an `Int32` dependency property by name. `None` on unknown name or
+    /// type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_i32(&self, name: &str) -> Option<i32> {
+        let mut out: i32 = 0;
+        self.get_prop(name, PropType::Int32, (&mut out as *mut i32).cast())
+            .then_some(out)
+    }
+
+    /// Read a `Float` dependency property by name. `None` on unknown name or
+    /// type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_f32(&self, name: &str) -> Option<f32> {
+        let mut out: f32 = 0.0;
+        self.get_prop(name, PropType::Float, (&mut out as *mut f32).cast())
+            .then_some(out)
+    }
+
+    /// Read a `Double` dependency property by name. `None` on unknown name or
+    /// type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_f64(&self, name: &str) -> Option<f64> {
+        let mut out: f64 = 0.0;
+        self.get_prop(name, PropType::Double, (&mut out as *mut f64).cast())
+            .then_some(out)
+    }
+
+    /// Read a `Bool` dependency property by name. `None` on unknown name or
+    /// type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_bool(&self, name: &str) -> Option<bool> {
+        let mut out: bool = false;
+        self.get_prop(name, PropType::Bool, (&mut out as *mut bool).cast())
+            .then_some(out)
+    }
+
+    /// Read a `String` dependency property by name, copying it into an owned
+    /// [`String`]. `None` on unknown name or type mismatch. The pointer Noesis
+    /// returns is borrowed; we copy immediately so the result stays valid past
+    /// the next layout pass.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_string(&self, name: &str) -> Option<String> {
+        let mut p: *const i8 = core::ptr::null();
+        if !self.get_prop(name, PropType::String, (&mut p as *mut *const i8).cast()) {
+            return None;
+        }
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: p is a live NUL-terminated UTF-8 string borrowed from
+        // Noesis-owned storage while we hold our element reference; copy out
+        // before yielding control.
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+    }
+
+    /// Read a `Thickness` dependency property as `[left, top, right, bottom]`.
+    /// `None` on unknown name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_thickness(&self, name: &str) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        self.get_prop(name, PropType::Thickness, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read a `Color` dependency property as `[r, g, b, a]` (each in `0..=1`).
+    /// `None` on unknown name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_color(&self, name: &str) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        self.get_prop(name, PropType::Color, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read a `Rect` dependency property as `[x, y, width, height]`. `None` on
+    /// unknown name or type mismatch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_rect(&self, name: &str) -> Option<[f32; 4]> {
+        let mut out = [0.0f32; 4];
+        self.get_prop(name, PropType::Rect, out.as_mut_ptr().cast())
+            .then_some(out)
+    }
+
+    /// Read a reference-typed dependency property (any `BaseComponent`
+    /// subclass — `Brush`, `ImageSource`, `Style`, …) as a borrowed opaque
+    /// pointer. `None` on unknown name, type mismatch, or a null value.
+    ///
+    /// The returned pointer is borrowed: it has no `+1` reference and must not
+    /// be released. Treat it as valid only while this element is alive and the
+    /// property is unchanged. Useful for checking whether a `Background` /
+    /// `Source` is set, or feeding the pointer to another Noesis accessor
+    /// (e.g. [`crate::classes::image_source_size`]).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_component(&self, name: &str) -> Option<NonNull<c_void>> {
+        let mut p: *mut c_void = core::ptr::null_mut();
+        if !self.get_prop(
+            name,
+            PropType::BaseComponent,
+            (&mut p as *mut *mut c_void).cast(),
+        ) {
+            return None;
+        }
+        NonNull::new(p)
     }
 }
 

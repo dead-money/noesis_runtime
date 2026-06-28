@@ -16,7 +16,9 @@ XAML/font/texture providers (+ font fallbacks, registration, default properties)
 projection/flags/update + renderer init/update/render/offscreen; full input pump
 (mouse/wheel/scroll/touch/key/char/activate); `FrameworkElement` find-by-name, get-name,
 visibility, margin; routed `Click` + `KeyDown` subscriptions; TextBox text get/set + caret;
-focus; `Path` points; custom classes (`ContentControl` base) + custom markup extensions.
+focus; `Path` points; generic name-keyed `DependencyProperty` get/set on any
+`DependencyObject` (all 10 FFI value types, with type-tag validation + read-only guard);
+custom classes (`ContentControl` base) + custom markup extensions.
 
 ---
 
@@ -36,12 +38,21 @@ Most of `IView` is unexposed beyond the basics. From `NsGui/IView.h`:
 
 ## 2. Element tree access (DependencyObject / generic properties)
 
-Today we have only hand-picked typed accessors (text, visibility, margin, path points).
-There is no general property access.
+Generic name-keyed property access now exists:
+`dm_noesis_dependency_object_{set,get}_property` resolves a `DependencyProperty` by name
+(`FindDependencyProperty`) on any `DependencyObject`, validates the caller's type tag against
+the property's real reflected type, honours read-only, and marshals all 10 FFI value types.
+The safe Rust surface is `FrameworkElement::{set,get}_{i32,f32,f64,bool,string,thickness,color,rect}`
+plus `get_component` (borrowed `BaseComponent*`). `Width`/`Height`/`Opacity` etc. are
+reachable by name through these. Common typed accessors (text, visibility, margin, path
+points) remain as ergonomic shortcuts.
 
-- **Generic `GetValue` / `SetValue`** by `DependencyProperty` on any `DependencyObject`. This is the single highest-leverage gap — it would replace most one-off accessors.
-- **`DependencyProperty` lookup** by name/owner type; attached-property get/set.
-- **`FrameworkElement` common props** programmatically: `Width`/`Height`/`ActualWidth`/`ActualHeight`, `Opacity`, `Visibility` (have), `HorizontalAlignment`/`VerticalAlignment`, `RenderTransform`, `DataContext`, `Tag`, `Style`, `IsEnabled`, `Focusable`.
+Still open:
+
+- **Attached properties.** Same `FindDependencyProperty` mechanism but needs owner-type-qualified name resolution (e.g. `Grid.Row`, `Canvas.Left`).
+- **`ClearValue` / `SetCurrentValue` / `GetBaseValue`** and animation/expression destinations — the generic path only does plain local `SetValue`/`GetValue`.
+- **Dynamic tag inference.** A fully dynamic getter that infers the FFI tag from `dp->GetType()` (would need a `Type*`→tag table) rather than the caller supplying it.
+- **`FrameworkElement` common props as first-class typed wrappers** (optional sugar over the name-keyed accessors): `ActualWidth`/`ActualHeight`, `HorizontalAlignment`/`VerticalAlignment`, `RenderTransform`, `DataContext`, `Tag`, `Style`, `IsEnabled`, `Focusable`.
 - **`DataContext`** set/get (prerequisite for any binding-driven workflow).
 - **Tree traversal.** `VisualTreeHelper` (GetChild/GetParent/GetChildrenCount/HitTest), `LogicalTreeHelper`, `FrameworkElement::GetParent`/`GetTemplateChild`.
 - **Name scopes.** `INameScope` register/unregister; `FindName` exists, register does not.

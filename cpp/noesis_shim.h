@@ -709,6 +709,40 @@ bool dm_noesis_image_source_get_size(
     float* out_width,
     float* out_height);
 
+// ── Generic name-keyed DependencyProperty access ───────────────────────────
+//
+// Set / get any dependency property on any `Noesis::DependencyObject` by name,
+// without registering a Rust-backed class. `obj` is an opaque
+// `BaseComponent*` (e.g. a `FrameworkElement*` from find-by-name); it is
+// `DynamicCast` to `DependencyObject*` internally. The property is resolved
+// by `name` through the inherited class hierarchy
+// (`FindDependencyProperty`).
+//
+// `prop_type` is a `dm_noesis_prop_type` and selects the layout of
+// `value_ptr` / `out_value` exactly as on the instance path (see the enum
+// docs above). Because the caller supplies the tag, it is validated against
+// the property's real reflected type before any cast: value / struct types
+// must match exactly; `IMAGE_SOURCE` / `BASE_COMPONENT` accept any property
+// whose type is assignable to `ImageSource` / `BaseComponent`.
+//
+// Returns false (no-op) on: null obj/name, obj is not a DependencyObject,
+// unknown property name, type-tag mismatch, or (set only) a read-only
+// property. String / component `get` results borrow Noesis-owned storage —
+// copy immediately (same contract as the instance getter). Never throws; does
+// not call VerifyAccess(), so the caller must respect the View's thread
+// affinity.
+bool dm_noesis_dependency_object_set_property(
+    void* obj,
+    const char* name,
+    uint32_t prop_type,
+    const void* value_ptr);
+
+bool dm_noesis_dependency_object_get_property(
+    void* obj,
+    const char* name,
+    uint32_t prop_type,
+    void* out_value);
+
 // ── Custom MarkupExtension registration (Phase 5.D) ────────────────────────
 //
 // Register Rust-backed `MarkupExtension` subclasses so XAML's
