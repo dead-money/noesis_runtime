@@ -12,6 +12,7 @@
 
 use std::ffi::{CStr, CString};
 
+pub mod animation;
 pub mod binding;
 pub mod brushes;
 pub mod classes;

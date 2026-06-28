@@ -43,11 +43,24 @@ don't keep re-discovering them.
 
 ## 6. Animation & timing
 
-Nothing here is exposed. Leans on §1 View timers for scheduling.
+Core is exposed in `src/animation.rs` / `cpp/noesis_animation.cpp`: `Storyboard`
+(create/add-child/target-name+property/Begin/Pause/Resume/Stop/Seek/IsPlaying/
+IsPaused), the Double/Color/Thickness/Point From-To animations + their
+Double/Color `*UsingKeyFrames` (Discrete/Linear/Easing key frames), the full
+easing-function family (Quadratic…Power, EasingMode + per-easing knobs), the
+common `Timeline` knobs (duration/begin-time/auto-reverse/speed/fill-behavior/
+repeat), and a storyboard-less `Animation::begin_on` (BeginAnimation /
+ApplyAnimationClock equivalent off the element's view `TimeManager`).
 
-- **`Storyboard`** Begin/Pause/Resume/Stop/Seek (+ `BeginStoryboard` and the controllable actions).
-- **Animation classes** (Double/Color/Point/Thickness/Rect/Size/Object/Matrix/Int*, plus `*UsingKeyFrames`, easing functions, key splines, repeat/handoff behaviors).
-- **`Clock` / `AnimationClock` / `Timeline`** control and `ApplyAnimationClock`.
+Remaining:
+
+- **Animation classes** for the less-common value types (Rect/Size/Object/
+  Matrix/Int16/Int32/Int64) and their `*UsingKeyFrames`; spline (`KeySpline`)
+  key frames; per-animation `HandoffBehavior` on the storyboard path.
+- **`BeginStoryboard`** trigger-action wrapper (only useful inside a trigger;
+  storyboard `Begin` covers code-driven use).
+- **`Clock` / `AnimationClock` controller surface** (Seek/skip/SpeedRatio/
+  CurrentState on a live clock). See the Clock note under Known SDK limitations.
 
 ## 7. Styles, resources, templates
 
@@ -202,3 +215,4 @@ Recorded so they aren't re-attempted — 3.2.12 doesn't expose these; the workar
 - **`NavigationCommands` (§4).** Header doesn't ship (`ApplicationCommands`/`ComponentCommands` do).
 - **`GetBaseValue` object form (§2).** No boxed `GetBaseValue`, so the base-value getter covers value/struct/string DPs only, not component/brush DPs.
 - **`Dispatcher::BeginInvoke` (§2).** No NsGui dispatcher queue; queued/cross-thread invoke must route through the View timer API (`CreateTimer`, §1) once wrapped.
+- **Live `Clock` / `AnimationClock` controller (§6).** A standalone `Clock` is only produced internally by `Timeline::CreateClock(TimeManager*, …)`, and `TimeManager` / `ITimeManager` are opaque (no public time-source you can hand-roll). There is no public `UIElement::ApplyAnimationClock(dp, clock)`. Control therefore runs through `Storyboard` (controllable Begin + Pause/Resume/Stop/Seek, wrapped) or `AnimationTimeline::Start` via `Animation::begin_on` (wrapped); per-clock Seek/SpeedRatio/CurrentState on a detached clock is not reachable.
