@@ -22,6 +22,7 @@
 #include <NsGui/DependencyObject.h>
 #include <NsGui/Enums.h>
 #include <NsGui/FocusManager.h>
+#include <NsGui/FrameworkElement.h>
 #include <NsGui/ICommand.h>
 #include <NsGui/InputBinding.h>
 #include <NsGui/InputEnums.h>
@@ -239,6 +240,16 @@ extern "C" void* noesis_ui_element_predict_focus(void* element, int32_t directio
     if (!ui) return nullptr;
     return static_cast<void*>(
         ui->PredictFocus(static_cast<Noesis::FocusNavigationDirection>(direction)));
+}
+
+// x:Name of the element PredictFocus would land on, borrowed (const char*, may
+// be null), or null if there is no candidate or it is not a FrameworkElement.
+extern "C" const char* noesis_ui_element_predict_focus_name(void* element, int32_t direction) {
+    Noesis::UIElement* ui = as_ui(element);
+    if (!ui) return nullptr;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        ui->PredictFocus(static_cast<Noesis::FocusNavigationDirection>(direction)));
+    return fe ? fe->GetName() : nullptr;
 }
 
 // ── FocusManager statics ─────────────────────────────────────────────────────

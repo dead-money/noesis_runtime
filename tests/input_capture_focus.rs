@@ -221,6 +221,18 @@ fn capture_focus_roundtrip() {
             one.predict_focus(FocusNavigationDirection::Next).is_none(),
             "PredictFocus does not support tab-order Next"
         );
+        // predict_focus_name names the same target the pointer points at.
+        assert_eq!(
+            one.predict_focus_name(FocusNavigationDirection::Down)
+                .as_deref(),
+            Some("Two"),
+            "PredictFocus(Down) lands on the button named `Two`"
+        );
+        assert!(
+            one.predict_focus_name(FocusNavigationDirection::Next)
+                .is_none(),
+            "no name when PredictFocus has no candidate"
+        );
 
         drop(view);
     }

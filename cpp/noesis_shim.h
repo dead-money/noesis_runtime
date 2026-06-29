@@ -3394,6 +3394,8 @@ bool noesis_ui_element_move_focus(void* element, int32_t direction, bool wrapped
 
 // Borrowed DependencyObject* UIElement::PredictFocus(direction) lands on, or null.
 void* noesis_ui_element_predict_focus(void* element, int32_t direction);
+// x:Name of the element PredictFocus lands on, borrowed (may be null).
+const char* noesis_ui_element_predict_focus_name(void* element, int32_t direction);
 
 // FocusManager statics. Getters return borrowed pointers / values; the focused-
 // element setter accepts null to clear and requires a UIElement otherwise.
