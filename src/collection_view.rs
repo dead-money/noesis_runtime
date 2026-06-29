@@ -39,7 +39,8 @@ use crate::ffi::{
     noesis_collection_view_move_current_to_previous, noesis_collection_view_refresh,
     noesis_collection_view_source_create, noesis_collection_view_source_get_view,
     noesis_collection_view_source_set_source, noesis_collection_view_subscribe_current_changed,
-    noesis_collection_view_unsubscribe_current_changed, noesis_unbox_string,
+    noesis_collection_view_unsubscribe_current_changed, noesis_unbox_bool, noesis_unbox_double,
+    noesis_unbox_int32, noesis_unbox_string,
 };
 
 /// A code-built `Noesis::CollectionViewSource`: the proxy that produces a
@@ -275,8 +276,10 @@ impl Drop for CollectionView {
 
 /// The current item of a [`CollectionView`], `AddRef`'d so Rust owns it.
 /// Released on drop. Use [`raw`](Self::raw) for pointer-identity checks against
-/// the source item, or [`as_string`](Self::as_string) to unbox a boxed-string
-/// item.
+/// the source item, or one of [`as_string`](Self::as_string) /
+/// [`as_bool`](Self::as_bool) / [`as_i32`](Self::as_i32) /
+/// [`as_f64`](Self::as_f64) to unbox a boxed primitive item (each returns `None`
+/// on a type mismatch).
 pub struct CurrentItem {
     ptr: NonNull<c_void>,
 }
@@ -304,6 +307,39 @@ impl CurrentItem {
         }
         // SAFETY: p is a NUL-terminated string owned by the boxed value.
         Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+    }
+
+    /// Unbox the item as a `bool` if it is a boxed `bool` (e.g. from
+    /// [`ObservableCollection::push_bool`](crate::binding::ObservableCollection::push_bool)),
+    /// else `None`.
+    #[must_use]
+    pub fn as_bool(&self) -> Option<bool> {
+        let mut out = false;
+        // SAFETY: self.ptr is a live boxed BaseComponent*; out is a valid slot.
+        let ok = unsafe { noesis_unbox_bool(self.ptr.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+
+    /// Unbox the item as an `i32` if it is a boxed `int` (e.g. from
+    /// [`ObservableCollection::push_i32`](crate::binding::ObservableCollection::push_i32)),
+    /// else `None`.
+    #[must_use]
+    pub fn as_i32(&self) -> Option<i32> {
+        let mut out = 0i32;
+        // SAFETY: self.ptr is a live boxed BaseComponent*; out is a valid slot.
+        let ok = unsafe { noesis_unbox_int32(self.ptr.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+
+    /// Unbox the item as an `f64` if it is a boxed `double` (e.g. from
+    /// [`ObservableCollection::push_f64`](crate::binding::ObservableCollection::push_f64)),
+    /// else `None`.
+    #[must_use]
+    pub fn as_f64(&self) -> Option<f64> {
+        let mut out = 0.0f64;
+        // SAFETY: self.ptr is a live boxed BaseComponent*; out is a valid slot.
+        let ok = unsafe { noesis_unbox_double(self.ptr.as_ptr(), &mut out) };
+        ok.then_some(out)
     }
 }
 
