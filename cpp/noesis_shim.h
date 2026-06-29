@@ -3219,6 +3219,9 @@ void* noesis_text_inlines_span_get_inlines(void* span);
 int32_t noesis_text_inlines_collection_add(void* collection, void* inl);
 int32_t noesis_text_inlines_collection_count(void* collection);
 void* noesis_text_inlines_collection_get(void* collection, uint32_t index);
+// Remove all inlines from the collection (so it can be repopulated). No-op if
+// `collection` is not an InlineCollection.
+void noesis_text_inlines_collection_clear(void* collection);
 
 // ── Code-side element-tree construction ──────────────────────────────────────
 //

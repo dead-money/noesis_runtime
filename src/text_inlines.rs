@@ -20,8 +20,9 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::ffi::{
     noesis_base_component_release, noesis_text_inlines_bold_create,
-    noesis_text_inlines_collection_add, noesis_text_inlines_collection_count,
-    noesis_text_inlines_collection_get, noesis_text_inlines_hyperlink_create,
+    noesis_text_inlines_collection_add, noesis_text_inlines_collection_clear,
+    noesis_text_inlines_collection_count, noesis_text_inlines_collection_get,
+    noesis_text_inlines_hyperlink_create,
     noesis_text_inlines_hyperlink_get_navigate_uri, noesis_text_inlines_hyperlink_set_navigate_uri,
     noesis_text_inlines_inline_get_text_decorations,
     noesis_text_inlines_inline_set_text_decorations, noesis_text_inlines_italic_create,
@@ -433,6 +434,13 @@ impl InlineCollection {
     pub fn get_raw(&self, index: usize) -> *mut c_void {
         // SAFETY: self.ptr is a live InlineCollection*; bounds checked C-side.
         unsafe { noesis_text_inlines_collection_get(self.ptr.as_ptr(), index as u32) }
+    }
+
+    /// Remove all inlines, so the collection can be repopulated (e.g. to
+    /// re-apply changed formatted content without rebuilding the host element).
+    pub fn clear(&mut self) {
+        // SAFETY: self.ptr is a live InlineCollection*.
+        unsafe { noesis_text_inlines_collection_clear(self.ptr.as_ptr()) }
     }
 }
 

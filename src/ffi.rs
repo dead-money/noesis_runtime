@@ -2723,6 +2723,7 @@ unsafe extern "C" {
     pub fn noesis_text_inlines_collection_add(collection: *mut c_void, inl: *mut c_void) -> i32;
     pub fn noesis_text_inlines_collection_count(collection: *mut c_void) -> i32;
     pub fn noesis_text_inlines_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
+    pub fn noesis_text_inlines_collection_clear(collection: *mut c_void);
 
     // Code-side element-tree construction: Decorator/Border Child,
     // Panel Children, Grid row/column definitions. Collections hand out a +1
