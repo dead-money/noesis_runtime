@@ -6,7 +6,7 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
-## [0.10.0]
+## [0.10.0] - 2026-06-29
 
 ### Changed
 
@@ -24,6 +24,19 @@ pre-1.0, any `0.x` release may contain breaking changes.
   `None` on a type mismatch, plus `is_none` / `raw` for the no-parameter and
   raw-pointer cases. Construct one with `CommandParameterValue::new` to supply a
   parameter when invoking a command yourself.
+- Typed `ItemsSource` items: `push_i32`, `push_f64`, `push_bool`, and
+  `push_object` add values without boxing them yourself, and `CurrentItem` reads
+  them back with `as_i32`, `as_f64`, `as_bool`, and `as_string`.
+- `FrameworkElement::remove_input_binding` tears down an input binding added with
+  the `add_to` counterpart.
+- `View::predict_focus_name` names the element that focus navigation would move
+  to in a given direction, when you only need its name.
+- `View::solid_brush_color` reads back the RGBA of a named element's
+  `SolidColorBrush`.
+- `InlineCollection::clear` empties a `TextBlock`'s inlines so they can be
+  repopulated without rebuilding the host element.
+- `Shape::as_element` views a built shape as an owning `FrameworkElement`.
+- `ResourceDictionary::add_brush` inserts a typed brush under a key.
 
 ## [0.9.0]
 
