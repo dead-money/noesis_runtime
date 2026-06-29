@@ -1,16 +1,20 @@
 //! `RoutedCommand` / `RoutedUICommand` / `CommandBinding`: execute, can-execute gating, RAII detach, and built-in `ApplicationCommands` / `ComponentCommands` libraries.
 
 use std::collections::HashMap;
-use std::ptr::NonNull;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use noesis_runtime::commands::{
-    ApplicationCommand, CommandBinding, CommandBindingHandler, CommandParameter, ComponentCommand,
-    RoutedCommand, RoutedUICommand,
+    ApplicationCommand, CommandBinding, CommandBindingHandler, CommandParameterValue,
+    ComponentCommand, RoutedCommand, RoutedUICommand,
 };
 use noesis_runtime::view::{FrameworkElement, View};
 use noesis_runtime::xaml_provider::XamlProvider;
+
+// No command parameter (a null pointer), for the calls that don't pass one.
+fn no_param() -> CommandParameterValue {
+    CommandParameterValue::new(std::ptr::null_mut())
+}
 
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid x:Name="Root"
@@ -38,11 +42,11 @@ struct Probe {
 }
 
 impl CommandBindingHandler for Probe {
-    fn can_execute(&self, _param: CommandParameter) -> bool {
+    fn can_execute(&self, _param: CommandParameterValue) -> bool {
         self.can.load(Ordering::SeqCst)
     }
-    fn execute(&self, param: CommandParameter) {
-        self.saw_param.store(param.is_some(), Ordering::SeqCst);
+    fn execute(&self, param: CommandParameterValue) {
+        self.saw_param.store(!param.is_none(), Ordering::SeqCst);
         self.executed.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -76,7 +80,7 @@ fn routed_commands_bindings_and_builtin_libraries() {
         // Negative control: with no CommandBinding attached, the command cannot
         // execute (nothing in the tree handles it).
         assert!(
-            !cmd.can_execute(None, &root),
+            !cmd.can_execute(no_param(), &root),
             "an unbound routed command must not be executable"
         );
 
@@ -95,10 +99,10 @@ fn routed_commands_bindings_and_builtin_libraries() {
         assert!(binding.attach(&root), "attach to the root UIElement");
 
         assert!(
-            cmd.can_execute(None, &root),
+            cmd.can_execute(no_param(), &root),
             "bound command should be executable when the handler allows it"
         );
-        cmd.execute(None, &root);
+        cmd.execute(no_param(), &root);
         assert_eq!(
             executed.load(Ordering::SeqCst),
             1,
@@ -110,7 +114,7 @@ fn routed_commands_bindings_and_builtin_libraries() {
         );
 
         // Parameter plumbing: pass a non-null BaseComponent* (the root itself).
-        let param = NonNull::new(root.raw());
+        let param = CommandParameterValue::new(root.raw());
         cmd.execute(param, &root);
         assert_eq!(
             executed.load(Ordering::SeqCst),
@@ -124,26 +128,26 @@ fn routed_commands_bindings_and_builtin_libraries() {
 
         can.store(false, Ordering::SeqCst);
         assert!(
-            !cmd.can_execute(None, &root),
+            !cmd.can_execute(no_param(), &root),
             "CanExecute should now report false (handler gates it)"
         );
         can.store(true, Ordering::SeqCst);
         assert!(
-            cmd.can_execute(None, &root),
+            cmd.can_execute(no_param(), &root),
             "flipping the flag back re-enables CanExecute"
         );
 
         // RAII: dropping the binding detaches its handlers.
         drop(binding);
         let before = executed.load(Ordering::SeqCst);
-        cmd.execute(None, &root);
+        cmd.execute(no_param(), &root);
         assert_eq!(
             executed.load(Ordering::SeqCst),
             before,
             "after the CommandBinding is dropped, Execute must no longer fire the handler"
         );
         assert!(
-            !cmd.can_execute(None, &root),
+            !cmd.can_execute(no_param(), &root),
             "after drop, the command is unhandled again"
         );
 
@@ -195,16 +199,16 @@ fn routed_commands_bindings_and_builtin_libraries() {
 
         let copy_runs = Arc::new(AtomicU32::new(0));
         let cr = Arc::clone(&copy_runs);
-        let copy_binding = CommandBinding::new(&copy, move |_param: CommandParameter| {
+        let copy_binding = CommandBinding::new(&copy, move |_param: CommandParameterValue| {
             cr.fetch_add(1, Ordering::SeqCst);
         })
         .expect("create CommandBinding for a built-in");
         assert!(copy_binding.attach(&root));
         assert!(
-            copy.can_execute(None, &root),
+            copy.can_execute(no_param(), &root),
             "the built-in Copy should be executable once a binding handles it"
         );
-        copy.execute(None, &root);
+        copy.execute(no_param(), &root);
         assert_eq!(
             copy_runs.load(Ordering::SeqCst),
             1,
