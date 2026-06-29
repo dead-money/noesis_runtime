@@ -24,31 +24,41 @@ build, clippy, test, and the verified publish. GitHub-hosted runners only run
 ## One-time setup
 
 1. **Install cargo-release** locally: `cargo install cargo-release`.
-2. **Configure crates.io Trusted Publishing.** On crates.io → the crate →
-   Settings → Trusted Publishing, add a GitHub publisher:
+2. **Claim the name with a manual first publish.** crates.io does not allow
+   Trusted Publishing for a crate that does not exist yet, so the first version
+   has to be published by hand from a machine with the SDK. Create an API token
+   (crates.io → Account → API Tokens, scope `publish-new`), then:
+
+   ```sh
+   CARGO_REGISTRY_TOKEN=<token> NOESIS_SDK_DIR=~/sdk/noesis-3.2.13 cargo publish
+   ```
+
+   This was done for 0.9.0. Revoke the token afterward; later releases use
+   Trusted Publishing and need no token.
+3. **Configure crates.io Trusted Publishing** (only possible once the crate
+   exists). On crates.io → the crate → Settings → Trusted Publishing, add a
+   GitHub publisher:
    - Repository: `dead-money/noesis_runtime`
    - Workflow filename: `release.yml`
    - Environment: leave blank.
 
-   Trusted Publishing uses GitHub's OIDC identity, so there is **no API token to
-   store**. The `id-token: write` permission in `release.yml` lets the runner
-   mint a short-lived token at publish time.
-3. **First publish claims the name.** Trusted Publishing can be configured before
-   the crate exists; the first release can go straight through CI, or you can run
-   one manual `cargo publish` from a machine with the SDK to claim the name.
+   It uses GitHub's OIDC identity, so there is **no API token to store**. The
+   `id-token: write` permission in `release.yml` lets the runner mint a
+   short-lived token at publish time.
 
 ## Cutting a release
 
 With `main` clean and CI green:
 
-> **First release (0.9.0):** the version is already set in `Cargo.toml` and the
-> `0.9.0` section of `CHANGELOG.md` is already filled, so do NOT run
-> `cargo release` for it, which would re-bump the version and duplicate the
-> changelog heading. Just tag the current commit and push the tag:
+> **First release (0.9.0) is already published** to crates.io (manually, see
+> One-time setup). Tag the commit for the record:
 >
 > ```sh
 > git tag v0.9.0 && git push origin v0.9.0
 > ```
+>
+> The release workflow runs on the tag, detects 0.9.0 is already on crates.io,
+> and skips re-publishing.
 
 Use `cargo release` for **subsequent** releases:
 
