@@ -74,19 +74,20 @@ use crate::ffi::{
     noesis_scrollviewer_scroll_to_home, noesis_scrollviewer_scroll_to_horizontal,
     noesis_scrollviewer_scroll_to_vertical, noesis_selector_get_selected_index,
     noesis_selector_get_selected_item, noesis_selector_set_selected_index,
-    noesis_selector_set_selected_item, noesis_text_caret_to_end, noesis_text_get, noesis_text_set,
-    noesis_textbox_get_int, noesis_textbox_get_selected_text, noesis_textbox_select,
-    noesis_textbox_select_all, noesis_textbox_set_int, noesis_toggle_get_is_checked,
-    noesis_toggle_set_is_checked, noesis_ui_element_capture_mouse,
-    noesis_ui_element_capture_mouse_mode, noesis_ui_element_capture_touch,
-    noesis_ui_element_focus_engage, noesis_ui_element_get_is_focused,
-    noesis_ui_element_get_is_keyboard_focus_within, noesis_ui_element_get_is_keyboard_focused,
-    noesis_ui_element_get_is_mouse_captured, noesis_ui_element_get_key_states,
-    noesis_ui_element_get_keyboard_focused, noesis_ui_element_get_modifiers,
-    noesis_ui_element_get_mouse_captured, noesis_ui_element_get_mouse_position,
-    noesis_ui_element_get_render_transform_origin, noesis_ui_element_is_key_down,
-    noesis_ui_element_is_key_toggled, noesis_ui_element_is_key_up, noesis_ui_element_move_focus,
-    noesis_ui_element_predict_focus, noesis_ui_element_predict_focus_name,
+    noesis_selector_set_selected_item, noesis_solid_color_brush_get_color,
+    noesis_text_caret_to_end, noesis_text_get, noesis_text_set, noesis_textbox_get_int,
+    noesis_textbox_get_selected_text, noesis_textbox_select, noesis_textbox_select_all,
+    noesis_textbox_set_int, noesis_toggle_get_is_checked, noesis_toggle_set_is_checked,
+    noesis_ui_element_capture_mouse, noesis_ui_element_capture_mouse_mode,
+    noesis_ui_element_capture_touch, noesis_ui_element_focus_engage,
+    noesis_ui_element_get_is_focused, noesis_ui_element_get_is_keyboard_focus_within,
+    noesis_ui_element_get_is_keyboard_focused, noesis_ui_element_get_is_mouse_captured,
+    noesis_ui_element_get_key_states, noesis_ui_element_get_keyboard_focused,
+    noesis_ui_element_get_modifiers, noesis_ui_element_get_mouse_captured,
+    noesis_ui_element_get_mouse_position, noesis_ui_element_get_render_transform_origin,
+    noesis_ui_element_is_key_down, noesis_ui_element_is_key_toggled, noesis_ui_element_is_key_up,
+    noesis_ui_element_move_focus, noesis_ui_element_predict_focus,
+    noesis_ui_element_predict_focus_name,
     noesis_ui_element_release_mouse_capture, noesis_ui_element_set_render_transform_origin,
     noesis_view_activate, noesis_view_add_reference, noesis_view_add_rendering_handler,
     noesis_view_cancel_timer, noesis_view_char, noesis_view_create, noesis_view_create_timer,
@@ -1033,6 +1034,31 @@ impl FrameworkElement {
             return None;
         }
         NonNull::new(p)
+    }
+
+    /// Read the color of the `SolidColorBrush` currently assigned to the
+    /// Brush-typed dependency property `name` (e.g. `"Background"`,
+    /// `"Foreground"`, `"Fill"`, `"Stroke"`) as `[r, g, b, a]` (each `0..=1`).
+    ///
+    /// `None` if the property is unset, the value is not a brush, or the brush
+    /// is not a `SolidColorBrush` (e.g. a gradient). This is the read-back
+    /// counterpart to the brush-assignment sugar
+    /// ([`set_background`](Self::set_background) etc.): it lets a caller observe
+    /// that a code-built [`SolidColorBrush`](crate::brushes::SolidColorBrush)
+    /// actually landed on the element.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn solid_brush_color(&self, name: &str) -> Option<[f32; 4]> {
+        let brush = self.get_component(name)?;
+        let mut out = [0.0f32; 4];
+        // SAFETY: `brush` is a live, borrowed `BaseComponent*` valid for this
+        // call; the getter `DynamicCast`s to `SolidColorBrush` and returns
+        // `false` (leaving `out` untouched) when the value is a different brush.
+        let ok = unsafe { noesis_solid_color_brush_get_color(brush.as_ptr(), out.as_mut_ptr()) };
+        ok.then_some(out)
     }
 
     // ── Data binding ────────────────────────────────────────────────────────
