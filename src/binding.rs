@@ -154,6 +154,46 @@ impl ObservableCollection {
         unsafe { self.push_component(boxed.raw()) }
     }
 
+    /// Append a boxed `bool` item, returning its index (or `None` on failure).
+    /// The collection takes its own reference; nothing needs to be kept alive on
+    /// the Rust side.
+    pub fn push_bool(&mut self, value: bool) -> Option<usize> {
+        let boxed = box_bool(value);
+        // SAFETY: `boxed` is a live BaseComponent* for the duration of the call;
+        // it drops afterwards, releasing our ref while the collection keeps its own.
+        unsafe { self.push_component(boxed.raw()) }
+    }
+
+    /// Append a boxed `i32` item, returning its index (or `None` on failure).
+    /// The collection takes its own reference; nothing needs to be kept alive on
+    /// the Rust side.
+    pub fn push_i32(&mut self, value: i32) -> Option<usize> {
+        let boxed = box_i32(value);
+        // SAFETY: `boxed` is a live BaseComponent* for the duration of the call;
+        // it drops afterwards, releasing our ref while the collection keeps its own.
+        unsafe { self.push_component(boxed.raw()) }
+    }
+
+    /// Append a boxed `f64` item, returning its index (or `None` on failure).
+    /// The collection takes its own reference; nothing needs to be kept alive on
+    /// the Rust side.
+    pub fn push_f64(&mut self, value: f64) -> Option<usize> {
+        let boxed = box_f64(value);
+        // SAFETY: `boxed` is a live BaseComponent* for the duration of the call;
+        // it drops afterwards, releasing our ref while the collection keeps its own.
+        unsafe { self.push_component(boxed.raw()) }
+    }
+
+    /// Append a [`ClassInstance`](crate::classes::ClassInstance) view model as a
+    /// nested item, returning its index (or `None` on failure). The collection
+    /// takes its own reference; the caller retains ownership of `instance`. Bind a
+    /// `<DataTemplate>` against the instance's dependency properties to render it.
+    pub fn push_object(&mut self, instance: &crate::classes::ClassInstance) -> Option<usize> {
+        // SAFETY: `instance.raw()` is a live BaseComponent* for the lifetime of
+        // `instance`, which outlives this call; the collection takes its own ref.
+        unsafe { self.push_component(instance.raw()) }
+    }
+
     /// Append an arbitrary `BaseComponent*` item, returning its index (or `None`
     /// if the underlying handle is not a collection). The collection takes its
     /// own reference; the caller retains ownership of `item`.

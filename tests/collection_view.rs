@@ -112,5 +112,34 @@ fn collection_view_current_item_navigation() {
         );
     }
 
+    // Typed items navigate and unbox through the view's current item.
+    {
+        let mut list = ObservableCollection::new();
+        list.push_bool(true);
+        list.push_i32(42);
+        list.push_f64(3.5);
+
+        let mut cvs = CollectionViewSource::new();
+        assert!(cvs.set_source(&list), "set_source on a typed collection");
+        let view = cvs.view().expect("GetView once Source is set");
+        assert_eq!(view.count(), 3);
+
+        assert!(view.move_current_to_first());
+        let item = view.current_item().expect("bool current item");
+        assert_eq!(item.as_bool(), Some(true), "bool item round-trips");
+        assert_eq!(item.as_i32(), None, "bool item is not an i32");
+        assert_eq!(item.as_string(), None, "bool item is not a string");
+
+        assert!(view.move_current_to_next());
+        let item = view.current_item().expect("i32 current item");
+        assert_eq!(item.as_i32(), Some(42), "i32 item round-trips");
+        assert_eq!(item.as_string(), None, "i32 item is not a string");
+
+        assert!(view.move_current_to_next());
+        let item = view.current_item().expect("f64 current item");
+        assert_eq!(item.as_f64(), Some(3.5), "f64 item round-trips");
+        assert_eq!(item.as_bool(), None, "f64 item is not a bool");
+    }
+
     noesis_runtime::shutdown();
 }
