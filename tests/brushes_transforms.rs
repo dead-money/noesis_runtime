@@ -49,6 +49,10 @@ fn brushes_transforms_effects_round_trip() {
             border.get_component("Background").is_none(),
             "Border Background starts unset"
         );
+        assert!(
+            border.solid_brush_color("Background").is_none(),
+            "unset Background has no solid color"
+        );
         assert!(border.set_background(&brush), "set Background");
         let bg = border
             .get_component("Background")
@@ -58,6 +62,17 @@ fn brushes_transforms_effects_round_trip() {
             bg.as_ptr(),
             brush.raw(),
             "Background is the exact brush we assigned"
+        );
+        // Read-back counterpart to set_background: the assigned SolidColorBrush's
+        // color is observable straight off the element.
+        assert!(
+            approx4(
+                border
+                    .solid_brush_color("Background")
+                    .expect("Background reads back as a solid color"),
+                red
+            ),
+            "solid_brush_color reads the assigned color"
         );
 
         let mut grad = LinearGradientBrush::new();
@@ -94,6 +109,11 @@ fn brushes_transforms_effects_round_trip() {
             rect.get_component("Fill").expect("Fill set").as_ptr(),
             grad.raw(),
             "Fill is the exact gradient brush"
+        );
+        // A gradient is a brush but not a SolidColorBrush, so the read-back declines.
+        assert!(
+            rect.solid_brush_color("Fill").is_none(),
+            "gradient Fill has no single solid color"
         );
         // Border has no Fill DP, so the typed sugar must report failure.
         assert!(!border.set_fill(&brush), "Border has no Fill");
