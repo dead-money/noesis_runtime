@@ -27,22 +27,23 @@ use std::ffi::{CStr, CString, c_void};
 
 use crate::brushes::Brush;
 use crate::ffi::{
-    noesis_base_component_release, noesis_ellipse_create, noesis_line_create, noesis_line_get,
-    noesis_line_set, noesis_rectangle_create, noesis_rectangle_get_radius_x,
-    noesis_rectangle_get_radius_y, noesis_rectangle_set_radius_x, noesis_rectangle_set_radius_y,
-    noesis_shape_get_fill, noesis_shape_get_height, noesis_shape_get_stretch,
-    noesis_shape_get_stroke, noesis_shape_get_stroke_dash_array, noesis_shape_get_stroke_dash_cap,
-    noesis_shape_get_stroke_dash_offset, noesis_shape_get_stroke_end_line_cap,
-    noesis_shape_get_stroke_line_join, noesis_shape_get_stroke_miter_limit,
-    noesis_shape_get_stroke_start_line_cap, noesis_shape_get_stroke_thickness,
-    noesis_shape_get_trim_end, noesis_shape_get_trim_offset, noesis_shape_get_trim_start,
-    noesis_shape_get_width, noesis_shape_set_fill, noesis_shape_set_height,
-    noesis_shape_set_stretch, noesis_shape_set_stroke, noesis_shape_set_stroke_dash_array,
-    noesis_shape_set_stroke_dash_cap, noesis_shape_set_stroke_dash_offset,
-    noesis_shape_set_stroke_end_line_cap, noesis_shape_set_stroke_line_join,
-    noesis_shape_set_stroke_miter_limit, noesis_shape_set_stroke_start_line_cap,
-    noesis_shape_set_stroke_thickness, noesis_shape_set_trim_end, noesis_shape_set_trim_offset,
-    noesis_shape_set_trim_start, noesis_shape_set_width,
+    noesis_base_component_add_reference, noesis_base_component_release, noesis_ellipse_create,
+    noesis_line_create, noesis_line_get, noesis_line_set, noesis_rectangle_create,
+    noesis_rectangle_get_radius_x, noesis_rectangle_get_radius_y, noesis_rectangle_set_radius_x,
+    noesis_rectangle_set_radius_y, noesis_shape_get_fill, noesis_shape_get_height,
+    noesis_shape_get_stretch, noesis_shape_get_stroke, noesis_shape_get_stroke_dash_array,
+    noesis_shape_get_stroke_dash_cap, noesis_shape_get_stroke_dash_offset,
+    noesis_shape_get_stroke_end_line_cap, noesis_shape_get_stroke_line_join,
+    noesis_shape_get_stroke_miter_limit, noesis_shape_get_stroke_start_line_cap,
+    noesis_shape_get_stroke_thickness, noesis_shape_get_trim_end, noesis_shape_get_trim_offset,
+    noesis_shape_get_trim_start, noesis_shape_get_width, noesis_shape_set_fill,
+    noesis_shape_set_height, noesis_shape_set_stretch, noesis_shape_set_stroke,
+    noesis_shape_set_stroke_dash_array, noesis_shape_set_stroke_dash_cap,
+    noesis_shape_set_stroke_dash_offset, noesis_shape_set_stroke_end_line_cap,
+    noesis_shape_set_stroke_line_join, noesis_shape_set_stroke_miter_limit,
+    noesis_shape_set_stroke_start_line_cap, noesis_shape_set_stroke_thickness,
+    noesis_shape_set_trim_end, noesis_shape_set_trim_offset, noesis_shape_set_trim_start,
+    noesis_shape_set_width,
 };
 
 /// How the ends of a dash (or a line) are drawn. Ordinals mirror
@@ -113,6 +114,25 @@ pub trait Shape {
     /// valid for `self`'s lifetime. Used by the shared property methods and by
     /// callers handing the shape to other Noesis APIs (e.g. tree insertion).
     fn shape_raw(&self) -> *mut c_void;
+
+    /// View this shape as an owning [`FrameworkElement`](crate::view::FrameworkElement)
+    /// handle (a fresh `+1`) so it can be handed to element-tree APIs that take a
+    /// `&FrameworkElement` — e.g.
+    /// [`FrameworkElement::set_content`](crate::view::FrameworkElement::set_content)
+    /// (a `ContentControl`'s `Content`) or
+    /// [`FrameworkElement::set_decorator_child`](crate::view::FrameworkElement::set_decorator_child)
+    /// (a `Border`/`Decorator`'s `Child`). Dropping the returned handle releases
+    /// only its own reference and does not affect `self`.
+    #[must_use]
+    fn as_element(&self) -> crate::view::FrameworkElement {
+        // SAFETY: shape_raw() is a live FrameworkElement*/BaseComponent*; AddRef
+        // hands back an independent +1 the returned handle owns and releases on
+        // drop.
+        let p = unsafe { noesis_base_component_add_reference(self.shape_raw()) };
+        let ptr = NonNull::new(p).expect("add_reference returned null on a live shape");
+        // SAFETY: `ptr` carries the +1 we just took ownership of.
+        unsafe { crate::view::FrameworkElement::from_owned(ptr) }
+    }
 
     /// Set the element's explicit `Width` (a `FrameworkElement` DP; `NaN` ==
     /// "auto").
