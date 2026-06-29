@@ -165,6 +165,22 @@ impl ResourceDictionary {
         unsafe { self.add(key, value.raw()) }
     }
 
+    /// Add a [`Brush`](crate::brushes::Brush) under `key`; the dictionary takes
+    /// its own reference, so the caller retains ownership of `brush`. The safe,
+    /// typed counterpart to [`add`](Self::add) for the common "register a
+    /// code-built brush as a `{StaticResource}`" case (e.g. a
+    /// [`SolidColorBrush`](crate::brushes::SolidColorBrush) or a
+    /// [`LinearGradientBrush`](crate::brushes::LinearGradientBrush)).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `key` contains an interior NUL byte.
+    pub fn add_brush(&mut self, key: &str, brush: &impl crate::brushes::Brush) -> bool {
+        // SAFETY: brush.brush_raw() is a live Noesis::Brush* (a BaseComponent*)
+        // for the duration of the call; the dictionary AddRefs it.
+        unsafe { self.add(key, brush.brush_raw()) }
+    }
+
     /// Whether the dictionary (or one of its merged dictionaries) contains
     /// `key`.
     ///
