@@ -10,7 +10,7 @@ The crate is renderer-agnostic. It's built for Dead Money's own game projects an
 
 ## You need a Noesis license
 
-This crate links against the [Noesis Native SDK](https://www.noesisengine.com/), closed-source commercial software from Noesis Technologies S.L. We don't redistribute it. Buy it separately and point `NOESIS_SDK_DIR` at your install; the build script reads it at compile time and links `libNoesis` from the matching `Bin/<platform>/` directory.
+This crate links against the [Noesis Native SDK](https://www.noesisengine.com/), closed-source commercial software from Noesis Technologies S.L. We don't redistribute it. Buy it separately and point `NOESIS_SDK_DIR` at your install; the build script reads it at compile time and links the Noesis library for the matching platform target.
 
 This release targets **Noesis Native SDK 3.2.13**. The C ABI shim is compiled against that version's headers and checks key struct sizes at build time, so a different SDK version may fail to build or link. Match it unless you've verified a newer release.
 
@@ -123,6 +123,8 @@ unzip NoesisGUI-NativeSDK-linux-3.2.13-Indie.zip -d ~/sdks/noesis-3.2.13
 export NOESIS_SDK_DIR=~/sdks/noesis-3.2.13
 cargo test
 ```
+
+On Windows, point `NOESIS_SDK_DIR` at the unzipped **win** SDK and build with the MSVC toolchain. The build script links `Noesis.lib` from `Lib/windows_x86_64/` and copies `Noesis.dll` from `Bin/windows_x86_64/` next to the test and example binaries, so `cargo test` runs without extra setup. To run a binary from elsewhere, put that `Bin/` directory on `PATH` or keep `Noesis.dll` beside the `.exe`.
 
 Optionally apply your license credentials (see above):
 

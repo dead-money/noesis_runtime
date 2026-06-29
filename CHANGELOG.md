@@ -37,6 +37,10 @@ pre-1.0, any `0.x` release may contain breaking changes.
   repopulated without rebuilding the host element.
 - `Shape::as_element` views a built shape as an owning `FrameworkElement`.
 - `ResourceDictionary::add_brush` inserts a typed brush under a key.
+- Windows (`x86_64-pc-windows-msvc`) builds. The build script links `Noesis.lib`
+  from the SDK's `Lib/` directory, which the Windows package keeps separate from
+  the `Noesis.dll` in `Bin/`, and stages the DLL next to the test and example
+  binaries so `cargo test` runs without a `PATH` change.
 
 ## [0.9.0]
 

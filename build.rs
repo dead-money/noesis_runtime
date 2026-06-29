@@ -77,18 +77,54 @@ fn main() {
         bin.display()
     );
 
-    println!("cargo:rustc-link-search=native={}", bin.display());
+    // What the linker resolves `Noesis` against. On Linux and Android the shared
+    // object in Bin/ is linked directly. The Windows package splits the two:
+    // Bin/<subdir>/Noesis.dll is the runtime library with no import lib beside
+    // it, and the matching Noesis.lib ships under Lib/<subdir>.
+    let link_dir = if target_os == "windows" {
+        let lib = sdk.join("Lib").join(bin_subdir);
+        assert!(
+            lib.is_dir(),
+            "Noesis Lib/ subdir not found at {}. The Windows SDK keeps the import \
+             library (Noesis.lib) here, separate from the DLL in Bin/.",
+            lib.display()
+        );
+        lib
+    } else {
+        bin.clone()
+    };
+
+    println!("cargo:rustc-link-search=native={}", link_dir.display());
     println!("cargo:rustc-link-lib=dylib=Noesis");
 
-    // Via cargo's `links = "Noesis"` metadata, this surfaces to downstream
-    // crates as DEP_NOESIS_LIB_DIR; the rustc-link-arg below only reaches our
-    // own binaries.
+    // Via cargo's `links = "Noesis"` metadata, this surfaces to downstream crates
+    // as DEP_NOESIS_LIB_DIR. It points at Bin/, where the runtime library (.so /
+    // .dll) lives, so a consumer can stage it for packaging regardless of where
+    // the import lib was.
     println!("cargo:lib_dir={}", bin.display());
 
     if target_os == "linux" {
         // Bake the SDK Bin/ path into rpath so integration tests find
         // libNoesis.so without LD_LIBRARY_PATH.
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", bin.display());
+    } else if target_os == "windows" {
+        // Windows has no rpath: the loader finds Noesis.dll next to the .exe or
+        // on PATH. Copy it beside the test and example binaries so they run
+        // straight from `cargo test` / `cargo run`, the parity of the rpath
+        // above. OUT_DIR is <target>/<profile>/build/<pkg>-<hash>/out; the
+        // profile dir three levels up holds the binaries and their deps/.
+        let dll = bin.join("Noesis.dll");
+        let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+        if let Some(profile_dir) = out_dir.ancestors().nth(3) {
+            for sub in ["", "deps", "examples"] {
+                let dest = profile_dir.join(sub);
+                if dest.is_dir() {
+                    // Best effort: a stale copy or a missing dir is not fatal,
+                    // PATH still works as a fallback (see README).
+                    let _ = std::fs::copy(&dll, dest.join("Noesis.dll"));
+                }
+            }
+        }
     }
 
     let mut build = cc::Build::new();
