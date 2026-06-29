@@ -2949,6 +2949,10 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn noesis_input_binding_create(command: *mut c_void, gesture: *mut c_void) -> *mut c_void;
     pub fn noesis_ui_element_add_input_binding(element: *mut c_void, binding: *mut c_void) -> bool;
+    pub fn noesis_ui_element_remove_input_binding(
+        element: *mut c_void,
+        binding: *mut c_void,
+    ) -> bool;
 }
 
 // ────────────────────────────────────────────────────────────────────────────

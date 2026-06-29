@@ -86,6 +86,22 @@ fn mouse_bindings_fire_bound_commands() {
             "LeftClick fires the bound command exactly once"
         );
 
+        // Tearing the binding down must stop the click from firing it again.
+        assert!(
+            binding.remove_from(&target),
+            "remove binding from InputBindings"
+        );
+
+        let _ = view.mouse_button_down(100, 100, MouseButton::Left);
+        let _ = view.update(0.056);
+        let _ = view.mouse_button_up(100, 100, MouseButton::Left);
+        let _ = view.update(0.064);
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            1,
+            "removed binding must not fire on a later LeftClick"
+        );
+
         drop(view);
         drop(binding);
         drop(command);

@@ -423,3 +423,11 @@ extern "C" bool noesis_ui_element_add_input_binding(void* element, void* binding
     ui->GetInputBindings()->Add(b);
     return true;
 }
+
+extern "C" bool noesis_ui_element_remove_input_binding(void* element, void* binding) {
+    Noesis::UIElement* ui = as_ui(element);
+    auto* b = Noesis::DynamicCast<Noesis::InputBinding*>(
+        static_cast<Noesis::BaseComponent*>(binding));
+    if (!ui || !b) return false;
+    return ui->GetInputBindings()->Remove(b);
+}

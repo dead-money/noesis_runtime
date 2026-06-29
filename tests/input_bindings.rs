@@ -97,6 +97,26 @@ fn input_bindings_fire_bound_commands() {
             "Ctrl+Enter must fire the bound command exactly once"
         );
 
+        // Tearing the binding down must stop the chord from firing it again.
+        assert!(
+            binding.remove_from(&target),
+            "remove binding from InputBindings"
+        );
+
+        let _ = view.key_down(Key::LeftCtrl);
+        let _ = view.update(0.064);
+        let _ = view.key_down(Key::Return);
+        let _ = view.update(0.072);
+        let _ = view.key_up(Key::Return);
+        let _ = view.key_up(Key::LeftCtrl);
+        let _ = view.update(0.08);
+
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            1,
+            "removed binding must not fire on a later Ctrl+Enter"
+        );
+
         drop(view);
         drop(binding);
         drop(command);
