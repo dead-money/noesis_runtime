@@ -39,6 +39,7 @@ use crate::ffi::{
     noesis_keyboard_navigation_set_is_tab_stop, noesis_keyboard_navigation_set_tab_index,
     noesis_keyboard_navigation_set_tab_navigation, noesis_mouse_binding_create,
     noesis_mouse_gesture_create, noesis_ui_element_add_input_binding,
+    noesis_ui_element_remove_input_binding,
 };
 use crate::view::{FrameworkElement, Key};
 
@@ -320,6 +321,15 @@ impl KeyBinding {
         unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
+    /// Remove this binding from `element`'s `InputBindings`, the teardown
+    /// counterpart to [`Self::add_to`]. Returns `true` if the binding was
+    /// present and removed, `false` otherwise (e.g. never added, or `element`
+    /// is not a `UIElement`).
+    pub fn remove_from(&self, element: &FrameworkElement) -> bool {
+        // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
+        unsafe { noesis_ui_element_remove_input_binding(element.raw(), self.ptr.as_ptr()) }
+    }
+
     /// Raw `Noesis::InputBinding*`, borrowed for the lifetime of `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
@@ -364,6 +374,13 @@ impl MouseBinding {
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
+    }
+
+    /// Remove this binding from `element`'s `InputBindings`, the teardown
+    /// counterpart to [`Self::add_to`]. See [`KeyBinding::remove_from`].
+    pub fn remove_from(&self, element: &FrameworkElement) -> bool {
+        // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
+        unsafe { noesis_ui_element_remove_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
     /// Raw `Noesis::InputBinding*`, borrowed for the lifetime of `self`.
@@ -417,6 +434,13 @@ impl InputBinding {
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
+    }
+
+    /// Remove this binding from `element`'s `InputBindings`, the teardown
+    /// counterpart to [`Self::add_to`]. See [`KeyBinding::remove_from`].
+    pub fn remove_from(&self, element: &FrameworkElement) -> bool {
+        // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
+        unsafe { noesis_ui_element_remove_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
     /// Raw `Noesis::InputBinding*`, borrowed for the lifetime of `self`.

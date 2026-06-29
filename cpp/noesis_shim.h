@@ -3421,13 +3421,16 @@ bool noesis_keyboard_navigation_set_accepts_return(void* element, bool value);
 
 // Input gestures + bindings. Creates return +1 (released by Rust on drop) or
 // null on a bad command/gesture pointer. `add_input_binding` adds the binding to
-// the element's InputBindingCollection (which takes its own reference).
+// the element's InputBindingCollection (which takes its own reference);
+// `remove_input_binding` is its teardown counterpart, returning true if the
+// binding was present and removed.
 void* noesis_key_gesture_create(int32_t key, int32_t modifiers);
 void* noesis_mouse_gesture_create(int32_t action, int32_t modifiers);
 void* noesis_key_binding_create(void* command, int32_t key, int32_t modifiers);
 void* noesis_mouse_binding_create(void* command, int32_t action, int32_t modifiers);
 void* noesis_input_binding_create(void* command, void* gesture);
 bool noesis_ui_element_add_input_binding(void* element, void* binding);
+bool noesis_ui_element_remove_input_binding(void* element, void* binding);
 
 // ── Diagnostics: error / assert handlers + memory queries ────────────────────
 //
