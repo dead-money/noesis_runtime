@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
-use noesis_runtime::commands::{Command, CommandHandler, CommandParameter};
+use noesis_runtime::commands::{Command, CommandHandler, CommandParameterValue};
 use noesis_runtime::ffi::{ClassBase, PropType};
 use noesis_runtime::view::{FrameworkElement, MouseButton, View};
 use noesis_runtime::xaml_provider::XamlProvider;
@@ -46,11 +46,13 @@ struct Counting {
     enabled: Arc<AtomicU32>, // 1 = can_execute true, 0 = false
 }
 impl CommandHandler for Counting {
-    fn can_execute(&self, _param: CommandParameter) -> bool {
+    fn can_execute(&self, _param: CommandParameterValue) -> bool {
         self.enabled.load(Ordering::SeqCst) != 0
     }
-    fn execute(&self, param: CommandParameter) {
-        if param.is_some() {
+    fn execute(&self, param: CommandParameterValue) {
+        // The XAML sets CommandParameter="42"; Noesis boxes it as a String, so
+        // it now decodes on the Rust side. Count only correctly-decoded hits.
+        if param.as_str() == Some("42") {
             self.saw_param.fetch_add(1, Ordering::SeqCst);
         }
         self.executes.fetch_add(1, Ordering::SeqCst);
@@ -67,7 +69,7 @@ impl Drop for DropProbe {
     }
 }
 impl CommandHandler for DropProbe {
-    fn execute(&self, _param: CommandParameter) {}
+    fn execute(&self, _param: CommandParameterValue) {}
 }
 
 #[test]
@@ -156,7 +158,7 @@ fn rust_command_drives_button() {
         assert_eq!(
             saw_param.load(Ordering::SeqCst),
             1,
-            "command did not receive the CommandParameter"
+            "command did not receive the CommandParameter decoded as \"42\""
         );
 
         enabled.store(0, Ordering::SeqCst);

@@ -40,7 +40,7 @@
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
-use std::ffi::{CString, c_void};
+use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
 
 use crate::ffi::{
@@ -49,7 +49,8 @@ use crate::ffi::{
     noesis_command_create, noesis_command_destroy, noesis_command_raise_can_execute_changed,
     noesis_component_command, noesis_routed_command_can_execute, noesis_routed_command_create,
     noesis_routed_command_execute, noesis_routed_command_get_name, noesis_routed_ui_command_create,
-    noesis_routed_ui_command_get_text, noesis_routed_ui_command_set_text,
+    noesis_routed_ui_command_get_text, noesis_routed_ui_command_set_text, noesis_unbox_bool,
+    noesis_unbox_double, noesis_unbox_int32, noesis_unbox_string,
 };
 use crate::view::FrameworkElement;
 
@@ -62,11 +63,85 @@ unsafe fn cstr_opt(p: *const c_char) -> Option<String> {
     }
 }
 
-/// A borrowed command parameter: Noesis's `CommandParameter` as an opaque
-/// `Noesis::BaseComponent*`. `None` when the bound control supplied no
-/// parameter. The pointer is borrowed for the duration of the callback; copy /
+/// A borrowed command parameter: Noesis's `CommandParameter` as an opaque,
+/// boxed `Noesis::BaseComponent*`. [`is_none`](Self::is_none) reports the
+/// no-parameter case (the bound control supplied none); the typed accessors
+/// decode the boxed value, each returning `None` when its runtime type doesn't
+/// match. The pointer is borrowed for the duration of the callback; copy /
 /// re-root (via Noesis accessors) if you need it past the call.
-pub type CommandParameter = Option<NonNull<c_void>>;
+pub struct CommandParameterValue(Option<NonNull<c_void>>);
+
+impl CommandParameterValue {
+    /// Wrap a raw `CommandParameter` pointer, mapping null to the no-parameter
+    /// case. Use this to supply a parameter when invoking a command yourself
+    /// (e.g. [`RoutedCommand::execute`]).
+    #[must_use]
+    pub fn new(raw: *mut c_void) -> Self {
+        Self(NonNull::new(raw))
+    }
+
+    /// Whether the bound control supplied no parameter (a null pointer).
+    #[must_use]
+    pub fn is_none(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// Raw borrowed `Noesis::BaseComponent*` (the boxed value), or `None` when
+    /// no parameter was supplied.
+    #[must_use]
+    pub fn raw(&self) -> Option<NonNull<c_void>> {
+        self.0
+    }
+
+    /// Unbox a `bool` (a `BoxedValue<bool>`), or `None` on type mismatch / no
+    /// parameter.
+    #[must_use]
+    pub fn as_bool(&self) -> Option<bool> {
+        let p = self.0?;
+        let mut out = false;
+        // SAFETY: p is a live boxed BaseComponent* for the callback; out is valid.
+        let ok = unsafe { noesis_unbox_bool(p.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+
+    /// Unbox an `i32` (a `BoxedValue<int>`), or `None` on type mismatch / no
+    /// parameter.
+    #[must_use]
+    pub fn as_i32(&self) -> Option<i32> {
+        let p = self.0?;
+        let mut out = 0i32;
+        // SAFETY: as in `as_bool`.
+        let ok = unsafe { noesis_unbox_int32(p.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+
+    /// Unbox an `f64` (a `BoxedValue<double>`), or `None` on type mismatch / no
+    /// parameter.
+    #[must_use]
+    pub fn as_f64(&self) -> Option<f64> {
+        let p = self.0?;
+        let mut out = 0.0f64;
+        // SAFETY: as in `as_bool`.
+        let ok = unsafe { noesis_unbox_double(p.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+
+    /// Borrowed view of a boxed string (a `BoxedValue<String>`), valid for the
+    /// callback. `None` on type mismatch / no parameter / non-UTF-8. Noesis
+    /// boxes a XAML `CommandParameter="..."` literal as a string, so this is the
+    /// usual decoder for a constant parameter.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        let p = self.0?;
+        // SAFETY: p is a live boxed BaseComponent* for the callback.
+        let s = unsafe { noesis_unbox_string(p.as_ptr()) };
+        if s.is_null() {
+            return None;
+        }
+        // SAFETY: s is a borrowed NUL-terminated string valid for the callback.
+        unsafe { CStr::from_ptr(s) }.to_str().ok()
+    }
+}
 
 /// Rust-side command logic. `execute` runs the action; `can_execute` gates it
 /// (and drives the bound control's `IsEnabled`).
@@ -78,7 +153,7 @@ pub trait CommandHandler: Send + 'static {
     /// this to decide a bound `Button`'s enabled state, and again before each
     /// `Execute`. After the answer changes, call
     /// [`Command::raise_can_execute_changed`] so bound controls re-query.
-    fn can_execute(&self, _param: CommandParameter) -> bool {
+    fn can_execute(&self, _param: CommandParameterValue) -> bool {
         true
     }
 
@@ -89,15 +164,15 @@ pub trait CommandHandler: Send + 'static {
     /// re-enter the same box (it can trigger a synchronous `can_execute` requery,
     /// or activate another control bound to the same command). Use interior
     /// mutability for handler state.
-    fn execute(&self, param: CommandParameter);
+    fn execute(&self, param: CommandParameterValue);
 }
 
 /// Adapter so a bare `Fn` closure is a fire-always [`CommandHandler`]
 /// (`can_execute` is always `true`). Use [`Command::new`] with a struct
 /// implementing [`CommandHandler`] when you need a controllable
 /// `can_execute`.
-impl<F: Fn(CommandParameter) + Send + 'static> CommandHandler for F {
-    fn execute(&self, param: CommandParameter) {
+impl<F: Fn(CommandParameterValue) + Send + 'static> CommandHandler for F {
+    fn execute(&self, param: CommandParameterValue) {
         self(param);
     }
 }
@@ -117,7 +192,7 @@ unsafe extern "C" fn command_can_execute_trampoline(
 ) -> bool {
     crate::panic_guard::guard(|| {
         let handler = &*userdata.cast::<Box<dyn CommandHandler>>();
-        handler.can_execute(NonNull::new(param))
+        handler.can_execute(CommandParameterValue::new(param))
     })
 }
 
@@ -126,7 +201,7 @@ unsafe extern "C" fn command_execute_trampoline(userdata: *mut c_void, param: *m
     crate::panic_guard::guard(|| {
         // Shared `&`: re-entrant handler box (see `CommandHandler::execute`).
         let handler = &*userdata.cast::<Box<dyn CommandHandler>>();
-        handler.execute(NonNull::new(param));
+        handler.execute(CommandParameterValue::new(param));
     })
 }
 
@@ -153,7 +228,7 @@ unsafe impl Send for Command {}
 
 impl Command {
     /// Build a command from a [`CommandHandler`]. A bare
-    /// `Fn(CommandParameter)` closure also works (fire-always: its
+    /// `Fn(CommandParameterValue)` closure also works (fire-always: its
     /// `can_execute` is always `true`).
     ///
     /// # Panics
@@ -260,20 +335,20 @@ impl RoutedCommand {
 
     /// Execute the command against `target` (a `UIElement`), routing to its
     /// `CommandBinding`s. `param` is an optional borrowed command parameter.
-    pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
+    pub fn execute(&self, param: CommandParameterValue, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedCommand*; target.raw() a live element.
         unsafe {
-            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(&param), target.raw());
         }
     }
 
     /// Whether the command can currently execute against `target` (queries its
     /// `CommandBinding`s' `CanExecute`). `false` if nothing handles it.
     #[must_use]
-    pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
+    pub fn can_execute(&self, param: CommandParameterValue, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
         unsafe {
-            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(&param), target.raw())
         }
     }
 
@@ -333,19 +408,19 @@ impl RoutedUICommand {
     }
 
     /// See [`RoutedCommand::execute`].
-    pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
+    pub fn execute(&self, param: CommandParameterValue, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedUICommand* (a RoutedCommand).
         unsafe {
-            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(&param), target.raw());
         }
     }
 
     /// See [`RoutedCommand::can_execute`].
     #[must_use]
-    pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
+    pub fn can_execute(&self, param: CommandParameterValue, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
         unsafe {
-            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(&param), target.raw())
         }
     }
 
@@ -394,9 +469,10 @@ impl Drop for RoutedUICommand {
     }
 }
 
-/// `CommandParameter` → raw pointer for the C ABI (NULL when `None`).
-fn param_ptr(param: CommandParameter) -> *mut c_void {
-    param.map_or(core::ptr::null_mut(), NonNull::as_ptr)
+/// [`CommandParameterValue`] → raw pointer for the C ABI (NULL when no
+/// parameter). Used on the outbound path when we invoke a command ourselves.
+fn param_ptr(param: &CommandParameterValue) -> *mut c_void {
+    param.raw().map_or(core::ptr::null_mut(), NonNull::as_ptr)
 }
 
 /// A borrowed reference to a framework-owned `RoutedUICommand` singleton (the
@@ -436,20 +512,20 @@ impl BorrowedCommand {
     /// Execute this command against `target` (a `UIElement`), routing to its
     /// `CommandBinding`s. The built-ins are `RoutedCommand`s. See
     /// [`RoutedCommand::execute`].
-    pub fn execute(&self, param: CommandParameter, target: &FrameworkElement) {
+    pub fn execute(&self, param: CommandParameterValue, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedCommand*; target.raw() a live element.
         unsafe {
-            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(param), target.raw());
+            noesis_routed_command_execute(self.ptr.as_ptr(), param_ptr(&param), target.raw());
         }
     }
 
     /// Whether this command can currently execute against `target`. See
     /// [`RoutedCommand::can_execute`].
     #[must_use]
-    pub fn can_execute(&self, param: CommandParameter, target: &FrameworkElement) -> bool {
+    pub fn can_execute(&self, param: CommandParameterValue, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
         unsafe {
-            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(param), target.raw())
+            noesis_routed_command_can_execute(self.ptr.as_ptr(), param_ptr(&param), target.raw())
         }
     }
 }
@@ -563,11 +639,11 @@ impl ComponentCommand {
 
 /// Rust handlers for a [`CommandBinding`]: `execute` runs the action when a
 /// bound command is invoked through the attached element; `can_execute` gates
-/// it (default always-`true`). A bare `Fn(CommandParameter)` closure works as
-/// a fire-always handler.
+/// it (default always-`true`). A bare `Fn(CommandParameterValue)` closure works
+/// as a fire-always handler.
 pub trait CommandBindingHandler: Send + 'static {
     /// Whether the command may run now. Default `true`.
-    fn can_execute(&self, _param: CommandParameter) -> bool {
+    fn can_execute(&self, _param: CommandParameterValue) -> bool {
         true
     }
 
@@ -575,11 +651,11 @@ pub trait CommandBindingHandler: Send + 'static {
     ///
     /// Takes `&self` (re-entrant per the same reasoning as
     /// [`CommandHandler::execute`]; use interior mutability for handler state).
-    fn execute(&self, param: CommandParameter);
+    fn execute(&self, param: CommandParameterValue);
 }
 
-impl<F: Fn(CommandParameter) + Send + 'static> CommandBindingHandler for F {
-    fn execute(&self, param: CommandParameter) {
+impl<F: Fn(CommandParameterValue) + Send + 'static> CommandBindingHandler for F {
+    fn execute(&self, param: CommandParameterValue) {
         self(param);
     }
 }
@@ -590,7 +666,7 @@ unsafe extern "C" fn cb_executed_trampoline(userdata: *mut c_void, param: *mut c
     crate::panic_guard::guard(|| {
         // Shared `&`: re-entrant handler box (see `CommandBindingHandler`).
         let handler = &*userdata.cast::<Box<dyn CommandBindingHandler>>();
-        handler.execute(NonNull::new(param));
+        handler.execute(CommandParameterValue::new(param));
     })
 }
 
@@ -598,7 +674,7 @@ unsafe extern "C" fn cb_executed_trampoline(userdata: *mut c_void, param: *mut c
 unsafe extern "C" fn cb_can_execute_trampoline(userdata: *mut c_void, param: *mut c_void) -> bool {
     crate::panic_guard::guard(|| {
         let handler = &*userdata.cast::<Box<dyn CommandBindingHandler>>();
-        handler.can_execute(NonNull::new(param))
+        handler.can_execute(CommandParameterValue::new(param))
     })
 }
 
