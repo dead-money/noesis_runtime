@@ -24,11 +24,30 @@ jobs:
       - name: cargo test
         run: cargo test --all-features
 
+      # Skip publishing if this version is already on crates.io (the first
+      # release is published manually). Keeps the tag run green and makes a
+      # re-run idempotent.
+      - name: Check if version already published
+        id: check
+        run: |
+          ver=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H 'User-Agent: noesis_runtime-release' \
+            "https://crates.io/api/v1/crates/noesis_runtime/$ver")
+          if [ "$code" = "200" ]; then
+            echo "noesis_runtime $ver is already on crates.io; skipping publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Authenticate to crates.io (Trusted Publishing)
+        if: steps.check.outputs.skip != 'true'
         uses: rust-lang/crates-io-auth-action@v1
         id: auth
 
       - name: cargo publish
+        if: steps.check.outputs.skip != 'true'
         run: cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

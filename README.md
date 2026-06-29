@@ -12,6 +12,8 @@ The crate is renderer-agnostic. It's built for Dead Money's own game projects an
 
 This crate links against the [Noesis Native SDK](https://www.noesisengine.com/), closed-source commercial software from Noesis Technologies S.L. We don't redistribute it. Buy it separately and point `NOESIS_SDK_DIR` at your install; the build script reads it at compile time and links `libNoesis` from the matching `Bin/<platform>/` directory.
 
+This release targets **Noesis Native SDK 3.2.13**. The C ABI shim is compiled against that version's headers and checks key struct sizes at build time, so a different SDK version may fail to build or link. Match it unless you've verified a newer release.
+
 Set `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to apply your license. Without them the runtime works for a while, then blanks the view with a "Trial expired" message.
 
 ## Quick start
