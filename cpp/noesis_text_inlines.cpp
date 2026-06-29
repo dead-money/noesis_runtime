@@ -242,3 +242,10 @@ extern "C" void* noesis_text_inlines_collection_get(void* collection, uint32_t i
     if (!coll || index >= (uint32_t)coll->Count()) return nullptr;
     return static_cast<Noesis::BaseComponent*>(coll->Get(index));
 }
+
+// Remove all inlines from the collection (so it can be repopulated). No-op if
+// `collection` is not an InlineCollection.
+extern "C" void noesis_text_inlines_collection_clear(void* collection) {
+    InlineColl* coll = as_inlines(collection);
+    if (coll) coll->Clear();
+}
