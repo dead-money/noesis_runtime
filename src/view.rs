@@ -86,13 +86,13 @@ use crate::ffi::{
     noesis_ui_element_get_mouse_captured, noesis_ui_element_get_mouse_position,
     noesis_ui_element_get_render_transform_origin, noesis_ui_element_is_key_down,
     noesis_ui_element_is_key_toggled, noesis_ui_element_is_key_up, noesis_ui_element_move_focus,
-    noesis_ui_element_predict_focus, noesis_ui_element_release_mouse_capture,
-    noesis_ui_element_set_render_transform_origin, noesis_view_activate, noesis_view_add_reference,
-    noesis_view_add_rendering_handler, noesis_view_cancel_timer, noesis_view_char,
-    noesis_view_create, noesis_view_create_timer, noesis_view_deactivate, noesis_view_destroy,
-    noesis_view_get_content, noesis_view_get_flags, noesis_view_get_renderer,
-    noesis_view_get_stats, noesis_view_get_tessellation_max_pixel_error, noesis_view_hscroll,
-    noesis_view_key_down, noesis_view_key_up, noesis_view_mouse_button_down,
+    noesis_ui_element_predict_focus, noesis_ui_element_predict_focus_name,
+    noesis_ui_element_release_mouse_capture, noesis_ui_element_set_render_transform_origin,
+    noesis_view_activate, noesis_view_add_reference, noesis_view_add_rendering_handler,
+    noesis_view_cancel_timer, noesis_view_char, noesis_view_create, noesis_view_create_timer,
+    noesis_view_deactivate, noesis_view_destroy, noesis_view_get_content, noesis_view_get_flags,
+    noesis_view_get_renderer, noesis_view_get_stats, noesis_view_get_tessellation_max_pixel_error,
+    noesis_view_hscroll, noesis_view_key_down, noesis_view_key_up, noesis_view_mouse_button_down,
     noesis_view_mouse_button_up, noesis_view_mouse_double_click, noesis_view_mouse_hwheel,
     noesis_view_mouse_move, noesis_view_mouse_wheel, noesis_view_remove_rendering_handler,
     noesis_view_restart_timer, noesis_view_scroll, noesis_view_set_double_tap_distance_threshold,
@@ -587,6 +587,26 @@ impl FrameworkElement {
         // SAFETY: self.ptr is a live FrameworkElement*; borrowed or null.
         let p = unsafe { noesis_ui_element_predict_focus(self.ptr.as_ptr(), direction as i32) };
         NonNull::new(p)
+    }
+
+    /// The `x:Name` of the element [`predict_focus`](Self::predict_focus) would
+    /// land on in `direction`, or `None` if there is no candidate (or the target
+    /// is unnamed / not a `FrameworkElement`). A convenience over `predict_focus`
+    /// when you only need to identify the predicted element by name.
+    #[must_use]
+    pub fn predict_focus_name(
+        &self,
+        direction: crate::input::FocusNavigationDirection,
+    ) -> Option<String> {
+        // SAFETY: self.ptr is a live FrameworkElement*; borrowed const char* or
+        // null. The string is Noesis-owned and borrowed only for this call, so
+        // copy it out before yielding control.
+        let p =
+            unsafe { noesis_ui_element_predict_focus_name(self.ptr.as_ptr(), direction as i32) };
+        if p.is_null() {
+            return None;
+        }
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
     }
 
     /// Assign this element's geometry (as a `Path`) to an open polyline through

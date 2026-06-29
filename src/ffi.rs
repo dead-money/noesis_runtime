@@ -2892,6 +2892,10 @@ unsafe extern "C" {
         wrapped: bool,
     ) -> bool;
     pub fn noesis_ui_element_predict_focus(element: *mut c_void, direction: i32) -> *mut c_void;
+    pub fn noesis_ui_element_predict_focus_name(
+        element: *mut c_void,
+        direction: i32,
+    ) -> *const c_char;
 
     // FocusManager statics
     pub fn noesis_focus_manager_get_focused_element(scope: *mut c_void) -> *mut c_void;
