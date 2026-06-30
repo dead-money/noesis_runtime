@@ -6,6 +6,27 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-29
+
+### Added
+
+- `ObservableCollection::move_item(old, new)` performs a true positional move on
+  the underlying Noesis collection, raising a single `CollectionChanged.Move`
+  rather than a Remove+Add. A reorder keeps `ICollectionView` currency (selection)
+  and scroll position instead of resetting them.
+- `ObservableCollection::insert_object` inserts a reflected object at an index for
+  entity-keyed list inserts, without a clear-and-rebuild.
+- `u64` reflected values: `PlainType::U64` / `PlainValue::U64`, `ItemValue::U64`,
+  `PropType::UInt64`, and `Instance::{set_u64, get_u64}` plus the plain-VM
+  `set_u64` / `get_u64` / `as_u64`. Stamp a `u64` (e.g. a host `Entity`'s bits) on
+  a reflected row or view-model object as a stable key.
+- `FrameworkElement::data_context_u64` and `EventArgs::source_data_context_u64`
+  read a `u64` back off an element's (or a routed event source's) `DataContext`,
+  resolving an event to the row it originated from with no side channel.
+- `subscribe_selection_changed` (with `SelectionChangedHandler` and the RAII
+  `SelectionChangedSubscription`) subscribes to `Selector::SelectionChanged`, so a
+  control's selection surfaces through `ICollectionView` currency.
+
 ## [0.10.0] - 2026-06-29
 
 ### Changed
