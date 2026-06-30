@@ -33,8 +33,8 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    noesis_key_args_key, noesis_mouse_args_position, noesis_mouse_button_args_button,
-    noesis_mouse_wheel_args_delta, noesis_routed_args_source,
+    noesis_element_datacontext_get_u64, noesis_key_args_key, noesis_mouse_args_position,
+    noesis_mouse_button_args_button, noesis_mouse_wheel_args_delta, noesis_routed_args_source,
     noesis_routed_events_add_copying_handler, noesis_routed_events_add_pasting_handler,
     noesis_routed_events_do_drag_drop, noesis_routed_events_drag_data,
     noesis_routed_events_drag_effects, noesis_routed_events_drag_position,
@@ -621,6 +621,35 @@ impl EventArgs {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
         let p = unsafe { noesis_routed_args_source(self.raw) };
         (!p.is_null()).then_some(p)
+    }
+
+    /// Read a `u64` field named `prop_name` off the (inherited) `DataContext` of
+    /// this event's originating element (`RoutedEventArgs::source`). This is the
+    /// per-row identity hook for templated list rows: a handler subscribed once
+    /// on the `ItemsControl` recovers the clicked row's stable id (e.g. a Bevy
+    /// `Entity`'s bits stashed via the hidden `__entity` field) straight from the
+    /// event source — no `x:Name`, no per-row subscription, no borrowed pointer
+    /// kept past the callback.
+    ///
+    /// Returns `None` if the event carries no source, the source is not a
+    /// `FrameworkElement`, it has no `DataContext`, or that context exposes no
+    /// `u64` field of that name. See
+    /// [`FrameworkElement::data_context_u64`](crate::view::FrameworkElement::data_context_u64)
+    /// for the field-resolution rules.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `prop_name` contains an interior NUL byte.
+    #[must_use]
+    pub fn source_data_context_u64(&self, prop_name: &str) -> Option<u64> {
+        let source = self.source_ptr()?;
+        let c = CString::new(prop_name).expect("property name contained interior NUL");
+        let mut out: u64 = 0;
+        // SAFETY: `source` is the borrowed live event source for the callback
+        // duration; the C side borrows its DataContext and writes `out` only on a
+        // hit. We never retain `source` past this call.
+        let ok = unsafe { noesis_element_datacontext_get_u64(source, c.as_ptr(), &mut out) };
+        ok.then_some(out)
     }
 
     /// Borrowed pointer to the element that previously had focus
