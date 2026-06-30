@@ -264,11 +264,6 @@ namespace {
 // `RustClickHandler`: owns a +1 ref on the Selector so the subscription survives
 // the caller dropping every other handle. Pair construction with
 // `SelectionChanged() +=` and destruction with `SelectionChanged() -=`.
-//
-// The notification is intentionally argument-free: the ECS-UI design reads the
-// authoritative selection back through `ICollectionView` currency / the
-// `Selected` marker after the fact, so this only needs to signal "selection
-// moved, re-poll".
 class RustSelectionChangedHandler {
 public:
     RustSelectionChangedHandler(noesis_selection_changed_fn cb, void* userdata,

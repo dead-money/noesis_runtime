@@ -217,8 +217,7 @@ pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
     element: &FrameworkElement,
     handler: H,
 ) -> Option<SelectionChangedSubscription> {
-    // Double-Box gives a stable thin pointer for the C ABI userdata, same
-    // pattern as the other subscriptions.
+    // Double-Box: stable thin pointer for the C ABI userdata.
     let outer: Box<Box<dyn SelectionChangedHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
@@ -239,8 +238,7 @@ pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
             userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
         })
     } else {
-        // Subscription failed (element wasn't a Selector). Free the userdata we
-        // leaked above so we don't leak the handler.
+        // Subscription failed (not a Selector); free the leaked userdata.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -628,7 +626,7 @@ impl EventArgs {
     /// per-row identity hook for templated list rows: a handler subscribed once
     /// on the `ItemsControl` recovers the clicked row's stable id (e.g. a Bevy
     /// `Entity`'s bits stashed via the hidden `__entity` field) straight from the
-    /// event source — no `x:Name`, no per-row subscription, no borrowed pointer
+    /// event source: no `x:Name`, no per-row subscription, no borrowed pointer
     /// kept past the callback.
     ///
     /// Returns `None` if the event carries no source, the source is not a

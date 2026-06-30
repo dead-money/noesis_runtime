@@ -49,10 +49,8 @@ fn datacontext_u64() {
         let inst = reg.create_instance().expect("create_instance");
         let handle = inst.handle();
 
-        // Default uint64 DP reads back 0.
         assert_eq!(handle.get_u64(row_id), Some(0));
 
-        // Round-trip a full 64-bit value through the DP.
         handle.set_u64(row_id, ROW_ID);
         assert_eq!(
             handle.get_u64(row_id),

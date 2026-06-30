@@ -1159,10 +1159,9 @@ typedef enum noesis_prop_type {
     NOESIS_PROP_SIZE           = 12,
     NOESIS_PROP_VECTOR         = 13,
     NOESIS_PROP_ENUM           = 14,
-    // uint64 value DP. `value_ptr` / `out_value` is `const uint64_t*`. The
-    // motivating use is stashing a stable row identity (e.g. a Bevy Entity's
-    // 64-bit bits) on a bound row view model so per-row event routing can read
-    // it back off the event source's DataContext.
+    // uint64 value DP; `value_ptr` / `out_value` is `const uint64_t*`. Carries a
+    // stable row identity (e.g. a Bevy Entity's bits) on a bound row model for
+    // per-row event routing.
     NOESIS_PROP_UINT64         = 15
 } noesis_prop_type;
 

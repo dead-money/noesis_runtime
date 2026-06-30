@@ -96,7 +96,6 @@ fn observable_collection_move() {
         }
         assert_eq!(lb.items_count(), Some(3));
 
-        // Select Beta (index 1).
         let beta = coll.get(1).expect("Beta");
         // SAFETY: coll outlives lb; beta is a live element of the bound source.
         assert!(unsafe { lb.set_selected_item(beta.as_ptr()) });

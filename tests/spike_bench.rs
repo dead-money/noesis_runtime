@@ -1,4 +1,4 @@
-//! Spike-Bench — for a 200-row bound object list, where does the cost of a
+//! Spike-Bench: for a 200-row bound object list, where does the cost of a
 //! single-row mutation live: in the FFI marshalling we do from Rust (the
 //! "Apply" phase), or in Noesis-side container re-realization during the
 //! `view.update` "Drive" phase?
@@ -9,7 +9,7 @@
 //!   (c) Granular: one `remove_at` + one `insert_component` (Remove + Add).
 //!
 //! The list uses a NON-virtualizing `StackPanel` items panel so all 200
-//! containers are realized — this is the pessimistic case that exposes
+//! containers are realized; this is the pessimistic case that exposes
 //! re-realization cost. For each strategy we time the Apply phase and the Drive
 //! phase separately and read Noesis's cumulative allocation counter
 //! (`allocated_memory_accum`) across Drive, so container churn shows up as

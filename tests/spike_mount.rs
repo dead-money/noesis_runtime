@@ -1,4 +1,4 @@
-//! Spike-Mount — can ONE live `View` host two copies of the SAME sub-XAML, each
+//! Spike-Mount: can ONE live `View` host two copies of the SAME sub-XAML, each
 //! with its own `DataContext` and its own namescope, mounted MID-FRAME into a
 //! shared named panel, without rebuilding the View?
 //!
@@ -75,7 +75,7 @@ fn spike_mount_two_copies_isolated() {
         assert!(vm_a.set(title, PlainValue::String("AAA".into())));
         assert!(vm_b.set(title, PlainValue::String("BBB".into())));
 
-        // Build + pump the host View FIRST — the scene exists before we mount.
+        // Build + pump the host View FIRST; the scene exists before we mount.
         let host_root = FrameworkElement::load("host.xaml").expect("load host.xaml");
         let mut view = View::create(host_root);
         view.set_size(200, 200);
@@ -102,7 +102,7 @@ fn spike_mount_two_copies_isolated() {
             view.update(f64::from(i) * 0.016);
         }
 
-        // Resolve "Leaf" from EACH fragment root — namescope isolation means
+        // Resolve "Leaf" from EACH fragment root: namescope isolation means
         // each resolves to its own TextBlock.
         let leaf_a_tb = leaf_a.find_name("Leaf").expect("A/Leaf");
         let leaf_b_tb = leaf_b.find_name("Leaf").expect("B/Leaf");

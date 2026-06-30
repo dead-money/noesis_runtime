@@ -1148,9 +1148,9 @@ impl FrameworkElement {
     /// Read a `u64` field named `prop_name` off this element's (inherited)
     /// `DataContext`. This is the per-row identity hook for event routing: a
     /// bound row view model can stash a stable 64-bit id (e.g. a Bevy `Entity`'s
-    /// bits) — via [`Instance::set_u64`](crate::classes::Instance::set_u64) on a
+    /// bits) via [`Instance::set_u64`](crate::classes::Instance::set_u64) on a
     /// `ClassInstance` row, or [`PlainValue::U64`](crate::plain_vm::PlainValue::U64)
-    /// on a plain-VM row — and a handler recovers it from the event source
+    /// on a plain-VM row, and a handler recovers it from the event source
     /// without re-wrapping any borrowed pointer.
     ///
     /// Returns `None` if this element is not a `FrameworkElement`, has no

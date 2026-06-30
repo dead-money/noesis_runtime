@@ -1,10 +1,10 @@
-//! Spike-Move — does a `ListBox`'s selection ride a *reordered object row* to
+//! Spike-Move: does a `ListBox`'s selection ride a *reordered object row* to
 //! its new slot?
 //!
 //! This is the low-level gate for the ECS-UI list contract ("selection survives
 //! a Move; Reset is the enemy"). Unlike `observable_collection_move` (string
 //! items), the rows here are real `ClassInstance` objects with a bound `Name`
-//! DP — exactly the shape a per-`Entity` row object takes — so we can capture
+//! DP (exactly the shape a per-`Entity` row object takes), so we can capture
 //! the *selected item's `ClassInstance` pointer* and prove currency follows the
 //! object identity, not the slot index.
 //!
@@ -49,7 +49,6 @@ fn spike_move_selection_survives_object_reorder() {
     noesis_runtime::init();
 
     {
-        // A lightweight DependencyObject row carrying one bound `Name` DP.
         let mut builder = ClassBuilder::new("DmSpike.MoveRow", ClassBase::Freezable, Noop);
         let name_prop = builder.add_property("Name", PropType::String);
         let reg = builder.register().expect("register MoveRow");
@@ -81,10 +80,8 @@ fn spike_move_selection_survives_object_reorder() {
         }
         assert_eq!(lb.items_count(), Some(5));
 
-        // The object pointer that lives at index 2 ("R2").
         let r2_ptr = coll.get(2).expect("row 2");
 
-        // Select index 2, then capture the selected item's ClassInstance ptr.
         assert!(lb.set_selected_index(2));
         for i in 10..=12 {
             view.update(f64::from(i) * 0.016);

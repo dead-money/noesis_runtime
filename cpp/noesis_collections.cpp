@@ -128,12 +128,8 @@ extern "C" bool noesis_observable_collection_remove_at(void* collection, uint32_
     return true;
 }
 
-// Move the item at `old_index` to `new_index` (BaseObservableCollection::Move).
-// This raises a single NotifyCollectionChangedAction.Move so a bound control
-// relocates the existing container in place, preserving its selection / scroll
-// state, rather than tearing down and rebuilding it (which a Remove+Add pair
-// would do). Returns false on a null/non-collection pointer or an out-of-range
-// index (both indices must be < Count).
+// Single NotifyCollectionChangedAction.Move (not Remove+Add) so a bound control
+// keeps the moved container's selection / scroll state.
 extern "C" bool noesis_observable_collection_move(
     void* collection, uint32_t old_index, uint32_t new_index) {
     ObsColl* coll = as_collection(collection);
