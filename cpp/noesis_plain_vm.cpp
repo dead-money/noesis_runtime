@@ -116,6 +116,7 @@ const Noesis::Type* plain_content_type(noesis_plain_type t) {
     using namespace Noesis;
     switch (t) {
         case NOESIS_PLAIN_INT32:          return TypeOf<int32_t>();
+        case NOESIS_PLAIN_UINT64:         return TypeOf<uint64_t>();
         case NOESIS_PLAIN_DOUBLE:         return TypeOf<double>();
         case NOESIS_PLAIN_BOOL:           return TypeOf<bool>();
         case NOESIS_PLAIN_STRING:         return TypeOf<String>();

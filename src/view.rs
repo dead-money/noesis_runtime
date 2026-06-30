@@ -48,20 +48,20 @@ use crate::ffi::{
     noesis_dependency_object_get_base_value, noesis_dependency_object_get_property,
     noesis_dependency_object_property_tag, noesis_dependency_object_set_attached,
     noesis_dependency_object_set_current_value, noesis_dependency_object_set_property,
-    noesis_dependency_object_thread_id, noesis_element_get_transform3d,
-    noesis_element_set_transform3d, noesis_expander_get_is_expanded,
-    noesis_expander_set_is_expanded, noesis_focus_element, noesis_framework_element_find_name,
-    noesis_framework_element_find_resource, noesis_framework_element_get_data_context,
-    noesis_framework_element_get_halign, noesis_framework_element_get_name,
-    noesis_framework_element_get_resources, noesis_framework_element_get_style,
-    noesis_framework_element_get_valign, noesis_framework_element_logical_parent,
-    noesis_framework_element_register_name, noesis_framework_element_set_data_context,
-    noesis_framework_element_set_halign, noesis_framework_element_set_margin,
-    noesis_framework_element_set_resources, noesis_framework_element_set_style,
-    noesis_framework_element_set_valign, noesis_framework_element_set_visibility,
-    noesis_framework_element_template_child, noesis_framework_element_unregister_name,
-    noesis_get_binding_expression, noesis_gui_load_xaml, noesis_gui_parse_xaml,
-    noesis_items_control_items_add, noesis_items_control_items_clear,
+    noesis_dependency_object_thread_id, noesis_element_datacontext_get_u64,
+    noesis_element_get_transform3d, noesis_element_set_transform3d,
+    noesis_expander_get_is_expanded, noesis_expander_set_is_expanded, noesis_focus_element,
+    noesis_framework_element_find_name, noesis_framework_element_find_resource,
+    noesis_framework_element_get_data_context, noesis_framework_element_get_halign,
+    noesis_framework_element_get_name, noesis_framework_element_get_resources,
+    noesis_framework_element_get_style, noesis_framework_element_get_valign,
+    noesis_framework_element_logical_parent, noesis_framework_element_register_name,
+    noesis_framework_element_set_data_context, noesis_framework_element_set_halign,
+    noesis_framework_element_set_margin, noesis_framework_element_set_resources,
+    noesis_framework_element_set_style, noesis_framework_element_set_valign,
+    noesis_framework_element_set_visibility, noesis_framework_element_template_child,
+    noesis_framework_element_unregister_name, noesis_get_binding_expression, noesis_gui_load_xaml,
+    noesis_gui_parse_xaml, noesis_items_control_items_add, noesis_items_control_items_clear,
     noesis_items_control_items_count, noesis_items_control_items_insert,
     noesis_items_control_items_remove_at, noesis_items_control_realized_count,
     noesis_items_control_set_items_source, noesis_logical_child, noesis_logical_children_count,
@@ -715,6 +715,18 @@ impl FrameworkElement {
         self.set_prop(name, PropType::UInt32, (&value as *const u32).cast())
     }
 
+    /// Set a `UInt64` dependency property by name. The 64-bit counterpart to
+    /// [`set_u32`](Self::set_u32); the motivating use is a custom DP carrying a
+    /// stable row identity (e.g. a Bevy `Entity`'s bits) on a bound view model.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
+    pub fn set_u64(&mut self, name: &str, value: u64) -> bool {
+        self.set_prop(name, PropType::UInt64, (&value as *const u64).cast())
+    }
+
     /// Set a `Float` (single-precision) dependency property by name. Most
     /// `FrameworkElement` scalars Noesis exposes (`Width`, `Height`,
     /// `Opacity`) are `float`, so this is the common case.
@@ -813,6 +825,19 @@ impl FrameworkElement {
     pub fn get_u32(&self, name: &str) -> Option<u32> {
         let mut out: u32 = 0;
         self.get_prop(name, PropType::UInt32, (&mut out as *mut u32).cast())
+            .then_some(out)
+    }
+
+    /// Read a `UInt64` dependency property by name. `None` on unknown name or
+    /// type mismatch. The `uint64_t` counterpart to [`get_u32`](Self::get_u32).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL byte.
+    #[must_use]
+    pub fn get_u64(&self, name: &str) -> Option<u64> {
+        let mut out: u64 = 0;
+        self.get_prop(name, PropType::UInt64, (&mut out as *mut u64).cast())
             .then_some(out)
     }
 
@@ -1118,6 +1143,31 @@ impl FrameworkElement {
         // borrowed pointer or null.
         let p = unsafe { noesis_framework_element_get_data_context(self.ptr.as_ptr()) };
         NonNull::new(p)
+    }
+
+    /// Read a `u64` field named `prop_name` off this element's (inherited)
+    /// `DataContext`. This is the per-row identity hook for event routing: a
+    /// bound row view model can stash a stable 64-bit id (e.g. a Bevy `Entity`'s
+    /// bits) via [`Instance::set_u64`](crate::classes::Instance::set_u64) on a
+    /// `ClassInstance` row, or [`PlainValue::U64`](crate::plain_vm::PlainValue::U64)
+    /// on a plain-VM row, and a handler recovers it from the event source
+    /// without re-wrapping any borrowed pointer.
+    ///
+    /// Returns `None` if this element is not a `FrameworkElement`, has no
+    /// `DataContext`, or that context exposes no `u64` field of that name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `prop_name` contains an interior NUL byte.
+    #[must_use]
+    pub fn data_context_u64(&self, prop_name: &str) -> Option<u64> {
+        let c = CString::new(prop_name).expect("property name contained interior NUL");
+        let mut out: u64 = 0;
+        // SAFETY: self.ptr is a live FrameworkElement*; c lives for the call; the
+        // C side borrows the DataContext and writes `out` only on a hit.
+        let ok =
+            unsafe { noesis_element_datacontext_get_u64(self.ptr.as_ptr(), c.as_ptr(), &mut out) };
+        ok.then_some(out)
     }
 
     /// Point this element's `ItemsSource` at a Rust-owned
@@ -1837,6 +1887,7 @@ impl FrameworkElement {
             12 => Some(PropType::Size),
             13 => Some(PropType::Vector),
             14 => Some(PropType::Enum),
+            15 => Some(PropType::UInt64),
             _ => None,
         }
     }
@@ -1854,6 +1905,7 @@ impl FrameworkElement {
         match self.property_tag(name)? {
             PropType::Int32 => self.get_i32(name).map(DynValue::I32),
             PropType::UInt32 => self.get_u32(name).map(DynValue::U32),
+            PropType::UInt64 => self.get_u64(name).map(DynValue::U64),
             PropType::Float => self.get_f32(name).map(DynValue::F32),
             PropType::Double => self.get_f64(name).map(DynValue::F64),
             PropType::Bool => self.get_bool(name).map(DynValue::Bool),
@@ -3365,6 +3417,8 @@ pub enum DynValue {
     I32(i32),
     /// `UInt32`.
     U32(u32),
+    /// `UInt64`.
+    U64(u64),
     /// `Float` (single-precision).
     F32(f32),
     /// `Double` (double-precision).

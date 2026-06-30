@@ -33,6 +33,12 @@
 #include <NsCore/Delegate.h>
 #include <NsCore/DynamicCast.h>
 #include <NsCore/Ptr.h>
+#include <NsCore/Symbol.h>
+#include <NsCore/TypeClass.h>
+#include <NsCore/TypeOf.h>
+#include <NsCore/TypeProperty.h>
+#include <NsGui/DependencyObject.h>
+#include <NsGui/DependencyProperty.h>
 #include <NsDrawing/Point.h>
 #include <NsGui/CollectionView.h>
 #include <NsGui/CollectionViewSource.h>
@@ -122,6 +128,18 @@ extern "C" bool noesis_observable_collection_remove_at(void* collection, uint32_
     return true;
 }
 
+// Single NotifyCollectionChangedAction.Move (not Remove+Add) so a bound control
+// keeps the moved container's selection / scroll state.
+extern "C" bool noesis_observable_collection_move(
+    void* collection, uint32_t old_index, uint32_t new_index) {
+    ObsColl* coll = as_collection(collection);
+    if (!coll) return false;
+    uint32_t count = (uint32_t)coll->Count();
+    if (old_index >= count || new_index >= count) return false;
+    coll->Move(old_index, new_index);
+    return true;
+}
+
 extern "C" void noesis_observable_collection_clear(void* collection) {
     ObsColl* coll = as_collection(collection);
     if (coll) coll->Clear();
@@ -159,6 +177,60 @@ extern "C" void* noesis_framework_element_get_data_context(void* element) {
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     return fe ? fe->GetDataContext() : nullptr;
+}
+
+// Read a `uint64` field named `prop_name` off `element`'s DataContext, the
+// per-row identity hook for event routing: given a BORROWED event-source element
+// pointer (e.g. `RoutedEventArgs::source`, valid only for the callback), pull the
+// row identity (a packed Entity's bits) straight off the bound row view model
+// without ever re-wrapping the borrowed pointer into an owning handle.
+//
+// `element`'s DataContext is read borrowed (FrameworkElement::GetDataContext does
+// not +1), and so is the row object; nothing here takes or drops a reference.
+// Two row-object shapes are supported, tried in order:
+//   1. A DependencyObject (the synthetic ClassInstance built via ClassBuilder)
+//      carrying a real `uint64` DP — read with the typed GetValue.
+//   2. Any reflected object (the plain-VM PlainInstance) exposing the field as a
+//      CLR-style property whose boxed value is a BoxedValue<uint64_t>.
+// Writes `*out` and returns true only when a uint64 field of that name is found;
+// returns false (leaving `*out` untouched) otherwise.
+extern "C" bool noesis_element_datacontext_get_u64(
+    void* element, const char* prop_name, uint64_t* out) {
+    if (!element || !prop_name || !out) return false;
+    auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!fe) return false;
+    // Borrowed (no +1): the DataContext is owned by the element / its tree.
+    Noesis::BaseComponent* dc = fe->GetDataContext();
+    if (!dc) return false;
+
+    Noesis::Symbol sym(prop_name, Noesis::Symbol::NullIfNotFound());
+    if (sym.IsNull()) return false;
+
+    // 1. DependencyObject + real uint64 DP (the ClassBuilder row object).
+    if (auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(dc)) {
+        const Noesis::DependencyProperty* dp =
+            Noesis::FindDependencyProperty(d->GetClassType(), sym);
+        if (dp && dp->GetType() == Noesis::TypeOf<uint64_t>()) {
+            *out = d->GetValue<uint64_t>(dp);
+            return true;
+        }
+    }
+
+    // 2. Generic reflected (CLR-style) property: boxed BoxedValue<uint64_t>
+    //    (the plain-VM row object). `GetComponent` returns a borrowed/locally
+    //    owned Ptr; unbox before it drops.
+    if (const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(dc->GetClassType())) {
+        if (const Noesis::TypeProperty* prop = tc->FindProperty(sym)) {
+            Noesis::Ptr<Noesis::BaseComponent> boxed = prop->GetComponent(dc);
+            if (boxed && Noesis::Boxing::CanUnbox<uint64_t>(boxed.GetPtr())) {
+                *out = Noesis::Boxing::Unbox<uint64_t>(boxed.GetPtr());
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 // ── ItemsControl.ItemsSource + container introspection ──────────────────────

@@ -39,8 +39,8 @@ use crate::ffi::{
     noesis_framework_element_add_resource, noesis_observable_collection_add,
     noesis_observable_collection_clear, noesis_observable_collection_count,
     noesis_observable_collection_create, noesis_observable_collection_get,
-    noesis_observable_collection_insert, noesis_observable_collection_remove_at,
-    noesis_observable_collection_set, noesis_set_binding,
+    noesis_observable_collection_insert, noesis_observable_collection_move,
+    noesis_observable_collection_remove_at, noesis_observable_collection_set, noesis_set_binding,
 };
 use crate::view::FrameworkElement;
 
@@ -194,6 +194,23 @@ impl ObservableCollection {
         unsafe { self.push_component(instance.raw()) }
     }
 
+    /// Insert a [`ClassInstance`](crate::classes::ClassInstance) view model at
+    /// `index` (allows `index == len`), returning `true` on success. The
+    /// collection takes its own reference; the caller retains ownership of
+    /// `instance`. The safe, object-typed counterpart of
+    /// [`insert_component`](Self::insert_component): the entity-keyed list
+    /// reconciler inserts a freshly-realized row here (the Add op) without leaving
+    /// `unsafe` in the Bevy layer.
+    pub fn insert_object(
+        &mut self,
+        index: usize,
+        instance: &crate::classes::ClassInstance,
+    ) -> bool {
+        // SAFETY: `instance.raw()` is a live BaseComponent* for the lifetime of
+        // `instance`, which outlives this call; the collection takes its own ref.
+        unsafe { self.insert_component(index, instance.raw()) }
+    }
+
     /// Append an arbitrary `BaseComponent*` item, returning its index (or `None`
     /// if the underlying handle is not a collection). The collection takes its
     /// own reference; the caller retains ownership of `item`.
@@ -231,6 +248,23 @@ impl ObservableCollection {
     pub fn remove_at(&mut self, index: usize) -> bool {
         // SAFETY: self.ptr is a live ObservableCollection*.
         unsafe { noesis_observable_collection_remove_at(self.ptr.as_ptr(), index as u32) }
+    }
+
+    /// Move the item at `old_index` to `new_index`, keeping the same object in
+    /// the collection (no boxing / re-wrapping). This maps to Noesis's real
+    /// `BaseObservableCollection::Move`, which raises a single
+    /// `NotifyCollectionChangedAction.Move`: a bound `ItemsControl` relocates the
+    /// *existing* container, so its selection and scroll position survive the
+    /// reorder. Reconciling row order with `move_item` (rather than
+    /// remove-then-insert) is what lets `Selected` / currency outlast a sort.
+    ///
+    /// Returns `false` if either index is out of range (`>= len`); both indices
+    /// address positions in the current collection.
+    pub fn move_item(&mut self, old_index: usize, new_index: usize) -> bool {
+        // SAFETY: self.ptr is a live ObservableCollection*.
+        unsafe {
+            noesis_observable_collection_move(self.ptr.as_ptr(), old_index as u32, new_index as u32)
+        }
     }
 
     /// Remove every item.
