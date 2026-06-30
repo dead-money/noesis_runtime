@@ -149,6 +149,11 @@ extern "C" void* noesis_box_double(double value) {
     return handout(boxed.GetPtr());
 }
 
+extern "C" void* noesis_box_u64(uint64_t value) {
+    Noesis::Ptr<Noesis::BoxedValue> boxed = Noesis::Boxing::Box<uint64_t>(value);
+    return handout(boxed.GetPtr());
+}
+
 extern "C" bool noesis_unbox_bool(void* boxed, bool* out) {
     if (!boxed || !out) return false;
     auto* b = static_cast<Noesis::BaseComponent*>(boxed);
@@ -170,6 +175,14 @@ extern "C" bool noesis_unbox_double(void* boxed, double* out) {
     auto* b = static_cast<Noesis::BaseComponent*>(boxed);
     if (!Noesis::Boxing::CanUnbox<double>(b)) return false;
     *out = Noesis::Boxing::Unbox<double>(b);
+    return true;
+}
+
+extern "C" bool noesis_unbox_u64(void* boxed, uint64_t* out) {
+    if (!boxed || !out) return false;
+    auto* b = static_cast<Noesis::BaseComponent*>(boxed);
+    if (!Noesis::Boxing::CanUnbox<uint64_t>(b)) return false;
+    *out = Noesis::Boxing::Unbox<uint64_t>(b);
     return true;
 }
 

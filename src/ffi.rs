@@ -332,6 +332,13 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn noesis_unsubscribe_keydown(token: *mut c_void);
 
+    pub fn noesis_subscribe_selection_changed(
+        element: *mut c_void,
+        cb: ClickFn,
+        userdata: *mut c_void,
+    ) -> *mut c_void;
+    pub fn noesis_unsubscribe_selection_changed(token: *mut c_void);
+
     pub fn noesis_subscribe_event(
         element: *mut c_void,
         event_name: *const c_char,
@@ -559,6 +566,11 @@ unsafe extern "C" {
         item: *mut c_void,
     ) -> bool;
     pub fn noesis_observable_collection_remove_at(collection: *mut c_void, index: u32) -> bool;
+    pub fn noesis_observable_collection_move(
+        collection: *mut c_void,
+        old_index: u32,
+        new_index: u32,
+    ) -> bool;
     pub fn noesis_observable_collection_clear(collection: *mut c_void);
     pub fn noesis_observable_collection_count(collection: *mut c_void) -> i32;
     pub fn noesis_observable_collection_get(collection: *mut c_void, index: u32) -> *mut c_void;
@@ -593,6 +605,11 @@ unsafe extern "C" {
         context: *mut c_void,
     ) -> bool;
     pub fn noesis_framework_element_get_data_context(element: *mut c_void) -> *mut c_void;
+    pub fn noesis_element_datacontext_get_u64(
+        element: *mut c_void,
+        prop_name: *const c_char,
+        out: *mut u64,
+    ) -> bool;
 
     pub fn noesis_items_control_set_items_source(element: *mut c_void, items: *mut c_void) -> bool;
     pub fn noesis_items_control_items_count(element: *mut c_void) -> i32;
@@ -754,9 +771,11 @@ unsafe extern "C" {
     pub fn noesis_box_bool(value: bool) -> *mut c_void;
     pub fn noesis_box_int32(value: i32) -> *mut c_void;
     pub fn noesis_box_double(value: f64) -> *mut c_void;
+    pub fn noesis_box_u64(value: u64) -> *mut c_void;
     pub fn noesis_unbox_bool(boxed: *mut c_void, out: *mut bool) -> bool;
     pub fn noesis_unbox_int32(boxed: *mut c_void, out: *mut i32) -> bool;
     pub fn noesis_unbox_double(boxed: *mut c_void, out: *mut f64) -> bool;
+    pub fn noesis_unbox_u64(boxed: *mut c_void, out: *mut u64) -> bool;
     pub fn noesis_unbox_string(boxed: *mut c_void) -> *const c_char;
 
     // ── Value converters: IValueConverter from Rust ───────────────────────────
@@ -2165,6 +2184,10 @@ pub enum PropType {
     /// Runtime-enum-typed DP: int32 storage; register via
     /// `noesis_class_register_enum_property` (it needs the enum type name).
     Enum = 14,
+    /// `uint64` value DP. `value_ptr` / `out_value` is `const uint64_t*`.
+    /// Carries a stable 64-bit row identity (e.g. a Bevy `Entity`'s bits) on a
+    /// bound view model.
+    UInt64 = 15,
 }
 
 /// Property-changed callback. Fired from inside Noesis's property pump

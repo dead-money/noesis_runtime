@@ -313,6 +313,7 @@ void invoke_cb(ClassData* cd, void* instance, uint32_t idx,
     switch (ty) {
         case NOESIS_PROP_INT32:
         case NOESIS_PROP_UINT32:
+        case NOESIS_PROP_UINT64:
         case NOESIS_PROP_FLOAT:
         case NOESIS_PROP_DOUBLE:
         case NOESIS_PROP_BOOL:
@@ -324,7 +325,7 @@ void invoke_cb(ClassData* cd, void* instance, uint32_t idx,
         case NOESIS_PROP_VECTOR:
         case NOESIS_PROP_ENUM:
             // Pass through directly. `raw` already points to the typed value
-            // (POINT/SIZE/VECTOR: float[2]; ENUM: int32).
+            // (POINT/SIZE/VECTOR: float[2]; ENUM: int32; UINT64: uint64).
             cd->cb(cd->userdata, instance, idx, raw);
             return;
 
@@ -366,6 +367,10 @@ void apply_set_readonly(Obj* obj, const Noesis::DependencyProperty* dp,
         case NOESIS_PROP_UINT32:
             obj->template SetReadOnlyProperty<uint32_t>(
                 dp, value_ptr ? *static_cast<const uint32_t*>(value_ptr) : 0);
+            return;
+        case NOESIS_PROP_UINT64:
+            obj->template SetReadOnlyProperty<uint64_t>(
+                dp, value_ptr ? *static_cast<const uint64_t*>(value_ptr) : 0);
             return;
         case NOESIS_PROP_FLOAT:
             obj->template SetReadOnlyProperty<float>(
@@ -838,6 +843,11 @@ Noesis::Ptr<Noesis::DependencyProperty> create_dp_ex(
             return DependencyProperty::Create<uint32_t>(
                 name, owner, make_md<uint32_t>(def, options, coerce).GetPtr(), nullptr, access);
         }
+        case NOESIS_PROP_UINT64: {
+            uint64_t def = default_ptr ? *static_cast<const uint64_t*>(default_ptr) : 0;
+            return DependencyProperty::Create<uint64_t>(
+                name, owner, make_md<uint64_t>(def, options, coerce).GetPtr(), nullptr, access);
+        }
         case NOESIS_PROP_FLOAT: {
             float def = default_ptr ? *static_cast<const float*>(default_ptr) : 0.0f;
             return DependencyProperty::Create<float>(
@@ -1242,6 +1252,12 @@ void apply_set(
             else obj->SetValue<uint32_t>(dp, v);
             return;
         }
+        case NOESIS_PROP_UINT64: {
+            uint64_t v = value_ptr ? *static_cast<const uint64_t*>(value_ptr) : 0;
+            if (mode == SetMode::Current) obj->SetCurrentValue<uint64_t>(dp, v);
+            else obj->SetValue<uint64_t>(dp, v);
+            return;
+        }
         case NOESIS_PROP_FLOAT: {
             float v = value_ptr ? *static_cast<const float*>(value_ptr) : 0.0f;
             if (mode == SetMode::Current) obj->SetCurrentValue<float>(dp, v);
@@ -1361,6 +1377,10 @@ bool apply_get(
             *static_cast<uint32_t*>(out_value) =
                 base ? obj->GetBaseValue<uint32_t>(dp) : obj->GetValue<uint32_t>(dp);
             return true;
+        case NOESIS_PROP_UINT64:
+            *static_cast<uint64_t*>(out_value) =
+                base ? obj->GetBaseValue<uint64_t>(dp) : obj->GetValue<uint64_t>(dp);
+            return true;
         case NOESIS_PROP_FLOAT:
             *static_cast<float*>(out_value) =
                 base ? obj->GetBaseValue<float>(dp) : obj->GetValue<float>(dp);
@@ -1437,6 +1457,7 @@ bool prop_type_matches(const Noesis::Type* t, noesis_prop_type tag) {
     switch (tag) {
         case NOESIS_PROP_INT32:     return t == TypeOf<int32_t>();
         case NOESIS_PROP_UINT32:    return t == TypeOf<uint32_t>();
+        case NOESIS_PROP_UINT64:    return t == TypeOf<uint64_t>();
         case NOESIS_PROP_FLOAT:     return t == TypeOf<float>();
         case NOESIS_PROP_DOUBLE:    return t == TypeOf<double>();
         case NOESIS_PROP_BOOL:      return t == TypeOf<bool>();
@@ -1462,6 +1483,7 @@ int32_t prop_type_to_tag(const Noesis::Type* t) {
     if (!t) return -1;
     if (t == TypeOf<int32_t>())   return NOESIS_PROP_INT32;
     if (t == TypeOf<uint32_t>())  return NOESIS_PROP_UINT32;
+    if (t == TypeOf<uint64_t>())  return NOESIS_PROP_UINT64;
     if (t == TypeOf<float>())     return NOESIS_PROP_FLOAT;
     if (t == TypeOf<double>())    return NOESIS_PROP_DOUBLE;
     if (t == TypeOf<bool>())      return NOESIS_PROP_BOOL;

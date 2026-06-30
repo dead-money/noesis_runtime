@@ -44,8 +44,9 @@ use crate::ffi::{
     noesis_routed_events_manip_origin, noesis_routed_events_manip_velocities,
     noesis_routed_events_remove_data_object_handler, noesis_size_changed_args_new_size,
     noesis_subscribe_click, noesis_subscribe_event, noesis_subscribe_keydown,
-    noesis_subscribe_lifecycle, noesis_text_args_ch, noesis_unsubscribe_click,
-    noesis_unsubscribe_event, noesis_unsubscribe_keydown, noesis_unsubscribe_lifecycle,
+    noesis_subscribe_lifecycle, noesis_subscribe_selection_changed, noesis_text_args_ch,
+    noesis_unsubscribe_click, noesis_unsubscribe_event, noesis_unsubscribe_keydown,
+    noesis_unsubscribe_lifecycle, noesis_unsubscribe_selection_changed,
 };
 use crate::view::{FrameworkElement, Key, MouseButton};
 
@@ -138,6 +139,108 @@ pub fn subscribe_click<H: ClickHandler>(
     } else {
         // Subscription failed (e.g. element wasn't a button). Free the
         // userdata we leaked above so we don't leak the handler.
+        // SAFETY: userdata came from Box::into_raw moments ago; nothing else
+        // ever saw the pointer.
+        unsafe { drop(Box::from_raw(userdata)) };
+        None
+    }
+}
+
+/// Rust-side handler for `Selector::SelectionChanged`. Receives a single `()`
+/// notification each time the selection moves; the authoritative selection is
+/// read back afterwards (through `ICollectionView` currency or the bound model),
+/// so this handler only signals "re-poll".
+///
+/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource` or
+/// be moved onto the render thread. Takes `&self` (re-entrant: a handler that
+/// mutates the selection re-enters this same box; use interior mutability for
+/// handler state).
+pub trait SelectionChangedHandler: Send + 'static {
+    fn on_selection_changed(&self);
+}
+
+impl<F: Fn() + Send + 'static> SelectionChangedHandler for F {
+    fn on_selection_changed(&self) {
+        self();
+    }
+}
+
+/// SAFETY: `userdata` must be a pointer produced by
+/// [`subscribe_selection_changed`] and still alive (the
+/// [`SelectionChangedSubscription`] hasn't been dropped).
+unsafe extern "C" fn selection_changed_trampoline(userdata: *mut c_void) {
+    crate::panic_guard::guard(|| {
+        // Shared `&`: re-entrant handler box (see `SelectionChangedHandler`).
+        let handler = &*userdata.cast::<Box<dyn SelectionChangedHandler>>();
+        handler.on_selection_changed();
+    })
+}
+
+/// RAII subscription token for [`subscribe_selection_changed`]. Drop to
+/// unsubscribe and free the boxed handler. Mirrors [`ClickSubscription`].
+#[must_use = "dropping the subscription immediately unsubscribes the handler"]
+pub struct SelectionChangedSubscription {
+    token: NonNull<c_void>,
+    userdata: NonNull<Box<dyn SelectionChangedHandler>>,
+}
+
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
+unsafe impl Send for SelectionChangedSubscription {}
+
+impl Drop for SelectionChangedSubscription {
+    fn drop(&mut self) {
+        // SAFETY: token + userdata produced together by
+        // subscribe_selection_changed; freed exactly once here.
+        unsafe {
+            noesis_unsubscribe_selection_changed(self.token.as_ptr());
+            drop(Box::from_raw(self.userdata.as_ptr()));
+        }
+    }
+}
+
+/// Subscribe `handler` to `Selector::SelectionChanged` on `element` (a
+/// `Selector`: `ListBox` / `ListView` / `ComboBox` / `TabControl` / ...).
+/// Returns `None` if `element` is not a `Selector`.
+///
+/// The returned [`SelectionChangedSubscription`] keeps the handler installed for
+/// as long as it lives; drop it (or replace it) to unsubscribe. This is the
+/// push counterpart of polling the selection each frame: pair it with
+/// `ICollectionView` currency / the bound `Selected` marker to learn *what*
+/// changed.
+///
+/// # Panics
+///
+/// Panics only on internal logic errors, specifically if `Box::into_raw`
+/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
+/// explicit at the type level).
+pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
+    element: &FrameworkElement,
+    handler: H,
+) -> Option<SelectionChangedSubscription> {
+    // Double-Box gives a stable thin pointer for the C ABI userdata, same
+    // pattern as the other subscriptions.
+    let outer: Box<Box<dyn SelectionChangedHandler>> = Box::new(Box::new(handler));
+    let userdata = Box::into_raw(outer);
+
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
+    // element pointer is borrowed for the call duration only; Noesis copies
+    // whatever it needs into the routed-event handler list.
+    let token = unsafe {
+        noesis_subscribe_selection_changed(
+            element.raw(),
+            selection_changed_trampoline,
+            userdata.cast(),
+        )
+    };
+
+    if let Some(token) = NonNull::new(token) {
+        Some(SelectionChangedSubscription {
+            token,
+            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
+        })
+    } else {
+        // Subscription failed (element wasn't a Selector). Free the userdata we
+        // leaked above so we don't leak the handler.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };

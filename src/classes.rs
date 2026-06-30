@@ -131,6 +131,8 @@ pub trait PropertyChangeHandler: Send + 'static {
 pub enum PropertyValue<'a> {
     Int32(i32),
     UInt32(u32),
+    /// A `uint64` DP value (e.g. a packed row identity).
+    UInt64(u64),
     Float(f32),
     Double(f64),
     Bool(bool),
@@ -203,6 +205,7 @@ enum OwnedDefault {
     None,
     Int32(i32),
     UInt32(u32),
+    UInt64(u64),
     Float(f32),
     Double(f64),
     Bool(bool),
@@ -505,6 +508,7 @@ pub enum PropertyDefault<'a> {
     None,
     Int32(i32),
     UInt32(u32),
+    UInt64(u64),
     Float(f32),
     Double(f64),
     Bool(bool),
@@ -550,6 +554,7 @@ impl PropertyDefault<'_> {
             PropertyDefault::None => OwnedDefault::None,
             PropertyDefault::Int32(v) => OwnedDefault::Int32(v),
             PropertyDefault::UInt32(v) => OwnedDefault::UInt32(v),
+            PropertyDefault::UInt64(v) => OwnedDefault::UInt64(v),
             PropertyDefault::Float(v) => OwnedDefault::Float(v),
             PropertyDefault::Double(v) => OwnedDefault::Double(v),
             PropertyDefault::Bool(v) => OwnedDefault::Bool(v),
@@ -588,6 +593,7 @@ impl OwnedDefault {
             OwnedDefault::None => ptr::null(),
             OwnedDefault::Int32(v) => (v as *const i32).cast(),
             OwnedDefault::UInt32(v) => (v as *const u32).cast(),
+            OwnedDefault::UInt64(v) => (v as *const u64).cast(),
             OwnedDefault::Float(v) => (v as *const f32).cast(),
             OwnedDefault::Double(v) => (v as *const f64).cast(),
             OwnedDefault::Bool(v) => (v as *const bool).cast(),
@@ -774,6 +780,20 @@ impl Instance {
             );
         }
     }
+    /// Set a `UInt64` DP. Triggers the change callback if the value differs.
+    /// Register the DP with [`PropType::UInt64`]. The motivating use is stashing
+    /// a stable row identity (e.g. a Bevy `Entity`'s 64-bit bits) on a bound row
+    /// view model, so a per-row event handler can recover it off the event
+    /// source's `DataContext`.
+    pub fn set_u64(self, prop_index: u32, value: u64) {
+        unsafe {
+            noesis_instance_set_property(
+                self.0.as_ptr(),
+                prop_index,
+                (&value as *const u64).cast(),
+            );
+        }
+    }
     /// Set a `Float` DP. Triggers the change callback if the value differs.
     pub fn set_float(self, prop_index: u32, value: f32) {
         unsafe {
@@ -925,6 +945,15 @@ impl Instance {
         let mut out: i32 = 0;
         let ok = unsafe {
             noesis_instance_get_property(self.0.as_ptr(), prop_index, (&mut out as *mut i32).cast())
+        };
+        ok.then_some(out)
+    }
+    /// Read back a `UInt64` DP. Returns `None` on bad input
+    /// (instance pointer / index mismatch).
+    pub fn get_u64(self, prop_index: u32) -> Option<u64> {
+        let mut out: u64 = 0;
+        let ok = unsafe {
+            noesis_instance_get_property(self.0.as_ptr(), prop_index, (&mut out as *mut u64).cast())
         };
         ok.then_some(out)
     }
@@ -1114,6 +1143,7 @@ unsafe fn decode_value<'a>(
             PropType::BaseComponent => PropertyValue::BaseComponent(None),
             PropType::Int32 => PropertyValue::Int32(0),
             PropType::UInt32 => PropertyValue::UInt32(0),
+            PropType::UInt64 => PropertyValue::UInt64(0),
             PropType::Float => PropertyValue::Float(0.0),
             PropType::Double => PropertyValue::Double(0.0),
             PropType::Bool => PropertyValue::Bool(false),
@@ -1147,6 +1177,7 @@ unsafe fn decode_value<'a>(
     match kind {
         PropType::Int32 => PropertyValue::Int32(*value_ptr.cast::<i32>()),
         PropType::UInt32 => PropertyValue::UInt32(*value_ptr.cast::<u32>()),
+        PropType::UInt64 => PropertyValue::UInt64(*value_ptr.cast::<u64>()),
         PropType::Float => PropertyValue::Float(*value_ptr.cast::<f32>()),
         PropType::Double => PropertyValue::Double(*value_ptr.cast::<f64>()),
         PropType::Bool => PropertyValue::Bool(*value_ptr.cast::<bool>()),

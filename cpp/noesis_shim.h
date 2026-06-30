@@ -795,6 +795,24 @@ void* noesis_subscribe_click(
 // Unsubscribe and free the handler. Safe to call with NULL.
 void noesis_unsubscribe_click(void* token);
 
+// SelectionChanged callback. Argument-free (same shape / threading contract as
+// `noesis_click_fn`): the authoritative selection is read back afterwards
+// through ICollectionView currency / the bound model, so this only signals
+// "selection moved, re-poll".
+typedef void (*noesis_selection_changed_fn)(void* userdata);
+
+// Subscribe `cb(userdata)` to `Selector::SelectionChanged` on `element` (a
+// Selector: ListBox / ListView / ComboBox / TabControl / ...). Returns an opaque
+// token to pass to `noesis_unsubscribe_selection_changed` exactly once, or NULL
+// if `element` is not a Selector or `cb` is NULL. The token holds a +1 ref on
+// the Selector so the subscription survives the caller dropping every other
+// handle; release it before `noesis_shutdown`.
+void* noesis_subscribe_selection_changed(
+    void* element, noesis_selection_changed_fn cb, void* userdata);
+
+// Unsubscribe and free the handler. Safe to call with NULL.
+void noesis_unsubscribe_selection_changed(void* token);
+
 // KeyDown-event callback. Invoked from inside the input pump on whatever
 // thread is driving the view, same threading contract as `noesis_click_fn`.
 //
@@ -1140,7 +1158,12 @@ typedef enum noesis_prop_type {
     NOESIS_PROP_POINT          = 11,
     NOESIS_PROP_SIZE           = 12,
     NOESIS_PROP_VECTOR         = 13,
-    NOESIS_PROP_ENUM           = 14
+    NOESIS_PROP_ENUM           = 14,
+    // uint64 value DP. `value_ptr` / `out_value` is `const uint64_t*`. The
+    // motivating use is stashing a stable row identity (e.g. a Bevy Entity's
+    // 64-bit bits) on a bound row view model so per-row event routing can read
+    // it back off the event source's DataContext.
+    NOESIS_PROP_UINT64         = 15
 } noesis_prop_type;
 
 // Callback fired by the trampoline subclass's `OnPropertyChanged` override.
@@ -1688,6 +1711,13 @@ bool noesis_observable_collection_set(void* collection, uint32_t index, void* it
 // Remove the item at `index`. False on null/non-collection or out-of-range.
 bool noesis_observable_collection_remove_at(void* collection, uint32_t index);
 
+// Move the item at `old_index` to `new_index`, raising a single
+// NotifyCollectionChangedAction.Move (not a Remove+Add pair) so a bound control
+// keeps the moved container's selection / scroll state. False on
+// null/non-collection or an out-of-range index (both must be < Count).
+bool noesis_observable_collection_move(
+    void* collection, uint32_t old_index, uint32_t new_index);
+
 // Remove every item.
 void noesis_observable_collection_clear(void* collection);
 
@@ -1747,6 +1777,16 @@ void noesis_collection_view_unsubscribe_current_changed(void* token);
 // FrameworkElement. `get` returns a borrowed (no +1) pointer or NULL.
 bool noesis_framework_element_set_data_context(void* element, void* context);
 void* noesis_framework_element_get_data_context(void* element);
+
+// Read a uint64 field named `prop_name` off `element`'s (borrowed) DataContext.
+// Handles both a DependencyObject with a real uint64 DP and a plain reflected
+// object whose property boxes a BoxedValue<uint64_t>. Writes `*out` and returns
+// true only when such a field is found; false (leaving `*out` untouched)
+// otherwise. Borrows throughout: no reference is taken on the element, its
+// DataContext, or the field value, so it is safe to pass a borrowed
+// event-source pointer that must not be re-wrapped into an owning handle.
+bool noesis_element_datacontext_get_u64(
+    void* element, const char* prop_name, uint64_t* out);
 
 // Set an ItemsControl's `ItemsSource` (e.g. an ObservableCollection). Returns
 // false if `element` is not an ItemsControl. Pass NULL to clear.
@@ -1882,10 +1922,12 @@ const void* noesis_component_command(uint32_t which);
 void* noesis_box_bool(bool value);
 void* noesis_box_int32(int32_t value);
 void* noesis_box_double(double value);
+void* noesis_box_u64(uint64_t value);
 
 bool noesis_unbox_bool(void* boxed, bool* out);
 bool noesis_unbox_int32(void* boxed, int32_t* out);
 bool noesis_unbox_double(void* boxed, double* out);
+bool noesis_unbox_u64(void* boxed, uint64_t* out);
 
 // Borrowed (no +1) view of a boxed string's bytes, valid only while `boxed` is
 // alive (copy if you need to keep it). NULL if `boxed` is not a
@@ -2751,7 +2793,10 @@ typedef enum noesis_plain_type {
     NOESIS_PLAIN_DOUBLE         = 1,
     NOESIS_PLAIN_BOOL           = 2,
     NOESIS_PLAIN_STRING         = 3,
-    NOESIS_PLAIN_BASE_COMPONENT = 4
+    NOESIS_PLAIN_BASE_COMPONENT = 4,
+    // uint64 reflected property: a boxed `BoxedValue<uint64_t>`. Carries a
+    // stable 64-bit row identity (e.g. a Bevy Entity's bits) on a plain VM.
+    NOESIS_PLAIN_UINT64         = 5
 } noesis_plain_type;
 
 // Invoked when a TwoWay / OneWayToSource binding writes a value BACK to a

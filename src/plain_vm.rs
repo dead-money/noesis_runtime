@@ -46,10 +46,11 @@ use std::ffi::{CString, c_void};
 
 use crate::ffi::{
     PlainSetFn, noesis_base_component_release, noesis_box_bool, noesis_box_double,
-    noesis_box_int32, noesis_box_string, noesis_plain_vm_create_instance,
+    noesis_box_int32, noesis_box_string, noesis_box_u64, noesis_plain_vm_create_instance,
     noesis_plain_vm_get_value, noesis_plain_vm_notify, noesis_plain_vm_register,
     noesis_plain_vm_register_property, noesis_plain_vm_set_value, noesis_plain_vm_unregister,
     noesis_unbox_bool, noesis_unbox_double, noesis_unbox_int32, noesis_unbox_string,
+    noesis_unbox_u64,
 };
 use crate::view::FrameworkElement;
 
@@ -65,6 +66,9 @@ pub enum PlainType {
     String = 3,
     /// An opaque `BaseComponent*` (e.g. a nested view model or a boxed object).
     BaseComponent = 4,
+    /// A `uint64` (boxed). Carries a stable 64-bit row identity (e.g. a Bevy
+    /// `Entity`'s bits) on a plain view model.
+    U64 = 5,
 }
 
 /// A value to push into a plain-VM property. The crate boxes it into the
@@ -75,6 +79,8 @@ pub enum PlainValue {
     Double(f64),
     Bool(bool),
     String(String),
+    /// A `uint64` (e.g. a packed row identity). Pairs with [`PlainType::U64`].
+    U64(u64),
     /// An explicit null (clears the property).
     Null,
 }
@@ -88,6 +94,8 @@ impl PlainValue {
             PlainValue::Int32(i) => unsafe { noesis_box_int32(i) },
             PlainValue::Double(d) => unsafe { noesis_box_double(d) },
             PlainValue::Bool(b) => unsafe { noesis_box_bool(b) },
+            // SAFETY: returns a +1-owned BoxedValue<uint64_t>.
+            PlainValue::U64(v) => unsafe { noesis_box_u64(v) },
             PlainValue::String(s) => {
                 let cs = CString::new(s).unwrap_or_default();
                 // SAFETY: cs is valid for the call; the C side copies the bytes.
@@ -131,6 +139,16 @@ impl PlainValueRef {
         let mut out = 0.0f64;
         // SAFETY: as above.
         let ok = unsafe { noesis_unbox_double(p.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+
+    /// Unbox a `u64`, or `None` on type mismatch / null.
+    #[must_use]
+    pub fn as_u64(&self) -> Option<u64> {
+        let p = self.0?;
+        let mut out = 0u64;
+        // SAFETY: p is a live boxed BaseComponent*; out is a valid slot.
+        let ok = unsafe { noesis_unbox_u64(p.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 
@@ -442,6 +460,13 @@ impl PlainInstance {
         self.get(prop_index).and_then(|v| v.as_f64())
     }
 
+    /// Read the current boxed value of `prop_index` as a `u64`. `None` if
+    /// unset / out of range / type mismatch.
+    #[must_use]
+    pub fn get_u64(&self, prop_index: u32) -> Option<u64> {
+        self.get(prop_index).and_then(|v| v.as_u64())
+    }
+
     /// Read the current boxed value of `prop_index` as a `bool`.
     #[must_use]
     pub fn get_bool(&self, prop_index: u32) -> Option<bool> {
@@ -503,6 +528,12 @@ impl OwnedBoxed {
         let mut out = false;
         // SAFETY: as above.
         let ok = unsafe { noesis_unbox_bool(self.0.as_ptr(), &mut out) };
+        ok.then_some(out)
+    }
+    fn as_u64(&self) -> Option<u64> {
+        let mut out = 0u64;
+        // SAFETY: self.0 is a live boxed BaseComponent*; out is a valid slot.
+        let ok = unsafe { noesis_unbox_u64(self.0.as_ptr(), &mut out) };
         ok.then_some(out)
     }
 }

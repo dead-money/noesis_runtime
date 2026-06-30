@@ -43,6 +43,7 @@
 #include <NsGui/FrameworkElement.h>
 #include <NsGui/Path.h>
 #include <NsGui/RoutedEvent.h>
+#include <NsGui/Selector.h>
 #include <NsGui/StreamGeometry.h>
 #include <NsGui/StreamGeometryContext.h>
 #include <NsGui/TextBlock.h>
@@ -250,6 +251,85 @@ extern "C" void noesis_unsubscribe_keydown(void* token) {
     auto* handler = static_cast<RustKeyDownHandler*>(token);
     if (auto* uie = handler->element()) {
         uie->KeyDown() -= Noesis::MakeDelegate(handler, &RustKeyDownHandler::OnKeyDown);
+    }
+    delete handler;
+}
+
+// ── Selector.SelectionChanged subscription ─────────────────────────────────
+
+namespace {
+
+// Adapter between Noesis's `Delegate<void(BaseComponent*, const
+// SelectionChangedEventArgs&)>` and the C ABI callback. Mirrors
+// `RustClickHandler`: owns a +1 ref on the Selector so the subscription survives
+// the caller dropping every other handle. Pair construction with
+// `SelectionChanged() +=` and destruction with `SelectionChanged() -=`.
+//
+// The notification is intentionally argument-free: the ECS-UI design reads the
+// authoritative selection back through `ICollectionView` currency / the
+// `Selected` marker after the fact, so this only needs to signal "selection
+// moved, re-poll".
+class RustSelectionChangedHandler {
+public:
+    RustSelectionChangedHandler(noesis_selection_changed_fn cb, void* userdata,
+                                Noesis::Selector* selector)
+        : mCb(cb), mUserdata(userdata), mSelector(selector)
+    {
+        if (mSelector) {
+            mSelector->AddReference();
+        }
+    }
+
+    ~RustSelectionChangedHandler() {
+        if (mSelector) {
+            mSelector->Release();
+        }
+    }
+
+    RustSelectionChangedHandler(const RustSelectionChangedHandler&) = delete;
+    RustSelectionChangedHandler& operator=(const RustSelectionChangedHandler&) = delete;
+
+    void OnSelectionChanged(Noesis::BaseComponent* /*sender*/,
+                            const Noesis::SelectionChangedEventArgs& /*args*/) {
+        if (mCb) {
+            mCb(mUserdata);
+        }
+    }
+
+    Noesis::Selector* selector() const { return mSelector; }
+
+private:
+    noesis_selection_changed_fn mCb;
+    void* mUserdata;
+    Noesis::Selector* mSelector;  // raw + manual AddRef/Release; see ctor/dtor.
+};
+
+}  // namespace
+
+// Subscribe `cb` to `Selector::SelectionChanged` on `element` (a Selector:
+// ListBox / ListView / ComboBox / TabControl / ...). Returns an opaque token
+// (release via noesis_unsubscribe_selection_changed) or NULL when `element` is
+// not a Selector / `cb` is null.
+extern "C" void* noesis_subscribe_selection_changed(
+    void* element, noesis_selection_changed_fn cb, void* userdata)
+{
+    if (!element || !cb) return nullptr;
+    auto* selector = Noesis::DynamicCast<Noesis::Selector*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!selector) return nullptr;
+
+    auto* handler = new RustSelectionChangedHandler(cb, userdata, selector);
+    selector->SelectionChanged() +=
+        Noesis::MakeDelegate(handler, &RustSelectionChangedHandler::OnSelectionChanged);
+    return handler;
+}
+
+extern "C" void noesis_unsubscribe_selection_changed(void* token) {
+    if (!token) return;
+    auto* handler = static_cast<RustSelectionChangedHandler*>(token);
+    if (auto* selector = handler->selector()) {
+        selector->SelectionChanged() -=
+            Noesis::MakeDelegate(handler, &RustSelectionChangedHandler::OnSelectionChanged);
     }
     delete handler;
 }
