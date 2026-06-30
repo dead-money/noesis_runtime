@@ -194,6 +194,23 @@ impl ObservableCollection {
         unsafe { self.push_component(instance.raw()) }
     }
 
+    /// Insert a [`ClassInstance`](crate::classes::ClassInstance) view model at
+    /// `index` (allows `index == len`), returning `true` on success. The
+    /// collection takes its own reference; the caller retains ownership of
+    /// `instance`. The safe, object-typed counterpart of
+    /// [`insert_component`](Self::insert_component): the entity-keyed list
+    /// reconciler inserts a freshly-realized row here (the Add op) without leaving
+    /// `unsafe` in the Bevy layer.
+    pub fn insert_object(
+        &mut self,
+        index: usize,
+        instance: &crate::classes::ClassInstance,
+    ) -> bool {
+        // SAFETY: `instance.raw()` is a live BaseComponent* for the lifetime of
+        // `instance`, which outlives this call; the collection takes its own ref.
+        unsafe { self.insert_component(index, instance.raw()) }
+    }
+
     /// Append an arbitrary `BaseComponent*` item, returning its index (or `None`
     /// if the underlying handle is not a collection). The collection takes its
     /// own reference; the caller retains ownership of `item`.
