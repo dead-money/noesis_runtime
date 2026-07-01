@@ -693,7 +693,10 @@ unsafe extern "C" fn cb_free_trampoline(userdata: *mut c_void) {
 
 /// Binds a command to Rust handlers and (once [`attached`](Self::attach)) makes
 /// an element respond to that command when it's invoked and routes through the
-/// element. RAII: drop it to detach the handlers and free them.
+/// element. RAII: drop it to detach the handlers, remove the binding from the
+/// element it was attached to, and free them. Dropping it from inside its own
+/// `Executed` / `CanExecute` handler is safe (the C++ bridge owns the handler
+/// box and defers its own destruction until the callback frame unwinds).
 pub struct CommandBinding {
     token: NonNull<c_void>,
 }
@@ -737,7 +740,11 @@ impl CommandBinding {
 
     /// Attach this binding to `element`'s `CommandBindings` so commands invoked
     /// on (or routing through) the element reach these handlers. Returns `false`
-    /// if `element` is not a `UIElement`.
+    /// if `element` is not a `UIElement`. Dropping the binding removes it from
+    /// the element's `CommandBindings` again, so it does not accumulate there.
+    /// The binding remembers the element it was attached to (holding a `+1`
+    /// ref); calling `attach` on more than one element only auto-detaches from
+    /// the most recent.
     pub fn attach(&self, element: &FrameworkElement) -> bool {
         // SAFETY: token is a live bridge; element.raw() a live element.
         unsafe { noesis_command_binding_attach(self.token.as_ptr(), element.raw()) }
@@ -746,8 +753,9 @@ impl CommandBinding {
 
 impl Drop for CommandBinding {
     fn drop(&mut self) {
-        // SAFETY: token from new(); destroy detaches the delegates and frees the
-        // donated handler box exactly once.
+        // SAFETY: token from new(); destroy detaches the delegates, removes the
+        // binding from the attached element, and frees the donated handler box
+        // exactly once (deferred if dropping from inside the callback).
         unsafe { noesis_command_binding_destroy(self.token.as_ptr()) }
     }
 }

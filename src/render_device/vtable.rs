@@ -106,7 +106,9 @@ unsafe extern "C" fn t_create_texture(
         let dev = device(userdata);
         let label = cstr_to_str(label);
         // Unknown engine-supplied format ordinal: contained failure, leave `out`
-        // unwritten (same as the panic path, where the C side sees a null texture).
+        // unwritten. As on the panic path, the C shim then wraps the zero-init
+        // `out` as an inert handle-0 texture that forwards no update/drop
+        // callbacks back into this impl.
         let Some(format) = texture_format_from_raw(format_raw) else {
             return;
         };
@@ -137,15 +139,7 @@ unsafe extern "C" fn t_create_texture(
             },
         };
         let binding = dev.create_texture(desc);
-        out.write(TextureBindingFfi {
-            handle: binding.handle.0.get(),
-            width: binding.width,
-            height: binding.height,
-            has_mipmaps: binding.has_mipmaps,
-            inverted: binding.inverted,
-            has_alpha: binding.has_alpha,
-            pad: 0,
-        });
+        out.write(TextureBindingFfi::from(binding));
     })
 }
 
@@ -224,15 +218,7 @@ unsafe extern "C" fn t_create_render_target(
         let binding = dev.create_render_target(desc);
         out.write(RenderTargetBindingFfi {
             handle: binding.handle.0.get(),
-            resolve_texture: TextureBindingFfi {
-                handle: binding.resolve_texture.handle.0.get(),
-                width: binding.resolve_texture.width,
-                height: binding.resolve_texture.height,
-                has_mipmaps: binding.resolve_texture.has_mipmaps,
-                inverted: binding.resolve_texture.inverted,
-                has_alpha: binding.resolve_texture.has_alpha,
-                pad: 0,
-            },
+            resolve_texture: binding.resolve_texture.into(),
         });
     })
 }
@@ -249,15 +235,7 @@ unsafe extern "C" fn t_clone_render_target(
         let binding = dev.clone_render_target(&label, render_target_handle(src_handle));
         out.write(RenderTargetBindingFfi {
             handle: binding.handle.0.get(),
-            resolve_texture: TextureBindingFfi {
-                handle: binding.resolve_texture.handle.0.get(),
-                width: binding.resolve_texture.width,
-                height: binding.resolve_texture.height,
-                has_mipmaps: binding.resolve_texture.has_mipmaps,
-                inverted: binding.resolve_texture.inverted,
-                has_alpha: binding.resolve_texture.has_alpha,
-                pad: 0,
-            },
+            resolve_texture: binding.resolve_texture.into(),
         });
     })
 }

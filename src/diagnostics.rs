@@ -21,9 +21,19 @@
 //! a fixed trampoline forwards into it. The per-thread variant carries a
 //! `void* user`, so its boxed closure threads straight through.
 //!
-//! Each setter returns an RAII guard. Dropping the guard restores the previous
-//! handler (the house convention) and frees the boxed closure. Guards are
-//! global state. Drop them in LIFO order (nested scopes do this naturally).
+//! Each setter returns an RAII guard. The error and assert handlers are
+//! **process-global with a single slot**; the per-thread handler owns one slot
+//! per thread. All three are **last-registration-wins**: installing a second
+//! handler replaces the first, and the older guard is then logically dead even
+//! though it is still alive. To make `Drop` safe under that reality, each
+//! registration carries a unique generation id and the active-registration id is
+//! recorded per hook. A guard's `Drop` clears its slot (restoring Noesis's own
+//! default handler) **only if it is still the active registration**; otherwise
+//! it just frees its own boxed closure and leaves the slot pointing at whoever
+//! overwrote it. Replacing a handler therefore *drops* the old one rather than
+//! stacking it: once replaced, a predecessor is gone for good and is **not**
+//! restored when its successor is dropped. Each guard always frees exactly its
+//! own box, so drop order can never cause a double-free or use-after-free.
 //!
 //! ## Driving the handlers
 //!
@@ -48,15 +58,39 @@
 //! expose Noesis's process-global allocator counters. The absolute values are
 //! not meaningful across builds; reason about **deltas** and **monotonicity**.
 
+use std::cell::Cell;
 use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ffi::{
-    AssertFn, Error2Fn, ErrorContext as FfiErrorContext, ErrorFn, noesis_get_allocated_memory,
+    ErrorContext as FfiErrorContext, noesis_get_allocated_memory,
     noesis_get_allocated_memory_accum, noesis_get_allocations_count, noesis_invoke_assert_handler,
     noesis_invoke_error_handler, noesis_set_assert_handler, noesis_set_error_handler,
     noesis_set_thread_error_handler,
 };
+
+/// Monotonic source of per-registration ids, shared across every hook. `0` is
+/// reserved as the "no active registration" sentinel, so ids start at `1`.
+static NEXT_REG_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Allocate a fresh, never-`0` registration id.
+fn next_reg_id() -> u64 {
+    NEXT_REG_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Id of the global error hook's currently active registration (`0` = none).
+static ERROR_ACTIVE: AtomicU64 = AtomicU64::new(0);
+
+/// Id of the global assert hook's currently active registration (`0` = none).
+static ASSERT_ACTIVE: AtomicU64 = AtomicU64::new(0);
+
+thread_local! {
+    /// Id of *this thread's* currently active per-thread error registration
+    /// (`0` = none). Thread-local because the handler is thread-scoped and the
+    /// guard is `!Send`, so install and drop always run on the same thread.
+    static THREAD_ERROR_ACTIVE: Cell<u64> = const { Cell::new(0) };
+}
 
 /// A borrowed C string → owned `String`, empty on null.
 unsafe fn cstr(p: *const c_char) -> String {
@@ -92,7 +126,7 @@ pub struct ErrorContext {
     pub column: u32,
 }
 
-type ErrorClosure = Box<dyn FnMut(&str, u32, &str, bool) + Send + 'static>;
+type ErrorClosure = Box<dyn Fn(&str, u32, &str, bool) + Send + 'static>;
 
 /// SAFETY: `userdata` is the `Box<ErrorClosure>` leaked in [`set_error_handler`]
 /// and kept alive by the live [`ErrorHandlerGuard`].
@@ -105,71 +139,87 @@ unsafe extern "C" fn error_trampoline(
 ) {
     crate::panic_guard::guard(|| {
         // SAFETY: userdata is the leaked Box<ErrorClosure>; the guard guarantees it
-        // outlives every dispatch.
-        let closure = unsafe { &mut *userdata.cast::<ErrorClosure>() };
+        // outlives every dispatch. Shared `&`: the handler is `Fn`, so a
+        // re-entrant invoke that materialises a second reference is sound.
+        let closure = unsafe { &*userdata.cast::<ErrorClosure>() };
         let file = unsafe { cstr(file) };
         let message = unsafe { cstr(message) };
         closure(&file, line, &message, fatal);
     })
 }
 
-/// RAII guard for the global error handler. On drop, restores the previously
-/// installed handler and frees the boxed closure.
+/// RAII guard for the global error handler. On drop, if this is still the active
+/// registration, it restores Noesis's default handler; it always frees its
+/// boxed closure. See the module docs for the last-registration-wins semantics.
 #[must_use = "dropping the guard immediately uninstalls the handler"]
 pub struct ErrorHandlerGuard {
     boxed: *mut ErrorClosure,
-    prev_cb: Option<ErrorFn>,
-    prev_user: *mut c_void,
+    id: u64,
 }
 
 impl Drop for ErrorHandlerGuard {
     fn drop(&mut self) {
-        // SAFETY: restore the predecessor (which the C shim re-points its global
-        // slot at), then reclaim our leaked closure box exactly once.
-        unsafe {
-            noesis_set_error_handler(
-                self.prev_cb,
-                self.prev_user,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            );
-            drop(Box::from_raw(self.boxed));
+        // Clear the global slot only if it still names THIS registration; a newer
+        // set_error_handler otherwise owns it and must keep firing.
+        if ERROR_ACTIVE
+            .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            // SAFETY: a null cb tells the shim to restore Noesis's saved default;
+            // no previous (cb, user) requested.
+            unsafe {
+                noesis_set_error_handler(
+                    None,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+            }
         }
+        // SAFETY: reclaim our leaked closure box exactly once.
+        unsafe { drop(Box::from_raw(self.boxed)) };
     }
 }
 
 /// Install a process-global error handler. The closure receives `file`, `line`,
 /// `message`, and `fatal` for every error not claimed by a per-thread handler
-/// ([`set_thread_error_handler`]). Keep the returned guard alive for as long as
-/// the handler should be active; dropping it restores the previous handler.
+/// ([`set_thread_error_handler`]). It must be `Fn` because an error raised from
+/// inside the handler re-enters it synchronously; use interior mutability for
+/// handler state. Keep the returned guard alive for as long as the handler
+/// should be active.
+///
+/// This hook is **process-global with a single slot**: a later
+/// `set_error_handler` replaces this one (last-registration-wins), after which
+/// dropping this now-older guard no longer touches the slot; dropping the active
+/// guard restores Noesis's default handler (not a predecessor). See the module
+/// docs for the full semantics.
 ///
 /// Requires [`crate::init`]. Drive it with [`invoke_error`] (always
 /// `fatal = false`; see the module safety note).
 pub fn set_error_handler<F>(handler: F) -> ErrorHandlerGuard
 where
-    F: FnMut(&str, u32, &str, bool) + Send + 'static,
+    F: Fn(&str, u32, &str, bool) + Send + 'static,
 {
     let boxed: *mut ErrorClosure = Box::into_raw(Box::new(Box::new(handler)));
-    let mut prev_cb: Option<ErrorFn> = None;
-    let mut prev_user: *mut c_void = std::ptr::null_mut();
+    let id = next_reg_id();
+    // Claim the id before writing the slot so a stale guard's drop (which
+    // compare-exchanges against the active id) can never clobber this fresh
+    // registration.
+    ERROR_ACTIVE.store(id, Ordering::Release);
     // SAFETY: trampoline is extern "C"; `boxed` is freshly leaked and kept alive
-    // by the guard; the out-params receive the previous (cb, user).
+    // by the guard; no previous (cb, user) requested.
     unsafe {
         noesis_set_error_handler(
             Some(error_trampoline),
             boxed.cast(),
-            &mut prev_cb,
-            &mut prev_user,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         );
     }
-    ErrorHandlerGuard {
-        boxed,
-        prev_cb,
-        prev_user,
-    }
+    ErrorHandlerGuard { boxed, id }
 }
 
-type AssertClosure = Box<dyn FnMut(&str, u32, &str) -> bool + Send + 'static>;
+type AssertClosure = Box<dyn Fn(&str, u32, &str) -> bool + Send + 'static>;
 
 /// SAFETY: `userdata` is the `Box<AssertClosure>` leaked in
 /// [`set_assert_handler`], kept alive by the live [`AssertHandlerGuard`].
@@ -181,67 +231,77 @@ unsafe extern "C" fn assert_trampoline(
 ) -> bool {
     // A panicking handler is contained and reported as `false` (no debug break).
     crate::panic_guard::guard(|| {
-        // SAFETY: see `error_trampoline`.
-        let closure = unsafe { &mut *userdata.cast::<AssertClosure>() };
+        // SAFETY: see `error_trampoline`; shared `&` because the handler is `Fn`.
+        let closure = unsafe { &*userdata.cast::<AssertClosure>() };
         let file = unsafe { cstr(file) };
         let expr = unsafe { cstr(expr) };
         closure(&file, line, &expr)
     })
 }
 
-/// RAII guard for the global assert handler; restores the predecessor on drop.
+/// RAII guard for the global assert handler. On drop, if still the active
+/// registration, restores Noesis's default handler; always frees its box. See
+/// the module docs for the last-registration-wins semantics.
 #[must_use = "dropping the guard immediately uninstalls the handler"]
 pub struct AssertHandlerGuard {
     boxed: *mut AssertClosure,
-    prev_cb: Option<AssertFn>,
-    prev_user: *mut c_void,
+    id: u64,
 }
 
 impl Drop for AssertHandlerGuard {
     fn drop(&mut self) {
-        // SAFETY: see `ErrorHandlerGuard::drop`.
-        unsafe {
-            noesis_set_assert_handler(
-                self.prev_cb,
-                self.prev_user,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            );
-            drop(Box::from_raw(self.boxed));
+        // See `ErrorHandlerGuard::drop`.
+        if ASSERT_ACTIVE
+            .compare_exchange(self.id, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            // SAFETY: a null cb restores Noesis's saved default assert handler.
+            unsafe {
+                noesis_set_assert_handler(
+                    None,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+            }
         }
+        // SAFETY: reclaim our leaked closure box exactly once.
+        unsafe { drop(Box::from_raw(self.boxed)) };
     }
 }
 
 /// Install a process-global assert handler. The closure receives `file`,
 /// `line`, `expr` and returns whether Noesis should request a debug break
-/// (`true`) for that assertion. Keep the guard alive while active.
+/// (`true`) for that assertion. It must be `Fn` because an assertion raised from
+/// inside the handler re-enters it synchronously; use interior mutability for
+/// handler state. Keep the guard alive while active.
+///
+/// Process-global, single-slot, last-registration-wins; dropping the active
+/// guard restores Noesis's default (not a predecessor). See the module docs.
 ///
 /// Requires [`crate::init`]. Drive it with [`invoke_assert`]. Do **not** let a
 /// real failed `NS_ASSERT` reach it (it may abort in a Debug SDK build).
 pub fn set_assert_handler<F>(handler: F) -> AssertHandlerGuard
 where
-    F: FnMut(&str, u32, &str) -> bool + Send + 'static,
+    F: Fn(&str, u32, &str) -> bool + Send + 'static,
 {
     let boxed: *mut AssertClosure = Box::into_raw(Box::new(Box::new(handler)));
-    let mut prev_cb: Option<AssertFn> = None;
-    let mut prev_user: *mut c_void = std::ptr::null_mut();
+    let id = next_reg_id();
+    // Claim the id before writing the slot (see `set_error_handler`).
+    ASSERT_ACTIVE.store(id, Ordering::Release);
     // SAFETY: as `set_error_handler`.
     unsafe {
         noesis_set_assert_handler(
             Some(assert_trampoline),
             boxed.cast(),
-            &mut prev_cb,
-            &mut prev_user,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         );
     }
-    AssertHandlerGuard {
-        boxed,
-        prev_cb,
-        prev_user,
-    }
+    AssertHandlerGuard { boxed, id }
 }
 
-type Error2Closure = Box<dyn FnMut(&str, u32, &str, bool, Option<&ErrorContext>) + Send + 'static>;
+type Error2Closure = Box<dyn Fn(&str, u32, &str, bool, Option<&ErrorContext>) + Send + 'static>;
 
 /// SAFETY: `userdata` is the `Box<Error2Closure>` leaked in
 /// [`set_thread_error_handler`], kept alive by the live guard. `context` is null
@@ -256,7 +316,8 @@ unsafe extern "C" fn error2_trampoline(
 ) {
     crate::panic_guard::guard(|| {
         // SAFETY: see `error_trampoline`; userdata is our leaked Box<Error2Closure>.
-        let closure = unsafe { &mut *userdata.cast::<Error2Closure>() };
+        // Shared `&` because the handler is `Fn` (re-entrant-safe).
+        let closure = unsafe { &*userdata.cast::<Error2Closure>() };
         let file = unsafe { cstr(file) };
         let message = unsafe { cstr(message) };
         let ctx = if context.is_null() {
@@ -274,28 +335,42 @@ unsafe extern "C" fn error2_trampoline(
     })
 }
 
-/// RAII guard for the per-thread error handler; restores the predecessor on
-/// drop. Because the handler is thread-scoped, install and drop it on the same
-/// thread.
+/// RAII guard for the per-thread error handler. On drop, if still this thread's
+/// active registration, it clears the thread handler; it always frees its box.
+/// Because the handler is thread-scoped (and this guard is `!Send`), install and
+/// drop it on the same thread. Last-registration-wins per the module docs.
 #[must_use = "dropping the guard immediately uninstalls the handler"]
 pub struct ThreadErrorHandlerGuard {
     boxed: *mut Error2Closure,
-    prev_handler: Option<Error2Fn>,
-    prev_user: *mut c_void,
+    id: u64,
 }
 
 impl Drop for ThreadErrorHandlerGuard {
     fn drop(&mut self) {
-        // SAFETY: restore the predecessor handler+user, then reclaim our box.
-        unsafe {
-            noesis_set_thread_error_handler(
-                self.prev_handler,
-                self.prev_user,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            );
-            drop(Box::from_raw(self.boxed));
+        // Clear this thread's slot only if it still names THIS registration; a
+        // newer set_thread_error_handler on this thread otherwise owns it.
+        let still_active = THREAD_ERROR_ACTIVE.with(|c| {
+            if c.get() == self.id {
+                c.set(0);
+                true
+            } else {
+                false
+            }
+        });
+        if still_active {
+            // SAFETY: a null handler clears this thread's error handler; no
+            // previous (handler, user) requested.
+            unsafe {
+                noesis_set_thread_error_handler(
+                    None,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+            }
         }
+        // SAFETY: reclaim our leaked closure box exactly once.
+        unsafe { drop(Box::from_raw(self.boxed)) };
     }
 }
 
@@ -303,32 +378,37 @@ impl Drop for ThreadErrorHandlerGuard {
 /// priority for errors raised on this thread and additionally receives an
 /// [`ErrorContext`] (the offending `uri` / `line` / `column`, e.g. for a XAML
 /// parse error). The closure receives `file`, `line`, `message`, `fatal`, and
-/// `Some(&ErrorContext)` when location info was supplied (else `None`).
+/// `Some(&ErrorContext)` when location info was supplied (else `None`). It must
+/// be `Fn` because an error raised from inside the handler re-enters it
+/// synchronously; use interior mutability for handler state.
+///
+/// One slot per thread, last-registration-wins: a later
+/// `set_thread_error_handler` on this thread replaces this one, after which
+/// dropping this now-older guard no longer touches the slot; dropping the active
+/// guard clears the thread handler (no predecessor is restored). See the module
+/// docs.
 ///
 /// Requires [`crate::init`]. Drive it with [`invoke_error_with_context`]
 /// (always `fatal = false`).
 pub fn set_thread_error_handler<F>(handler: F) -> ThreadErrorHandlerGuard
 where
-    F: FnMut(&str, u32, &str, bool, Option<&ErrorContext>) + Send + 'static,
+    F: Fn(&str, u32, &str, bool, Option<&ErrorContext>) + Send + 'static,
 {
     let boxed: *mut Error2Closure = Box::into_raw(Box::new(Box::new(handler)));
-    let mut prev_handler: Option<Error2Fn> = None;
-    let mut prev_user: *mut c_void = std::ptr::null_mut();
+    let id = next_reg_id();
+    // Claim the id before writing the slot (see `set_error_handler`).
+    THREAD_ERROR_ACTIVE.with(|c| c.set(id));
     // SAFETY: trampoline is extern "C"; `boxed` is the threaded userdata kept
-    // alive by the guard; the out-params receive the previous (handler, user).
+    // alive by the guard; no previous (handler, user) requested.
     unsafe {
         noesis_set_thread_error_handler(
             Some(error2_trampoline),
             boxed.cast(),
-            &mut prev_handler,
-            &mut prev_user,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         );
     }
-    ThreadErrorHandlerGuard {
-        boxed,
-        prev_handler,
-        prev_user,
-    }
+    ThreadErrorHandlerGuard { boxed, id }
 }
 
 /// Run the registered error handler through Noesis's real dispatch

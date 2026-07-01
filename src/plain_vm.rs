@@ -78,6 +78,8 @@ pub enum PlainValue {
     Int32(i32),
     Double(f64),
     Bool(bool),
+    /// A string. Must not contain an interior NUL byte; setting one panics
+    /// (matching the property-name entry points).
     String(String),
     /// A `uint64` (e.g. a packed row identity). Pairs with [`PlainType::U64`].
     U64(u64),
@@ -97,7 +99,7 @@ impl PlainValue {
             // SAFETY: returns a +1-owned BoxedValue<uint64_t>.
             PlainValue::U64(v) => unsafe { noesis_box_u64(v) },
             PlainValue::String(s) => {
-                let cs = CString::new(s).unwrap_or_default();
+                let cs = CString::new(s).expect("plain value string contained NUL");
                 // SAFETY: cs is valid for the call; the C side copies the bytes.
                 unsafe { noesis_box_string(cs.as_ptr()) }
             }
@@ -280,9 +282,10 @@ impl PlainVmBuilder {
     /// registered or a property registration failed.
     #[must_use]
     pub fn register(self) -> Option<PlainVmClass> {
-        // Double-Box for a stable thin pointer across the C ABI, matching the
-        // Command / Converter pattern. A `None` handler still donates an empty
-        // closure box so the free trampoline has a uniform shape.
+        // Double-Box the handler for a stable thin pointer across the C ABI,
+        // matching the Command / Converter pattern. A `None` handler registers
+        // with null userdata and no callbacks, so C++ takes no ownership and the
+        // free trampoline is never installed.
         let (userdata, on_set): (*mut c_void, Option<PlainSetFn>) = match self.handler {
             Some(h) => {
                 let boxed: Box<Box<dyn PlainSetHandler>> = Box::new(h);
@@ -398,6 +401,9 @@ impl PlainInstance {
     /// raise the change notification; call [`Self::notify`] (or use
     /// [`Self::set_and_notify`]). Returns `false` if `prop_index` is out of
     /// range.
+    ///
+    /// Panics if `value` is a [`PlainValue::String`] containing an interior NUL
+    /// byte.
     pub fn set(&self, prop_index: u32, value: PlainValue) -> bool {
         if prop_index >= self.prop_count {
             return false;

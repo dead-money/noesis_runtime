@@ -67,6 +67,13 @@ impl NameScope {
     /// Look up the object registered under `name` (`INameScope::FindName`), or
     /// `None`. The returned element owns its own `+1` reference.
     ///
+    /// A name scope can hold any registered `BaseComponent` (a parsed scope may
+    /// contain `Storyboard`s or other `Freezable`s), so the returned handle is
+    /// not guaranteed to be a real `FrameworkElement`. It's typed as one for
+    /// convenience; the shims `DynamicCast` on each call, so calling element
+    /// methods on a non-element handle degrades to a no-op / `None` rather than
+    /// undefined behavior.
+    ///
     /// # Panics
     ///
     /// Panics if `name` contains an interior NUL byte.

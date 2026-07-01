@@ -259,8 +259,10 @@ void noesis_set_xaml_provider(void* provider);
 //
 //   - `open_font(userdata, folder_uri, filename, out_data, out_len)`:
 //     return `true` with `*out_data`/`*out_len` set; the pointed bytes
-//     must stay valid until the font-stream reader finishes (same
-//     contract as `load_xaml`). Return `false` to signal "not found".
+//     need only stay valid for the duration of the `open_font` call — the
+//     shim copies them into an owning stream because Noesis retains the font
+//     stream inside the FontSource and reads it lazily at glyph-raster time.
+//     Return `false` to signal "not found".
 
 typedef void (*noesis_register_font_fn)(void* register_cx, const char* filename);
 
@@ -773,6 +775,23 @@ void noesis_framework_element_set_visibility(void* element, bool visible);
 void noesis_framework_element_set_margin(
     void* element, float left, float top, float right, float bottom);
 
+// Frees a donated subscription `userdata` box. Called exactly once, by the C++
+// handler's destructor, when the handler is actually torn down. That teardown
+// is deferred past any in-flight callback, so the box is never freed while a
+// callback's borrow of it is still live. Mirrors noesis_command_free_fn.
+typedef void (*noesis_subscription_free_fn)(void* userdata);
+
+// A note on the whole subscription family below (click / selection / keydown /
+// generic routed event / lifecycle / data-object / collection-view current
+// changed): each subscribe entrypoint DONATES its `userdata` box to the C++
+// handler along with a `free_handler`. The handler frees the box exactly once
+// in its destructor; the unsubscribe entrypoint no longer frees it. Because a
+// handler may drop its own subscription (calling the unsubscribe entrypoint)
+// from INSIDE its own callback, unsubscribe defers the handler's destruction
+// until the callback frame unwinds when one is on the stack — so unsubscribing
+// (and thus dropping the RAII token) from within the callback is safe. All of
+// this is thread-affine to the single view-driving thread.
+
 // Click-event callback. Invoked from inside `IView::Update` (or another
 // input-pump method, depending on which event raised the click) on whatever
 // thread is driving the view. Keep work in the callback small: push to a
@@ -783,16 +802,21 @@ typedef void (*noesis_click_fn)(void* userdata);
 // opaque token (an internal handler) that you must pass to
 // `noesis_unsubscribe_click` exactly once when you're done. Returns NULL
 // if `element` is not castable to `BaseButton` (e.g. it's a ContentControl
-// or a UserControl with no inner button), or if `cb` is NULL.
+// or a UserControl with no inner button), or if `cb` is NULL. On a NULL
+// return C++ took no ownership; the caller reclaims `userdata`. On a non-NULL
+// return `userdata` is donated: the handler frees it via `free_handler`.
 //
 // The token holds a +1 ref on the underlying button so the subscription
 // stays valid even if the caller drops every other reference to the
 // element. Release the token before `noesis_shutdown` like every other
 // owning handle in this API.
 void* noesis_subscribe_click(
-    void* element, noesis_click_fn cb, void* userdata);
+    void* element, noesis_click_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler);
 
-// Unsubscribe and free the handler. Safe to call with NULL.
+// Unsubscribe the handler (and free its donated userdata via free_handler).
+// Safe to call with NULL, and safe to call from inside the click callback
+// (destruction is deferred until the callback returns).
 void noesis_unsubscribe_click(void* token);
 
 // SelectionChanged callback. Argument-free (same shape / threading contract as
@@ -808,9 +832,11 @@ typedef void (*noesis_selection_changed_fn)(void* userdata);
 // the Selector so the subscription survives the caller dropping every other
 // handle; release it before `noesis_shutdown`.
 void* noesis_subscribe_selection_changed(
-    void* element, noesis_selection_changed_fn cb, void* userdata);
+    void* element, noesis_selection_changed_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler);
 
-// Unsubscribe and free the handler. Safe to call with NULL.
+// Unsubscribe the handler (and free its donated userdata). Safe to call with
+// NULL and from inside the callback (destruction deferred until it returns).
 void noesis_unsubscribe_selection_changed(void* token);
 
 // KeyDown-event callback. Invoked from inside the input pump on whatever
@@ -833,9 +859,12 @@ typedef void (*noesis_keydown_fn)(void* userdata, int32_t key, bool* out_handled
 // even if the caller drops every other reference. Release the token before
 // `noesis_shutdown` like every other owning handle in this API.
 void* noesis_subscribe_keydown(
-    void* element, noesis_keydown_fn cb, void* userdata);
+    void* element, noesis_keydown_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler);
 
-// Unsubscribe and free the keydown handler. Safe to call with NULL.
+// Unsubscribe the keydown handler (and free its donated userdata). Safe to
+// call with NULL and from inside the callback (destruction deferred until it
+// returns).
 void noesis_unsubscribe_keydown(void* token);
 
 // ── Generic routed-event subscription ───────────────────────────────────────
@@ -875,9 +904,11 @@ typedef void (*noesis_routed_event_fn)(void* userdata, const void* args, bool* o
 // every other handle the caller drops.
 void* noesis_subscribe_event(
     void* element, const char* event_name, bool handled_too, noesis_routed_event_fn cb,
-    void* userdata);
+    void* userdata, noesis_subscription_free_fn free_handler);
 
-// Unsubscribe and free the routed-event handler. Safe to call with NULL.
+// Unsubscribe the routed-event handler (and free its donated userdata). Safe to
+// call with NULL and from inside the callback (destruction deferred until it
+// returns).
 void noesis_unsubscribe_event(void* token);
 
 // ── Non-routed lifecycle events ─────────────────────────────────────────────
@@ -905,14 +936,39 @@ typedef void (*noesis_lifecycle_fn)(void* userdata);
 // +1 ref on the element so the subscription outlives every other handle the
 // caller drops.
 void* noesis_subscribe_lifecycle(
-    void* element, const char* event_name, noesis_lifecycle_fn cb, void* userdata);
+    void* element, const char* event_name, noesis_lifecycle_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler);
 
-// Unsubscribe and free the lifecycle handler. Safe to call with NULL.
+// Unsubscribe the lifecycle handler (and free its donated userdata). Safe to
+// call with NULL and from inside the callback (destruction deferred until it
+// returns).
 void noesis_unsubscribe_lifecycle(void* token);
 
 // Event-arg accessors. Each takes the opaque `args` handed to the callback and
 // returns a sentinel when the live event isn't of the matching kind (so one
 // generic callback can probe whatever arrived).
+
+// Arg-shape discriminant carried by the opaque `args`. Mirrors the
+// `events::arg_kind` module in src/events.rs; keep the two in sync. This is the authoritative way to
+// classify an event — the typed accessors below intentionally share sentinels
+// (e.g. a MouseMove and a zero-delta MouseWheel both look "position, no
+// button"), so probe the kind rather than inferring it from which accessor
+// yields a value.
+//   0  ROUTED          base RoutedEventArgs (source/handled only)
+//   1  MOUSE           MouseEventArgs (position)
+//   2  MOUSE_BUTTON    MouseButtonEventArgs (position + changed button)
+//   3  MOUSE_WHEEL     MouseWheelEventArgs (position + wheel delta)
+//   4  KEY             KeyEventArgs (key)
+//   5  SIZE_CHANGED    SizeChangedEventArgs (new size)
+//   6  TEXT_INPUT      TextCompositionEventArgs (ch)
+//   7  FOCUS_CHANGED   KeyboardFocusChangedEventArgs (old/new focus)
+//   8  DRAG            DragEventArgs (effects/allowed/keyStates/data/position)
+//   9  MANIP_STARTED   ManipulationStartedEventArgs (origin)
+//   10 MANIP_DELTA     ManipulationDeltaEventArgs
+//   11 MANIP_COMPLETED ManipulationCompletedEventArgs
+//   12 MANIP_INERTIA   ManipulationInertiaStartingEventArgs
+// Returns -1 if `args` is NULL.
+int32_t noesis_event_args_kind(const void* args);
 
 // Mouse pointer position in the source element's coordinate space. Works for
 // mouse, mouse-button and mouse-wheel events. Returns false (writes nothing)
@@ -1018,11 +1074,15 @@ typedef void (*noesis_data_object_fn)(
 // `noesis_routed_events_remove_data_object_handler`, or NULL if `element` is
 // not a UIElement or `cb` is NULL. The token holds a +1 ref on the element.
 void* noesis_routed_events_add_copying_handler(
-    void* element, noesis_data_object_fn cb, void* userdata);
+    void* element, noesis_data_object_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler);
 void* noesis_routed_events_add_pasting_handler(
-    void* element, noesis_data_object_fn cb, void* userdata);
+    void* element, noesis_data_object_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler);
 
-// Remove and free a DataObject handler. Safe to call with NULL.
+// Remove a DataObject handler (and free its donated userdata). Safe to call
+// with NULL and from inside the callback (destruction deferred until it
+// returns).
 void noesis_routed_events_remove_data_object_handler(void* token);
 
 // ── Text + focus helpers ───────────────────────────────────────────────────
@@ -1740,8 +1800,12 @@ void* noesis_collection_view_source_create(void);
 // Point the source at `source` (borrowed list, e.g. an ObservableCollection);
 // the view is (re)built. NULL clears. false if not a CollectionViewSource.
 bool noesis_collection_view_source_set_source(void* cvs, void* source);
-// +1-owned CollectionView associated with `cvs`, or NULL if none yet. Set a
-// Source first.
+// +1-owned CollectionView associated with `cvs`, or NULL if `cvs` is not a
+// CollectionViewSource or has no source list. A CollectionViewSource only
+// eagerly materializes its view once hosted (XAML-parsed / initialized in a
+// tree); for a standalone (code-built) CVS whose GetView() is still null, this
+// synthesizes a CollectionView directly over the current Source list — the same
+// object the hosted path would produce, with an identical navigation surface.
 void* noesis_collection_view_source_get_view(void* cvs);
 
 // Records in the view, or -1 if `view` is not a CollectionView.
@@ -1768,7 +1832,10 @@ typedef void (*noesis_collection_view_changed_fn)(void* userdata);
 // Subscribe to CurrentChanged; returns an opaque token (release via the
 // unsubscribe call) or NULL on a non-view handle / null cb.
 void* noesis_collection_view_subscribe_current_changed(
-    void* view, noesis_collection_view_changed_fn cb, void* userdata);
+    void* view, noesis_collection_view_changed_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler);
+// Unsubscribe (and free the donated userdata). Safe to call with NULL and from
+// inside the callback (destruction deferred until it returns).
 void noesis_collection_view_unsubscribe_current_changed(void* token);
 
 // Set / get a FrameworkElement's `DataContext`. `set` stores its own ref on
@@ -1896,10 +1963,14 @@ void* noesis_command_binding_create(
     noesis_cmd_can_execute_fn can_execute, void* userdata,
     noesis_command_free_fn free_handler);
 // Add the binding to `element`'s CommandBindings. Returns false if `element` is
-// not a UIElement. The element then keeps the binding alive.
+// not a UIElement. The token remembers the element (holding a +1 ref) so
+// destroy can remove the binding from its collection again.
 bool noesis_command_binding_attach(void* token, void* element);
-// Detach the delegates, free the donated userdata (exactly once), and drop the
-// token's binding reference. Safe to call with NULL.
+// Detach the delegates, remove the binding from the attached element's
+// CommandBindings (reversing attach), free the donated userdata (exactly once),
+// and drop the token's binding reference. Safe to call with NULL, and safe to
+// call from inside the Executed / CanExecute callback (destruction is deferred
+// until the callback frame unwinds).
 void noesis_command_binding_destroy(void* token);
 
 // ── Built-in command libraries ──────────────────────────────────────────────

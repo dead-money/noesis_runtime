@@ -322,6 +322,7 @@ unsafe extern "C" {
         element: *mut c_void,
         cb: ClickFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_unsubscribe_click(token: *mut c_void);
 
@@ -329,6 +330,7 @@ unsafe extern "C" {
         element: *mut c_void,
         cb: KeyDownFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_unsubscribe_keydown(token: *mut c_void);
 
@@ -336,6 +338,7 @@ unsafe extern "C" {
         element: *mut c_void,
         cb: ClickFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_unsubscribe_selection_changed(token: *mut c_void);
 
@@ -345,6 +348,7 @@ unsafe extern "C" {
         handled_too: bool,
         cb: RoutedEventFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_unsubscribe_event(token: *mut c_void);
 
@@ -356,6 +360,7 @@ unsafe extern "C" {
         event_name: *const c_char,
         cb: ClickFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_unsubscribe_lifecycle(token: *mut c_void);
 
@@ -370,6 +375,7 @@ unsafe extern "C" {
         height: *mut f32,
     ) -> bool;
     pub fn noesis_routed_args_source(args: *const c_void) -> *mut c_void;
+    pub fn noesis_event_args_kind(args: *const c_void) -> i32;
 
     // ── Typed arg accessors: focus / drag / manipulation ──────────────────────
     pub fn noesis_routed_events_focus_old(args: *const c_void) -> *mut c_void;
@@ -428,11 +434,13 @@ unsafe extern "C" {
         element: *mut c_void,
         cb: DataObjectFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_routed_events_add_pasting_handler(
         element: *mut c_void,
         cb: DataObjectFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_routed_events_remove_data_object_handler(token: *mut c_void);
 
@@ -597,6 +605,7 @@ unsafe extern "C" {
         view: *mut c_void,
         cb: ClickFn,
         userdata: *mut c_void,
+        free_handler: SubscriptionFreeFn,
     ) -> *mut c_void;
     pub fn noesis_collection_view_unsubscribe_current_changed(token: *mut c_void);
 
@@ -2060,6 +2069,12 @@ pub type MarkupProvideFn = unsafe extern "C" fn(
 /// `cpp/noesis_shim.h` for the threading contract: the callback runs on
 /// whatever thread is driving the view, so keep work small.
 pub type ClickFn = unsafe extern "C" fn(userdata: *mut c_void);
+
+/// C callback invoked exactly once when a subscription's C++ handler is finally
+/// torn down (deferred past any in-flight callback), to free the donated
+/// `userdata` box. Shared by every event / collection-view subscription in this
+/// crate. Mirrors [`CommandFreeFn`].
+pub type SubscriptionFreeFn = unsafe extern "C" fn(userdata: *mut c_void);
 
 /// C callback invoked when a subscribed `UIElement::KeyDown` fires.
 ///

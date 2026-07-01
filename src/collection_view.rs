@@ -31,7 +31,7 @@ use std::ffi::{CStr, c_void};
 
 use crate::binding::ObservableCollection;
 use crate::ffi::{
-    ClickFn, noesis_base_component_release, noesis_collection_view_count,
+    ClickFn, SubscriptionFreeFn, noesis_base_component_release, noesis_collection_view_count,
     noesis_collection_view_current_item, noesis_collection_view_current_position,
     noesis_collection_view_is_current_after_last, noesis_collection_view_is_current_before_first,
     noesis_collection_view_move_current_to_first, noesis_collection_view_move_current_to_last,
@@ -231,11 +231,9 @@ impl CollectionView {
 
     /// Subscribe `handler` to the view's `CurrentChanged` event, fired after the
     /// current item changes (e.g. from any `move_current_to_*`). The returned
-    /// [`CurrentChangedSubscription`] keeps the handler installed until dropped.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `Box::into_raw` returns null (an internal logic error).
+    /// [`CurrentChangedSubscription`] keeps the handler installed until dropped;
+    /// dropping it from inside the callback is safe (the C++ handler owns the
+    /// boxed closure and defers its own destruction until the callback returns).
     #[must_use]
     pub fn subscribe_current_changed<H: CurrentChangedHandler>(
         &self,
@@ -245,21 +243,21 @@ impl CollectionView {
         // events::subscribe_click.
         let outer: Box<Box<dyn CurrentChangedHandler>> = Box::new(Box::new(handler));
         let userdata = Box::into_raw(outer);
-        // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked.
+        // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked and
+        // donated to the C++ handler (freed via the free trampoline on teardown).
         let token = unsafe {
             noesis_collection_view_subscribe_current_changed(
                 self.ptr.as_ptr(),
                 current_changed_trampoline,
                 userdata.cast(),
+                current_changed_free,
             )
         };
         if let Some(token) = NonNull::new(token) {
-            Some(CurrentChangedSubscription {
-                token,
-                userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
-            })
+            Some(CurrentChangedSubscription { token })
         } else {
-            // Subscription failed (not a view). Reclaim the leaked userdata.
+            // Subscription failed (not a view); C++ took no ownership. Reclaim
+            // the leaked userdata.
             // SAFETY: userdata came from Box::into_raw moments ago; nothing took it.
             drop(unsafe { Box::from_raw(userdata) });
             None
@@ -370,7 +368,6 @@ impl<F: Fn() + Send + 'static> CurrentChangedHandler for F {
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct CurrentChangedSubscription {
     token: NonNull<c_void>,
-    userdata: NonNull<Box<dyn CurrentChangedHandler>>,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -378,12 +375,10 @@ unsafe impl Send for CurrentChangedSubscription {}
 
 impl Drop for CurrentChangedSubscription {
     fn drop(&mut self) {
-        // SAFETY: token + userdata produced together by subscribe; unsubscribe
-        // detaches the delegate before we reclaim the handler box.
-        unsafe {
-            noesis_collection_view_unsubscribe_current_changed(self.token.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
-        }
+        // SAFETY: token produced by subscribe; unsubscribe detaches the delegate
+        // and frees the donated handler box exactly once (deferred if dropping
+        // from inside the callback).
+        unsafe { noesis_collection_view_unsubscribe_current_changed(self.token.as_ptr()) }
     }
 }
 
@@ -401,5 +396,22 @@ unsafe extern "C" fn current_changed_trampoline(userdata: *mut c_void) {
     });
 }
 
-// Keep the `ClickFn` reuse honest: the trampoline must match its shape.
+/// Free trampoline for the donated handler box. The C++ handler calls it exactly
+/// once when it is destroyed (deferred past any in-flight callback).
+///
+/// SAFETY: `userdata` is the `Box<Box<dyn CurrentChangedHandler>>` leaked in
+/// subscribe; the C++ side invokes this at most once.
+unsafe extern "C" fn current_changed_free(userdata: *mut c_void) {
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // SAFETY: reclaim the exact box leaked in subscribe; runs once.
+        drop(unsafe { Box::from_raw(userdata.cast::<Box<dyn CurrentChangedHandler>>()) });
+    });
+}
+
+// Keep the `ClickFn` / `SubscriptionFreeFn` reuse honest: the trampolines must
+// match their shapes.
 const _: ClickFn = current_changed_trampoline;
+const _: SubscriptionFreeFn = current_changed_free;

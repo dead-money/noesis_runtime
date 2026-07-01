@@ -126,6 +126,9 @@ pub struct LoadedComponent {
     ptr: NonNull<c_void>,
 }
 
+// SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
+unsafe impl Send for LoadedComponent {}
+
 impl LoadedComponent {
     /// Raw `Noesis::BaseComponent*`, borrowed for the lifetime of `self`. Hand
     /// to other Noesis APIs that take a `BaseComponent*`.

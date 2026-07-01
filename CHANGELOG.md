@@ -6,6 +6,65 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the integration callbacks — `set_cursor_callback`,
+  `set_software_keyboard_callback`, `set_open_url_callback`, and
+  `set_play_audio_callback` — now require `Fn` closures instead of `FnMut`.
+  Noesis can invoke these re-entrantly, so `&mut` access to captured state was
+  unsound.
+- **Breaking:** the diagnostics handlers — `set_error_handler`,
+  `set_assert_handler`, and `set_thread_error_handler` — now require `Fn`
+  closures instead of `FnMut`, for the same re-entrancy reason.
+- **Breaking:** `get_font_family` now returns `FontFamilyRef<'a>` borrowing the
+  `FrameworkElement` it was read from, so the reference can no longer outlive
+  the element that owns it.
+- **Breaking:** `EventTrigger::source_name` now returns `None` for an unset
+  (empty) name instead of `Some("")`.
+- The typography enum accessors (font weight/style/stretch, capitals, numeral
+  style, fraction, variants, and the composition-underline line style) return
+  `None` when the underlying discriminant is unknown, rather than silently
+  substituting a default value.
+- `Style::builder` now panics if `target_type` is unknown to the reflection
+  registry or contains an interior NUL byte — previously it swallowed the error
+  and returned an inert builder whose setters all silently failed. Use
+  `Style::new` + `set_target_type` for the fallible form.
+- Added the gamepad `Key` variants (`GamepadLeft` through `GamepadContext4`,
+  ordinals 175–190) so directional-focus and accept/cancel input can be sent
+  through `View::key_down` / `key_up`.
+- Event-argument classification behind `EventArgs::wheel_delta` is now keyed on
+  the arg-kind discriminant reported by the C++ side rather than inferred from
+  position/button sentinels, so plain mouse events (moves, enter/leave) no
+  longer misreport as zero-delta wheel events.
+
+### Fixed
+
+- Provider registration guards (font, texture, and XAML `Registered`) now clear
+  the Noesis slot on drop only when their id still matches the active
+  registration, so dropping a stale guard can no longer tear down a newer
+  provider for the same scope. Each guard frees exactly its own boxed impl.
+- Diagnostics handler guards track a per-registration id: installing a second
+  handler leaves the older guard logically dead, and dropping it no longer
+  clobbers the newer handler's slot. Each guard restores Noesis's default on
+  drop and frees exactly its own closure.
+- Event, collection-view current-changed, and lifecycle/data-object
+  subscriptions now donate their boxed handler to the C++ side with a free
+  trampoline. Dropping a subscription from inside its own callback is safe
+  (destruction is deferred until the callback returns) and the previous
+  double-free / leak on the Rust side is gone.
+- Creating a reflected class instance no longer leaks a reference: the C++ shim
+  handed out an object that had been `AddReference`'d twice but released once.
+  The freezable make-trampoline path now adopts its `+1` correctly rather than
+  taking an extra reference.
+- `FontFamilyRef` borrows are tied to the source element's lifetime (see above),
+  closing a use-after-free when the element was dropped while the ref was live.
+- C++ shim: `noesis_collection_view_source_get_view` now documents that it
+  synthesizes a `CollectionView` over the source list for a standalone
+  (unhosted) `CollectionViewSource`, matching the implementation. Added
+  `static_assert`s pinning the 16 gamepad `Key` ordinals against the SDK enum,
+  and switched string-property FFI casts from `i8` to `c_char` for targets
+  where `c_char` is `u8` (e.g. aarch64 Linux).
+
 ## [0.11.0] - 2026-06-29
 
 ### Added

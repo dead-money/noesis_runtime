@@ -90,6 +90,7 @@ public:
 extern "C" void* noesis_register_enum(
     const char* name, const noesis_enum_value* values, uint32_t count) {
     if (!name || name[0] == '\0') return nullptr;
+    if (count > 0 && !values) return nullptr;
 
     Noesis::Symbol sym(name);
     if (Noesis::Reflection::IsTypeRegistered(sym)) {

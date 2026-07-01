@@ -183,6 +183,15 @@ void readRect(const Noesis::Rect& rect, float out[4]) {
     out[3] = rect.height;
 }
 
+// A key frame's KeyTime as seconds, or -1.0 if it is not a resolved TimeSpan.
+// GetTimeSpan() is only valid for KeyTimeType_TimeSpan; a Uniform / Percent /
+// Paced key time (from XAML like KeyTime="Uniform" or "50%") would assert in
+// debug and read a stale TimeSpan in release, so it maps to the -1.0 sentinel.
+double keyTimeSeconds(const Noesis::KeyTime& kt) {
+    if (kt.GetType() != Noesis::KeyTimeType_TimeSpan) return -1.0;
+    return kt.GetTimeSpan().GetTotalSeconds();
+}
+
 // key-frame `kind`: 0 Discrete, 1 Linear, 2 Easing (uses `extra` as an
 // EasingFunctionBase*), 3 Spline (uses `extra` as a KeySpline*). Returns a key
 // frame with its KeyTime set; the caller sets the typed value. Disc/Lin/Eas/Spl
@@ -994,7 +1003,7 @@ extern "C" double noesis_animation_rect_keyframes_get_key_time(void* anim, int32
     if (!a) return -1.0;
     Noesis::RectKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 extern "C" void* noesis_animation_size_keyframes_create() {
@@ -1043,7 +1052,7 @@ extern "C" double noesis_animation_size_keyframes_get_key_time(void* anim, int32
     if (!a) return -1.0;
     Noesis::SizeKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 // ── Point key-frame animation ─────────────────────────────────────────────────
@@ -1098,7 +1107,7 @@ extern "C" double noesis_animation_point_keyframes_get_key_time(void* anim, int3
     if (!a) return -1.0;
     Noesis::PointKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 // ── Thickness key-frame animation ─────────────────────────────────────────────
@@ -1156,7 +1165,7 @@ extern "C" double noesis_animation_thickness_keyframes_get_key_time(void* anim, 
     if (!a) return -1.0;
     Noesis::ThicknessKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 // ── Int16 / Int32 / Int64 key-frame animations ───────────────────────────────
@@ -1201,10 +1210,7 @@ extern "C" double noesis_animation_thickness_keyframes_get_key_time(void* anim, 
         if (!a) return -1.0;                                                                    \
         Noesis::COLL* frames = a->GetKeyFrames();                                               \
         if (!frames || idx < 0 || idx >= frames->Count()) return -1.0;                          \
-        return frames->Get(static_cast<uint32_t>(idx))                                          \
-            ->GetKeyTime()                                                                      \
-            .GetTimeSpan()                                                                      \
-            .GetTotalSeconds();                                                                 \
+        return keyTimeSeconds(frames->Get(static_cast<uint32_t>(idx))->GetKeyTime());           \
     }
 
 INT_KEYFRAMES(int16, Int16AnimationUsingKeyFrames, Int16KeyFrameCollection, Int16KeyFrame,
@@ -1265,7 +1271,7 @@ extern "C" double noesis_animation_object_keyframes_get_key_time(void* anim, int
     if (!a) return -1.0;
     Noesis::ObjectKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 // ── Boolean key-frame animation ───────────────────────────────────────────────
@@ -1315,7 +1321,7 @@ extern "C" double noesis_animation_boolean_keyframes_get_key_time(void* anim, in
     if (!a) return -1.0;
     Noesis::BooleanKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 // ── String key-frame animation ────────────────────────────────────────────────
@@ -1364,7 +1370,7 @@ extern "C" double noesis_animation_string_keyframes_get_key_time(void* anim, int
     if (!a) return -1.0;
     Noesis::StringKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 // ── Matrix key-frame animation ───────────────────────────────────────────────
@@ -1416,7 +1422,7 @@ extern "C" double noesis_animation_matrix_keyframes_get_key_time(void* anim, int
     if (!a) return -1.0;
     Noesis::MatrixKeyFrameCollection* frames = a->GetKeyFrames();
     if (!frames || index < 0 || index >= frames->Count()) return -1.0;
-    return frames->Get(static_cast<uint32_t>(index))->GetKeyTime().GetTimeSpan().GetTotalSeconds();
+    return keyTimeSeconds(frames->Get(static_cast<uint32_t>(index))->GetKeyTime());
 }
 
 // ── KeySpline ────────────────────────────────────────────────────────────────

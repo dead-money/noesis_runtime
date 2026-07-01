@@ -3,39 +3,24 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=NOESIS_SDK_DIR");
+
+    // Single source of truth for the shim translation units: every cpp/*.cpp,
+    // sorted so the build is deterministic. Both the rerun-if-changed list and
+    // the cc invocation below are driven from this, so a newly added .cpp
+    // compiles with nothing to keep in sync by hand. Watch the header and the
+    // cpp/ directory too, so an edited header or an added/removed source
+    // triggers a rebuild.
     println!("cargo:rerun-if-changed=cpp/noesis_shim.h");
-    println!("cargo:rerun-if-changed=cpp/noesis_shim.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_render_device.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_view.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_events.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_classes.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_collections.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_reflection_meta.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_controls.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_commands.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_input.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_binding.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_plain_vm.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_resources.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_visual_state.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_markup.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_font_provider.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_texture_provider.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_brushes.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_imaging.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_drawing.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_mesh.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_animation.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_geometry.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_shapes.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_svg.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_text_inlines.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_element_tree.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_formatted_text.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_typography.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_xaml.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_integration.cpp");
-    println!("cargo:rerun-if-changed=cpp/noesis_diagnostics.cpp");
+    println!("cargo:rerun-if-changed=cpp");
+    let mut sources: Vec<PathBuf> = std::fs::read_dir("cpp")
+        .expect("read cpp/ directory")
+        .map(|entry| entry.expect("read cpp/ entry").path())
+        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("cpp"))
+        .collect();
+    sources.sort();
+    for src in &sources {
+        println!("cargo:rerun-if-changed={}", src.display());
+    }
 
     // docs.rs has no SDK to link against; the FFI surface type-checks without
     // linking, so skip the native compile and let rustdoc build. Set DOCS_RS
@@ -131,43 +116,12 @@ fn main() {
     build
         .cpp(true)
         .std("c++17")
-        .file("cpp/noesis_shim.cpp")
-        .file("cpp/noesis_render_device.cpp")
-        .file("cpp/noesis_view.cpp")
-        .file("cpp/noesis_events.cpp")
-        .file("cpp/noesis_classes.cpp")
-        .file("cpp/noesis_reflection_meta.cpp")
-        .file("cpp/noesis_collections.cpp")
-        .file("cpp/noesis_controls.cpp")
-        .file("cpp/noesis_commands.cpp")
-        .file("cpp/noesis_input.cpp")
-        .file("cpp/noesis_binding.cpp")
-        .file("cpp/noesis_plain_vm.cpp")
-        .file("cpp/noesis_resources.cpp")
-        .file("cpp/noesis_visual_state.cpp")
-        .file("cpp/noesis_markup.cpp")
-        .file("cpp/noesis_font_provider.cpp")
-        .file("cpp/noesis_texture_provider.cpp")
-        .file("cpp/noesis_brushes.cpp")
-        .file("cpp/noesis_imaging.cpp")
-        .file("cpp/noesis_drawing.cpp")
-        .file("cpp/noesis_mesh.cpp")
-        .file("cpp/noesis_animation.cpp")
-        .file("cpp/noesis_geometry.cpp")
-        .file("cpp/noesis_shapes.cpp")
-        .file("cpp/noesis_svg.cpp")
-        .file("cpp/noesis_text_inlines.cpp")
-        .file("cpp/noesis_element_tree.cpp")
-        .file("cpp/noesis_formatted_text.cpp")
-        .file("cpp/noesis_typography.cpp")
-        .file("cpp/noesis_xaml.cpp")
-        .file("cpp/noesis_integration.cpp")
-        .file("cpp/noesis_diagnostics.cpp")
+        .files(&sources)
         .include(&include)
         .flag_if_supported("-Wno-unused-parameter");
 
     // Gates the noesis_test_* C entrypoints behind #ifdef NOESIS_TEST_UTILS
-    // in noesis_render_device.cpp.
+    // (e.g. in noesis_render_device.cpp and noesis_events.cpp).
     if env::var_os("CARGO_FEATURE_TEST_UTILS").is_some() {
         build.define("NOESIS_TEST_UTILS", None);
     }

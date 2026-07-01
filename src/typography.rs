@@ -25,6 +25,7 @@
 //! names* from the font system; the host font provider is the authority on which
 //! families it serves. See `LIMITATIONS.md` "Known SDK limitations".
 
+use core::marker::PhantomData;
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 
@@ -304,13 +305,14 @@ pub enum CompositionLineStyle {
 }
 
 impl CompositionLineStyle {
-    fn from_i32(v: i32) -> Self {
+    fn from_raw(v: i32) -> Option<Self> {
         match v {
-            1 => Self::Solid,
-            2 => Self::Dot,
-            3 => Self::Dash,
-            4 => Self::Squiggle,
-            _ => Self::None,
+            0 => Some(Self::None),
+            1 => Some(Self::Solid),
+            2 => Some(Self::Dot),
+            3 => Some(Self::Dash),
+            4 => Some(Self::Squiggle),
+            _ => None,
         }
     }
 }
@@ -393,13 +395,14 @@ impl Drop for FontFamily {
 }
 
 /// A *borrowed* `FontFamily` read back from an element's `TextElement.FontFamily`
-/// (see [`get_font_family`]). Does not own a reference and must not outlive the
-/// element it was read from.
-pub struct FontFamilyRef {
+/// (see [`get_font_family`]). Does not own a reference; its lifetime is tied to
+/// the borrow of the element it was read from, so it cannot outlive it.
+pub struct FontFamilyRef<'a> {
     ptr: NonNull<c_void>,
+    _marker: PhantomData<&'a ()>,
 }
 
-impl FontFamilyRef {
+impl FontFamilyRef<'_> {
     /// Raw `Noesis::FontFamily*`. Use it to assert pointer identity against the
     /// [`FontFamily`] handle that was assigned.
     #[must_use]
@@ -457,11 +460,14 @@ pub fn set_font_family(element: &FrameworkElement, family: &FontFamily) -> bool 
 /// Read the borrowed `TextElement.FontFamily` currently set on `element`, or
 /// `None` if unset / type mismatch.
 #[must_use]
-pub fn get_font_family(element: &FrameworkElement) -> Option<FontFamilyRef> {
+pub fn get_font_family(element: &FrameworkElement) -> Option<FontFamilyRef<'_>> {
     // SAFETY: element.raw() is live; the returned pointer is a borrowed
     // FontFamily* (no +1) valid while the element holds it, or null.
     let p = unsafe { noesis_typography_text_element_get_font_family(element.raw()) };
-    NonNull::new(p).map(|ptr| FontFamilyRef { ptr })
+    NonNull::new(p).map(|ptr| FontFamilyRef {
+        ptr,
+        _marker: PhantomData,
+    })
 }
 
 /// Set `TextElement.Foreground` on `element` to any [`Brush`] from
@@ -653,7 +659,8 @@ pub fn num_composition_underlines(element: &FrameworkElement) -> Option<u32> {
 }
 
 /// Read the IME composition underline at `index` back from the live `TextBox`,
-/// or `None` if `index` is out of range or `element` is not a `TextBox`.
+/// or `None` if `index` is out of range, `element` is not a `TextBox`, or the
+/// line style ordinal is unrecognised.
 #[must_use]
 pub fn composition_underline(
     element: &FrameworkElement,
@@ -678,7 +685,7 @@ pub fn composition_underline(
         Some(CompositionUnderline {
             start,
             end,
-            style: CompositionLineStyle::from_i32(style),
+            style: CompositionLineStyle::from_raw(style)?,
             bold,
         })
     } else {

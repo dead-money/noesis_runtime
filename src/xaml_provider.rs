@@ -6,23 +6,62 @@
 //!
 //! # Lifetime
 //!
-//! Keep the [`Registered`] guard alive as long as Noesis might call back into
-//! [`XamlProvider::load_xaml`], in practice until after [`crate::shutdown`]
-//! returns. Shutdown releases Noesis's internal `Ptr<XamlProvider>`, dropping
-//! the C++ wrapper's refcount to 1 (ours); dropping the guard then releases the
-//! final ref, fires the C++ destructor, and frees the boxed Rust impl.
+//! Keep the [`Registered`] guard alive as long as Noesis should serve XAML
+//! through your provider. Dropping it unregisters the provider from Noesis
+//! (clearing the slot this guard installed into — unless a newer registration
+//! for the same scope has replaced it), releases the C++ wrapper, and frees the
+//! boxed Rust impl. There is no need to call [`crate::shutdown`] first.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ffi::{
     XamlProviderVTable, noesis_set_xaml_provider, noesis_set_xaml_provider_assembly,
     noesis_set_xaml_provider_scheme, noesis_set_xaml_provider_scheme_assembly,
     noesis_xaml_provider_create, noesis_xaml_provider_destroy,
 };
+
+/// Which Noesis provider slot a [`Registered`] guard installed into. `Drop`
+/// uses it both to clear exactly that slot and as the key into [`ACTIVE`].
+#[derive(Clone, PartialEq, Eq)]
+enum Scope {
+    Global,
+    Scheme(CString),
+    Assembly(CString),
+    SchemeAssembly(CString, CString),
+}
+
+/// Monotonic registration ids; `0` is reserved as "no active registration".
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Id of the currently-active registration per scope (last-registration-wins).
+/// A guard's `Drop` clears the Noesis slot only if its id still matches the
+/// entry here, so a stale guard can't tear down a newer registration for the
+/// same scope. Mirrors `integration.rs`'s per-hook `*_ACTIVE` scheme, extended
+/// to a small per-scope table because scheme/assembly slots are independent.
+static ACTIVE: Mutex<Vec<(Scope, u64)>> = Mutex::new(Vec::new());
+
+/// Install `handle` (or null, to clear) into the Noesis slot named by `scope`.
+///
+/// # Safety
+///
+/// `handle` must be a live `RustXamlProvider*` or null; the `Scope`'s `CStrings`
+/// outlive the call.
+unsafe fn install(scope: &Scope, handle: *mut c_void) {
+    match scope {
+        Scope::Global => noesis_set_xaml_provider(handle),
+        Scope::Scheme(s) => noesis_set_xaml_provider_scheme(s.as_ptr(), handle),
+        Scope::Assembly(a) => noesis_set_xaml_provider_assembly(a.as_ptr(), handle),
+        Scope::SchemeAssembly(s, a) => {
+            noesis_set_xaml_provider_scheme_assembly(s.as_ptr(), a.as_ptr(), handle)
+        }
+    }
+}
 
 /// Resolves XAML URIs to bytes on demand. Implement this to serve XAML from
 /// memory, an archive, an asset pipeline, or anywhere else, then register it
@@ -95,16 +134,17 @@ static VTABLE: XamlProviderVTable = XamlProviderVTable {
 };
 
 /// Owns a Rust [`XamlProvider`] impl together with its C++ `RustXamlProvider`
-/// instance. Dropping releases the +1 ref we hold on the C++ side and frees
-/// the boxed impl. The caller is responsible for having called
-/// [`crate::shutdown`] before this drop so Noesis's own `Ptr<XamlProvider>`
-/// is already released; otherwise the final destructor fires later than
-/// expected and the boxed impl outlives its C++ wrapper briefly (still
-/// safe: no further callbacks are possible after `Shutdown`).
-#[must_use = "dropping the guard immediately clears the registration"]
+/// instance. Dropping unregisters the provider from Noesis (clearing the slot
+/// this guard installed into, unless a newer registration for the same scope
+/// has since replaced it), releases the +1 ref we hold on the C++ side, and
+/// frees the boxed impl. There is no requirement to call [`crate::shutdown`]
+/// first.
+#[must_use = "dropping the guard unregisters the provider and frees it"]
 pub struct Registered {
     handle: NonNull<c_void>,
     userdata: NonNull<Box<dyn XamlProvider>>,
+    scope: Scope,
+    id: u64,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -139,8 +179,26 @@ impl Registered {
 
 impl Drop for Registered {
     fn drop(&mut self) {
-        // SAFETY: handle + userdata produced together by register(); both
-        // freed exactly once here.
+        // Clear the Noesis slot only while we're still its active registration;
+        // a newer set_*_provider for the same scope must keep firing. Hold the
+        // lock across the check + uninstall so it stays atomic against a
+        // concurrent registration.
+        {
+            let mut active = ACTIVE.lock().expect("xaml provider registry poisoned");
+            if let Some(pos) = active
+                .iter()
+                .position(|(s, i)| *s == self.scope && *i == self.id)
+            {
+                active.swap_remove(pos);
+                // SAFETY: null clears our slot; the scope's CStrings outlive the
+                // call. Releasing Noesis's own Ptr here means no wrapper points
+                // at the userdata we free below.
+                unsafe { install(&self.scope, core::ptr::null_mut()) };
+            }
+        }
+        // SAFETY: handle + userdata produced together by register_with(); both
+        // freed exactly once here. destroy drops our +1 and fires the C++
+        // destructor; the boxed impl is then freed.
         unsafe {
             noesis_xaml_provider_destroy(self.handle.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
@@ -150,38 +208,47 @@ impl Drop for Registered {
 
 /// Install `provider` as the global Noesis XAML provider. Holds both the
 /// boxed trait object and the C++ wrapper; drop the returned [`Registered`]
-/// guard to tear everything down (after [`crate::shutdown`]).
+/// guard to unregister the provider and tear everything down.
 ///
 /// # Panics
 ///
 /// Panics if the C++ factory returns null (only possible on internal logic
 /// errors).
 pub fn set_xaml_provider<P: XamlProvider + 'static>(provider: P) -> Registered {
-    // SAFETY: install globally; Noesis retains its own +1.
-    register_with(provider, |handle| unsafe {
-        noesis_set_xaml_provider(handle)
-    })
+    register_with(provider, Scope::Global)
 }
 
-/// Shared construction for all four setters: build the C++ wrapper, run
-/// `install` to register the handle (the only step that varies), return the
-/// owning guard.
-fn register_with<P: XamlProvider + 'static>(
-    provider: P,
-    install: impl FnOnce(*mut c_void),
-) -> Registered {
+/// Shared construction for all four setters: build the C++ wrapper, install it
+/// into the slot named by `scope` (the only step that varies), record it as
+/// that scope's active registration, and return the owning guard.
+fn register_with<P: XamlProvider + 'static>(provider: P, scope: Scope) -> Registered {
     // Double-Box gives a stable thin pointer for the C ABI userdata.
     let outer: Box<Box<dyn XamlProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);
     // SAFETY: VTABLE is 'static; userdata is freshly leaked.
     let handle = unsafe { noesis_xaml_provider_create(&raw const VTABLE, userdata.cast()) };
     let handle = NonNull::new(handle).expect("noesis_xaml_provider_create returned null");
-    // Noesis retains its own +1; we keep ours until the Registered is dropped.
-    install(handle.as_ptr());
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    {
+        // Hold the registry lock across install + record so a concurrent Drop
+        // for the same scope can't observe a half-updated slot and uninstall a
+        // registration that just replaced it. Noesis retains its own +1; we
+        // keep ours until the Registered is dropped.
+        let mut active = ACTIVE.lock().expect("xaml provider registry poisoned");
+        // SAFETY: handle is freshly created and live.
+        unsafe { install(&scope, handle.as_ptr()) };
+        if let Some(slot) = active.iter_mut().find(|(s, _)| *s == scope) {
+            slot.1 = id;
+        } else {
+            active.push((scope.clone(), id));
+        }
+    }
 
     Registered {
         handle,
         userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
+        scope,
+        id,
     }
 }
 
@@ -198,10 +265,7 @@ pub fn set_scheme_xaml_provider<P: XamlProvider + 'static>(
     provider: P,
 ) -> Registered {
     let scheme = CString::new(scheme).expect("scheme contained interior NUL");
-    register_with(provider, move |handle| {
-        // SAFETY: handle is a live RustXamlProvider*; `scheme` outlives the call.
-        unsafe { noesis_set_xaml_provider_scheme(scheme.as_ptr(), handle) }
-    })
+    register_with(provider, Scope::Scheme(scheme))
 }
 
 /// Install `provider` as the XAML provider for `assembly` (the assembly name in
@@ -216,10 +280,7 @@ pub fn set_assembly_xaml_provider<P: XamlProvider + 'static>(
     provider: P,
 ) -> Registered {
     let assembly = CString::new(assembly).expect("assembly contained interior NUL");
-    register_with(provider, move |handle| {
-        // SAFETY: handle is a live RustXamlProvider*; `assembly` outlives the call.
-        unsafe { noesis_set_xaml_provider_assembly(assembly.as_ptr(), handle) }
-    })
+    register_with(provider, Scope::Assembly(assembly))
 }
 
 /// Install `provider` as the XAML provider scoped to both a `scheme` and an
@@ -236,10 +297,5 @@ pub fn set_scheme_assembly_xaml_provider<P: XamlProvider + 'static>(
 ) -> Registered {
     let scheme = CString::new(scheme).expect("scheme contained interior NUL");
     let assembly = CString::new(assembly).expect("assembly contained interior NUL");
-    register_with(provider, move |handle| {
-        // SAFETY: handle is a live RustXamlProvider*; both CStrings outlive the call.
-        unsafe {
-            noesis_set_xaml_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
-        }
-    })
+    register_with(provider, Scope::SchemeAssembly(scheme, assembly))
 }

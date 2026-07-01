@@ -831,12 +831,12 @@ impl Instance {
     /// Panics if `value` contains an interior NUL byte.
     pub fn set_string(self, prop_index: u32, value: &str) {
         let cstr = CString::new(value).expect("string contained NUL");
-        let ptr: *const i8 = cstr.as_ptr();
+        let ptr: *const c_char = cstr.as_ptr();
         unsafe {
             noesis_instance_set_property(
                 self.0.as_ptr(),
                 prop_index,
-                (&ptr as *const *const i8).cast(),
+                (&ptr as *const *const c_char).cast(),
             );
         }
     }
@@ -1183,7 +1183,7 @@ unsafe fn decode_value<'a>(
         PropType::Bool => PropertyValue::Bool(*value_ptr.cast::<bool>()),
         PropType::String => {
             // C++ passes &(const char*); deref to the c-string.
-            let p = *value_ptr.cast::<*const i8>();
+            let p = *value_ptr.cast::<*const c_char>();
             let s = if p.is_null() {
                 None
             } else {
@@ -1520,13 +1520,13 @@ impl Instance {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_string(self, prop_index: u32, value: &str) -> bool {
         let cstr = CString::new(value).expect("string contained NUL");
-        let ptr: *const i8 = cstr.as_ptr();
+        let ptr: *const c_char = cstr.as_ptr();
         // SAFETY: self.0 is a live instance pointer; cstr outlives the call.
         unsafe {
             noesis_instance_set_readonly_property(
                 self.0.as_ptr(),
                 prop_index,
-                (&ptr as *const *const i8).cast(),
+                (&ptr as *const *const c_char).cast(),
             )
         }
     }

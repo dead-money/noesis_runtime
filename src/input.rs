@@ -479,6 +479,7 @@ impl FocusManager {
     /// Set the logically-focused element within `scope`. Pass `Some(element)`
     /// (a `UIElement`) or `None` to clear. Returns `false` if `scope` is not a
     /// `DependencyObject` or `element` is given but is not a `UIElement`.
+    #[must_use = "a false return means focus was not set (element is not a UIElement / DependencyObject)"]
     pub fn set_focused_element(
         scope: &FrameworkElement,
         element: Option<&FrameworkElement>,
@@ -581,6 +582,7 @@ impl KeyboardNavigation {
     }
 
     /// Set `KeyboardNavigation.ControlTabNavigation`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_tab_navigation(
         element: &FrameworkElement,
         mode: KeyboardNavigationMode,
@@ -599,6 +601,7 @@ impl KeyboardNavigation {
     }
 
     /// Set `KeyboardNavigation.DirectionalNavigation`.
+    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_directional_navigation(
         element: &FrameworkElement,
         mode: KeyboardNavigationMode,

@@ -841,7 +841,9 @@ impl ImageBrush {
     }
 
     /// Create an image brush pointing at a borrowed `ImageSource*`. Noesis takes
-    /// its own reference to the source. Returns `None` only if allocation fails.
+    /// its own reference to the source. Returns `None` only if allocation fails;
+    /// a non-null pointer that isn't an `ImageSource` yields a brush with no
+    /// source set (as if constructed with null).
     ///
     /// # Safety
     ///

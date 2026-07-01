@@ -25,6 +25,11 @@
 //! The subscription holds a `+1` ref on the button so the handler list
 //! stays valid even if the only other reference to the element was the
 //! [`crate::view::FrameworkElement`] you used to subscribe.
+//!
+//! Every subscription type here may be dropped from *inside its own callback*:
+//! the C++ handler owns the boxed closure and defers its own destruction until
+//! the callback frame unwinds, so unsubscribing re-entrantly is safe (no
+//! use-after-free of the handler object or the boxed closure).
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -33,22 +38,49 @@ use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
 
 use crate::ffi::{
-    noesis_element_datacontext_get_u64, noesis_key_args_key, noesis_mouse_args_position,
-    noesis_mouse_button_args_button, noesis_mouse_wheel_args_delta, noesis_routed_args_source,
-    noesis_routed_events_add_copying_handler, noesis_routed_events_add_pasting_handler,
-    noesis_routed_events_do_drag_drop, noesis_routed_events_drag_data,
-    noesis_routed_events_drag_effects, noesis_routed_events_drag_position,
-    noesis_routed_events_drag_set_effects, noesis_routed_events_focus_new,
-    noesis_routed_events_focus_old, noesis_routed_events_manip_cumulative,
-    noesis_routed_events_manip_delta, noesis_routed_events_manip_is_inertial,
-    noesis_routed_events_manip_origin, noesis_routed_events_manip_velocities,
-    noesis_routed_events_remove_data_object_handler, noesis_size_changed_args_new_size,
-    noesis_subscribe_click, noesis_subscribe_event, noesis_subscribe_keydown,
-    noesis_subscribe_lifecycle, noesis_subscribe_selection_changed, noesis_text_args_ch,
-    noesis_unsubscribe_click, noesis_unsubscribe_event, noesis_unsubscribe_keydown,
-    noesis_unsubscribe_lifecycle, noesis_unsubscribe_selection_changed,
+    noesis_element_datacontext_get_u64, noesis_event_args_kind, noesis_key_args_key,
+    noesis_mouse_args_position, noesis_mouse_button_args_button, noesis_mouse_wheel_args_delta,
+    noesis_routed_args_source, noesis_routed_events_add_copying_handler,
+    noesis_routed_events_add_pasting_handler, noesis_routed_events_do_drag_drop,
+    noesis_routed_events_drag_data, noesis_routed_events_drag_effects,
+    noesis_routed_events_drag_position, noesis_routed_events_drag_set_effects,
+    noesis_routed_events_focus_new, noesis_routed_events_focus_old,
+    noesis_routed_events_manip_cumulative, noesis_routed_events_manip_delta,
+    noesis_routed_events_manip_is_inertial, noesis_routed_events_manip_origin,
+    noesis_routed_events_manip_velocities, noesis_routed_events_remove_data_object_handler,
+    noesis_size_changed_args_new_size, noesis_subscribe_click, noesis_subscribe_event,
+    noesis_subscribe_keydown, noesis_subscribe_lifecycle, noesis_subscribe_selection_changed,
+    noesis_text_args_ch, noesis_unsubscribe_click, noesis_unsubscribe_event,
+    noesis_unsubscribe_keydown, noesis_unsubscribe_lifecycle, noesis_unsubscribe_selection_changed,
 };
 use crate::view::{FrameworkElement, Key, MouseButton};
+
+/// Free trampoline for a donated `Box<Box<dyn Handler>>` subscription box (`T`
+/// is the inner `Box<dyn Handler>`). Every subscription in this module donates
+/// its box to the C++ handler along with one of these; the handler calls it
+/// exactly once when it is actually destroyed (deferred past any in-flight
+/// callback), so the box is never freed while a callback's borrow is live.
+///
+/// SAFETY: `userdata` is a `Box<T>` produced by `Box::into_raw` in the matching
+/// subscribe, and the C++ side invokes this at most once.
+unsafe extern "C" fn free_donated<T>(userdata: *mut c_void) {
+    crate::panic_guard::guard(|| {
+        if userdata.is_null() {
+            return;
+        }
+        // SAFETY: reclaim the exact box leaked in subscribe; runs once.
+        drop(unsafe { Box::from_raw(userdata.cast::<T>()) });
+    })
+}
+
+/// Arg-shape discriminant mirroring the C++ `DmArgKind` in `noesis_events.cpp`
+/// (exposed by [`noesis_event_args_kind`]). This is the authoritative event
+/// classifier: the typed accessors deliberately share sentinels, so the `is_*`
+/// checks key on the discriminant rather than probing accessors. Keep in sync
+/// with the C++ enum.
+mod arg_kind {
+    pub const MOUSE_WHEEL: i32 = 3;
+}
 
 /// Rust-side click handler. Implementors receive a single `()` notification
 /// per fired click; if you need the sender or event args, subscribe through
@@ -88,7 +120,6 @@ unsafe extern "C" fn click_trampoline(userdata: *mut c_void) {
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct ClickSubscription {
     token: NonNull<c_void>,
-    userdata: NonNull<Box<dyn ClickHandler>>,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -96,12 +127,10 @@ unsafe impl Send for ClickSubscription {}
 
 impl Drop for ClickSubscription {
     fn drop(&mut self) {
-        // SAFETY: token + userdata produced together by subscribe_click;
-        // freed exactly once here.
-        unsafe {
-            noesis_unsubscribe_click(self.token.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
-        }
+        // SAFETY: token produced by subscribe_click. Unsubscribe frees the
+        // donated handler box exactly once (deferred if we are dropping from
+        // inside the callback). Safe to drop re-entrantly.
+        unsafe { noesis_unsubscribe_click(self.token.as_ptr()) }
     }
 }
 
@@ -110,13 +139,8 @@ impl Drop for ClickSubscription {
 /// `ContentControl` or a `UserControl` whose root isn't a button).
 ///
 /// The returned [`ClickSubscription`] keeps the handler installed for as
-/// long as it lives; drop it (or replace it) to unsubscribe.
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the
-/// invariant explicit at the type level).
+/// long as it lives; drop it (or replace it) to unsubscribe. Dropping it from
+/// inside the click callback is safe (see the module "Lifetime" docs).
 pub fn subscribe_click<H: ClickHandler>(
     element: &FrameworkElement,
     handler: H,
@@ -126,19 +150,23 @@ pub fn subscribe_click<H: ClickHandler>(
     let outer: Box<Box<dyn ClickHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
-    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element pointer is borrowed for the call duration only; Noesis copies
-    // whatever it needs into the routed-event handler list.
-    let token = unsafe { noesis_subscribe_click(element.raw(), click_trampoline, userdata.cast()) };
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked and donated
+    // to the C++ handler (freed via the free trampoline when it is destroyed);
+    // the element pointer is borrowed for the call duration only.
+    let token = unsafe {
+        noesis_subscribe_click(
+            element.raw(),
+            click_trampoline,
+            userdata.cast(),
+            free_donated::<Box<dyn ClickHandler>>,
+        )
+    };
 
     if let Some(token) = NonNull::new(token) {
-        Some(ClickSubscription {
-            token,
-            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
-        })
+        Some(ClickSubscription { token })
     } else {
-        // Subscription failed (e.g. element wasn't a button). Free the
-        // userdata we leaked above so we don't leak the handler.
+        // Subscription failed (e.g. element wasn't a button); C++ took no
+        // ownership. Free the userdata we leaked above so we don't leak it.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -181,7 +209,6 @@ unsafe extern "C" fn selection_changed_trampoline(userdata: *mut c_void) {
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct SelectionChangedSubscription {
     token: NonNull<c_void>,
-    userdata: NonNull<Box<dyn SelectionChangedHandler>>,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -189,12 +216,10 @@ unsafe impl Send for SelectionChangedSubscription {}
 
 impl Drop for SelectionChangedSubscription {
     fn drop(&mut self) {
-        // SAFETY: token + userdata produced together by
-        // subscribe_selection_changed; freed exactly once here.
-        unsafe {
-            noesis_unsubscribe_selection_changed(self.token.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
-        }
+        // SAFETY: token produced by subscribe_selection_changed; unsubscribe
+        // frees the donated box exactly once (deferred if dropping from inside
+        // the callback).
+        unsafe { noesis_unsubscribe_selection_changed(self.token.as_ptr()) }
     }
 }
 
@@ -206,13 +231,8 @@ impl Drop for SelectionChangedSubscription {
 /// as long as it lives; drop it (or replace it) to unsubscribe. This is the
 /// push counterpart of polling the selection each frame: pair it with
 /// `ICollectionView` currency / the bound `Selected` marker to learn *what*
-/// changed.
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
-/// explicit at the type level).
+/// changed. Dropping the subscription from inside the callback is safe (see the
+/// module "Lifetime" docs).
 pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
     element: &FrameworkElement,
     handler: H,
@@ -221,24 +241,22 @@ pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
     let outer: Box<Box<dyn SelectionChangedHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
-    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element pointer is borrowed for the call duration only; Noesis copies
-    // whatever it needs into the routed-event handler list.
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked and donated
+    // to the C++ handler; the element pointer is borrowed for the call only.
     let token = unsafe {
         noesis_subscribe_selection_changed(
             element.raw(),
             selection_changed_trampoline,
             userdata.cast(),
+            free_donated::<Box<dyn SelectionChangedHandler>>,
         )
     };
 
     if let Some(token) = NonNull::new(token) {
-        Some(SelectionChangedSubscription {
-            token,
-            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
-        })
+        Some(SelectionChangedSubscription { token })
     } else {
-        // Subscription failed (not a Selector); free the leaked userdata.
+        // Subscription failed (not a Selector); C++ took no ownership. Free the
+        // leaked userdata.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -426,6 +444,22 @@ fn key_from_raw(raw: i32) -> Key {
         150 => Key::OemPipe,
         151 => Key::OemCloseBrackets,
         152 => Key::OemQuotes,
+        175 => Key::GamepadLeft,
+        176 => Key::GamepadUp,
+        177 => Key::GamepadRight,
+        178 => Key::GamepadDown,
+        179 => Key::GamepadAccept,
+        180 => Key::GamepadCancel,
+        181 => Key::GamepadMenu,
+        182 => Key::GamepadView,
+        183 => Key::GamepadPageUp,
+        184 => Key::GamepadPageDown,
+        185 => Key::GamepadPageLeft,
+        186 => Key::GamepadPageRight,
+        187 => Key::GamepadContext1,
+        188 => Key::GamepadContext2,
+        189 => Key::GamepadContext3,
+        190 => Key::GamepadContext4,
         _ => Key::None,
     }
 }
@@ -435,7 +469,6 @@ fn key_from_raw(raw: i32) -> Key {
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct KeyDownSubscription {
     token: NonNull<c_void>,
-    userdata: NonNull<Box<dyn KeyDownHandler>>,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -443,12 +476,10 @@ unsafe impl Send for KeyDownSubscription {}
 
 impl Drop for KeyDownSubscription {
     fn drop(&mut self) {
-        // SAFETY: token + userdata produced together by subscribe_keydown;
-        // freed exactly once here.
-        unsafe {
-            noesis_unsubscribe_keydown(self.token.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
-        }
+        // SAFETY: token produced by subscribe_keydown; unsubscribe frees the
+        // donated box exactly once (deferred if dropping from inside the
+        // callback).
+        unsafe { noesis_unsubscribe_keydown(self.token.as_ptr()) }
     }
 }
 
@@ -462,13 +493,8 @@ impl Drop for KeyDownSubscription {
 ///
 /// Setting the handler's return value to `true` marks the routed event
 /// handled, useful for swallowing the backtick that opens the console
-/// so it doesn't get typed into a focused `TextBox`.
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the
-/// invariant explicit at the type level).
+/// so it doesn't get typed into a focused `TextBox`. Dropping the subscription
+/// from inside the callback is safe (see the module "Lifetime" docs).
 pub fn subscribe_keydown<H: KeyDownHandler>(
     element: &FrameworkElement,
     handler: H,
@@ -476,20 +502,22 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
     let outer: Box<Box<dyn KeyDownHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
-    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element pointer is borrowed for the call duration only; Noesis copies
-    // whatever it needs into the routed-event handler list.
-    let token =
-        unsafe { noesis_subscribe_keydown(element.raw(), keydown_trampoline, userdata.cast()) };
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked and donated
+    // to the C++ handler; the element pointer is borrowed for the call only.
+    let token = unsafe {
+        noesis_subscribe_keydown(
+            element.raw(),
+            keydown_trampoline,
+            userdata.cast(),
+            free_donated::<Box<dyn KeyDownHandler>>,
+        )
+    };
 
     if let Some(token) = NonNull::new(token) {
-        Some(KeyDownSubscription {
-            token,
-            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
-        })
+        Some(KeyDownSubscription { token })
     } else {
-        // Subscription failed (e.g. element wasn't a UIElement). Free the
-        // userdata we leaked above so we don't leak the handler.
+        // Subscription failed (e.g. element wasn't a UIElement); C++ took no
+        // ownership. Free the userdata we leaked above so we don't leak it.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing
         // else ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -560,12 +588,12 @@ impl EventArgs {
     }
 
     /// Wheel rotation delta for a mouse-wheel event (signed, ~120 per notch).
-    /// `None` for non-wheel events. The kind check happens inside the C
-    /// accessor, so only genuine wheel events yield `Some`.
+    /// `None` for non-wheel events (including plain `MouseMove`, which also
+    /// carries a position). Classification is exact: it reads the event's
+    /// arg-kind discriminant rather than probing the 0-delta sentinel, so a
+    /// zero-scroll wheel event still yields `Some(0)` and a mouse-move yields
+    /// `None`.
     pub fn wheel_delta(&self) -> Option<i32> {
-        // Only mouse-class events carry a position; a wheel event always does.
-        // Combined with the accessor's kind gate, this disambiguates the
-        // 0-delta sentinel from "not a wheel event".
         if !self.is_wheel() {
             return None;
         }
@@ -573,11 +601,17 @@ impl EventArgs {
         Some(unsafe { noesis_mouse_wheel_args_delta(self.raw) })
     }
 
-    /// Whether the live args are a mouse-wheel event. A wheel event is the only
-    /// mouse-class event that reports a position but no changed button, so we
-    /// classify on that pair rather than the ambiguous 0-delta sentinel.
+    /// The event's arg-shape discriminant (see [`arg_kind`]), or `-1` if the
+    /// handle is null. The authoritative event classifier.
+    fn kind(&self) -> i32 {
+        // SAFETY: opaque handle; the accessor reads the carried discriminant.
+        unsafe { noesis_event_args_kind(self.raw) }
+    }
+
+    /// Whether the live args are a mouse-wheel event, keyed on the exact arg-kind
+    /// discriminant (not the ambiguous position/button/0-delta heuristics).
     fn is_wheel(&self) -> bool {
-        self.position().is_some() && self.mouse_button().is_none()
+        self.kind() == arg_kind::MOUSE_WHEEL
     }
 
     /// Pressed/released key for a key event, mapped to the safe [`Key`] mirror.
@@ -1032,7 +1066,6 @@ unsafe extern "C" fn event_trampoline(
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct EventSubscription {
     token: NonNull<c_void>,
-    userdata: NonNull<Box<dyn RoutedEventHandler>>,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -1040,12 +1073,10 @@ unsafe impl Send for EventSubscription {}
 
 impl Drop for EventSubscription {
     fn drop(&mut self) {
-        // SAFETY: token + userdata produced together by subscribe_event;
-        // freed exactly once here.
-        unsafe {
-            noesis_unsubscribe_event(self.token.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
-        }
+        // SAFETY: token produced by subscribe_event; unsubscribe frees the
+        // donated box exactly once (deferred if dropping from inside the
+        // callback).
+        unsafe { noesis_unsubscribe_event(self.token.as_ptr()) }
     }
 }
 
@@ -1250,12 +1281,6 @@ impl RoutedEvent {
 /// Returns `None` if `element` is not a `UIElement` or the C++ subscription
 /// fails. The returned [`EventSubscription`] keeps the handler installed until
 /// dropped. For arbitrary/custom events use [`subscribe_event_by_name`].
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
-/// explicit at the type level).
 pub fn subscribe_event<H: RoutedEventHandler>(
     element: &FrameworkElement,
     event: RoutedEvent,
@@ -1285,12 +1310,6 @@ pub fn subscribe_event<H: RoutedEventHandler>(
 /// Returns `None` if `element` is not a `UIElement`, `event_name` is unknown
 /// or contains an interior NUL, or the C++ subscription fails. The returned
 /// [`EventSubscription`] keeps the handler installed until dropped.
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
-/// explicit at the type level).
 pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     element: &FrameworkElement,
     event_name: &str,
@@ -1302,8 +1321,9 @@ pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     let outer: Box<Box<dyn RoutedEventHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
-    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element + name pointers are borrowed for the call duration only.
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked and donated
+    // to the C++ handler; the element + name pointers are borrowed for the call
+    // duration only.
     let token = unsafe {
         noesis_subscribe_event(
             element.raw(),
@@ -1311,17 +1331,15 @@ pub fn subscribe_event_by_name<H: RoutedEventHandler>(
             handled_too,
             event_trampoline,
             userdata.cast(),
+            free_donated::<Box<dyn RoutedEventHandler>>,
         )
     };
 
     if let Some(token) = NonNull::new(token) {
-        Some(EventSubscription {
-            token,
-            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
-        })
+        Some(EventSubscription { token })
     } else {
-        // Subscription failed (unknown event / not a UIElement). Free the
-        // userdata we leaked above so we don't leak the handler.
+        // Subscription failed (unknown event / not a UIElement); C++ took no
+        // ownership. Free the userdata we leaked above so we don't leak it.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -1368,7 +1386,6 @@ unsafe extern "C" fn lifecycle_trampoline(userdata: *mut c_void) {
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct LifecycleSubscription {
     token: NonNull<c_void>,
-    userdata: NonNull<Box<dyn LifecycleHandler>>,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -1376,12 +1393,10 @@ unsafe impl Send for LifecycleSubscription {}
 
 impl Drop for LifecycleSubscription {
     fn drop(&mut self) {
-        // SAFETY: token + userdata produced together by subscribe_lifecycle;
-        // freed exactly once here.
-        unsafe {
-            noesis_unsubscribe_lifecycle(self.token.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
-        }
+        // SAFETY: token produced by subscribe_lifecycle; unsubscribe frees the
+        // donated box exactly once (deferred if dropping from inside the
+        // callback).
+        unsafe { noesis_unsubscribe_lifecycle(self.token.as_ptr()) }
     }
 }
 
@@ -1447,12 +1462,6 @@ impl LifecycleEvent {
 /// installed until dropped; it holds a `+1` ref on the element so the
 /// subscription survives the caller dropping every other handle. For any name
 /// not enumerated by [`LifecycleEvent`] use [`subscribe_lifecycle_by_name`].
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
-/// explicit at the type level).
 pub fn subscribe_lifecycle<H: LifecycleHandler>(
     element: &FrameworkElement,
     event: LifecycleEvent,
@@ -1475,12 +1484,6 @@ pub fn subscribe_lifecycle<H: LifecycleHandler>(
 /// [`LifecycleSubscription`] keeps the handler installed until dropped; it holds
 /// a `+1` ref on the element so the subscription survives the caller dropping
 /// every other handle.
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
-/// explicit at the type level).
 pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     element: &FrameworkElement,
     name: &str,
@@ -1491,25 +1494,24 @@ pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     let outer: Box<Box<dyn LifecycleHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
-    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element + name pointers are borrowed for the call duration only.
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked and donated
+    // to the C++ handler; the element + name pointers are borrowed for the call
+    // duration only.
     let token = unsafe {
         noesis_subscribe_lifecycle(
             element.raw(),
             cname.as_ptr(),
             lifecycle_trampoline,
             userdata.cast(),
+            free_donated::<Box<dyn LifecycleHandler>>,
         )
     };
 
     if let Some(token) = NonNull::new(token) {
-        Some(LifecycleSubscription {
-            token,
-            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
-        })
+        Some(LifecycleSubscription { token })
     } else {
-        // Subscription failed (unknown name / not a FrameworkElement). Free the
-        // userdata we leaked above so we don't leak the handler.
+        // Subscription failed (unknown name / not a FrameworkElement); C++ took
+        // no ownership. Free the userdata we leaked above so we don't leak it.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -1587,7 +1589,6 @@ unsafe extern "C" fn data_object_trampoline(
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct DataObjectSubscription {
     token: NonNull<c_void>,
-    userdata: NonNull<Box<dyn DataObjectHandler>>,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -1595,12 +1596,9 @@ unsafe impl Send for DataObjectSubscription {}
 
 impl Drop for DataObjectSubscription {
     fn drop(&mut self) {
-        // SAFETY: token + userdata produced together by a subscribe call; freed
-        // exactly once here.
-        unsafe {
-            noesis_routed_events_remove_data_object_handler(self.token.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
-        }
+        // SAFETY: token produced by a subscribe call; remove frees the donated
+        // box exactly once (deferred if dropping from inside the callback).
+        unsafe { noesis_routed_events_remove_data_object_handler(self.token.as_ptr()) }
     }
 }
 
@@ -1620,12 +1618,6 @@ pub enum DataObjectEvent {
 /// `element`. Returns `None` if `element` is not a `UIElement` or the C++
 /// subscription fails. The returned [`DataObjectSubscription`] keeps the handler
 /// installed until dropped.
-///
-/// # Panics
-///
-/// Panics only on internal logic errors, specifically if `Box::into_raw`
-/// returns null (it cannot, but the wrapper is `NonNull` to keep the invariant
-/// explicit at the type level).
 pub fn subscribe_data_object<H: DataObjectHandler>(
     element: &FrameworkElement,
     event: DataObjectEvent,
@@ -1634,30 +1626,30 @@ pub fn subscribe_data_object<H: DataObjectHandler>(
     let outer: Box<Box<dyn DataObjectHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
-    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked; the
-    // element pointer is borrowed for the call duration only.
+    // SAFETY: trampoline is `extern "C"`; userdata is freshly leaked and donated
+    // to the C++ handler; the element pointer is borrowed for the call only.
     let token = unsafe {
         match event {
             DataObjectEvent::Copying => noesis_routed_events_add_copying_handler(
                 element.raw(),
                 data_object_trampoline,
                 userdata.cast(),
+                free_donated::<Box<dyn DataObjectHandler>>,
             ),
             DataObjectEvent::Pasting => noesis_routed_events_add_pasting_handler(
                 element.raw(),
                 data_object_trampoline,
                 userdata.cast(),
+                free_donated::<Box<dyn DataObjectHandler>>,
             ),
         }
     };
 
     if let Some(token) = NonNull::new(token) {
-        Some(DataObjectSubscription {
-            token,
-            userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
-        })
+        Some(DataObjectSubscription { token })
     } else {
-        // Subscription failed (not a UIElement). Free the userdata we leaked.
+        // Subscription failed (not a UIElement); C++ took no ownership. Free the
+        // userdata we leaked.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };

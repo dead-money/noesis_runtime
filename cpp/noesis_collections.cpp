@@ -442,10 +442,13 @@ extern "C" bool noesis_name_scope_set(void* element, void* scope) {
     return true;
 }
 
-// INameScope operations on a NameScope*. find_name returns +1 or NULL.
+// INameScope operations on a NameScope*. find_name returns +1 or NULL, or NULL
+// if `scope` is not a NameScope.
 extern "C" void* noesis_name_scope_find_name(void* scope, const char* name) {
     if (!scope || !name) return nullptr;
-    auto* s = static_cast<Noesis::NameScope*>(scope);
+    auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
+        static_cast<Noesis::BaseComponent*>(scope));
+    if (!s) return nullptr;
     Noesis::BaseComponent* obj = s->FindName(name);
     if (!obj) return nullptr;
     obj->AddReference();
@@ -454,40 +457,53 @@ extern "C" void* noesis_name_scope_find_name(void* scope, const char* name) {
 
 extern "C" void noesis_name_scope_register_name(void* scope, const char* name, void* obj) {
     if (!scope || !name || !obj) return;
-    static_cast<Noesis::NameScope*>(scope)->RegisterName(
-        name, static_cast<Noesis::BaseComponent*>(obj));
+    auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
+        static_cast<Noesis::BaseComponent*>(scope));
+    if (!s) return;
+    s->RegisterName(name, static_cast<Noesis::BaseComponent*>(obj));
 }
 
 extern "C" void noesis_name_scope_unregister_name(void* scope, const char* name) {
     if (!scope || !name) return;
-    static_cast<Noesis::NameScope*>(scope)->UnregisterName(name);
+    auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
+        static_cast<Noesis::BaseComponent*>(scope));
+    if (!s) return;
+    s->UnregisterName(name);
 }
 
 extern "C" void noesis_name_scope_update_name(void* scope, const char* name, void* obj) {
     if (!scope || !name || !obj) return;
-    static_cast<Noesis::NameScope*>(scope)->UpdateName(
-        name, static_cast<Noesis::BaseComponent*>(obj));
+    auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
+        static_cast<Noesis::BaseComponent*>(scope));
+    if (!s) return;
+    s->UpdateName(name, static_cast<Noesis::BaseComponent*>(obj));
 }
 
-// Reverse lookup: the registered name of `obj`, or NULL. The returned pointer is
-// owned by the NameScope (borrowed); copy it out before mutating the scope.
+// Reverse lookup: the registered name of `obj`, or NULL (also NULL if `scope`
+// is not a NameScope). The returned pointer is owned by the NameScope
+// (borrowed); copy it out before mutating the scope.
 extern "C" const char* noesis_name_scope_find_object(void* scope, void* obj) {
     if (!scope || !obj) return nullptr;
-    return static_cast<Noesis::NameScope*>(scope)->FindObject(
-        static_cast<Noesis::BaseComponent*>(obj));
+    auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
+        static_cast<Noesis::BaseComponent*>(scope));
+    if (!s) return nullptr;
+    return s->FindObject(static_cast<Noesis::BaseComponent*>(obj));
 }
 
 // Enumerate every (name, object) pair. `cb` receives borrowed pointers valid
-// only for that call. No-op on NULL scope/cb.
+// only for that call. No-op on NULL scope/cb or if `scope` is not a NameScope.
 extern "C" void noesis_name_scope_enum(
     void* scope, noesis_name_scope_enum_fn cb, void* userdata)
 {
     if (!scope || !cb) return;
+    auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
+        static_cast<Noesis::BaseComponent*>(scope));
+    if (!s) return;
     struct Ctx {
         noesis_name_scope_enum_fn cb;
         void* userdata;
     } ctx{cb, userdata};
-    static_cast<Noesis::NameScope*>(scope)->EnumNamedObjects(
+    s->EnumNamedObjects(
         [](const char* name, Noesis::BaseComponent* obj, void* ud) {
             auto* c = static_cast<Ctx*>(ud);
             c->cb(c->userdata, name, obj);
@@ -610,23 +626,46 @@ Noesis::CollectionView* as_collection_view(void* p) {
 // Delegate<void(BaseComponent*, const EventArgs&)>) and the C ABI callback.
 // Holds a +1 ref on the view so the subscription stays valid; `+=` in subscribe
 // is balanced by `-=` in unsubscribe.
+//
+// Ownership + reentrancy mirror the event subscriptions in noesis_events.cpp:
+// the Rust userdata box is donated (freed exactly once, in the destructor, via
+// mFree) and destruction is deferred while a callback is on the dispatch stack,
+// so dropping the subscription from inside its own CurrentChanged callback is
+// safe. Thread-affine to the view-driving thread, so a plain bool suffices.
 class RustCurrentChangedHandler {
 public:
     RustCurrentChangedHandler(noesis_collection_view_changed_fn cb, void* userdata,
-                              Noesis::CollectionView* view)
-        : mCb(cb), mUserdata(userdata), mView(view) {
+                              noesis_subscription_free_fn free, Noesis::CollectionView* view)
+        : mCb(cb), mUserdata(userdata), mFree(free), mView(view) {
         if (mView) mView->AddReference();
     }
 
     ~RustCurrentChangedHandler() {
         if (mView) mView->Release();
+        if (mFree && mUserdata) mFree(mUserdata);
     }
 
     RustCurrentChangedHandler(const RustCurrentChangedHandler&) = delete;
     RustCurrentChangedHandler& operator=(const RustCurrentChangedHandler&) = delete;
 
     void OnChanged(Noesis::BaseComponent* /*sender*/, const Noesis::EventArgs& /*args*/) {
+        mDispatchDepth++;
         if (mCb) mCb(mUserdata);
+        // Only the outermost dispatch frame may delete (the callback may re-raise
+        // CurrentChanged and re-enter this method).
+        if (--mDispatchDepth == 0 && mPendingDelete) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
+        }
+    }
+
+    // True => a callback is on the stack, so deletion was deferred (OnChanged's
+    // outermost frame deletes); the caller must NOT delete.
+    bool deferDeleteIfDispatching() {
+        if (mDispatchDepth > 0) {
+            mPendingDelete = true;
+            return true;
+        }
+        return false;
     }
 
     Noesis::CollectionView* view() const { return mView; }
@@ -634,7 +673,10 @@ public:
 private:
     noesis_collection_view_changed_fn mCb;
     void* mUserdata;
+    noesis_subscription_free_fn mFree;
     Noesis::CollectionView* mView;  // raw + manual AddRef/Release, see ctor/dtor.
+    uint32_t mDispatchDepth = 0;
+    bool mPendingDelete = false;
 };
 
 }  // namespace
@@ -742,10 +784,11 @@ extern "C" void noesis_collection_view_refresh(void* view) {
 // token (release via noesis_collection_view_unsubscribe_current_changed), or
 // null on a non-CollectionView handle / null cb.
 extern "C" void* noesis_collection_view_subscribe_current_changed(
-    void* view, noesis_collection_view_changed_fn cb, void* userdata) {
+    void* view, noesis_collection_view_changed_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler) {
     Noesis::CollectionView* cv = as_collection_view(view);
     if (!cv || !cb) return nullptr;
-    auto* handler = new RustCurrentChangedHandler(cb, userdata, cv);
+    auto* handler = new RustCurrentChangedHandler(cb, userdata, free_handler, cv);
     cv->CurrentChanged() += Noesis::MakeDelegate(handler, &RustCurrentChangedHandler::OnChanged);
     return handler;
 }
@@ -756,5 +799,6 @@ extern "C" void noesis_collection_view_unsubscribe_current_changed(void* token) 
     if (auto* cv = handler->view()) {
         cv->CurrentChanged() -= Noesis::MakeDelegate(handler, &RustCurrentChangedHandler::OnChanged);
     }
+    if (handler->deferDeleteIfDispatching()) return;
     delete handler;
 }

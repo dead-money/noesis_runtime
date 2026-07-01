@@ -123,7 +123,9 @@ pub enum Converted {
     Double(f64),
     /// A string, the most common converted target (e.g. a `TextBlock`'s `Text`,
     /// or a value coerced to an enum like `Visibility` via Noesis's
-    /// string→enum type converter).
+    /// string→enum type converter). Must not contain an interior NUL byte;
+    /// boxing one panics (caught by the trampoline as a clean conversion
+    /// failure).
     String(String),
     /// An explicit null value (distinct from returning `None`, which signals
     /// `UnsetValue` / fallback).
@@ -139,7 +141,7 @@ impl Converted {
             Converted::Int32(i) => unsafe { noesis_box_int32(i) },
             Converted::Double(d) => unsafe { noesis_box_double(d) },
             Converted::String(s) => {
-                let cs = CString::new(s).unwrap_or_default();
+                let cs = CString::new(s).expect("converted string contained NUL");
                 unsafe { noesis_box_string(cs.as_ptr()) }
             }
             Converted::Null => ptr::null_mut(),

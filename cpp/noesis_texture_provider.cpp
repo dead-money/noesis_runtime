@@ -74,8 +74,10 @@ public:
             return nullptr;
         }
         // The Rust side must pack exactly width*height*4 bytes for RGBA8;
-        // bail defensively rather than handing bad data to the device.
-        if (len != width * height * 4u) {
+        // bail defensively rather than handing bad data to the device. Compute
+        // the expected length in 64-bit: a u32 product (e.g. 65536*16384*4)
+        // wraps to a value that can spuriously match `len` and defeat the guard.
+        if (static_cast<uint64_t>(width) * height * 4u != len) {
             return nullptr;
         }
         // `data` is a single mip level. CreateTexture takes a

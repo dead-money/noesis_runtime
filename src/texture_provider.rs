@@ -28,16 +28,21 @@
 //!
 //! # Lifetime
 //!
-//! The [`Registered`] guard must outlive every Noesis-internal reference
-//! that might call back into the provider. Keep it alive until after
-//! [`crate::shutdown`] returns.
+//! Keep the [`Registered`] guard alive as long as Noesis should resolve
+//! textures through your provider. Dropping it unregisters the provider from
+//! Noesis (clearing the slot this guard installed into, unless a newer
+//! registration for the same scope has replaced it), releases the C++ wrapper,
+//! and frees the boxed impl. There is no need to call [`crate::shutdown`]
+//! first.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
 use core::ptr::NonNull;
 use std::borrow::Cow;
-use std::ffi::{CStr, c_void};
+use std::ffi::{CStr, CString, c_void};
 use std::os::raw::c_char;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ffi::{
     TextureInfoFfi, TextureProviderVTable, noesis_set_texture_provider,
@@ -46,16 +51,67 @@ use crate::ffi::{
     noesis_texture_provider_destroy,
 };
 
+/// Which Noesis provider slot a [`Registered`] guard installed into. `Drop`
+/// uses it both to clear exactly that slot and as the key into [`ACTIVE`].
+#[derive(Clone, PartialEq, Eq)]
+enum Scope {
+    Global,
+    Scheme(CString),
+    Assembly(CString),
+    SchemeAssembly(CString, CString),
+}
+
+/// Monotonic registration ids; `0` is reserved as "no active registration".
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Id of the currently-active registration per scope (last-registration-wins).
+/// A guard's `Drop` clears the Noesis slot only if its id still matches the
+/// entry here, so a stale guard can't tear down a newer registration for the
+/// same scope. See [`crate::xaml_provider`] for the full rationale.
+static ACTIVE: Mutex<Vec<(Scope, u64)>> = Mutex::new(Vec::new());
+
+/// Install `handle` (or null, to clear) into the Noesis slot named by `scope`.
+///
+/// # Safety
+///
+/// `handle` must be a live `RustTextureProvider*` or null; the `Scope`'s
+/// `CStrings` outlive the call.
+unsafe fn install(scope: &Scope, handle: *mut c_void) {
+    match scope {
+        Scope::Global => noesis_set_texture_provider(handle),
+        Scope::Scheme(s) => noesis_set_texture_provider_scheme(s.as_ptr(), handle),
+        Scope::Assembly(a) => noesis_set_texture_provider_assembly(a.as_ptr(), handle),
+        Scope::SchemeAssembly(s, a) => {
+            noesis_set_texture_provider_scheme_assembly(s.as_ptr(), a.as_ptr(), handle)
+        }
+    }
+}
+
 /// Metadata a [`TextureProvider`] can report for a URI without decoding
 /// pixels. [`new`](Self::new) leaves `x` / `y` at `0` (set them only for atlas
 /// sub-rects) and `dpi_scale` at `1.0` (96dpi).
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 pub struct TextureInfo {
     pub width: u32,
     pub height: u32,
     pub x: u32,
     pub y: u32,
     pub dpi_scale: f32,
+}
+
+impl Default for TextureInfo {
+    /// `dpi_scale` defaults to `1.0`, not `0.0`: the C++ side divides by it, so
+    /// a zero from a `..Default::default()` splat would poison the size math.
+    /// Everything else is a zero-sized whole-image texture.
+    fn default() -> Self {
+        Self {
+            width: 0,
+            height: 0,
+            x: 0,
+            y: 0,
+            dpi_scale: 1.0,
+        }
+    }
 }
 
 impl TextureInfo {
@@ -181,11 +237,15 @@ static VTABLE: TextureProviderVTable = TextureProviderVTable {
 
 /// Owns a Rust [`TextureProvider`] impl together with its C++
 /// `RustTextureProvider` instance. Parallel to
-/// [`crate::xaml_provider::Registered`].
-#[must_use = "dropping the guard immediately clears the registration"]
+/// [`crate::xaml_provider::Registered`]: dropping unregisters the provider from
+/// Noesis (clearing this guard's slot unless a newer registration for the same
+/// scope has replaced it), releases the C++ wrapper, and frees the boxed impl.
+#[must_use = "dropping the guard unregisters the provider and frees it"]
 pub struct Registered {
     handle: NonNull<c_void>,
     userdata: NonNull<Box<dyn TextureProvider>>,
+    scope: Scope,
+    id: u64,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -216,8 +276,26 @@ impl Registered {
 
 impl Drop for Registered {
     fn drop(&mut self) {
-        // SAFETY: handle + userdata produced together by set_texture_provider;
-        // both freed exactly once here.
+        // Clear the Noesis slot only while we're still its active registration;
+        // a newer set_*_provider for the same scope must keep firing. Hold the
+        // lock across the check + uninstall so it stays atomic against a
+        // concurrent registration.
+        {
+            let mut active = ACTIVE.lock().expect("texture provider registry poisoned");
+            if let Some(pos) = active
+                .iter()
+                .position(|(s, i)| *s == self.scope && *i == self.id)
+            {
+                active.swap_remove(pos);
+                // SAFETY: null clears our slot; the scope's CStrings outlive the
+                // call. Releasing Noesis's own Ptr here means no wrapper points
+                // at the userdata we free below.
+                unsafe { install(&self.scope, core::ptr::null_mut()) };
+            }
+        }
+        // SAFETY: handle + userdata produced together by register_with(); both
+        // freed exactly once here. destroy drops our +1 and fires the C++
+        // destructor; the boxed impl is then freed.
         unsafe {
             noesis_texture_provider_destroy(self.handle.as_ptr());
             drop(Box::from_raw(self.userdata.as_ptr()));
@@ -227,32 +305,46 @@ impl Drop for Registered {
 
 /// Install `provider` as the global Noesis texture provider. Returns a
 /// [`Registered`] guard that owns the boxed trait object and the C++
-/// wrapper; drop it to tear everything down (after [`crate::shutdown`]).
+/// wrapper; drop it to unregister the provider and tear everything down.
 ///
 /// # Panics
 ///
 /// Panics if the C++ factory returns null.
 pub fn set_texture_provider<P: TextureProvider>(provider: P) -> Registered {
-    // SAFETY: install globally; Noesis retains its own +1.
-    register_with(provider, |handle| unsafe {
-        noesis_set_texture_provider(handle)
-    })
+    register_with(provider, Scope::Global)
 }
 
-/// Build the C++ `RustTextureProvider` wrapping `provider`, hand its handle to
-/// `install` (the only thing that differs between the global / scheme /
-/// assembly variants), and return the owning [`Registered`] guard.
-fn register_with<P: TextureProvider>(provider: P, install: impl FnOnce(*mut c_void)) -> Registered {
+/// Build the C++ `RustTextureProvider` wrapping `provider`, install it into the
+/// slot named by `scope` (the only thing that differs between the global /
+/// scheme / assembly variants), record it as that scope's active registration,
+/// and return the owning [`Registered`] guard.
+fn register_with<P: TextureProvider>(provider: P, scope: Scope) -> Registered {
     let outer: Box<Box<dyn TextureProvider>> = Box::new(Box::new(provider));
     let userdata = Box::into_raw(outer);
     // SAFETY: VTABLE is 'static; userdata is freshly leaked.
     let handle = unsafe { noesis_texture_provider_create(&raw const VTABLE, userdata.cast()) };
     let handle = NonNull::new(handle).expect("noesis_texture_provider_create returned null");
-    install(handle.as_ptr());
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    {
+        // Hold the registry lock across install + record so a concurrent Drop
+        // for the same scope can't observe a half-updated slot and uninstall a
+        // registration that just replaced it. Noesis retains its own +1; we
+        // keep ours until the Registered is dropped.
+        let mut active = ACTIVE.lock().expect("texture provider registry poisoned");
+        // SAFETY: handle is freshly created and live.
+        unsafe { install(&scope, handle.as_ptr()) };
+        if let Some(slot) = active.iter_mut().find(|(s, _)| *s == scope) {
+            slot.1 = id;
+        } else {
+            active.push((scope.clone(), id));
+        }
+    }
 
     Registered {
         handle,
         userdata: NonNull::new(userdata).expect("Box::into_raw returned null"),
+        scope,
+        id,
     }
 }
 
@@ -267,11 +359,8 @@ fn register_with<P: TextureProvider>(provider: P, install: impl FnOnce(*mut c_vo
 /// Panics if the C++ factory returns null, or `scheme` contains an interior
 /// NUL byte.
 pub fn set_scheme_texture_provider<P: TextureProvider>(scheme: &str, provider: P) -> Registered {
-    let scheme = std::ffi::CString::new(scheme).expect("scheme contained interior NUL");
-    register_with(provider, move |handle| {
-        // SAFETY: handle is a live RustTextureProvider*; `scheme` outlives the call.
-        unsafe { noesis_set_texture_provider_scheme(scheme.as_ptr(), handle) }
-    })
+    let scheme = CString::new(scheme).expect("scheme contained interior NUL");
+    register_with(provider, Scope::Scheme(scheme))
 }
 
 /// Install `provider` as the texture provider for `assembly` (the assembly name
@@ -286,11 +375,8 @@ pub fn set_assembly_texture_provider<P: TextureProvider>(
     assembly: &str,
     provider: P,
 ) -> Registered {
-    let assembly = std::ffi::CString::new(assembly).expect("assembly contained interior NUL");
-    register_with(provider, move |handle| {
-        // SAFETY: handle is a live RustTextureProvider*; `assembly` outlives the call.
-        unsafe { noesis_set_texture_provider_assembly(assembly.as_ptr(), handle) }
-    })
+    let assembly = CString::new(assembly).expect("assembly contained interior NUL");
+    register_with(provider, Scope::Assembly(assembly))
 }
 
 /// Install `provider` as the texture provider scoped to both a `scheme` and an
@@ -306,12 +392,7 @@ pub fn set_scheme_assembly_texture_provider<P: TextureProvider>(
     assembly: &str,
     provider: P,
 ) -> Registered {
-    let scheme = std::ffi::CString::new(scheme).expect("scheme contained interior NUL");
-    let assembly = std::ffi::CString::new(assembly).expect("assembly contained interior NUL");
-    register_with(provider, move |handle| {
-        // SAFETY: handle is a live RustTextureProvider*; both CStrings outlive the call.
-        unsafe {
-            noesis_set_texture_provider_scheme_assembly(scheme.as_ptr(), assembly.as_ptr(), handle)
-        }
-    })
+    let scheme = CString::new(scheme).expect("scheme contained interior NUL");
+    let assembly = CString::new(assembly).expect("assembly contained interior NUL");
+    register_with(provider, Scope::SchemeAssembly(scheme, assembly))
 }

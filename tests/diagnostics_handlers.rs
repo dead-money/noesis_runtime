@@ -70,37 +70,36 @@ fn error_assert_thread_handlers() {
                     1,
                     "outer handler must NOT see the inner invoke while shadowed"
                 );
-                // _gb drops here → outer handler restored.
+                // _gb was the active registration, so its drop restores
+                // Noesis's default handler — NOT the shadowed outer one. Handlers
+                // are last-registration-wins (single slot), not stacked: once the
+                // inner handler replaced the outer, the outer is gone for good.
             }
 
+            // The outer guard is still alive but was overwritten, so it is
+            // logically dead: the slot now points at Noesis's default and this
+            // invoke never reaches the outer closure.
             diag::invoke_error("outer.cpp", 9, false, "outer again");
-            {
-                let got = a.lock().unwrap();
-                assert_eq!(
-                    got.len(),
-                    2,
-                    "outer handler must catch the post-restore invoke"
-                );
-                assert_eq!(
-                    got[1],
-                    ("outer.cpp".to_string(), 9, "outer again".to_string(), false),
-                );
-            }
+            assert_eq!(
+                a.lock().unwrap().len(),
+                1,
+                "a replaced handler is NOT restored when its successor drops"
+            );
             assert_eq!(
                 b.lock().unwrap().len(),
                 1,
                 "dropped inner handler must NOT receive later invokes"
             );
-            // _ga drops here → Noesis default handler restored.
+            // _ga drops here → already logically dead; it just frees its box.
         }
 
         // With no custom handler, the invoke hits the Noesis default (a log) and
-        // must NOT reach our dropped closure.
+        // must NOT reach either dropped closure.
         diag::invoke_error("after.cpp", 1, false, "to the default");
         assert_eq!(
             a.lock().unwrap().len(),
-            2,
-            "no invoke may reach a handler after its guard dropped"
+            1,
+            "no invoke may reach a handler after it was replaced/dropped"
         );
 
         let t: Rec<(String, u32, String, bool, Option<ErrorContext>)> = rec();

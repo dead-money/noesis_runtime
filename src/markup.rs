@@ -97,7 +97,6 @@ pub struct ClosureHandler<F: FnMut(&str) -> Option<String> + Send + 'static> {
 #[must_use = "dropping the guard immediately clears the registration"]
 pub struct MarkupExtensionRegistration {
     token: NonNull<c_void>,
-    _name: CString,
 }
 
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
@@ -128,15 +127,13 @@ impl MarkupExtensionRegistration {
             )
         };
         let Some(token) = NonNull::new(token) else {
-            // Registration rejected before C++ took ownership of the box.
+            // A null token means C++ rejected the registration and, per the
+            // contract, left ownership of the box with us. Free it here.
             unsafe { drop(Box::from_raw(userdata)) };
             return None;
         };
 
-        Some(Self {
-            token,
-            _name: cname,
-        })
+        Some(Self { token })
     }
 
     /// Convenience: register an extension whose body is a single closure
@@ -216,8 +213,12 @@ unsafe extern "C" fn provide_trampoline(
             MarkupValue::String(s) => {
                 // Noesis copies the bytes synchronously; stash a NUL-terminated
                 // CString in a per-handler slot to give the pointer a stable
-                // lifetime across this call.
-                let cstring = CString::new(s.as_bytes()).unwrap_or_default();
+                // lifetime across this call. An interior NUL can't be handed to
+                // C as a string, so report "no value" rather than silently
+                // truncating to the bytes before it.
+                let Ok(cstring) = CString::new(s.as_bytes()) else {
+                    return false;
+                };
                 let key = userdata as usize;
                 let mut table = STRING_SCRATCH.lock().expect("STRING_SCRATCH poisoned");
                 // Prior scratch for this handler is already copied, so reuse the slot.
