@@ -770,7 +770,11 @@ impl FrameworkElement {
     pub fn set_string(&mut self, name: &str, value: &str) -> bool {
         let v = CString::new(value).expect("string value contained interior NUL");
         let ptr: *const c_char = v.as_ptr();
-        self.set_prop(name, PropType::String, (&ptr as *const *const c_char).cast())
+        self.set_prop(
+            name,
+            PropType::String,
+            (&ptr as *const *const c_char).cast(),
+        )
     }
 
     /// Set a `Thickness` dependency property (`left, top, right, bottom`).
@@ -892,7 +896,11 @@ impl FrameworkElement {
     #[must_use]
     pub fn get_string(&self, name: &str) -> Option<String> {
         let mut p: *const c_char = core::ptr::null();
-        if !self.get_prop(name, PropType::String, (&mut p as *mut *const c_char).cast()) {
+        if !self.get_prop(
+            name,
+            PropType::String,
+            (&mut p as *mut *const c_char).cast(),
+        ) {
             return None;
         }
         if p.is_null() {
@@ -1668,7 +1676,11 @@ impl FrameworkElement {
     pub fn set_current_string(&mut self, name: &str, value: &str) -> bool {
         let v = CString::new(value).expect("string value contained interior NUL");
         let ptr: *const c_char = v.as_ptr();
-        self.set_current(name, PropType::String, (&ptr as *const *const c_char).cast())
+        self.set_current(
+            name,
+            PropType::String,
+            (&ptr as *const *const c_char).cast(),
+        )
     }
 
     /// Set the current value of a `Point` dependency property. See
@@ -1792,7 +1804,11 @@ impl FrameworkElement {
     #[must_use]
     pub fn get_base_string(&self, name: &str) -> Option<String> {
         let mut p: *const c_char = core::ptr::null();
-        if !self.get_base(name, PropType::String, (&mut p as *mut *const c_char).cast()) {
+        if !self.get_base(
+            name,
+            PropType::String,
+            (&mut p as *mut *const c_char).cast(),
+        ) {
             return None;
         }
         if p.is_null() {

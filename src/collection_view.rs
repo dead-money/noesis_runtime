@@ -31,7 +31,7 @@ use std::ffi::{CStr, c_void};
 
 use crate::binding::ObservableCollection;
 use crate::ffi::{
-    ClickFn, noesis_base_component_release, noesis_collection_view_count,
+    ClickFn, SubscriptionFreeFn, noesis_base_component_release, noesis_collection_view_count,
     noesis_collection_view_current_item, noesis_collection_view_current_position,
     noesis_collection_view_is_current_after_last, noesis_collection_view_is_current_before_first,
     noesis_collection_view_move_current_to_first, noesis_collection_view_move_current_to_last,
@@ -40,7 +40,7 @@ use crate::ffi::{
     noesis_collection_view_source_create, noesis_collection_view_source_get_view,
     noesis_collection_view_source_set_source, noesis_collection_view_subscribe_current_changed,
     noesis_collection_view_unsubscribe_current_changed, noesis_unbox_bool, noesis_unbox_double,
-    noesis_unbox_int32, noesis_unbox_string, SubscriptionFreeFn,
+    noesis_unbox_int32, noesis_unbox_string,
 };
 
 /// A code-built `Noesis::CollectionViewSource`: the proxy that produces a
