@@ -7,6 +7,7 @@
 use core::mem::{align_of, size_of};
 use std::os::raw::{c_char, c_void};
 
+use crate::render_device::device::TextureBinding;
 use crate::render_device::types::DeviceCaps;
 
 /// Mirror of `noesis_texture_binding`. `handle == 0` is reserved invalid;
@@ -23,6 +24,23 @@ pub struct TextureBindingFfi {
     pub inverted: bool,
     pub has_alpha: bool,
     pub pad: u8,
+}
+
+impl From<TextureBinding> for TextureBindingFfi {
+    /// Lower a Rust [`TextureBinding`] to its C-ABI mirror. Centralising the
+    /// field copy keeps a silently-swapped field from compiling: every call
+    /// site goes through this one mapping.
+    fn from(b: TextureBinding) -> Self {
+        Self {
+            handle: b.handle.0.get(),
+            width: b.width,
+            height: b.height,
+            has_mipmaps: b.has_mipmaps,
+            inverted: b.inverted,
+            has_alpha: b.has_alpha,
+            pad: 0,
+        }
+    }
 }
 
 /// Mirror of `noesis_render_target_binding`.
@@ -137,8 +155,6 @@ unsafe extern "C" {
 
     /// Read the `u64` binding handle out of a `Noesis::Texture*`.
     pub fn noesis_texture_get_handle(texture: *const c_void) -> u64;
-    /// Read the `u64` binding handle out of a `Noesis::RenderTarget*`.
-    pub fn noesis_render_target_get_handle(surface: *const c_void) -> u64;
 
     // Resource sizing on the `Noesis::RenderDevice` base; set before the first
     // frame. Offscreen 0 == automatic; glyph cache defaults to 1024×1024.

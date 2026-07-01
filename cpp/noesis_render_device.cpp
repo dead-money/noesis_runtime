@@ -130,7 +130,11 @@ public:
     {
         const auto src = static_cast<RustRenderTarget*>(surface);
         noesis_render_target_binding b{};
-        mVtable.clone_render_target(mUserdata, label, src->handle(), &b);
+        // Cloning an inert handle-0 source yields another inert wrapper (b stays
+        // zero) rather than forwarding a handle the Rust impl never created.
+        if (src->handle() != 0) {
+            mVtable.clone_render_target(mUserdata, label, src->handle(), &b);
+        }
         return makeRenderTarget(b);
     }
 
@@ -149,17 +153,24 @@ public:
                        const void* data) override
     {
         const auto* t = static_cast<RustTexture*>(texture);
+        if (t->handle() == 0) return;  // inert handle-0 texture; skip callback
         mVtable.update_texture(mUserdata, t->handle(), level, x, y, width, height,
                                static_cast<uint32_t>(t->format()), data);
     }
 
     void EndUpdatingTextures(Noesis::Texture** textures, uint32_t count) override {
         if (count == 0) return;
-        std::vector<uint64_t> handles(count);
+        std::vector<uint64_t> handles;
+        handles.reserve(count);
         for (uint32_t i = 0; i < count; ++i) {
-            handles[i] = static_cast<RustTexture*>(textures[i])->handle();
+            // Drop inert handle-0 textures so the Rust impl never sees a handle
+            // it did not create.
+            const uint64_t h = static_cast<RustTexture*>(textures[i])->handle();
+            if (h != 0) handles.push_back(h);
         }
-        mVtable.end_updating_textures(mUserdata, handles.data(), count);
+        if (handles.empty()) return;
+        mVtable.end_updating_textures(mUserdata, handles.data(),
+                                      static_cast<uint32_t>(handles.size()));
     }
 
     void BeginOffscreenRender() override { mVtable.begin_offscreen_render(mUserdata); }
@@ -168,25 +179,31 @@ public:
     void EndOnscreenRender()    override { mVtable.end_onscreen_render(mUserdata); }
 
     void SetRenderTarget(Noesis::RenderTarget* surface) override {
-        mVtable.set_render_target(mUserdata,
-            static_cast<RustRenderTarget*>(surface)->handle());
+        // An inert handle-0 target (failed create) forwards nothing; see
+        // makeRenderTarget. The same guard applies to the tile/resolve paths.
+        const uint64_t h = static_cast<RustRenderTarget*>(surface)->handle();
+        if (h == 0) return;
+        mVtable.set_render_target(mUserdata, h);
     }
 
     void BeginTile(Noesis::RenderTarget* surface, const Noesis::Tile& tile) override {
-        mVtable.begin_tile(mUserdata,
-            static_cast<RustRenderTarget*>(surface)->handle(), &tile);
+        const uint64_t h = static_cast<RustRenderTarget*>(surface)->handle();
+        if (h == 0) return;
+        mVtable.begin_tile(mUserdata, h, &tile);
     }
 
     void EndTile(Noesis::RenderTarget* surface) override {
-        mVtable.end_tile(mUserdata,
-            static_cast<RustRenderTarget*>(surface)->handle());
+        const uint64_t h = static_cast<RustRenderTarget*>(surface)->handle();
+        if (h == 0) return;
+        mVtable.end_tile(mUserdata, h);
     }
 
     void ResolveRenderTarget(Noesis::RenderTarget* surface,
                              const Noesis::Tile* tiles, uint32_t numTiles) override
     {
-        mVtable.resolve_render_target(mUserdata,
-            static_cast<RustRenderTarget*>(surface)->handle(), tiles, numTiles);
+        const uint64_t h = static_cast<RustRenderTarget*>(surface)->handle();
+        if (h == 0) return;
+        mVtable.resolve_render_target(mUserdata, h, tiles, numTiles);
     }
 
     void* MapVertices(uint32_t bytes) override { return mVtable.map_vertices(mUserdata, bytes); }
@@ -227,11 +244,15 @@ private:
 // `RustRenderDevice` definition to call `drop*`.
 
 RustTexture::~RustTexture() {
-    mDevice->dropTexture(mHandle);
+    // A handle of 0 marks an inert wrapper: the Rust impl panicked or rejected
+    // the create call and left `out` zero-initialised, so there is no resource
+    // to drop and it never handed us this handle. Forwarding 0 would trip the
+    // nonzero-handle assertion in the Rust trampoline (swallowed per call).
+    if (mHandle != 0) mDevice->dropTexture(mHandle);
 }
 
 RustRenderTarget::~RustRenderTarget() {
-    mDevice->dropRenderTarget(mHandle);
+    if (mHandle != 0) mDevice->dropRenderTarget(mHandle);  // inert handle; see above
 }
 
 }  // namespace

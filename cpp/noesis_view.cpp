@@ -383,6 +383,22 @@ static_assert((int32_t)Noesis::Key_OemOpenBrackets == 149, "Key::OemOpenBrackets
 static_assert((int32_t)Noesis::Key_OemPipe == 150, "Key::OemPipe");
 static_assert((int32_t)Noesis::Key_OemCloseBrackets == 151, "Key::OemCloseBrackets");
 static_assert((int32_t)Noesis::Key_OemQuotes == 152, "Key::OemQuotes");
+static_assert((int32_t)Noesis::Key_GamepadLeft == 175, "Key::GamepadLeft");
+static_assert((int32_t)Noesis::Key_GamepadUp == 176, "Key::GamepadUp");
+static_assert((int32_t)Noesis::Key_GamepadRight == 177, "Key::GamepadRight");
+static_assert((int32_t)Noesis::Key_GamepadDown == 178, "Key::GamepadDown");
+static_assert((int32_t)Noesis::Key_GamepadAccept == 179, "Key::GamepadAccept");
+static_assert((int32_t)Noesis::Key_GamepadCancel == 180, "Key::GamepadCancel");
+static_assert((int32_t)Noesis::Key_GamepadMenu == 181, "Key::GamepadMenu");
+static_assert((int32_t)Noesis::Key_GamepadView == 182, "Key::GamepadView");
+static_assert((int32_t)Noesis::Key_GamepadPageUp == 183, "Key::GamepadPageUp");
+static_assert((int32_t)Noesis::Key_GamepadPageDown == 184, "Key::GamepadPageDown");
+static_assert((int32_t)Noesis::Key_GamepadPageLeft == 185, "Key::GamepadPageLeft");
+static_assert((int32_t)Noesis::Key_GamepadPageRight == 186, "Key::GamepadPageRight");
+static_assert((int32_t)Noesis::Key_GamepadContext1 == 187, "Key::GamepadContext1");
+static_assert((int32_t)Noesis::Key_GamepadContext2 == 188, "Key::GamepadContext2");
+static_assert((int32_t)Noesis::Key_GamepadContext3 == 189, "Key::GamepadContext3");
+static_assert((int32_t)Noesis::Key_GamepadContext4 == 190, "Key::GamepadContext4");
 
 extern "C" bool noesis_view_mouse_move(void* view, int32_t x, int32_t y) {
     return static_cast<Noesis::IView*>(view)->MouseMove(x, y);

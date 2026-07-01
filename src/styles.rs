@@ -219,9 +219,20 @@ impl Style {
     /// [`set_target_type`](Self::set_target_type). Chain
     /// [`setter`](StyleBuilder::setter) / [`based_on`](StyleBuilder::based_on) /
     /// [`trigger`](StyleBuilder::trigger), then [`build`](StyleBuilder::build).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `target_type` is unknown to the reflection registry or contains
+    /// an interior NUL byte — otherwise the resulting builder would be inert
+    /// (every subsequent `setter` silently failing to resolve its DP). Use
+    /// [`Style::new`] + [`set_target_type`](Self::set_target_type) for the
+    /// fallible form.
     pub fn builder(target_type: &str) -> StyleBuilder {
         let mut style = Style::new();
-        let _ = style.set_target_type(target_type);
+        assert!(
+            style.set_target_type(target_type),
+            "Style::builder: unknown target type {target_type:?}"
+        );
         StyleBuilder { style }
     }
 }
@@ -879,11 +890,12 @@ impl EventTrigger {
         unsafe { noesis_templates_event_trigger_set_source_name(self.ptr.as_ptr(), n.as_ptr()) }
     }
 
-    /// The trigger's `SourceName`, read back from the live object (empty string
-    /// if unset).
+    /// The trigger's `SourceName`, read back from the live object, or `None` if
+    /// unset (an empty name reads back as `None`).
     #[must_use]
     pub fn source_name(&self) -> Option<String> {
         read_name(unsafe { noesis_templates_event_trigger_get_source_name(self.ptr.as_ptr()) })
+            .filter(|s| !s.is_empty())
     }
 
     /// Number of `TriggerAction` objects in the trigger's `Actions` collection.

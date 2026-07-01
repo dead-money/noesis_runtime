@@ -250,15 +250,13 @@ extern "C" void* noesis_markup_extension_register(
     Noesis::Factory::RegisterComponent(sym, Noesis::Symbol(""), markup_creator);
 
     if (!markup_registry_insert(sym, cd)) {
-        // Same fully-torn-down failure path as in noesis_classes.cpp:
-        // no instances exist, no destructor chain in play, `cd` not yet
-        // in the shutdown sweep list, so free everything including
-        // MarkupClassData itself.
+        // No instances exist, no destructor chain in play, `cd` not yet in
+        // the shutdown sweep list, so tear down everything we built here and
+        // free MarkupClassData itself. We do NOT free the handler box: a null
+        // return leaves ownership of `userdata` with the Rust caller, which
+        // frees it. See MarkupExtensionRegistration::new.
         Noesis::Factory::UnregisterComponent(sym);
         Noesis::Reflection::Unregister(cd->typeClass);
-        if (cd->free_handler && cd->userdata) {
-            cd->free_handler(cd->userdata);
-        }
         delete cd;
         return nullptr;
     }

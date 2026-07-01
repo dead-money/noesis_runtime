@@ -23,6 +23,7 @@
 
 #include "noesis_shim.h"
 
+#include <clocale>
 #include <cstdio>
 #include <string>
 
@@ -158,9 +159,19 @@ extern "C" bool noesis_pen_set_dash_style(
     Noesis::Ptr<Noesis::DashStyle> style = *new Noesis::DashStyle();
     std::string text;
     char buf[32];
+    // %g honors LC_NUMERIC, which under locales like de_DE emits a comma decimal
+    // separator ("1,5") that Noesis's dash parser rejects. Normalize the locale
+    // separator back to '.' so the string parses regardless of process locale;
+    // in the default "C" locale the separator is already '.' and this is a no-op.
+    const char sep = std::localeconv()->decimal_point[0];
     for (uint32_t i = 0; i < count; ++i) {
         if (i != 0) text.push_back(' ');
         std::snprintf(buf, sizeof(buf), "%g", static_cast<double>(dashes[i]));
+        if (sep != '.') {
+            for (char* c = buf; *c; ++c) {
+                if (*c == sep) *c = '.';
+            }
+        }
         text += buf;
     }
     style->SetDashes(text.c_str());

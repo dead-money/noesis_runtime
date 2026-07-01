@@ -242,7 +242,7 @@ impl Mesh {
 
     /// Assign the [`MeshData`] to render (Noesis takes its own reference, so the
     /// `MeshData` handle may be dropped afterwards).
-    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
+    #[must_use = "a false return means the data was not set (the Mesh pointer was null or not a Noesis::Mesh)"]
     pub fn set_data(&mut self, data: &MeshData) -> bool {
         // SAFETY: self.ptr is a live Mesh*; data.raw() is a live MeshData*.
         unsafe { noesis_mesh_set_data(self.ptr.as_ptr(), data.raw()) }
@@ -257,7 +257,7 @@ impl Mesh {
     }
 
     /// Set the fill [`Brush`] (Noesis takes its own reference).
-    #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
+    #[must_use = "a false return means the brush was not set (the Mesh pointer was null or not a Noesis::Mesh)"]
     pub fn set_brush(&mut self, brush: &dyn Brush) -> bool {
         // SAFETY: self.ptr is a live Mesh*; brush_raw() is a live Brush*.
         unsafe { noesis_mesh_set_brush(self.ptr.as_ptr(), brush.brush_raw()) }

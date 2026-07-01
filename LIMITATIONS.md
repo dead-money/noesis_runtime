@@ -22,6 +22,11 @@ Noesis leaves these to the host platform, so there's no SDK call for them.
   built against a third-party profiler. Time your own update and render calls.
   Per-frame render stats and the debug overlays (wireframe, overdraw, batch
   coloring) do work.
+- **IME composition for CJK (and other) text input.** Only committed codepoints
+  reach the view, through `char_input`. There's no composition string or
+  candidate-window API, so the pre-edit UI (the underlined in-progress text and
+  the candidate list) is the host platform's job. Drive the OS IME yourself and
+  feed the final characters once it commits them.
 
 ## Different from WPF
 
@@ -48,15 +53,42 @@ These work, just not the way WPF does it.
   it. Styles, data triggers, and selecting templates from Rust all work.
 - **No dispatcher queue.** Schedule deferred or cross-thread work through the
   view's timer API instead.
+- **Localization substitutes at parse time.** A `Localize`-style markup extension
+  resolves each key against the current locale table while the XAML is parsed,
+  then bakes the result in (see the `markup` module). There's no live-updating
+  binding behind it, so switching language at runtime means re-loading the XAML,
+  not watching strings refresh in place.
 
 ## Not supported
 
 The SDK doesn't allow these at all.
 
-- **Custom `Brush`/`Geometry`/`Transform`/`Effect` subclasses.** These serialize
-  into the GPU render tree, which a custom subclass can't drive. Custom
-  `Freezable` subclasses (with their own dependency properties and freeze
-  support) are fine.
+- **Custom `Brush`/`Geometry`/`Transform` subclasses.** These serialize into the
+  GPU render tree, which a custom subclass can't drive. Custom `Freezable`
+  subclasses (with their own dependency properties and freeze support) are fine.
+  Custom visual effects are a different story — see "Not wrapped yet" below;
+  they aren't impossible, just not exposed here yet.
 - **Retained or recorded drawings.** There's no drawing object model and no
   drawing-as-a-brush. Immediate-mode drawing is reachable only by overriding a
   custom element's `OnRender`.
+- **UI Automation / accessibility.** The 3.2 native SDK has no automation
+  peers, no accessibility tree, and no screen-reader surface — this is a gap in
+  the SDK itself, not in the bindings, so there's nothing to wrap. If you need
+  accessibility you have to build it at the host level around the view.
+
+## Not wrapped yet
+
+The SDK supports these; the bindings just don't expose them today. They're
+binding gaps, not hard limits.
+
+- **Blend interactivity behaviors** (`http://schemas.microsoft.com/xaml/behaviors`).
+  The SDK's App/Interactivity package isn't compiled into this build, so XAML
+  that pulls in `<i:Interaction.Triggers>`/behaviors fails to load. Reach the
+  same outcomes from Rust with event subscriptions plus commands, and drive
+  visual states with `go_to_state`.
+- **`MediaElement` video playback.** Part of the App-framework package, which
+  isn't wrapped. There's no Rust-side path to play video through the view.
+- **Custom pixel-shader effects.** The SDK does support them via `ShaderEffect`
+  and `BrushShader` (`SetPixelShader`), and the render device already carries a
+  batch's custom shader pointer — but there's no Rust-side way to author a
+  custom `Effect` yet.

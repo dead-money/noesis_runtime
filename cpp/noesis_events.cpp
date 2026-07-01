@@ -59,6 +59,84 @@
 
 namespace {
 
+// Shared teardown machinery for every Rust-owned event subscription in this
+// file. Two hazards it addresses:
+//
+//   * Donated userdata ownership. The Rust side hands us its handler box plus a
+//     free-fn and forgets about it; we free the box exactly once, in our
+//     destructor, via `mFree`. Rust's Drop only calls the unsubscribe
+//     entrypoint (it never frees the box), so the box can't be freed while a
+//     callback's borrow of it is still live.
+//
+//   * Self-drop from inside a callback. A handler may drop its own subscription
+//     (Rust Drop -> noesis_unsubscribe_*) while its callback is still on the
+//     dispatch stack. Deleting the handler there would be a use-after-free (the
+//     running callback's `this`, plus any member access in the dispatch
+//     epilogue, would dangle). So each derived handler brackets the user
+//     callback with `enterDispatch()` / `leaveDispatch()`, and the unsubscribe
+//     entrypoints call `deferDeleteIfDispatching()`: when a callback is live it
+//     marks the handler and returns true, so unsubscribe skips the delete and
+//     the outermost dispatch frame performs `delete this` once it unwinds.
+//     Detaching the Noesis delegate (`-=`) from within its own dispatch is
+//     already safe: MultiDelegate nulls the slot and defers compaction until
+//     the invoke nesting hits zero.
+//
+// A depth counter (not a bool) tracks dispatch nesting because a handler may
+// synchronously re-raise its own event and re-enter its callback; only the
+// OUTERMOST frame may delete, otherwise an inner frame would free the object
+// out from under the outer one.
+//
+// Thread affinity: subscriptions are created, dispatched and torn down on the
+// single view-driving thread, so a plain counter suffices — no atomics.
+//
+// The destructor is non-virtual: every unsubscribe path deletes through the
+// concrete handler type, never through a `RustSubscription*`.
+class RustSubscription {
+public:
+    // Called by an unsubscribe entrypoint. True => a callback for this handler
+    // is on the stack, so destruction was deferred (the outermost dispatch
+    // frame will `delete this`); the caller must NOT delete. False => the caller
+    // deletes now.
+    bool deferDeleteIfDispatching() {
+        if (mDispatchDepth > 0) {
+            mPendingDelete = true;
+            return true;
+        }
+        return false;
+    }
+
+    // Give the donated box back to Rust: after this the destructor won't free
+    // it. Used only when a subscribe entrypoint constructs a handler but then
+    // fails to register it and returns NULL, so ownership never transferred.
+    void abandonDonation() {
+        mUserdata = nullptr;
+        mFree = nullptr;
+    }
+
+protected:
+    RustSubscription(void* userdata, noesis_subscription_free_fn free)
+        : mUserdata(userdata), mFree(free) {}
+
+    ~RustSubscription() {
+        // Donated box freed exactly once, when the handler is really torn down.
+        if (mFree && mUserdata) {
+            mFree(mUserdata);
+        }
+    }
+
+    void enterDispatch() { mDispatchDepth++; }
+
+    // Pair with enterDispatch() at the end of a callback. Returns true iff this
+    // is the outermost dispatch frame AND an unsubscribe arrived during dispatch,
+    // in which case the caller must `delete this` (nothing else will).
+    bool leaveDispatch() { return (--mDispatchDepth == 0) && mPendingDelete; }
+
+    void* mUserdata;
+    noesis_subscription_free_fn mFree;
+    uint32_t mDispatchDepth = 0;
+    bool mPendingDelete = false;
+};
+
 // Adapter between Noesis's `Delegate<void(BaseComponent*, const
 // RoutedEventArgs&)>` and the C ABI callback. Stores the function pointer +
 // userdata that the Rust trampoline registered, plus a +1 ref on the button
@@ -66,10 +144,11 @@ namespace {
 // the element. A handler owns its subscription; pair construction with
 // `Click() +=` and destruction with `Click() -=` so the reference symmetry
 // between this object and the routed-event-handler list is exact.
-class RustClickHandler {
+class RustClickHandler final: public RustSubscription {
 public:
-    RustClickHandler(noesis_click_fn cb, void* userdata, Noesis::BaseButton* button)
-        : mCb(cb), mUserdata(userdata), mButton(button)
+    RustClickHandler(noesis_click_fn cb, void* userdata,
+                     noesis_subscription_free_fn free, Noesis::BaseButton* button)
+        : RustSubscription(userdata, free), mCb(cb), mButton(button)
     {
         if (mButton) {
             mButton->AddReference();
@@ -86,8 +165,12 @@ public:
     RustClickHandler& operator=(const RustClickHandler&) = delete;
 
     void OnClick(Noesis::BaseComponent* /*sender*/, const Noesis::RoutedEventArgs& /*args*/) {
+        enterDispatch();
         if (mCb) {
             mCb(mUserdata);
+        }
+        if (leaveDispatch()) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
         }
     }
 
@@ -95,7 +178,6 @@ public:
 
 private:
     noesis_click_fn mCb;
-    void* mUserdata;
     Noesis::BaseButton* mButton;  // raw + manual AddRef/Release; see ctor/dtor.
 };
 
@@ -159,14 +241,14 @@ extern "C" void noesis_framework_element_set_margin(
 }
 
 extern "C" void* noesis_subscribe_click(
-    void* element, noesis_click_fn cb, void* userdata)
+    void* element, noesis_click_fn cb, void* userdata, noesis_subscription_free_fn free_handler)
 {
     if (!element || !cb) return nullptr;
     auto* fe = static_cast<Noesis::FrameworkElement*>(element);
     auto* button = Noesis::DynamicCast<Noesis::BaseButton*>(fe);
     if (!button) return nullptr;
 
-    auto* handler = new RustClickHandler(cb, userdata, button);
+    auto* handler = new RustClickHandler(cb, userdata, free_handler, button);
     button->Click() += Noesis::MakeDelegate(handler, &RustClickHandler::OnClick);
     return handler;
 }
@@ -177,6 +259,7 @@ extern "C" void noesis_unsubscribe_click(void* token) {
     if (auto* button = handler->button()) {
         button->Click() -= Noesis::MakeDelegate(handler, &RustClickHandler::OnClick);
     }
+    if (handler->deferDeleteIfDispatching()) return;
     delete handler;
 }
 
@@ -193,10 +276,11 @@ namespace {
 // `out_handled` lets the Rust side mark the event handled so further routing
 // stops, which matters for swallowing the backtick keystroke that opens the
 // console (otherwise it gets typed into the focused TextBox).
-class RustKeyDownHandler {
+class RustKeyDownHandler final: public RustSubscription {
 public:
-    RustKeyDownHandler(noesis_keydown_fn cb, void* userdata, Noesis::UIElement* element)
-        : mCb(cb), mUserdata(userdata), mElement(element)
+    RustKeyDownHandler(noesis_keydown_fn cb, void* userdata,
+                       noesis_subscription_free_fn free, Noesis::UIElement* element)
+        : RustSubscription(userdata, free), mCb(cb), mElement(element)
     {
         if (mElement) {
             mElement->AddReference();
@@ -213,13 +297,18 @@ public:
     RustKeyDownHandler& operator=(const RustKeyDownHandler&) = delete;
 
     void OnKeyDown(Noesis::BaseComponent* /*sender*/, const Noesis::KeyEventArgs& args) {
-        if (!mCb) return;
-        bool handled = false;
-        mCb(mUserdata, static_cast<int32_t>(args.key), &handled);
-        // RoutedEventArgs::handled is `mutable`; writing through a const
-        // reference is supported by design.
-        if (handled) {
-            args.handled = true;
+        enterDispatch();
+        if (mCb) {
+            bool handled = false;
+            mCb(mUserdata, static_cast<int32_t>(args.key), &handled);
+            // RoutedEventArgs::handled is `mutable`; writing through a const
+            // reference is supported by design.
+            if (handled) {
+                args.handled = true;
+            }
+        }
+        if (leaveDispatch()) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
         }
     }
 
@@ -227,21 +316,20 @@ public:
 
 private:
     noesis_keydown_fn mCb;
-    void* mUserdata;
     Noesis::UIElement* mElement;  // raw + manual AddRef/Release; see ctor/dtor.
 };
 
 }  // namespace
 
 extern "C" void* noesis_subscribe_keydown(
-    void* element, noesis_keydown_fn cb, void* userdata)
+    void* element, noesis_keydown_fn cb, void* userdata, noesis_subscription_free_fn free_handler)
 {
     if (!element || !cb) return nullptr;
     auto* fe = static_cast<Noesis::FrameworkElement*>(element);
     auto* uie = Noesis::DynamicCast<Noesis::UIElement*>(fe);
     if (!uie) return nullptr;
 
-    auto* handler = new RustKeyDownHandler(cb, userdata, uie);
+    auto* handler = new RustKeyDownHandler(cb, userdata, free_handler, uie);
     uie->KeyDown() += Noesis::MakeDelegate(handler, &RustKeyDownHandler::OnKeyDown);
     return handler;
 }
@@ -252,6 +340,7 @@ extern "C" void noesis_unsubscribe_keydown(void* token) {
     if (auto* uie = handler->element()) {
         uie->KeyDown() -= Noesis::MakeDelegate(handler, &RustKeyDownHandler::OnKeyDown);
     }
+    if (handler->deferDeleteIfDispatching()) return;
     delete handler;
 }
 
@@ -264,11 +353,11 @@ namespace {
 // `RustClickHandler`: owns a +1 ref on the Selector so the subscription survives
 // the caller dropping every other handle. Pair construction with
 // `SelectionChanged() +=` and destruction with `SelectionChanged() -=`.
-class RustSelectionChangedHandler {
+class RustSelectionChangedHandler final: public RustSubscription {
 public:
     RustSelectionChangedHandler(noesis_selection_changed_fn cb, void* userdata,
-                                Noesis::Selector* selector)
-        : mCb(cb), mUserdata(userdata), mSelector(selector)
+                                noesis_subscription_free_fn free, Noesis::Selector* selector)
+        : RustSubscription(userdata, free), mCb(cb), mSelector(selector)
     {
         if (mSelector) {
             mSelector->AddReference();
@@ -286,8 +375,12 @@ public:
 
     void OnSelectionChanged(Noesis::BaseComponent* /*sender*/,
                             const Noesis::SelectionChangedEventArgs& /*args*/) {
+        enterDispatch();
         if (mCb) {
             mCb(mUserdata);
+        }
+        if (leaveDispatch()) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
         }
     }
 
@@ -295,7 +388,6 @@ public:
 
 private:
     noesis_selection_changed_fn mCb;
-    void* mUserdata;
     Noesis::Selector* mSelector;  // raw + manual AddRef/Release; see ctor/dtor.
 };
 
@@ -306,14 +398,15 @@ private:
 // (release via noesis_unsubscribe_selection_changed) or NULL when `element` is
 // not a Selector / `cb` is null.
 extern "C" void* noesis_subscribe_selection_changed(
-    void* element, noesis_selection_changed_fn cb, void* userdata)
+    void* element, noesis_selection_changed_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler)
 {
     if (!element || !cb) return nullptr;
     auto* selector = Noesis::DynamicCast<Noesis::Selector*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!selector) return nullptr;
 
-    auto* handler = new RustSelectionChangedHandler(cb, userdata, selector);
+    auto* handler = new RustSelectionChangedHandler(cb, userdata, free_handler, selector);
     selector->SelectionChanged() +=
         Noesis::MakeDelegate(handler, &RustSelectionChangedHandler::OnSelectionChanged);
     return handler;
@@ -326,6 +419,7 @@ extern "C" void noesis_unsubscribe_selection_changed(void* token) {
         selector->SelectionChanged() -=
             Noesis::MakeDelegate(handler, &RustSelectionChangedHandler::OnSelectionChanged);
     }
+    if (handler->deferDeleteIfDispatching()) return;
     delete handler;
 }
 
@@ -433,8 +527,8 @@ extern "C" bool noesis_path_set_points(void* element, const float* xy, uint32_t 
 
 namespace {
 
-// Arg-shape discriminant. Mirrored by `events::ArgKind` in src/events.rs and
-// the accessor sentinels there. Keep the two in sync.
+// Arg-shape discriminant. Mirrored by the `events::arg_kind` module in
+// src/events.rs and the accessor sentinels there. Keep the two in sync.
 enum DmArgKind : int32_t {
     ARG_ROUTED       = 0,  // RoutedEventArgs (source + handled only)
     ARG_MOUSE        = 1,  // MouseEventArgs (position)
@@ -575,11 +669,12 @@ const Noesis::RoutedEvent* LookupEvent(
 // and stores the RoutedEvent it registered against so `-=` is exact on
 // teardown. Pair construction with `AddHandler` and destruction with
 // `RemoveHandler`.
-class RustRoutedHandler {
+class RustRoutedHandler final: public RustSubscription {
 public:
-    RustRoutedHandler(noesis_routed_event_fn cb, void* userdata, Noesis::UIElement* element,
+    RustRoutedHandler(noesis_routed_event_fn cb, void* userdata,
+        noesis_subscription_free_fn free, Noesis::UIElement* element,
         const Noesis::RoutedEvent* ev, int32_t kind, bool handledToo)
-        : mCb(cb), mUserdata(userdata), mElement(element), mEvent(ev), mKind(kind),
+        : RustSubscription(userdata, free), mCb(cb), mElement(element), mEvent(ev), mKind(kind),
           mHandledToo(handledToo)
     {
         if (mElement) {
@@ -597,11 +692,12 @@ public:
     RustRoutedHandler& operator=(const RustRoutedHandler&) = delete;
 
     void OnEvent(Noesis::BaseComponent* /*sender*/, const Noesis::RoutedEventArgs& args) {
-        if (!mCb) return;
         // handledEventsToo semantics: when false, respect a prior handler on
-        // this element that already marked the event handled.
-        if (!mHandledToo && args.handled) return;
+        // this element that already marked the event handled. (No callback, so
+        // no re-entrant unsubscribe is possible on this path — return directly.)
+        if (!mCb || (!mHandledToo && args.handled)) return;
 
+        enterDispatch();
         DmEventArgs wrap{mKind, &args};
         bool handled = args.handled;
         mCb(mUserdata, &wrap, &handled);
@@ -610,6 +706,9 @@ public:
         if (handled) {
             args.handled = true;
         }
+        if (leaveDispatch()) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
+        }
     }
 
     Noesis::UIElement* element() const { return mElement; }
@@ -617,7 +716,6 @@ public:
 
 private:
     noesis_routed_event_fn mCb;
-    void* mUserdata;
     Noesis::UIElement* mElement;  // raw + manual AddRef/Release; see ctor/dtor.
     const Noesis::RoutedEvent* mEvent;
     int32_t mKind;
@@ -628,7 +726,7 @@ private:
 
 extern "C" void* noesis_subscribe_event(
     void* element, const char* event_name, bool handled_too, noesis_routed_event_fn cb,
-    void* userdata)
+    void* userdata, noesis_subscription_free_fn free_handler)
 {
     if (!element || !event_name || !cb) return nullptr;
     auto* uie = Noesis::DynamicCast<Noesis::UIElement*>(static_cast<Noesis::BaseComponent*>(element));
@@ -638,7 +736,7 @@ extern "C" void* noesis_subscribe_event(
     const Noesis::RoutedEvent* ev = LookupEvent(uie, event_name, kind);
     if (!ev) return nullptr;
 
-    auto* handler = new RustRoutedHandler(cb, userdata, uie, ev, kind, handled_too);
+    auto* handler = new RustRoutedHandler(cb, userdata, free_handler, uie, ev, kind, handled_too);
     uie->AddHandler(ev, Noesis::MakeDelegate(handler, &RustRoutedHandler::OnEvent));
     return handler;
 }
@@ -650,6 +748,7 @@ extern "C" void noesis_unsubscribe_event(void* token) {
         uie->RemoveHandler(handler->event(),
             Noesis::MakeDelegate(handler, &RustRoutedHandler::OnEvent));
     }
+    if (handler->deferDeleteIfDispatching()) return;
     delete handler;
 }
 
@@ -722,6 +821,16 @@ extern "C" void* noesis_routed_args_source(const void* args) {
     if (!args) return nullptr;
     auto* w = static_cast<const DmEventArgs*>(args);
     return w->args ? w->args->source : nullptr;
+}
+
+// The arg-shape discriminant (DmArgKind) carried by the opaque `args`. This is
+// the authoritative classifier: the typed accessors above deliberately share
+// sentinels (a MouseMove and a zero-delta MouseWheel both read as "position, no
+// button"), so the Rust side keys its is_* checks on this value rather than
+// inferring the kind from which accessor returned. Returns -1 if `args` is null.
+extern "C" int32_t noesis_event_args_kind(const void* args) {
+    if (!args) return -1;
+    return static_cast<const DmEventArgs*>(args)->kind;
 }
 
 // ── Typed arg accessors: focus / drag / manipulation ────────────────────────
@@ -948,13 +1057,13 @@ namespace {
 // callback receives the data object pointer (borrowed), the isDragDrop flag,
 // and a writable cancel flag (Copying cancels the copy; Pasting cancels the
 // paste).
-class RustDataObjectHandler {
+class RustDataObjectHandler final: public RustSubscription {
 public:
     enum Kind { Copying, Pasting };
 
     RustDataObjectHandler(noesis_data_object_fn cb, void* userdata,
-        Noesis::UIElement* element, Kind kind)
-        : mCb(cb), mUserdata(userdata), mElement(element), mKind(kind)
+        noesis_subscription_free_fn free, Noesis::UIElement* element, Kind kind)
+        : RustSubscription(userdata, free), mCb(cb), mElement(element), mKind(kind)
     {
         if (mElement) {
             mElement->AddReference();
@@ -972,18 +1081,28 @@ public:
 
     void OnCopying(Noesis::BaseComponent* /*sender*/,
         const Noesis::DataObjectCopyingEventArgs& e) {
-        if (!mCb) return;
-        bool cancel = e.commandCancelled;
-        mCb(mUserdata, e.dataObject.GetPtr(), e.isDragDrop, &cancel);
-        e.commandCancelled = cancel;
+        enterDispatch();
+        if (mCb) {
+            bool cancel = e.commandCancelled;
+            mCb(mUserdata, e.dataObject.GetPtr(), e.isDragDrop, &cancel);
+            e.commandCancelled = cancel;
+        }
+        if (leaveDispatch()) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
+        }
     }
 
     void OnPasting(Noesis::BaseComponent* /*sender*/,
         const Noesis::DataObjectPastingEventArgs& e) {
-        if (!mCb) return;
-        bool cancel = e.commandCancelled;
-        mCb(mUserdata, e.dataObject.GetPtr(), e.isDragDrop, &cancel);
-        e.commandCancelled = cancel;
+        enterDispatch();
+        if (mCb) {
+            bool cancel = e.commandCancelled;
+            mCb(mUserdata, e.dataObject.GetPtr(), e.isDragDrop, &cancel);
+            e.commandCancelled = cancel;
+        }
+        if (leaveDispatch()) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
+        }
     }
 
     Noesis::UIElement* element() const { return mElement; }
@@ -991,7 +1110,6 @@ public:
 
 private:
     noesis_data_object_fn mCb;
-    void* mUserdata;
     Noesis::UIElement* mElement;  // raw + manual AddRef/Release.
     Kind mKind;
 };
@@ -999,26 +1117,30 @@ private:
 }  // namespace
 
 extern "C" void* noesis_routed_events_add_copying_handler(
-    void* element, noesis_data_object_fn cb, void* userdata)
+    void* element, noesis_data_object_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler)
 {
     if (!element || !cb) return nullptr;
     auto* uie = Noesis::DynamicCast<Noesis::UIElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!uie) return nullptr;
-    auto* handler = new RustDataObjectHandler(cb, userdata, uie, RustDataObjectHandler::Copying);
+    auto* handler = new RustDataObjectHandler(
+        cb, userdata, free_handler, uie, RustDataObjectHandler::Copying);
     Noesis::DataObject::AddCopyingHandler(
         uie, Noesis::MakeDelegate(handler, &RustDataObjectHandler::OnCopying));
     return handler;
 }
 
 extern "C" void* noesis_routed_events_add_pasting_handler(
-    void* element, noesis_data_object_fn cb, void* userdata)
+    void* element, noesis_data_object_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler)
 {
     if (!element || !cb) return nullptr;
     auto* uie = Noesis::DynamicCast<Noesis::UIElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!uie) return nullptr;
-    auto* handler = new RustDataObjectHandler(cb, userdata, uie, RustDataObjectHandler::Pasting);
+    auto* handler = new RustDataObjectHandler(
+        cb, userdata, free_handler, uie, RustDataObjectHandler::Pasting);
     Noesis::DataObject::AddPastingHandler(
         uie, Noesis::MakeDelegate(handler, &RustDataObjectHandler::OnPasting));
     return handler;
@@ -1036,6 +1158,7 @@ extern "C" void noesis_routed_events_remove_data_object_handler(void* token) {
                 uie, Noesis::MakeDelegate(handler, &RustDataObjectHandler::OnPasting));
         }
     }
+    if (handler->deferDeleteIfDispatching()) return;
     delete handler;
 }
 
@@ -1058,11 +1181,11 @@ extern "C" void noesis_routed_events_remove_data_object_handler(void* token) {
 
 namespace {
 
-class RustLifecycleHandler {
+class RustLifecycleHandler final: public RustSubscription {
 public:
     RustLifecycleHandler(noesis_lifecycle_fn cb, void* userdata,
-        Noesis::FrameworkElement* element, const char* name)
-        : mCb(cb), mUserdata(userdata), mElement(element)
+        noesis_subscription_free_fn free, Noesis::FrameworkElement* element, const char* name)
+        : RustSubscription(userdata, free), mCb(cb), mElement(element)
     {
         if (mElement) {
             mElement->AddReference();
@@ -1084,22 +1207,31 @@ public:
 
     // EventHandler signature (Initialized / LayoutUpdated).
     void OnEvent(Noesis::BaseComponent* /*sender*/, const Noesis::EventArgs& /*args*/) {
-        if (mCb) mCb(mUserdata);
+        dispatch();
     }
 
     // DependencyPropertyChangedEventHandler signature (Is*Changed / Focusable /
     // DataContext). The arg carries old/new DP values we don't surface here.
     void OnDpEvent(Noesis::BaseComponent* /*sender*/,
         const Noesis::DependencyPropertyChangedEventArgs& /*args*/) {
-        if (mCb) mCb(mUserdata);
+        dispatch();
     }
 
     Noesis::FrameworkElement* element() const { return mElement; }
     const char* name() const { return mName; }
 
 private:
+    // Both delegate shapes forward to the same argument-free callback; share the
+    // dispatch-guard / deferred-delete epilogue.
+    void dispatch() {
+        enterDispatch();
+        if (mCb) mCb(mUserdata);
+        if (leaveDispatch()) {
+            delete this;  // deferred teardown from an unsubscribe during dispatch
+        }
+    }
+
     noesis_lifecycle_fn mCb;
-    void* mUserdata;
     Noesis::FrameworkElement* mElement;  // raw + manual AddRef/Release.
     char* mName;
 };
@@ -1143,16 +1275,20 @@ bool ApplyLifecycle(
 }  // namespace
 
 extern "C" void* noesis_subscribe_lifecycle(
-    void* element, const char* event_name, noesis_lifecycle_fn cb, void* userdata)
+    void* element, const char* event_name, noesis_lifecycle_fn cb, void* userdata,
+    noesis_subscription_free_fn free_handler)
 {
     if (!element || !event_name || !cb) return nullptr;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!fe) return nullptr;
 
-    auto* handler = new RustLifecycleHandler(cb, userdata, fe, event_name);
+    auto* handler = new RustLifecycleHandler(cb, userdata, free_handler, fe, event_name);
     if (!ApplyLifecycle(fe, handler->name(), handler, true)) {
-        // Unknown event name: undo and report failure (frees the +1 ref + name).
+        // Unknown event name: undo and report failure. Registration never
+        // happened, so ownership of the donated box never transferred — hand it
+        // back to Rust (which reclaims on the NULL return) rather than free it.
+        handler->abandonDonation();
         delete handler;
         return nullptr;
     }
@@ -1165,6 +1301,7 @@ extern "C" void noesis_unsubscribe_lifecycle(void* token) {
     if (auto* fe = handler->element()) {
         ApplyLifecycle(fe, handler->name(), handler, false);
     }
+    if (handler->deferDeleteIfDispatching()) return;
     delete handler;
 }
 

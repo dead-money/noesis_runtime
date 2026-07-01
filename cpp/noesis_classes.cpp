@@ -614,7 +614,9 @@ protected:
         if (mClassData) {
             Noesis::BaseComponent* bc = make_trampoline(mClassData);
             auto* fz = Noesis::DynamicCast<Noesis::Freezable*>(bc);
-            if (fz) return Noesis::Ptr<Noesis::Freezable>(fz);
+            // make_trampoline hands back a +1 (new starts at refcount 1); adopt
+            // it rather than taking a second reference.
+            if (fz) return Noesis::Ptr<Noesis::Freezable>(*fz);
         }
         return Noesis::Ptr<Noesis::Freezable>(*new RustFreezable());
     }
@@ -679,7 +681,9 @@ bool base_is_uielement(noesis_class_base base) {
 }
 
 // Construct a trampoline for `cd`'s base, bind ClassData, and return the
-// canonical BaseComponent* (refcount 0; caller AddRef's if it needs +1).
+// canonical BaseComponent*. `new` starts the BaseComponent at refcount 1, so
+// the returned pointer already carries a +1 the caller owns (adopt it; do not
+// AddRef again).
 Noesis::BaseComponent* make_trampoline(ClassData* cd) {
     Noesis::BaseComponent* canonical = nullptr;
     Noesis::DependencyObject* dobj = nullptr;
@@ -759,24 +763,28 @@ size_t coercible_size(noesis_prop_type t) {
 
 bool rust_coerce_dispatch(const Noesis::DependencyObject* d, uint32_t slot,
                           const void* baseValue, void* coercedValue) {
-    // Pre-initialize the output to the input so a no-op Rust coerce (or no
-    // installed handler) passes the value through unchanged. Returning true
-    // tells Noesis `coercedValue` holds the effective value.
+    // Noesis hands us an *uninitialized* stack POD in `coercedValue` and, when
+    // we return true, treats it as the effective value. Every path here must
+    // therefore leave it written. Resolve the property's POD size from the slot
+    // machinery and mirror `baseValue` into `coercedValue` up front so a
+    // pass-through (unknown slot, no installed handler, or a no-op Rust coerce)
+    // yields the unchanged value instead of stack garbage. A zero size means a
+    // non-coercible tag (string / object), which Noesis default-constructs
+    // rather than leaving uninitialized, so leaving it untouched is safe.
     RustClassInstance* iface =
         instance_lookup((void*)static_cast<const Noesis::BaseComponent*>(d));
-    if (!iface) return true;
-    ClassData* cd = iface->GetClassData();
-    if (!cd || slot >= cd->properties.size()) return true;
+    ClassData* cd = iface ? iface->GetClassData() : nullptr;
+    size_t sz = (cd && slot < cd->properties.size())
+                    ? coercible_size(cd->properties[slot].type)
+                    : 0;
 
-    noesis_prop_type type = cd->properties[slot].type;
-    size_t sz = coercible_size(type);
-    if (sz == 0) return true;
-
-    if (baseValue && coercedValue) std::memcpy(coercedValue, baseValue, sz);
-    if (cd->coerce_cb) {
-        cd->coerce_cb(cd->coerce_userdata,
-                      (void*)static_cast<const Noesis::BaseComponent*>(d),
-                      slot, baseValue, coercedValue);
+    if (sz != 0 && baseValue && coercedValue) {
+        std::memcpy(coercedValue, baseValue, sz);
+        if (cd->coerce_cb) {
+            cd->coerce_cb(cd->coerce_userdata,
+                          (void*)static_cast<const Noesis::BaseComponent*>(d),
+                          slot, baseValue, coercedValue);
+        }
     }
     return true;
 }
@@ -1040,7 +1048,8 @@ extern "C" void* noesis_class_create_instance(void* class_token) {
     auto* cd = static_cast<ClassData*>(class_token);
     Noesis::BaseComponent* instance = make_trampoline(cd);
     if (!instance) return nullptr;
-    instance->AddReference();  // +1 for the caller; paired with base_component_release
+    // `new` (inside make_trampoline) started the BaseComponent at refcount 1.
+    // That IS the caller's +1, paired with base_component_release.
     return instance;
 }
 

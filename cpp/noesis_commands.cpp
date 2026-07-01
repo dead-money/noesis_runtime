@@ -219,13 +219,21 @@ public:
     ~RustCommandBinding() {
         mBinding->Executed() -= Noesis::MakeDelegate(this, &RustCommandBinding::OnExecuted);
         mBinding->CanExecute() -= Noesis::MakeDelegate(this, &RustCommandBinding::OnCanExecute);
+        // Reverse attach: remove the (now inert) binding from the element's
+        // CommandBindings so it doesn't accumulate there for the element's life.
+        if (mAttached) {
+            if (auto* bindings = mAttached->GetCommandBindings()) {
+                bindings->Remove(mBinding);
+            }
+            mAttached.Reset();
+        }
         void* ud = mUserdata;
         mUserdata = nullptr;
         if (mFree && ud) {
             mFree(ud);
         }
-        // Drop our +1 on the CommandBinding (the element's collection, if
-        // attached, holds its own ref and keeps it alive as needed).
+        // Drop our +1 on the CommandBinding (the element's collection, if still
+        // attached elsewhere, holds its own ref and keeps it alive as needed).
         mBinding.Reset();
     }
 
@@ -234,28 +242,60 @@ public:
 
     Noesis::CommandBinding* binding() const { return mBinding; }
 
+    // Record the element attach added the binding to, holding a +1 ref so the
+    // destructor can remove the binding from its collection again.
+    void setAttached(Noesis::UIElement* element) {
+        mAttached.Reset(element);
+    }
+
+    // True => an Executed / CanExecute callback is on the stack, so destruction
+    // was deferred (the outermost dispatch frame deletes); the caller must NOT
+    // delete. A command binding may drop itself (Rust Drop -> destroy) from
+    // inside its own callback, and deleting `this` mid-dispatch would be a
+    // use-after-free. A depth counter (not a bool) tracks nesting because a
+    // callback may synchronously re-invoke the command and re-enter. Thread-
+    // affine to the view-driving thread, so no atomics are needed.
+    bool deferDeleteIfDispatching() {
+        if (mDispatchDepth > 0) {
+            mPendingDelete = true;
+            return true;
+        }
+        return false;
+    }
+
 private:
     void OnExecuted(Noesis::BaseComponent*, const Noesis::ExecutedRoutedEventArgs& args) {
+        mDispatchDepth++;
         if (mExecuted) {
             mExecuted(mUserdata, args.parameter);
         }
         args.handled = true;
+        if (--mDispatchDepth == 0 && mPendingDelete) {
+            delete this;  // deferred teardown from a destroy during dispatch
+        }
     }
 
     void OnCanExecute(Noesis::BaseComponent*, const Noesis::CanExecuteRoutedEventArgs& args) {
+        mDispatchDepth++;
         bool can = true;
         if (mCanExecute) {
             can = mCanExecute(mUserdata, args.parameter);
         }
         args.canExecute = can;
         args.handled = true;
+        if (--mDispatchDepth == 0 && mPendingDelete) {
+            delete this;  // deferred teardown from a destroy during dispatch
+        }
     }
 
     Noesis::Ptr<Noesis::CommandBinding> mBinding;
+    Noesis::Ptr<Noesis::UIElement> mAttached;  // element attach registered with, or null.
     noesis_cmd_executed_fn    mExecuted;
     noesis_cmd_can_execute_fn mCanExecute;
     void*                        mUserdata;
     noesis_command_free_fn    mFree;
+    uint32_t mDispatchDepth = 0;
+    bool mPendingDelete = false;
 };
 
 }  // namespace
@@ -278,13 +318,18 @@ extern "C" bool noesis_command_binding_attach(void* token, void* element) {
     if (!ui) return false;
     auto* bridge = static_cast<RustCommandBinding*>(token);
     ui->GetCommandBindings()->Add(bridge->binding());
+    bridge->setAttached(ui);
     return true;
 }
 
 extern "C" void noesis_command_binding_destroy(void* token) {
     if (!token) return;
-    // Detaches the delegates, frees the donated box, drops our binding ref.
-    delete static_cast<RustCommandBinding*>(token);
+    // Detaches the delegates, removes the binding from the attached element,
+    // frees the donated box, drops our binding ref. Deferred if a callback for
+    // this binding is currently on the dispatch stack (the epilogue deletes).
+    auto* bridge = static_cast<RustCommandBinding*>(token);
+    if (bridge->deferDeleteIfDispatching()) return;
+    delete bridge;
 }
 
 // ── Built-in command libraries ───────────────────────────────────────────────

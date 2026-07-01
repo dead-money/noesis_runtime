@@ -10,27 +10,63 @@
 //       metadata.
 //     - `OpenFont(folder, filename)`: called by `MatchFont` once a face
 //       has been registered and Noesis needs the bytes. Trampolines to
-//       Rust, which returns a borrowed slice; we wrap it in a MemoryStream
-//       without copying. The Rust provider is responsible for keeping the
-//       bytes alive for the duration of Noesis's scan/parse.
+//       Rust, which returns a borrowed slice; we copy it into an owning
+//       stream (see OwnedFontStream) because the stream outlives the
+//       open_font call. The Rust provider only needs to keep the bytes
+//       alive for the duration of that call.
 //
 //   The Rust side doesn't see FontWeight/Stretch/Style; CachedFontProvider
 //   handles matching internally after RegisterFont(folder, filename) scans
 //   the file for face metadata.
 
 #include <cstdint>
+#include <cstring>
 
 #include <NsCore/Ptr.h>
 #include <NsCore/String.h>
+#include <NsCore/Vector.h>
 #include <NsGui/CachedFontProvider.h>
 #include <NsGui/IntegrationAPI.h>
-#include <NsGui/MemoryStream.h>
 #include <NsGui/Stream.h>
 #include <NsGui/Uri.h>
 
 #include "noesis_shim.h"
 
 namespace {
+
+// Stream that owns a private copy of its bytes. Noesis's stock MemoryStream
+// only *borrows* the caller's buffer, but a font stream is retained inside the
+// resulting FontSource and read lazily at glyph-raster time — long after
+// open_font has returned — so a borrowed Rust buffer would dangle. Copying the
+// bytes here makes the documented open_font contract (bytes valid only for the
+// duration of the call) actually true.
+class OwnedFontStream final : public Noesis::Stream {
+public:
+    OwnedFontStream(const uint8_t* data, uint32_t len) : mOffset(0) {
+        if (data && len > 0) mData.Append(data, data + len);
+    }
+
+    void SetPosition(uint32_t pos) override {
+        mOffset = pos < mData.Size() ? pos : mData.Size();
+    }
+    uint32_t GetPosition() const override { return mOffset; }
+    uint32_t GetLength() const override { return mData.Size(); }
+    uint32_t Read(void* buffer, uint32_t size) override {
+        uint32_t remaining = mData.Size() - mOffset;
+        uint32_t n = size < remaining ? size : remaining;
+        if (n > 0) memcpy(buffer, mData.Begin() + mOffset, n);
+        mOffset += n;
+        return n;
+    }
+    const void* GetMemoryBase() const override {
+        return mData.Size() > 0 ? mData.Begin() : nullptr;
+    }
+    void Close() override {}
+
+private:
+    Noesis::Vector<uint8_t> mData;
+    uint32_t mOffset;
+};
 
 // RustFontProvider: subclass of CachedFontProvider. We expose
 // `scan_folder` and `open_font` through the Rust vtable; the rest of the
@@ -54,24 +90,24 @@ protected:
         if (!mVtable.scan_folder) return;
         const char* folderUri = folder.Str();
 
-        // Trampoline ctx: carries `this` + folder so each Rust callback
-        // can route back into our RegisterFontFromRust helper. Safe
-        // because Rust calls `register_fn` synchronously from within
-        // `scan_folder` before the call returns.
-        struct Ctx {
-            RustFontProvider* self;
-            const Noesis::Uri* folder;
-        };
-        Ctx ctx{this, &folder};
+        // Collect the filenames the Rust callback hands us, then RegisterFont
+        // them *after* scan_folder returns. RegisterFont synchronously opens
+        // and scans each file through OpenFont (→ the Rust open_font
+        // trampoline), which mints its own &mut to the Rust provider; running
+        // it while the provider's scan_folder &mut is still live on the stack
+        // would be aliasing UB. Deferring keeps the two &mut disjoint.
+        Noesis::Vector<Noesis::String> names;
         mVtable.scan_folder(
             mUserdata,
-            folderUri,
+            folderUri ? folderUri : "",
             [](void* raw, const char* filename) {
                 if (!raw || !filename) return;
-                auto* c = static_cast<Ctx*>(raw);
-                c->self->RegisterFontFromRust(*c->folder, filename);
+                static_cast<Noesis::Vector<Noesis::String>*>(raw)->EmplaceBack(filename);
             },
-            &ctx);
+            &names);
+        for (uint32_t i = 0; i < names.Size(); ++i) {
+            RegisterFontFromRust(folder, names[i].Str());
+        }
     }
 
     Noesis::Ptr<Noesis::Stream> OpenFont(
@@ -89,11 +125,10 @@ protected:
         if (!ok || data == nullptr) {
             return nullptr;
         }
-        // Same contract as XamlProvider: MemoryStream holds a borrowed
-        // pointer; Rust guarantees the bytes stay valid until font loading
-        // completes. In practice the Rust provider owns the bytes in a
-        // HashMap and returns a slice into them, same pattern as XAML.
-        return Noesis::MakePtr<Noesis::MemoryStream>(data, len);
+        // Copy into an owning stream: Noesis retains the returned stream inside
+        // the FontSource and reads it lazily at raster time, so it cannot
+        // borrow the Rust-owned bytes (which are only valid for this call).
+        return Noesis::MakePtr<OwnedFontStream>(data, len);
     }
 
 private:

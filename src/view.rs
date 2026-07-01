@@ -17,6 +17,7 @@
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
+use std::os::raw::c_char;
 
 use crate::brushes::{Brush, Effect};
 use crate::ffi::{
@@ -768,8 +769,8 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_string(&mut self, name: &str, value: &str) -> bool {
         let v = CString::new(value).expect("string value contained interior NUL");
-        let ptr: *const i8 = v.as_ptr();
-        self.set_prop(name, PropType::String, (&ptr as *const *const i8).cast())
+        let ptr: *const c_char = v.as_ptr();
+        self.set_prop(name, PropType::String, (&ptr as *const *const c_char).cast())
     }
 
     /// Set a `Thickness` dependency property (`left, top, right, bottom`).
@@ -890,8 +891,8 @@ impl FrameworkElement {
     /// Panics if `name` contains an interior NUL byte.
     #[must_use]
     pub fn get_string(&self, name: &str) -> Option<String> {
-        let mut p: *const i8 = core::ptr::null();
-        if !self.get_prop(name, PropType::String, (&mut p as *mut *const i8).cast()) {
+        let mut p: *const c_char = core::ptr::null();
+        if !self.get_prop(name, PropType::String, (&mut p as *mut *const c_char).cast()) {
             return None;
         }
         if p.is_null() {
@@ -1666,8 +1667,8 @@ impl FrameworkElement {
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_current_string(&mut self, name: &str, value: &str) -> bool {
         let v = CString::new(value).expect("string value contained interior NUL");
-        let ptr: *const i8 = v.as_ptr();
-        self.set_current(name, PropType::String, (&ptr as *const *const i8).cast())
+        let ptr: *const c_char = v.as_ptr();
+        self.set_current(name, PropType::String, (&ptr as *const *const c_char).cast())
     }
 
     /// Set the current value of a `Point` dependency property. See
@@ -1790,8 +1791,8 @@ impl FrameworkElement {
     /// Panics if `name` contains an interior NUL byte.
     #[must_use]
     pub fn get_base_string(&self, name: &str) -> Option<String> {
-        let mut p: *const i8 = core::ptr::null();
-        if !self.get_base(name, PropType::String, (&mut p as *mut *const i8).cast()) {
+        let mut p: *const c_char = core::ptr::null();
+        if !self.get_base(name, PropType::String, (&mut p as *mut *const c_char).cast()) {
             return None;
         }
         if p.is_null() {
@@ -2407,15 +2408,21 @@ impl FrameworkElement {
     ///
     /// `item` must be a valid live `Noesis::BaseComponent*`.
     pub unsafe fn items_insert(&mut self, index: usize, item: *mut c_void) -> bool {
+        let Ok(index) = u32::try_from(index) else {
+            return false;
+        };
         // SAFETY: self.ptr is a live BaseComponent*; `item` is live per contract.
-        unsafe { noesis_items_control_items_insert(self.ptr.as_ptr(), index as u32, item) }
+        unsafe { noesis_items_control_items_insert(self.ptr.as_ptr(), index, item) }
     }
 
     /// Remove the item at `index` from `Items`. Returns `false` on a
     /// non-`ItemsControl` or out-of-range `index`.
     pub fn items_remove_at(&mut self, index: usize) -> bool {
+        let Ok(index) = u32::try_from(index) else {
+            return false;
+        };
         // SAFETY: self.ptr is a live BaseComponent*.
-        unsafe { noesis_items_control_items_remove_at(self.ptr.as_ptr(), index as u32) }
+        unsafe { noesis_items_control_items_remove_at(self.ptr.as_ptr(), index) }
     }
 
     /// Remove every item from `Items`. Returns `false` if this element is not an
@@ -4003,9 +4010,9 @@ pub enum MouseButton {
 
 /// Common subset of `Noesis::Key` from `NsGui/InputEnums.h`. Values are the
 /// C++ enum ordinals, validated by `static_assert` in `noesis_view.cpp`.
-/// Anything outside this subset can still be sent via [`View::key_down`] with
-/// a raw cast; prefer adding a variant here (and a matching assert in C++) to
-/// centralize the mapping.
+/// [`View::key_down`] takes this typed enum, so a key outside the subset can't
+/// be sent until it is added here — add the variant (with a matching assert in
+/// C++) to centralize the mapping.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -4135,6 +4142,42 @@ pub enum Key {
     OemCloseBrackets = 151,
     /// `'` / `"` (`Key_Oem7` / `Key_OemQuotes`).
     OemQuotes = 152,
+    /// Gamepad D-pad / left-stick left. Drives directional focus navigation
+    /// (moves focus left) when the focused element uses Noesis directional nav.
+    GamepadLeft = 175,
+    /// Gamepad D-pad / left-stick up. Moves directional focus up.
+    GamepadUp = 176,
+    /// Gamepad D-pad / left-stick right. Moves directional focus right.
+    GamepadRight = 177,
+    /// Gamepad D-pad / left-stick down. Moves directional focus down.
+    GamepadDown = 178,
+    /// Gamepad `A` / accept button. Activates the focused control (like
+    /// `Return`) and engages focus scopes.
+    GamepadAccept = 179,
+    /// Gamepad `B` / cancel button. Cancels / disengages the current focus
+    /// scope (like `Escape`).
+    GamepadCancel = 180,
+    /// Gamepad menu / start button.
+    GamepadMenu = 181,
+    /// Gamepad view / back button.
+    GamepadView = 182,
+    /// Gamepad page up (typically a shoulder/bumper), for paged scrolling.
+    GamepadPageUp = 183,
+    /// Gamepad page down (typically a shoulder/bumper), for paged scrolling.
+    GamepadPageDown = 184,
+    /// Gamepad page left (typically a trigger), for horizontal paged scrolling.
+    GamepadPageLeft = 185,
+    /// Gamepad page right (typically a trigger), for horizontal paged scrolling.
+    GamepadPageRight = 186,
+    /// Gamepad context-action button 1 (`Key_GamepadContext1`), free for
+    /// app-defined bindings.
+    GamepadContext1 = 187,
+    /// Gamepad context-action button 2 (`Key_GamepadContext2`).
+    GamepadContext2 = 188,
+    /// Gamepad context-action button 3 (`Key_GamepadContext3`).
+    GamepadContext3 = 189,
+    /// Gamepad context-action button 4 (`Key_GamepadContext4`).
+    GamepadContext4 = 190,
 }
 
 /// `Noesis::RenderFlags` bit values mirrored for convenience. See

@@ -318,11 +318,13 @@ impl StreamGeometry {
     /// Create a stream geometry from an SVG path-data string
     /// (e.g. `"M 0,0 L 10,0 10,10 Z"`).
     ///
+    /// Unparseable path data isn't an error: Noesis logs a warning and yields
+    /// an empty geometry.
+    ///
     /// # Panics
     ///
-    /// Panics if `data` contains an interior NUL byte, or if Noesis rejects the
-    /// input (cannot parse the path data, or fails to allocate the geometry and
-    /// returns null).
+    /// Panics if `data` contains an interior NUL byte, or if allocating the
+    /// geometry fails and Noesis returns null.
     #[must_use]
     pub fn from_data(data: &str) -> Self {
         let c = CString::new(data).expect("data contains NUL");

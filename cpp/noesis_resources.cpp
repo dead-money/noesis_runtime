@@ -266,9 +266,17 @@ extern "C" bool noesis_resource_dictionary_add_merged(void* dict, void* merged) 
 // ── Application resources ────────────────────────────────────────────────────
 
 // Install `dict` as the process-global application resources. Noesis takes its
-// own reference; the caller keeps ownership of its handle.
+// own reference; the caller keeps ownership of its handle. A NULL `dict` clears
+// the installed resources; a non-NULL handle that is not a ResourceDictionary
+// is rejected (a no-op), so a wrong-typed pointer can't silently clear them.
 extern "C" void noesis_gui_set_application_resources(void* dict) {
-    Noesis::GUI::SetApplicationResources(as_dict(dict));
+    if (!dict) {
+        Noesis::GUI::SetApplicationResources(nullptr);
+        return;
+    }
+    Noesis::ResourceDictionary* d = as_dict(dict);
+    if (!d) return;
+    Noesis::GUI::SetApplicationResources(d);
 }
 
 // Borrowed (no +1) application ResourceDictionary*, or NULL if none installed.
