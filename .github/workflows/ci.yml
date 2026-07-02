@@ -62,6 +62,16 @@ jobs:
           # Keep target/ between runs for fast incremental builds.
           clean: false
 
+      # The self-hosted pool can contain machines with other SDK installs;
+      # the crate is developed and released against exactly this version.
+      - name: Verify Noesis SDK version
+        run: |
+          grep -Fxq "3.2.13 (r17073)" "$NOESIS_SDK_DIR/version.txt" || {
+            echo "::error::Runner '$RUNNER_NAME' has an unexpected Noesis SDK at $NOESIS_SDK_DIR:"
+            cat "$NOESIS_SDK_DIR/version.txt"
+            exit 1
+          }
+
       - name: cargo clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
