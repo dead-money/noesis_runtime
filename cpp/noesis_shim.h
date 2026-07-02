@@ -2119,6 +2119,12 @@ void noesis_binding_expression_update_source(void* expr);
 // DependencyObject, `binding` is not a Binding, or the DP name is unknown.
 bool noesis_set_binding(void* element, const char* dp_name, void* binding);
 
+// Remove any binding on `element`'s `dp_name` via BindingOperations::
+// ClearBinding; the DP reverts to default/local-value precedence. True also
+// when no binding was present (the clear no-ops). Returns false if `element`
+// is not a DependencyObject or the DP name is unknown.
+bool noesis_clear_binding(void* element, const char* dp_name);
+
 // Insert `object` into `element`'s ResourceDictionary under `key` (creating the
 // dictionary if the element has none). Makes a Rust-built converter / value
 // reachable from XAML via `{StaticResource Key}`. The dictionary stores its own
@@ -2690,6 +2696,13 @@ bool noesis_resource_dictionary_contains(void* dict, const char* key);
 void* noesis_resource_dictionary_find(void* dict, const char* key);
 // Add `merged` to `dict`'s MergedDictionaries collection (takes its own ref).
 bool noesis_resource_dictionary_add_merged(void* dict, void* merged);
+
+// Assign `dict`'s Source URI, loading that XAML into it through the provider
+// chain. StaticResource lookups during the parse see every scope already
+// reachable from `dict` (join an installed parent's MergedDictionaries first
+// for dependency-ordered chains). Load/parse errors report through the Noesis
+// error handler; false only for a NULL/non-dictionary handle or NULL URI.
+bool noesis_resource_dictionary_set_source(void* dict, const char* uri);
 
 // Install `dict` as the process-global application resources (Noesis takes its
 // own reference). NULL clears them.
