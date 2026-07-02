@@ -102,6 +102,12 @@ public:
         , mUserdata(userdata)
     {}
 
+    // Runs when Noesis releases the device's last `Ptr<>` — past which no vtable
+    // callback fires. Frees the boxed impl here, not in the caller's `destroy`,
+    // so `mUserdata` outlives every callback. Members are all values, so the
+    // dtor body is the final event.
+    ~RustRenderDevice() override { mVtable.drop_userdata(mUserdata); }
+
     void dropTexture(uint64_t h) { mVtable.drop_texture(mUserdata, h); }
     void dropRenderTarget(uint64_t h) { mVtable.drop_render_target(mUserdata, h); }
 

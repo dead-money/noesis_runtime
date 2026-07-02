@@ -160,12 +160,6 @@ fn render_batches(class_name: &str, draw: bool, signals: Signals) -> u32 {
     batches.load(Ordering::SeqCst)
 }
 
-// TEMPORARY (diagnostic): this test intermittently SIGSEGVs during Noesis
-// teardown on the self-hosted runner — passes then crashes at process exit,
-// not reproducible locally (3200+ standalone runs clean). Ignored to confirm
-// whether the crash is specific to this binary or a general shutdown race that
-// relocates to another test. Re-enable once the teardown race is fixed.
-#[ignore = "flaky teardown SIGSEGV under investigation; diagnostic disable"]
 #[test]
 fn on_render_fires_and_draws() {
     if let (Ok(name), Ok(key)) = (

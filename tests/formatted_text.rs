@@ -89,11 +89,9 @@ fn formatted_text_measures_real_glyphs() {
     assert_eq!(b[2], sw, "bounds width should match width()");
     assert_eq!(b[3], sh, "bounds height should match height()");
 
-    // `IsEmpty` reflects SDK-internal run bookkeeping that is not portable
-    // across SDK builds in EITHER direction: on 3.2.13 (r17073) an empty-string
-    // FormattedText reports non-empty, just as a text-bearing one can report
-    // empty on other builds. Don't assert on it at all — the width/glyph asserts
-    // above already cover the real measurement behavior.
+    // IsEmpty tracks SDK-internal run bookkeeping that is not portable in either
+    // direction (on 3.2.13 an empty string reports non-empty), so don't assert on
+    // it; the width/glyph checks above cover real measurement.
     assert!(
         !short.has_visual_brush(),
         "solid foreground, no VisualBrush"

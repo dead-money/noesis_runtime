@@ -137,6 +137,11 @@ pub struct RenderDeviceVTable {
         userdata: *mut c_void,
         batch: *const crate::render_device::types::Batch,
     ),
+
+    /// Frees the boxed `RenderDevice` impl. Called once from `~RustRenderDevice`
+    /// when the device is truly destroyed, so `userdata` outlives every other
+    /// callback. See [`super::vtable::register`].
+    pub drop_userdata: unsafe extern "C" fn(userdata: *mut c_void),
 }
 
 // Implemented in noesis_render_device.cpp.

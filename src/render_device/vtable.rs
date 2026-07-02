@@ -327,6 +327,15 @@ unsafe extern "C" fn t_draw_batch(userdata: *mut c_void, batch: *const Batch) {
     })
 }
 
+// Frees the `Box<Box<dyn RenderDevice>>` that `register` leaked, at the device's
+// true end-of-life. Guarded: a panic in the impl's `Drop` must not unwind across
+// the C++ destructor.
+unsafe extern "C" fn t_drop_userdata(userdata: *mut c_void) {
+    crate::panic_guard::guard(|| {
+        drop(Box::from_raw(userdata.cast::<Box<dyn RenderDevice>>()));
+    })
+}
+
 // Static vtable, populated once with the trampoline addresses.
 static VTABLE: RenderDeviceVTable = RenderDeviceVTable {
     get_caps: t_get_caps,
@@ -350,12 +359,14 @@ static VTABLE: RenderDeviceVTable = RenderDeviceVTable {
     map_indices: t_map_indices,
     unmap_indices: t_unmap_indices,
     draw_batch: t_draw_batch,
+    drop_userdata: t_drop_userdata,
 };
 
 /// Owns a Rust [`RenderDevice`] impl together with its C++ `RustRenderDevice`
-/// instance. Drop order is C++ first (so any transitively-held textures /
-/// render targets fire their `drop_*` callbacks against a still-alive trait
-/// object), then the boxed impl.
+/// instance. Dropping releases the `_create` reference; the boxed impl is freed
+/// by the `drop_userdata` callback from `~RustRenderDevice` once Noesis drops
+/// its last reference, so every callback (including any issued after this guard
+/// drops) sees a live trait object.
 #[must_use = "dropping the guard immediately clears the registration"]
 pub struct Registered {
     handle: NonNull<c_void>,
@@ -505,14 +516,13 @@ impl Registered {
 
 impl Drop for Registered {
     fn drop(&mut self) {
-        // SAFETY: handle and userdata were produced together by `register`.
-        // noesis_render_device_destroy releases the +1 ref from `_create`;
-        // any Noesis-internal Ptr<>s also drop here, transitively destroying
-        // RustTexture / RustRenderTarget instances and firing drop_* callbacks
-        // back into the still-alive boxed impl.
+        // SAFETY: `handle` came from `register`. This releases only the +1
+        // `_create` ref; Noesis may keep its own Ptr<> and call back against
+        // `userdata` afterward, so the box is freed by `drop_userdata` from
+        // `~RustRenderDevice`, not here. Freeing here is a use-after-free — an
+        // intermittent MapIndices-on-freed-device SIGSEGV under SDK 3.2.13.
         unsafe {
             noesis_render_device_destroy(self.handle.as_ptr());
-            drop(Box::from_raw(self.userdata.as_ptr()));
         }
     }
 }
