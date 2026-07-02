@@ -375,6 +375,24 @@ extern "C" bool noesis_set_binding(void* element, const char* dp_name, void* bin
     return true;
 }
 
+// Remove any binding on `element`'s `dp_name`, mirroring `noesis_set_binding`.
+// The DP reverts to default/local-value precedence. True when no binding is
+// present (ClearBinding no-ops), so callers need no bound-ness tracking; false
+// only when the element/DP can't be resolved.
+extern "C" bool noesis_clear_binding(void* element, const char* dp_name) {
+    if (!element || !dp_name) return false;
+    auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
+        static_cast<Noesis::BaseComponent*>(element));
+    if (!d) return false;
+
+    const Noesis::DependencyProperty* dp =
+        Noesis::FindDependencyProperty(d->GetClassType(), Noesis::Symbol(dp_name));
+    if (!dp) return false;
+
+    Noesis::BindingOperations::ClearBinding(d, dp);
+    return true;
+}
+
 // ── ResourceDictionary insertion (so XAML {StaticResource} can reach a Rust
 //    converter / value) ─────────────────────────────────────────────────────
 

@@ -263,6 +263,18 @@ extern "C" bool noesis_resource_dictionary_add_merged(void* dict, void* merged) 
     return true;
 }
 
+// Assign `dict`'s Source URI, loading that XAML into it through the provider
+// chain. The parse resolves `{StaticResource}` against every scope already
+// reachable from `dict`: join an installed parent's MergedDictionaries before
+// SetSource and the leaf sees its earlier siblings. Load/parse errors report
+// through the Noesis error handler, not the return value.
+extern "C" bool noesis_resource_dictionary_set_source(void* dict, const char* uri) {
+    Noesis::ResourceDictionary* d = as_dict(dict);
+    if (!d || !uri) return false;
+    d->SetSource(Noesis::Uri(uri));
+    return true;
+}
+
 // ── Application resources ────────────────────────────────────────────────────
 
 // Install `dict` as the process-global application resources. Noesis takes its

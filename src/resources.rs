@@ -35,7 +35,7 @@ use crate::ffi::{
     noesis_resource_dictionary_add_merged, noesis_resource_dictionary_contains,
     noesis_resource_dictionary_count, noesis_resource_dictionary_create,
     noesis_resource_dictionary_destroy, noesis_resource_dictionary_find,
-    noesis_resource_dictionary_parse,
+    noesis_resource_dictionary_parse, noesis_resource_dictionary_set_source,
 };
 
 /// A Rust handle to a `Noesis::ResourceDictionary`. Owns a `+1` reference
@@ -219,6 +219,27 @@ impl ResourceDictionary {
         // SAFETY: both pointers are live ResourceDictionary*; the collection
         // AddRefs `other`.
         unsafe { noesis_resource_dictionary_add_merged(self.ptr.as_ptr(), other.raw()) }
+    }
+
+    /// Assign this dictionary's `Source` URI, loading and parsing that XAML
+    /// into it through the active provider chain. `{StaticResource}` lookups
+    /// during the parse resolve against every scope already reachable from
+    /// this dictionary, so adding it to an installed parent's merged
+    /// dictionaries ([`Self::add_merged`]) *before* calling `set_source` lets
+    /// a later leaf reference an earlier sibling's keys. That is the composable
+    /// form of [`crate::gui::install_app_resources_chain`], for callers that
+    /// also need to layer code-built entries into the same parent.
+    ///
+    /// Load/parse errors report through the Noesis error handler, not the
+    /// return value; `false` means the URI could not be passed at all.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `uri` contains an interior NUL byte.
+    pub fn set_source(&mut self, uri: &str) -> bool {
+        let c = CString::new(uri).expect("resource dictionary URI contained interior NUL");
+        // SAFETY: self.ptr live; c lives for the call.
+        unsafe { noesis_resource_dictionary_set_source(self.ptr.as_ptr(), c.as_ptr()) }
     }
 }
 

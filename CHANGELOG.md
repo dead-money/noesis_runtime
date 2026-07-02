@@ -6,6 +6,18 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- `ResourceDictionary::set_source(uri)` loads a dictionary's XAML by URI with
+  `{StaticResource}` resolving against every scope already reachable from it.
+  Join an installed parent's merged dictionaries first and a chain composes
+  leaf by leaf: the open-coded `gui::install_app_resources_chain`, for callers
+  that also layer code-built entries into the same parent.
+- `binding::clear_binding(element, dp_name)` removes a binding wired by
+  `set_binding` (`BindingOperations::ClearBinding`); the DP reverts to
+  default/local-value precedence. Reports success when no binding was present,
+  so removal-driven teardown needs no bound-ness tracking.
+
 ### Changed
 
 - **Breaking:** the integration callbacks — `set_cursor_callback`,

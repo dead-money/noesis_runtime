@@ -825,6 +825,7 @@ unsafe extern "C" {
         dp_name: *const c_char,
         binding: *mut c_void,
     ) -> bool;
+    pub fn noesis_clear_binding(element: *mut c_void, dp_name: *const c_char) -> bool;
     pub fn noesis_framework_element_add_resource(
         element: *mut c_void,
         key: *const c_char,
@@ -1055,6 +1056,7 @@ unsafe extern "C" {
     pub fn noesis_resource_dictionary_contains(dict: *mut c_void, key: *const c_char) -> bool;
     pub fn noesis_resource_dictionary_find(dict: *mut c_void, key: *const c_char) -> *mut c_void;
     pub fn noesis_resource_dictionary_add_merged(dict: *mut c_void, merged: *mut c_void) -> bool;
+    pub fn noesis_resource_dictionary_set_source(dict: *mut c_void, uri: *const c_char) -> bool;
 
     pub fn noesis_gui_set_application_resources(dict: *mut c_void);
     pub fn noesis_gui_get_application_resources() -> *mut c_void;

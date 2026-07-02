@@ -35,7 +35,7 @@ use crate::ffi::{
     noesis_binding_set_relative_source_previous_data, noesis_binding_set_relative_source_self,
     noesis_binding_set_relative_source_templated_parent, noesis_binding_set_source,
     noesis_binding_set_string_format, noesis_binding_set_update_source_trigger, noesis_box_bool,
-    noesis_box_double, noesis_box_float, noesis_box_int32, noesis_box_string,
+    noesis_box_double, noesis_box_float, noesis_box_int32, noesis_box_string, noesis_clear_binding,
     noesis_framework_element_add_resource, noesis_observable_collection_add,
     noesis_observable_collection_clear, noesis_observable_collection_count,
     noesis_observable_collection_create, noesis_observable_collection_get,
@@ -586,6 +586,24 @@ pub fn set_binding(element: &FrameworkElement, dp_name: &str, binding: &Binding)
     // SAFETY: element.raw() is a live FrameworkElement*; binding.raw() a live
     // Binding*; both outlive the call. Noesis takes its own reference.
     unsafe { noesis_set_binding(element.raw(), c.as_ptr(), binding.raw()) }
+}
+
+/// Remove any binding on `element`'s dependency property named `dp_name`, the
+/// inverse of [`set_binding`] (`Noesis::BindingOperations::ClearBinding`). The
+/// property reverts to its default/local-value precedence; a value the binding
+/// last wrote is discarded with it. Returns `true` when no binding was present
+/// (the clear no-ops), so removal-driven callers don't need to track
+/// bound-ness; `false` only when `element` is not a `DependencyObject` or
+/// `dp_name` doesn't resolve to one of its dependency properties.
+///
+/// # Panics
+///
+/// Panics if `dp_name` contains an interior NUL byte.
+#[must_use]
+pub fn clear_binding(element: &FrameworkElement, dp_name: &str) -> bool {
+    let c = CString::new(dp_name).expect("dp name contained interior NUL");
+    // SAFETY: element.raw() is a live FrameworkElement*; c lives for the call.
+    unsafe { noesis_clear_binding(element.raw(), c.as_ptr()) }
 }
 
 /// Insert `object` (e.g. a [`Converter`] via [`Converter::raw`], or a [`Boxed`]
