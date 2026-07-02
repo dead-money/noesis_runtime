@@ -150,7 +150,6 @@ fn formatted_text_measures_real_glyphs() {
 
     drop(short);
     drop(long);
-    drop(empty);
     drop(bold);
     drop(wrapped);
     drop(registered);
