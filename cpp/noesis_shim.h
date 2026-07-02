@@ -163,6 +163,11 @@ typedef struct noesis_render_device_vtable {
     void  (*unmap_indices)(void* userdata);
 
     void (*draw_batch)(void* userdata, const void* batch);
+
+    // Frees the boxed Rust impl. Called once from `~RustRenderDevice` when the
+    // device's last `Ptr<>` is released — not from `noesis_render_device_destroy`,
+    // which Noesis may outlive — so `userdata` stays valid for every callback.
+    void (*drop_userdata)(void* userdata);
 } noesis_render_device_vtable;
 
 // Create a `RustRenderDevice` instance, returning an opaque
@@ -177,7 +182,9 @@ void* noesis_render_device_create(
 // happens when the last `Ptr<>` goes away (including any Noesis-internal
 // references), which transitively releases all `RustTexture` / `RustRenderTarget`
 // instances allocated through the device, each calling `drop_texture` /
-// `drop_render_target` on the vtable.
+// `drop_render_target` on the vtable. Noesis may hold a device reference past
+// this call, so the boxed Rust impl is freed by the `drop_userdata` callback
+// from `~RustRenderDevice`, not here — keeping it valid for every late callback.
 void noesis_render_device_destroy(void* device);
 
 // Extract the Rust-side handle stored in a `RustTexture` / `RustRenderTarget`

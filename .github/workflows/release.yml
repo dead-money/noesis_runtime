@@ -21,6 +21,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Never publish a build verified against a different SDK than the one
+      # the crate is developed for (the pool can contain other SDK installs).
+      - name: Verify Noesis SDK version
+        run: |
+          grep -Fxq "3.2.13 (r17073)" "$NOESIS_SDK_DIR/version.txt" || {
+            echo "::error::Runner '$RUNNER_NAME' has an unexpected Noesis SDK at $NOESIS_SDK_DIR:"
+            cat "$NOESIS_SDK_DIR/version.txt"
+            exit 1
+          }
+
       - name: cargo test
         run: cargo test --all-features
 

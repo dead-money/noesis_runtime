@@ -6,10 +6,17 @@ How `noesis_runtime` gets published to crates.io.
 
 The crate links the closed-source Noesis SDK at build time, so it can only be
 built where the SDK is present. We run a **self-hosted GitHub Actions runner**
-(label `noesis-sdk`) that has the SDK installed at `/opt/noesis-sdk`
-(`NOESIS_SDK_DIR` is set in the runner's `.env`). That runner does the real
-build, clippy, test, and the verified publish. GitHub-hosted runners only run
-`cargo fmt` (no SDK needed), and never run fork-PR code against the SDK box.
+(`noesis-ci-deathengine`, org-level, label `noesis-sdk`) that has the SDK
+installed at `/opt/noesis-sdk` (`NOESIS_SDK_DIR` is set in the runner's
+`.env`). That runner does the real build, clippy, test, and the verified
+publish. GitHub-hosted runners only run `cargo fmt` (no SDK needed), and never
+run fork-PR code against the SDK box.
+
+Both `ci.yml` and `release.yml` verify `$NOESIS_SDK_DIR/version.txt` against
+the pinned SDK version the crate is developed with, so a runner with a stale
+SDK fails fast instead of gating (or publishing) a release against the wrong
+library. When the SDK is intentionally upgraded, update the pin in both
+workflows.
 
 ## CI
 
@@ -84,17 +91,18 @@ without the SDK because `build.rs` short-circuits on the `DOCS_RS` env var).
 
 ## The self-hosted runner
 
-Provisioned on an Ubuntu droplet:
+`noesis-ci-deathengine`, registered at the org level (it replaced the original
+`noesis-ci-droplet`):
 
 - Runs as the unprivileged `runner` user (the Actions runner refuses root).
 - SDK at `/opt/noesis-sdk`; `NOESIS_SDK_DIR` and a cargo-bin `PATH` are set in
-  `~/actions-runner/.env`.
-- Installed as a systemd service
-  (`actions.runner.dead-money-noesis_runtime.noesis-ci-droplet`), so it survives
-  reboots.
+  `~/actions-runner/.env`. The SDK version must match the pin in
+  `ci.yml`/`release.yml` (see above).
+- Installed as a systemd service, so it survives reboots.
 - `target/` is kept between runs (`clean: false` on checkout) for fast
   incremental builds.
 
-To re-register after a token/repo change, on the droplet as `runner`:
+To re-register after a token/repo change, on the runner box as `runner`:
 `cd ~/actions-runner && ./config.sh remove --token <token>` then re-run
-`./config.sh` with a fresh registration token.
+`./config.sh` with a fresh registration token (org-level runners are managed
+under the dead-money org settings, not the repo).
