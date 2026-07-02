@@ -6,6 +6,8 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-02
+
 ### Added
 
 - `ResourceDictionary::set_source(uri)` loads a dictionary's XAML by URI with
@@ -141,6 +143,8 @@ Renderer, implementing a `RenderDevice` against your own GPU, and writing
 Rust-backed custom controls and markup extensions. The surface is considered
 near-final ahead of a 1.0 that commits to stability.
 
-[Unreleased]: https://github.com/dead-money/noesis_runtime/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/dead-money/noesis_runtime/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/dead-money/noesis_runtime/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/dead-money/noesis_runtime/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/dead-money/noesis_runtime/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/dead-money/noesis_runtime/releases/tag/v0.9.0
