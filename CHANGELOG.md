@@ -6,6 +6,23 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- A default `shim` feature. With `default-features = false` the crate builds
+  without `NOESIS_SDK_DIR`, compiles no C++, links no Noesis library, and
+  exposes only `render_device::{types, device}`: the `#[repr(C)]` batch, tile
+  and caps types and the `RenderDevice` trait. That is what a render device
+  needs when another Noesis host, such as the managed (C#) SDK, drives it.
+
+### Changed
+
+- **Breaking:** everything that needs the shim is behind the `shim` feature:
+  every module except `render_device`, the lifecycle functions, `prelude`,
+  `render_device::{register, Registered}`, and the `Batch::*_handle` methods.
+  Default builds are unchanged; a dependency that already set
+  `default-features = false` must enable `shim`.
+- `test-utils` now implies `shim`.
+
 ## [0.12.1] - 2026-07-05
 
 ### Added

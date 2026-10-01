@@ -1,6 +1,6 @@
 [package]
 name = "noesis_runtime"
-version = "0.12.1"
+version = "0.13.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Brandon Reinhart <brandon@deadmoney.gg>"]
@@ -20,9 +20,12 @@ exclude = [".github/", ".claude/", "scripts/", "CLAUDE.md", "RELEASING.md", "rel
 all-features = true
 
 [features]
-default = []
+default = ["shim"]
+# Compiles the C++ shim and links libNoesis. Without it only the render-device
+# types and trait remain, and the crate builds without NOESIS_SDK_DIR.
+shim = []
 # Compiles the shim's noesis_test_* entry points and the tests that use them.
-test-utils = []
+test-utils = ["shim"]
 
 [dependencies]
 

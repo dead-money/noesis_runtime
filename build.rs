@@ -19,9 +19,10 @@ fn main() {
         println!("cargo:rerun-if-changed={}", src.display());
     }
 
-    // docs.rs has no SDK; rustdoc needs no native objects. Set DOCS_RS locally
-    // to preview that build.
-    if env::var_os("DOCS_RS").is_some() {
+    // Without `shim` the crate is plain Rust types; nothing to compile or link.
+    // docs.rs has no SDK, and rustdoc needs no native objects. Set DOCS_RS
+    // locally to preview that build.
+    if env::var_os("CARGO_FEATURE_SHIM").is_none() || env::var_os("DOCS_RS").is_some() {
         return;
     }
 

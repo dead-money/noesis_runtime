@@ -218,6 +218,7 @@ pub trait RenderDevice: Send + Sync + 'static {
 
     /// Draws the indexed triangles described by `batch`, reading from the most
     /// recently mapped vertex and index buffers. Recover the handles of its
-    /// textures with [`Batch::pattern_handle`] and its siblings.
+    /// textures with [`Batch::pattern_handle`] and its siblings (`shim`
+    /// feature).
     fn draw_batch(&mut self, batch: &Batch);
 }

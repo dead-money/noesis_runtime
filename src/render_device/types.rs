@@ -626,7 +626,9 @@ impl UniformData {
 /// returns, and each render target's resolve texture, in one of these. You
 /// can't construct or dereference it; turn the pointers in a `Batch` back into
 /// your [`TextureHandle`](crate::render_device::TextureHandle) with
-/// [`Batch::pattern_handle`] and its siblings.
+/// [`Batch::pattern_handle`] and its siblings. Those need the `shim` feature
+/// and only work on textures the shim created. A host that creates Noesis
+/// textures itself keeps its own map from these pointers to handles.
 #[repr(C)]
 pub struct Texture {
     _opaque: [u8; 0],
@@ -702,6 +704,7 @@ pub struct Batch {
     pub pixel_shader: *mut c_void,
 }
 
+#[cfg(feature = "shim")]
 impl Batch {
     /// The pattern texture as your device's
     /// [`TextureHandle`](crate::render_device::TextureHandle), or `None` when
@@ -740,6 +743,7 @@ impl Batch {
     }
 }
 
+#[cfg(feature = "shim")]
 fn handle_from_texture_ptr(ptr: *mut Texture) -> Option<crate::render_device::TextureHandle> {
     if ptr.is_null() {
         return None;
