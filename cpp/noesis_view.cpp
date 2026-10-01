@@ -1,16 +1,8 @@
-// C++ wrappers for the XamlProvider / IView / IRenderer surface.
+// XamlProvider, XAML loading, IView and IRenderer.
 //
-// Mirrors the RustRenderDevice pattern in noesis_render_device.cpp:
-//   * `RustXamlProvider` subclasses `Noesis::XamlProvider` and trampolines
-//     `LoadXaml` into a Rust vtable. The Rust side owns the bytes; this shim
-//     wraps them in a `Noesis::MemoryStream` whose `const void*` buffer is
-//     the Rust-owned storage.
-//   * Thin extern "C" entrypoints over `GUI::LoadXaml`, `GUI::CreateView`,
-//     and the `IView` / `IRenderer` methods.
-//
-// No Rust callback fires on XamlProvider teardown. The Rust side manages
-// the boxed trait object's lifetime via its `Drop` impl (mirrors the
-// `Registered` pattern for RenderDevice).
+// RustXamlProvider forwards LoadXaml to a Rust vtable and wraps the returned
+// bytes in a MemoryStream without copying. No callback fires on provider
+// teardown; the Rust handle's Drop owns the boxed trait object.
 
 #include "noesis_shim.h"
 
@@ -53,9 +45,7 @@ public:
         if (!ok || data == nullptr) {
             return nullptr;
         }
-        // MemoryStream stores the buffer pointer without copying. The Rust
-        // side guarantees the bytes stay valid until parsing completes (which
-        // is synchronous with this call's return).
+        // No copy: Rust keeps the bytes valid until the synchronous parse ends.
         return Noesis::MakePtr<Noesis::MemoryStream>(data, len);
     }
 
@@ -93,8 +83,7 @@ extern "C" void* noesis_gui_load_xaml(const char* uri) {
     Noesis::Ptr<Noesis::BaseComponent> component =
         Noesis::GUI::LoadXaml(Noesis::Uri(uri));
     if (!component) return nullptr;
-    // GUI::CreateView wants a FrameworkElement*. DynamicPtrCast fails
-    // predictably if the loaded root isn't one (e.g. a ResourceDictionary).
+    // NULL for non-FrameworkElement roots such as a ResourceDictionary.
     Noesis::Ptr<Noesis::FrameworkElement> element =
         Noesis::DynamicPtrCast<Noesis::FrameworkElement>(component);
     if (!element) return nullptr;
@@ -103,11 +92,7 @@ extern "C" void* noesis_gui_load_xaml(const char* uri) {
 
 extern "C" void* noesis_gui_parse_xaml(const char* text) {
     if (!text) return nullptr;
-    // ParseXaml builds an object tree directly from the string. No
-    // XamlProvider URI round-trip. Mirrors noesis_gui_load_xaml's
-    // ownership: cast the root to FrameworkElement and hand out a +1 ref.
-    // Malformed XAML yields a null Ptr (the error is routed through the log
-    // handler), so this returns NULL rather than crashing.
+    // Malformed XAML yields NULL; the error goes to the log handler.
     Noesis::Ptr<Noesis::BaseComponent> component = Noesis::GUI::ParseXaml(text);
     if (!component) return nullptr;
     Noesis::Ptr<Noesis::FrameworkElement> element =
@@ -118,10 +103,8 @@ extern "C" void* noesis_gui_parse_xaml(const char* text) {
 
 extern "C" bool noesis_gui_load_component(void* component, const char* uri) {
     if (!component || !uri) return false;
-    // LoadComponent populates an existing instance (the code-behind / x:Class
-    // pattern). `component` is borrowed; Noesis does not take ownership of the
-    // caller's ref. Meaningful population requires the instance's reflected
-    // type to match the XAML root's x:Class.
+    // `component` is borrowed. Population requires its reflected type to match
+    // the XAML root's x:Class.
     Noesis::GUI::LoadComponent(
         static_cast<Noesis::BaseComponent*>(component), Noesis::Uri(uri));
     return true;
@@ -132,20 +115,16 @@ extern "C" void noesis_base_component_release(void* obj) {
     static_cast<Noesis::BaseComponent*>(obj)->Release();
 }
 
-// Add a +1 reference to any BaseComponent and return it (NULL on NULL input).
-// Lets Rust promote a borrowed component pointer (e.g. a hit-test visual handed
-// to a callback, or GetRenderTransform's borrowed result) into an owning
-// handle. Balance with noesis_base_component_release.
+// Promotes a borrowed component pointer to an owning handle. Balance with
+// noesis_base_component_release.
 extern "C" void* noesis_base_component_add_reference(void* obj) {
     if (!obj) return nullptr;
     static_cast<Noesis::BaseComponent*>(obj)->AddReference();
     return obj;
 }
 
-// Current strong reference count of any BaseComponent (BaseRefCounted::
-// GetNumReferences). Returns 0 on NULL input. The absolute value is an internal
-// detail. Callers should reason about deltas (AddReference => +1, Release =>
-// -1), not the raw number.
+// 0 on NULL. The absolute count is an internal detail; only deltas are
+// meaningful.
 extern "C" int32_t noesis_base_component_get_num_references(void* obj) {
     if (!obj) return 0;
     return static_cast<Noesis::BaseComponent*>(obj)->GetNumReferences();
@@ -160,25 +139,11 @@ extern "C" bool noesis_gui_load_application_resources(const char* uri) {
     return true;
 }
 
-// Experimental: install application resources by building the merged-
-// dictionary chain manually in C++ so each leaf loads with the parent
-// `ResourceDictionary` already wired into application resources.
-//
-// Why: `LoadXaml<ResourceDictionary>(parent_uri)` parses the parent and
-// recursively parses each `<ResourceDictionary Source="..."/>` in
-// `MergedDictionaries`. The leaves are parsed in isolation. Their
-// internal `{StaticResource SiblingKey}` lookups can't see siblings that
-// haven't been parsed yet (or even the ones that already have, if the
-// resolver only walks the leaf's own logical tree). This is the
-// "Brushes.xaml self-merges Colors.xaml" workaround territory.
-//
-// This variant takes the list of leaf URIs explicitly (in dependency
-// order). It constructs an empty parent `ResourceDictionary`, installs
-// it as application resources before loading anything, then for each
-// leaf URI: creates an empty child, adds it to `parent.MergedDictionaries`
-// (parent scope is now visible to the child), and assigns
-// `child.Source = uri` to trigger the load. Each leaf parses with the
-// growing parent context already live.
+// Builds the merged-dictionary chain by hand so each leaf parses with the
+// earlier leaves already live in application resources. Loading a parent
+// dictionary with LoadXaml parses each merged leaf in isolation, so a leaf's
+// {StaticResource} cannot see keys from its siblings. `uris` must be in
+// dependency order.
 extern "C" bool noesis_gui_install_app_resources_chain(
     const char* const* uris, uint32_t count)
 {
@@ -210,11 +175,9 @@ extern "C" void noesis_view_destroy(void* view) {
     static_cast<Noesis::IView*>(view)->Release();
 }
 
-// Add a +1 reference to an IView and return it. Lets an owned renderer handle
-// keep the view (and the IRenderer it owns) alive independently of the View
-// wrapper, so the two can drive different threads (Update on the UI thread;
-// UpdateRenderTree / Render on the render thread). Balance with
-// noesis_view_destroy. No-op (returns NULL) on a NULL view.
+// Lets an owned renderer handle keep the view (and its IRenderer) alive apart
+// from the View wrapper, so Update and Render can run on different threads.
+// Balance with noesis_view_destroy. Returns NULL on NULL.
 extern "C" void* noesis_view_add_reference(void* view) {
     if (!view) return nullptr;
     static_cast<Noesis::IView*>(view)->AddReference();
@@ -228,16 +191,12 @@ extern "C" void noesis_view_set_size(void* view, uint32_t width, uint32_t height
 }
 
 extern "C" void noesis_view_set_scale(void* view, float scale) {
-    // DPI scale: 1.0 == 96 ppi. Scales content + hit-testing without changing
-    // the surface size, so the UI stays crisp (vector re-tessellation) at any
-    // display density.
+    // 1.0 == 96 ppi; scales content and hit-testing, not the surface size.
     static_cast<Noesis::IView*>(view)->SetScale(scale);
 }
 
 extern "C" void noesis_view_set_projection_matrix(void* view, const float* matrix) {
-    // Matrix4(const float*) reads 16 floats; the native GetData() layout is
-    // row-major (Vector4 mVal[4] holding rows), so we pass the Rust array
-    // through untouched.
+    // 16 floats, row-major (Matrix4 stores rows), passed through untouched.
     Noesis::Matrix4 m(matrix);
     static_cast<Noesis::IView*>(view)->SetProjectionMatrix(m);
 }
@@ -258,9 +217,7 @@ extern "C" void* noesis_view_get_content(void* view) {
     if (!view) return nullptr;
     Noesis::FrameworkElement* content = static_cast<Noesis::IView*>(view)->GetContent();
     if (!content) return nullptr;
-    // GetContent returns a non-owning raw pointer (the View owns the +1 ref
-    // it took at CreateView time). Bump the count so callers can release it
-    // through the standard FrameworkElement drop path.
+    // GetContent is borrowed; +1 so the caller's handle can release it.
     content->AddReference();
     return content;
 }
@@ -289,13 +246,10 @@ extern "C" void noesis_renderer_render(void* renderer, bool flip_y, bool clear) 
 }
 
 // ── Stereo / VR rendering ───────────────────────────────────────────────────
-// `RenderStereo` overloads (the non-deprecated VR path). Each eye matrix is a
-// row-major 4×4 read straight from 16 Rust floats, same layout convention as
-// noesis_view_set_projection_matrix. Culling always uses the view's
-// projection matrix, so the eye matrices must be enclosed by it.
+// Eye matrices are row-major 4x4, as in noesis_view_set_projection_matrix.
+// Culling uses the view's projection matrix, so it must enclose both eyes.
 
-// Multi-pass stereo: one eye per call (call twice, once per eye, into the
-// matching render target).
+// Multi-pass stereo: one eye per call, into that eye's render target.
 extern "C" void noesis_renderer_render_stereo(
     void* renderer, const float* eye_matrix, bool flip_y, bool clear)
 {
@@ -317,10 +271,8 @@ extern "C" void noesis_renderer_render_stereo_both(
 
 // ── View input ─────────────────────────────────────────────────────────────
 //
-// The safe wrappers in `src/view.rs` define `MouseButton` and `Key` enums with
-// explicit discriminants. Assert each ordinal here so any accidental drift
-// between Noesis SDK versions fails noesis_runtime's own C++ compile, long before
-// a wrong-key bug shows up at runtime.
+// `MouseButton` and `Key` in src/view.rs use these discriminants; an SDK that
+// renumbers them fails this compile instead of sending wrong keys at runtime.
 
 static_assert((int32_t)Noesis::MouseButton_Left == 0, "MouseButton::Left");
 static_assert((int32_t)Noesis::MouseButton_Right == 1, "MouseButton::Right");
@@ -527,8 +479,7 @@ extern "C" void noesis_view_set_stereo_offscreen_scale_factor(void* view, float 
     static_cast<Noesis::IView*>(view)->SetStereoOffscreenScaleFactor(factor);
 }
 
-// The C ABI struct mirrors `Noesis::ViewStats` field-for-field; guard the size
-// so a future SDK field addition can't silently desync the copy below.
+// Catches an SDK field addition that the field-by-field copy below would miss.
 static_assert(sizeof(noesis_view_stats) == sizeof(Noesis::ViewStats),
     "noesis_view_stats must match Noesis::ViewStats layout");
 
@@ -556,14 +507,10 @@ extern "C" void noesis_view_get_stats(void* view, noesis_view_stats* out) {
 
 namespace {
 
-// Trampoline between Noesis's `Delegate<uint32_t()>` timer callback and the C
-// ABI. Modelled on RustCommand (noesis_commands.cpp): the donated Rust handler
-// box is owned here and freed via `mFree` in the destructor, exactly once.
-// Holds a +1 ref on the IView so the token may safely outlive the caller's
-// other view handles (the only constraint is dropping it before the Noesis
-// runtime shuts down, like every other owning handle in this crate). Noesis
-// stores a copy of the `Delegate` bound to this object until CancelTimer, so
-// the object must stay alive until then, which the Rust RAII handle enforces.
+// Owns the donated Rust handler box (freed once via `mFree` in the dtor) and a
+// +1 on the IView, so the token may outlive the caller's other view handles but
+// must still drop before Noesis shuts down. Noesis keeps a Delegate bound to
+// this object until CancelTimer, so it must live until then.
 class RustTimer {
 public:
     RustTimer(Noesis::IView* view, noesis_timer_fn cb, void* userdata,
@@ -576,9 +523,7 @@ public:
     }
 
     ~RustTimer() {
-        // Donated ownership: drop the Rust handler box here, exactly once.
-        // Null first so a (currently-impossible) re-entrant teardown can't
-        // double-free.
+        // Null first so a re-entrant teardown can't double-free.
         void* ud = mUserdata;
         mUserdata = nullptr;
         if (mFree && ud) {
@@ -592,8 +537,7 @@ public:
     RustTimer(const RustTimer&) = delete;
     RustTimer& operator=(const RustTimer&) = delete;
 
-    // The Noesis timer callback: forwards to Rust and returns the next interval
-    // (0 stops the timer).
+    // Returns the next interval in ms; 0 stops the timer.
     uint32_t Tick() {
         if (mCb) {
             return mCb(mUserdata);
@@ -648,13 +592,9 @@ extern "C" void noesis_view_cancel_timer(void* token) {
 
 namespace {
 
-// Trampoline for `IView::Rendering()`, a `Delegate<void(IView*)>` fired after
-// animation/layout, just before the composition tree is rendered. Lifetime
-// mirrors RustTimer: the donated Rust handler box is owned here and freed via
-// `mFree` in the destructor exactly once, and a +1 ref on the IView keeps the
-// handle safely usable until it is removed. The Delegate is registered with
-// `+=` on construction and detached with `-=` on destruction, so the bound
-// object must (and does, via the Rust RAII handle) outlive registration.
+// IView::Rendering fires after animation and layout, just before the
+// composition tree renders. Ownership as RustTimer. The delegate is attached in
+// the ctor and detached in the dtor, so this object outlives its registration.
 class RustRenderingHandler {
 public:
     RustRenderingHandler(Noesis::IView* view, noesis_rendering_fn cb,
@@ -667,7 +607,6 @@ public:
 
     ~RustRenderingHandler() {
         mView->Rendering() -= Noesis::MakeDelegate(this, &RustRenderingHandler::OnRendering);
-        // Donated ownership: drop the Rust handler box here, exactly once.
         void* ud = mUserdata;
         mUserdata = nullptr;
         if (mFree && ud) {
@@ -705,6 +644,5 @@ extern "C" void* noesis_view_add_rendering_handler(
 
 extern "C" void noesis_view_remove_rendering_handler(void* token) {
     if (!token) return;
-    // dtor detaches the delegate, frees the donated userdata, releases the ref.
     delete static_cast<RustRenderingHandler*>(token);
 }

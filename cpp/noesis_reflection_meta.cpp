@@ -1,26 +1,15 @@
-// Reflection meta registration: custom enums, routed events, factory metadata,
-// and string->value conversion.
+// Runtime reflection entries: custom enums, routed events, type metadata, and
+// string->value conversion. Everything is keyed by reflected type name, so the
+// XAML parser and bindings resolve these like compile-time NS_REGISTER_* types.
 //
-// Everything here registers / queries a runtime entity against Noesis's
-// reflection database so the XAML parser / bindings resolve it the same way they
-// resolve a compile-time NS_REGISTER_* declaration. Two SDK facts make this work
-// from a C ABI:
+// Reflection::RegisterType takes ownership of a hand-built Type until shutdown;
+// TypeMeta::AddMeta / FindMeta attach and recover per-type metadata.
 //
-//   * Reflection::RegisterType(Type*) takes ownership of a hand-built Type and
-//     keeps it alive until shutdown, the same path noesis_classes.cpp uses for
-//     its synthetic TypeClassBuilder. We reuse it for a runtime TypeEnum.
-//   * TypeMeta::AddMeta / FindMeta let us attach (and recover) per-type metadata,
-//     namely UIElementData (routed events) and ContentPropertyMetaData, on an
-//     already-registered type, keyed only by its reflected name. So none of this
-//     needs the opaque ClassData token from noesis_classes.cpp.
-//
-// NOTE: custom *reflection TypeConverter* registration is NOT exposed in
-// 3.2.13. TypeConverter::Get resolves converters through an internal registry
-// that TypeConverterMetaData + Factory::RegisterComponent do not drive at
-// runtime (verified empirically: a synthetic converter type registers in the
-// Factory yet Get still returns null). The consumption side
-// (noesis_type_converter_from_string) works for any built-in / reflected
-// type. See LIMITATIONS.md "Known SDK limitations".
+// Custom TypeConverter registration is not possible in 3.2.13:
+// TypeConverter::Get resolves through an internal registry that
+// TypeConverterMetaData + Factory::RegisterComponent do not populate at runtime
+// (a registered synthetic converter still returns null). See LIMITATIONS.md
+// "Known SDK limitations".
 
 #include "noesis_shim.h"
 
@@ -44,16 +33,14 @@
 
 namespace {
 
-// Hand a freshly-created / borrowed BaseComponent across the C ABI with exactly
-// one reference owned by the caller (mirrors the helper in noesis_binding.cpp).
+// Adds the caller's +1; the producing Ptr releases its own reference.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
     return c;
 }
 
-// Resolve a reflected type by name without interning a junk Symbol for a
-// never-seen name.
+// NullIfNotFound: don't intern a Symbol for a name nobody registered.
 const Noesis::Type* find_type(const char* name) {
     if (!name) return nullptr;
     Noesis::Symbol sym(name, Noesis::Symbol::NullIfNotFound());
@@ -61,16 +48,9 @@ const Noesis::Type* find_type(const char* name) {
     return Noesis::Reflection::GetType(sym);
 }
 
-// ── (A) Custom enums ────────────────────────────────────────────────────────
-//
-// We cannot use Noesis::TypeEnumImpl<T> for a runtime enum: instantiating it
-// forces TypeEnumImpl<T>::GetValueObject -> Boxing::Box<T> -> TypeOf<T>(), which
-// requires a compile-time NS_DECLARE_REFLECTION_ENUM(T). Instead we subclass
-// TypeEnum directly (its only pure virtual is GetValueObject) and box members as
-// a plain int32, enough for the reflection / EnumConverter lookup paths the
-// XAML parser drives, with no compile-time type baggage. The (name, value)
-// members and reflected name come entirely from runtime arguments, so one C++
-// type services arbitrarily many distinct named enums.
+// TypeEnumImpl<T> needs a compile-time NS_DECLARE_REFLECTION_ENUM(T) (via
+// Boxing::Box<T> -> TypeOf<T>), so runtime enums subclass TypeEnum directly and
+// box members as int32. One C++ class serves every runtime-named enum.
 class DmRuntimeTypeEnum final: public Noesis::TypeEnum {
 public:
     explicit DmRuntimeTypeEnum(Noesis::Symbol name): TypeEnum(name) {}
@@ -146,8 +126,6 @@ extern "C" bool noesis_type_converter_from_string(
     return true;
 }
 
-// ── (B) Custom routed events ──────────────────────────────────────────────────
-
 extern "C" bool noesis_register_routed_event(
     const char* type_name, const char* event_name, int32_t strategy) {
     if (!event_name) return false;
@@ -170,9 +148,7 @@ extern "C" bool noesis_register_routed_event(
         default: rs = Noesis::RoutingStrategy_Bubble; break;
     }
 
-    // RegisterEvent writes the created RoutedEvent through the reference once;
-    // it does not retain &slot, so a local is fine. The event itself is owned
-    // by the UIElementData's event map.
+    // RegisterEvent does not retain &slot; the UIElementData owns the event.
     const Noesis::RoutedEvent* slot = nullptr;
     uiData->RegisterEvent(slot, event_name, rs);
     return slot != nullptr;
@@ -194,8 +170,6 @@ extern "C" bool noesis_raise_routed_event(void* element, const char* event_name)
     return true;
 }
 
-// ── (C) Factory / component metadata ───────────────────────────────────────
-
 extern "C" bool noesis_factory_is_registered(const char* name) {
     if (!name) return false;
     Noesis::Symbol sym(name, Noesis::Symbol::NullIfNotFound());
@@ -209,9 +183,8 @@ extern "C" bool noesis_type_set_content_property(
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
     if (!tc) return false;
 
-    // AddMeta is non-const; the synthetic types we attach to are mutable through
-    // the registry, and TypeMeta::AddMeta only appends. The const_cast is sound
-    // because we only ever pass our own registered types here.
+    // AddMeta only appends. find_type resolves built-in types too, so this can
+    // attach metadata to an SDK type, not just a runtime-registered one.
     auto* meta = const_cast<Noesis::TypeClass*>(tc);
     Noesis::Ptr<Noesis::ContentPropertyMetaData> cp =
         Noesis::MakePtr<Noesis::ContentPropertyMetaData>(prop_name);
@@ -225,9 +198,6 @@ extern "C" bool noesis_type_get_content_property(
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
     if (!tc) return false;
 
-    // FindMeta is keyed by the metadata TypeClass, so this reads the
-    // ContentPropertyMetaData record independently of any DependsOnMetaData
-    // attached to the same type.
     const auto* cp = Noesis::FindMeta<Noesis::ContentPropertyMetaData>(tc);
     if (!cp) return false;
     *out_name = cp->GetContentProperty().Str();
@@ -240,9 +210,7 @@ extern "C" bool noesis_type_add_depends_on(
     const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(find_type(type_name));
     if (!tc) return false;
 
-    // DependsOnMetaData is type-level metadata in Noesis (NsGui/DependsOnMetaData.h),
-    // attached the same way as ContentPropertyMetaData. The const_cast is sound:
-    // we only attach to our own runtime-registered types and AddMeta only appends.
+    // See noesis_type_set_content_property on the const_cast.
     auto* meta = const_cast<Noesis::TypeClass*>(tc);
     Noesis::Ptr<Noesis::DependsOnMetaData> dep =
         Noesis::MakePtr<Noesis::DependsOnMetaData>(prop_name);

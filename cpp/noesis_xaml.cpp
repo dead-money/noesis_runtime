@@ -1,21 +1,8 @@
-// C++ wrappers for the XAML loading variants surface:
+// XAML dependency scanning, scheme- and assembly-scoped provider setters, and
+// loading a XAML root that need not be a FrameworkElement.
 //
-//   * GetXamlDependencies: walk an in-memory XAML buffer's referenced
-//     resources (other XAMLs, fonts, textures, prefixed UserControl nodes,
-//     the root type) without instantiating the tree, forwarding each hit
-//     into a Rust callback.
-//
-//   * Scheme- / assembly-scoped provider setters: thin pass-throughs to the
-//     `GUI::SetSchemeXamlProvider` / `SetAssemblyXamlProvider` /
-//     `SetSchemeAssemblyXamlProvider` overloads (and the identical Texture +
-//     Font triples). These REUSE the provider handles produced by
-//     `noesis_{xaml,font,texture}_provider_create` in the existing shim
-//     files; only the install call differs from the global setter.
-//
-//   * Typed component load: `GUI::LoadXaml` for a root that need not be a
-//     FrameworkElement (e.g. a ResourceDictionary), plus a reflection helper
-//     that reports the loaded root's class-type name so the typed-load path
-//     is observable headlessly.
+// The scoped setters take the same provider handles as the global setters
+// (noesis_{xaml,font,texture}_provider_create).
 
 #include "noesis_shim.h"
 
@@ -35,8 +22,7 @@
 
 #include <cstdint>
 
-// The C ABI dependency-kind ints must match Noesis::XamlDependencyType so the
-// Rust enum can map them 1:1. Guard each ordinal at compile time.
+// The Rust dependency-kind enum maps these ordinals 1:1.
 static_assert((int32_t)Noesis::XamlDependencyType_Filename == 0, "XamlDependencyType::Filename");
 static_assert((int32_t)Noesis::XamlDependencyType_Font == 1, "XamlDependencyType::Font");
 static_assert((int32_t)Noesis::XamlDependencyType_UserControl == 2, "XamlDependencyType::UserControl");
@@ -44,16 +30,12 @@ static_assert((int32_t)Noesis::XamlDependencyType_Root == 3, "XamlDependencyType
 
 namespace {
 
-// Bundles the Rust callback + its userdata so the capture-less trampoline can
-// recover both from the single `void* user` slot GetXamlDependencies forwards.
 struct DependencyCtx {
     void* user;
     noesis_xaml_dependency_fn cb;
 };
 
-// Capture-less so it converts to the plain `XamlDependencyCallback` function
-// pointer the API wants. Forwards each dependency into the Rust callback,
-// passing the URI as a borrowed NUL-terminated string (Rust copies it).
+// The URI is borrowed for the callback's duration.
 void DependencyTrampoline(void* user, const Noesis::Uri& uri, Noesis::XamlDependencyType type) {
     auto* ctx = static_cast<DependencyCtx*>(user);
     if (!ctx || !ctx->cb) return;
@@ -81,11 +63,8 @@ extern "C" void noesis_get_xaml_dependencies(
 
 // ── Typed component load + reflected type name ─────────────────────────────
 
-// Load XAML by URI WITHOUT narrowing the root to FrameworkElement. Returns the
-// loaded root as a BaseComponent* at +1 (release via
-// noesis_base_component_release), or NULL when the URI is unknown to the
-// installed provider / the XAML is malformed. Unlike noesis_gui_load_xaml,
-// this keeps non-FrameworkElement roots (e.g. ResourceDictionary).
+// Unlike noesis_gui_load_xaml, keeps non-FrameworkElement roots. Returns the
+// root at +1, or NULL for an unknown URI or malformed XAML.
 extern "C" void* noesis_gui_load_xaml_component(const char* uri) {
     if (!uri) return nullptr;
     Noesis::Ptr<Noesis::BaseComponent> component =
@@ -94,10 +73,8 @@ extern "C" void* noesis_gui_load_xaml_component(const char* uri) {
     return component.GiveOwnership();
 }
 
-// Reflected class-type name of any BaseComponent (e.g. "ResourceDictionary",
-// "Grid"). Returns Noesis's interned `const char*` (owned by the type system,
-// stable for the process lifetime); Rust copies it immediately. NULL on a
-// NULL object or a type with no class.
+// Interned by the type system, valid for the process lifetime. NULL on NULL
+// or a type with no class.
 extern "C" const char* noesis_base_component_type_name(void* obj) {
     if (!obj) return nullptr;
     const Noesis::TypeClass* tc = static_cast<Noesis::BaseComponent*>(obj)->GetClassType();
@@ -107,9 +84,8 @@ extern "C" const char* noesis_base_component_type_name(void* obj) {
 
 // ── Scheme- / assembly-scoped provider setters ─────────────────────────────
 //
-// `provider` is a handle from the matching `noesis_*_provider_create`. A
-// NULL scheme/assembly is a no-op (the C++ API requires a valid C string).
-// Passing a NULL provider clears the scoped registration.
+// A NULL scheme or assembly is a no-op. A NULL provider clears the scoped
+// registration.
 
 extern "C" void noesis_set_xaml_provider_scheme(const char* scheme, void* provider) {
     if (!scheme) return;

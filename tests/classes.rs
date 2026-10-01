@@ -75,8 +75,8 @@ fn class_registration_roundtrip() {
     let recorder = Recorder::default();
 
     {
-        // Register the class BEFORE the XAML provider so the parser can
-        // resolve `<sample:NineSlicer>` on first load.
+        // Registered before the XAML loads so the parser resolves
+        // `<sample:NineSlicer>`.
         let mut builder = ClassBuilder::new(
             "Sample.NineSlicer",
             ClassBase::ContentControl,
@@ -147,8 +147,7 @@ fn class_registration_roundtrip() {
             recorded2
         );
 
-        // Drop instance handles before the view, then drop the view, then
-        // drop the registration. Registration must outlive every instance.
+        // The registration must outlive every instance and the view.
         drop(slicer);
         drop(content);
         view.deactivate();

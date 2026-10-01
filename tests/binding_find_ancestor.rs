@@ -55,9 +55,8 @@ fn relative_source_find_ancestor_resolves_by_type_and_level() {
         let leaf1 = content.find_name("Leaf1").expect("find Leaf1");
         let leaf2 = content.find_name("Leaf2").expect("find Leaf2");
 
-        // Graceful failure: an unknown / unregistered type name must NOT resolve,
-        // while the genuine "Border" (referenced by the XAML, so registered)
-        // does. This proves the reflection lookup gate, not just "didn't crash".
+        // An unregistered type name is rejected; "Border" is registered because
+        // the XAML uses it.
         let probe = Binding::new("Name");
         assert!(
             !probe.try_relative_source_find_ancestor("NoSuchAncestorType", 1),

@@ -1,9 +1,6 @@
-//! Code-built `ImageSource` / `BitmapSource` family: headless construction +
-//! read-back. GPU-resolved values (texture, pixel dims) return null/0 headless
-//! and are asserted as such.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test imaging -- --nocapture`
+//! `ImageSource` / `BitmapSource` types built from code and read back headless.
+//! Values resolved on a render pass (texture, pixel size) are null or 0 here,
+//! and the test asserts that.
 
 use std::ffi::c_void;
 
@@ -11,7 +8,7 @@ use noesis_runtime::imaging::{
     BitmapImage, BitmapSource, CroppedBitmap, DynamicTextureSource, Int32Rect, TextureSource,
 };
 
-// render-thread callback that must not fire headless (flag stays 0 = proof)
+// Render-thread callback; sets the flag if it ever runs.
 unsafe extern "C" fn never_called(_device: *mut c_void, _user: *mut c_void) -> *mut c_void {
     if !_user.is_null() {
         unsafe { *_user.cast::<u32>() = 1 };
@@ -31,12 +28,10 @@ fn imaging_family_round_trip() {
 
     {
         let texture_source = TextureSource::new();
-        // null headless: no RenderDevice Texture bound; documented outcome, not a stub
         assert!(
             texture_source.texture().is_none(),
             "TextureSource has no texture bound headless (needs a host RenderDevice Texture)"
         );
-        // BitmapSource base getters resolve only on a render pass: 0 headless.
         assert_eq!(
             texture_source.pixel_size(),
             (0, 0),
@@ -51,7 +46,6 @@ fn imaging_family_round_trip() {
             "fresh CroppedBitmap rect is Empty"
         );
 
-        // SetSource AddRefs the exact object; reading back proves identity, not clone
         assert!(crop.set_source(&texture_source), "set CroppedBitmap source");
         let got = crop.source().expect("source set after set_source");
         assert_eq!(
@@ -67,12 +61,12 @@ fn imaging_family_round_trip() {
             rect,
             "CroppedBitmap SourceRect field round-trip"
         );
-        // A different rect, including a negative origin, to defeat any echo.
+        // Negative origin, to rule out a cached first value.
         let rect2 = Int32Rect::new(-7, 12, 1000, 1);
         crop.set_source_rect(rect2);
         assert_eq!(crop.source_rect(), rect2, "CroppedBitmap SourceRect re-set");
 
-        // SetSource accepts any BitmapSource subclass and swaps the pointer
+        // Any BitmapSource subclass is accepted.
         let bitmap_image_src = BitmapImage::from_uri("clear_check.png");
         assert!(
             crop.set_source(&bitmap_image_src),
@@ -109,14 +103,12 @@ fn imaging_family_round_trip() {
             "Folder/aladin.png",
             "BitmapImage::from_uri UriSource round-trip"
         );
-        // Pixel dims are render-pass-resolved: 0 headless.
         assert_eq!(
             image2.pixel_size(),
             (0, 0),
             "BitmapImage pixel dims are 0 until a texture provider resolves it"
         );
 
-        // flag stays 0 headless: render-thread callback never fires without a pass
         let mut flag: u32 = 0;
         let mut dyn_src = unsafe {
             DynamicTextureSource::new(64, 48, never_called, (&raw mut flag).cast::<c_void>())

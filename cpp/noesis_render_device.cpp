@@ -1,7 +1,9 @@
-// C++ subclasses that satisfy the Noesis pure-virtual `RenderDevice`,
-// `Texture`, and `RenderTarget` contracts by trampolining into the Rust-side
-// vtable supplied at construction. Plus the C-ABI factory functions the Rust
-// `register()` helper calls. The C ABI surface is declared in noesis_shim.h.
+// Noesis RenderDevice / Texture / RenderTarget implementations that forward
+// every virtual into the Rust vtable supplied at construction.
+//
+// Handle 0 marks an inert wrapper: the Rust create callback panicked or
+// rejected the request and left its out-binding zeroed. Inert handles are never
+// forwarded back to Rust.
 
 #include "noesis_shim.h"
 
@@ -19,15 +21,8 @@ namespace {
 
 class RustRenderDevice;
 
-// ─── RustTexture ────────────────────────────────────────────────────────────
-//
-// Stores the metadata Noesis exposes through const-getters as plain members so
-// the getters are zero-overhead. Holds a back-pointer to its parent device so
-// the destructor can call `drop_texture`. The device outlives all textures it
-// produced because Rust drops the device only AFTER dropping the
-// `noesis_render_device_destroy` reference, which transitively releases
-// every Noesis-held `Ptr<Texture>`.
-
+// Raw back-pointer to the device for `drop_texture`: a texture must not
+// outlive the device that created it.
 class RustTexture final : public Noesis::Texture {
 public:
     RustTexture(RustRenderDevice* device, uint64_t handle,
@@ -66,12 +61,6 @@ private:
     bool mHasAlpha;
 };
 
-// ─── RustRenderTarget ───────────────────────────────────────────────────────
-//
-// Holds the resolve `RustTexture` as a `Ptr<>` so its lifetime is tied to the
-// render target. `GetTexture` returns the raw pointer; Noesis treats the
-// returned `Texture*` as borrowed.
-
 class RustRenderTarget final : public Noesis::RenderTarget {
 public:
     RustRenderTarget(RustRenderDevice* device, uint64_t handle,
@@ -93,8 +82,6 @@ private:
     Noesis::Ptr<RustTexture> mResolve;
 };
 
-// ─── RustRenderDevice ───────────────────────────────────────────────────────
-
 class RustRenderDevice final : public Noesis::RenderDevice {
 public:
     RustRenderDevice(const noesis_render_device_vtable* vtable, void* userdata)
@@ -102,16 +89,13 @@ public:
         , mUserdata(userdata)
     {}
 
-    // Runs when Noesis releases the device's last `Ptr<>` — past which no vtable
-    // callback fires. Frees the boxed impl here, not in the caller's `destroy`,
-    // so `mUserdata` outlives every callback. Members are all values, so the
-    // dtor body is the final event.
+    // Last reference gone, so no further callback can fire. Freeing the boxed
+    // impl here rather than in noesis_render_device_destroy keeps mUserdata
+    // valid for callbacks Noesis issues after the Rust guard drops.
     ~RustRenderDevice() override { mVtable.drop_userdata(mUserdata); }
 
     void dropTexture(uint64_t h) { mVtable.drop_texture(mUserdata, h); }
     void dropRenderTarget(uint64_t h) { mVtable.drop_render_target(mUserdata, h); }
-
-    // ── RenderDevice virtuals ──────────────────────────────────────────────
 
     const Noesis::DeviceCaps& GetCaps() const override {
         if (!mCapsValid) {
@@ -136,8 +120,7 @@ public:
     {
         const auto src = static_cast<RustRenderTarget*>(surface);
         noesis_render_target_binding b{};
-        // Cloning an inert handle-0 source yields another inert wrapper (b stays
-        // zero) rather than forwarding a handle the Rust impl never created.
+        // An inert source clones to another inert wrapper.
         if (src->handle() != 0) {
             mVtable.clone_render_target(mUserdata, label, src->handle(), &b);
         }
@@ -159,7 +142,7 @@ public:
                        const void* data) override
     {
         const auto* t = static_cast<RustTexture*>(texture);
-        if (t->handle() == 0) return;  // inert handle-0 texture; skip callback
+        if (t->handle() == 0) return;
         mVtable.update_texture(mUserdata, t->handle(), level, x, y, width, height,
                                static_cast<uint32_t>(t->format()), data);
     }
@@ -169,8 +152,6 @@ public:
         std::vector<uint64_t> handles;
         handles.reserve(count);
         for (uint32_t i = 0; i < count; ++i) {
-            // Drop inert handle-0 textures so the Rust impl never sees a handle
-            // it did not create.
             const uint64_t h = static_cast<RustTexture*>(textures[i])->handle();
             if (h != 0) handles.push_back(h);
         }
@@ -185,8 +166,6 @@ public:
     void EndOnscreenRender()    override { mVtable.end_onscreen_render(mUserdata); }
 
     void SetRenderTarget(Noesis::RenderTarget* surface) override {
-        // An inert handle-0 target (failed create) forwards nothing; see
-        // makeRenderTarget. The same guard applies to the tile/resolve paths.
         const uint64_t h = static_cast<RustRenderTarget*>(surface)->handle();
         if (h == 0) return;
         mVtable.set_render_target(mUserdata, h);
@@ -231,10 +210,7 @@ private:
     Noesis::Ptr<Noesis::RenderTarget> makeRenderTarget(
         const noesis_render_target_binding& b)
     {
-        // Resolve textures are always RGBA8. That's what Noesis uses for the
-        // composited surface. (The Rust impl is free to pick a wgpu format
-        // internally as long as that mapping is consistent with how it reads
-        // back via UpdateTexture.)
+        // Noesis composites into RGBA8; the binding carries no format field.
         return Noesis::MakePtr<RustRenderTarget>(
             this, b.handle,
             makeTexture(b.resolve_texture, Noesis::TextureFormat::RGBA8));
@@ -246,24 +222,16 @@ private:
     mutable bool mCapsValid = false;
 };
 
-// Definitions outside the class bodies because each destructor needs the full
-// `RustRenderDevice` definition to call `drop*`.
-
 RustTexture::~RustTexture() {
-    // A handle of 0 marks an inert wrapper: the Rust impl panicked or rejected
-    // the create call and left `out` zero-initialised, so there is no resource
-    // to drop and it never handed us this handle. Forwarding 0 would trip the
-    // nonzero-handle assertion in the Rust trampoline (swallowed per call).
+    // Forwarding 0 would panic in the Rust trampoline's NonZeroU64 conversion.
     if (mHandle != 0) mDevice->dropTexture(mHandle);
 }
 
 RustRenderTarget::~RustRenderTarget() {
-    if (mHandle != 0) mDevice->dropRenderTarget(mHandle);  // inert handle; see above
+    if (mHandle != 0) mDevice->dropRenderTarget(mHandle);
 }
 
 }  // namespace
-
-// ─── Factory C ABI ──────────────────────────────────────────────────────────
 
 extern "C" void* noesis_render_device_create(
     const noesis_render_device_vtable* vtable, void* userdata)
@@ -271,8 +239,7 @@ extern "C" void* noesis_render_device_create(
     if (!vtable) return nullptr;
     Noesis::Ptr<RustRenderDevice> device =
         Noesis::MakePtr<RustRenderDevice>(vtable, userdata);
-    // MakePtr returns refcount = 1. GiveOwnership clears the smart pointer
-    // without decrementing, transferring the +1 to the C-ABI caller.
+    // GiveOwnership hands MakePtr's +1 to the caller without a release.
     return device.GiveOwnership();
 }
 
@@ -280,13 +247,6 @@ extern "C" void noesis_render_device_destroy(void* device) {
     if (!device) return;
     static_cast<Noesis::RenderDevice*>(device)->Release();
 }
-
-// ─── Offscreen / glyph-cache tuning ─────────────────────────────────────────
-//
-// Non-virtual configuration on the `Noesis::RenderDevice` base, applied to the
-// device the renderer draws with. Width/height of 0 means automatic. These
-// affect resource sizing only, so they are plain pass-through setters; no-ops
-// on a NULL device.
 
 extern "C" void noesis_render_device_set_offscreen_width(void* device, uint32_t width) {
     if (!device) return;
@@ -370,26 +330,16 @@ extern "C" uint64_t noesis_render_target_get_handle(const void* surface) {
                static_cast<const Noesis::RenderTarget*>(surface))->handle();
 }
 
-// ─── Test-only entrypoints ─────────────────────────────────────────────────
-//
-// Gated by the `test-utils` Cargo feature (which sets NOESIS_TEST_UTILS).
-// Production builds omit them entirely.
-
+// NOESIS_TEST_UTILS is set by the `test-utils` Cargo feature.
 #ifdef NOESIS_TEST_UTILS
 
-// One-shot frame scenario that exercises every Noesis virtual the device
-// implements, in the documented frame-protocol order. Lets all Ptr<>s die at
-// function exit so drop_texture / drop_render_target fire and the Rust mock
-// can observe the cleanup ordering.
-//
-// Used by tests/render_device.rs.
+// Calls every RenderDevice virtual once in frame-protocol order, then lets the
+// Ptr<>s die so drop_texture / drop_render_target fire in a known order.
 extern "C" void noesis_test_run_frame_scenario(void* device_ptr) {
     auto* device = static_cast<RustRenderDevice*>(device_ptr);
 
-    // ── Caps query (cached after first call) ───────────────────────────────
     (void)device->GetCaps();
 
-    // ── Create textures ────────────────────────────────────────────────────
     static const uint32_t pixels4x4_rgba8[16] = {
         0xff0000ff, 0xff00ff00, 0xffff0000, 0xffffffff,
         0xff0000ff, 0xff00ff00, 0xffff0000, 0xffffffff,
@@ -415,11 +365,9 @@ extern "C" void noesis_test_run_frame_scenario(void* device_ptr) {
     Noesis::Texture* dirty[1] = { t_dynamic.GetPtr() };
     device->EndUpdatingTextures(dirty, 1);
 
-    // ── Create render target ───────────────────────────────────────────────
     Noesis::Ptr<Noesis::RenderTarget> rt = device->CreateRenderTarget(
         "rt_main", 256, 256, 1, true);
 
-    // ── Offscreen phase ────────────────────────────────────────────────────
     device->BeginOffscreenRender();
     device->SetRenderTarget(rt.GetPtr());
     Noesis::Tile tile = { 0, 0, 256, 256 };
@@ -440,7 +388,6 @@ extern "C" void noesis_test_run_frame_scenario(void* device_ptr) {
     device->ResolveRenderTarget(rt.GetPtr(), &tile, 1);
     device->EndOffscreenRender();
 
-    // ── Onscreen phase ─────────────────────────────────────────────────────
     device->BeginOnscreenRender();
 
     (void)device->MapVertices(96);
@@ -456,12 +403,11 @@ extern "C" void noesis_test_run_frame_scenario(void* device_ptr) {
 
     device->EndOnscreenRender();
 
-    // ── Clone (exercises clone_render_target) ──────────────────────────────
     Noesis::Ptr<Noesis::RenderTarget> rt_clone = device->CloneRenderTarget(
         "rt_clone", rt.GetPtr());
     (void)rt_clone;
 
-    // Function exit destroys (in reverse declaration order):
+    // Destroyed in reverse declaration order:
     //   rt_clone     → drop_render_target(clone) + drop_texture(clone resolve)
     //   rt           → drop_render_target(main)  + drop_texture(main resolve)
     //   t_dynamic    → drop_texture(dynamic)

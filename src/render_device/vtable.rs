@@ -1,10 +1,8 @@
-//! `extern "C"` trampolines that bridge the C++ `RustRenderDevice` subclass
-//! to a Rust-side [`RenderDevice`] trait object, plus the [`register`] entry
-//! point that owns the boxed impl and the C++ device handle.
+//! `extern "C"` trampolines from the C++ `RustRenderDevice` to a Rust
+//! [`RenderDevice`], and the [`register`] entry point that creates the pair.
 //!
-//! Userdata convention: every trampoline receives a `*mut c_void` whose
-//! actual type is `*mut Box<dyn RenderDevice>`. The double-`Box` gives us a
-//! stable thin pointer (the inner `Box<dyn ...>` is a fat pointer).
+//! Every trampoline's `userdata` is a `*mut Box<dyn RenderDevice>`: the outer
+//! box gives a thin pointer that fits through the C ABI.
 
 #![allow(unsafe_op_in_unsafe_fn)] // FFI sea-of-unsafe; explicit blocks add noise.
 
@@ -32,9 +30,7 @@ use crate::render_device::ffi::{
 };
 use crate::render_device::types::{Batch, DeviceCaps, TextureFormat, Tile};
 
-/// Decode a C `*const c_char` into a string. Empty on null. Noesis labels are
-/// ASCII debug strings; decode lossily so odd input can't panic across the C
-/// ABI (this runs on the render thread).
+/// Empty on null. Lossy so odd label bytes can't panic on the render thread.
 unsafe fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     if p.is_null() {
         Cow::Borrowed("")
@@ -43,10 +39,8 @@ unsafe fn cstr_to_str<'a>(p: *const c_char) -> Cow<'a, str> {
     }
 }
 
-/// Decode a `Noesis::TextureFormat::Enum` ordinal. Returns `None` for an
-/// unrecognized ordinal rather than panicking: `raw` is engine-supplied and
-/// reaches this on the render-thread hot path, so an unknown value is treated
-/// as a contained failure by the call sites (no panic across the C ABI).
+/// `None` for an unknown ordinal; call sites treat it as a contained failure
+/// rather than panicking on the render thread.
 fn texture_format_from_raw(raw: u32) -> Option<TextureFormat> {
     match raw {
         0 => Some(TextureFormat::Rgba8),
@@ -336,7 +330,6 @@ unsafe extern "C" fn t_drop_userdata(userdata: *mut c_void) {
     })
 }
 
-// Static vtable, populated once with the trampoline addresses.
 static VTABLE: RenderDeviceVTable = RenderDeviceVTable {
     get_caps: t_get_caps,
     create_texture: t_create_texture,
@@ -362,11 +355,11 @@ static VTABLE: RenderDeviceVTable = RenderDeviceVTable {
     drop_userdata: t_drop_userdata,
 };
 
-/// Owns a Rust [`RenderDevice`] impl together with its C++ `RustRenderDevice`
-/// instance. Dropping releases the `_create` reference; the boxed impl is freed
-/// by the `drop_userdata` callback from `~RustRenderDevice` once Noesis drops
-/// its last reference, so every callback (including any issued after this guard
-/// drops) sees a live trait object.
+/// A registered [`RenderDevice`], returned by [`register`].
+///
+/// Dropping the guard releases its reference to the C++ device. Your impl is
+/// dropped when Noesis releases its last reference as well, so callbacks that
+/// arrive after the guard drops still reach a live impl.
 #[must_use = "dropping the guard immediately clears the registration"]
 pub struct Registered {
     handle: NonNull<c_void>,
@@ -377,21 +370,17 @@ pub struct Registered {
 unsafe impl Send for Registered {}
 
 impl Registered {
-    /// Raw `Noesis::RenderDevice*` for handing to other Noesis APIs that take
-    /// a render device (e.g. `IView::SetRenderer`). Borrowed for the lifetime
-    /// of this `Registered`.
+    /// Raw `Noesis::RenderDevice*`, borrowed for the lifetime of this guard.
+    /// [`Renderer::init`](crate::view::Renderer::init) takes the guard itself,
+    /// so you need this only for your own FFI.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.handle.as_ptr()
     }
 
-    /// Mutable access to the concrete [`RenderDevice`] impl behind the
-    /// registration. Use when a system needs to mutate driver state between
-    /// Noesis calls (e.g. swapping the onscreen target view each frame
-    /// before driving the renderer).
-    ///
-    /// The type parameter `D` must match the concrete type passed to
-    /// [`register`]; enforced at runtime via `dyn Any` downcast.
+    /// Mutable access to your concrete [`RenderDevice`] impl, for changing its
+    /// state between Noesis calls (for example, swapping the onscreen target
+    /// each frame before rendering).
     ///
     /// # Panics
     ///
@@ -407,15 +396,15 @@ impl Registered {
     }
 
     /// Width of offscreen render-target textures, in pixels. `0` (the default)
-    /// selects automatic sizing. Set this (and the sibling offscreen /
-    /// glyph-cache knobs) before the renderer draws its first frame.
+    /// sizes them automatically. Set this and the other offscreen and
+    /// glyph-cache options before the renderer draws its first frame.
     pub fn set_offscreen_width(&mut self, width: u32) {
         // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
         unsafe { noesis_render_device_set_offscreen_width(self.handle.as_ptr(), width) }
     }
 
     /// Height of offscreen render-target textures, in pixels. `0` (the default)
-    /// selects automatic sizing.
+    /// sizes them automatically.
     pub fn set_offscreen_height(&mut self, height: u32) {
         // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
         unsafe { noesis_render_device_set_offscreen_height(self.handle.as_ptr(), height) }
@@ -442,46 +431,43 @@ impl Registered {
     }
 
     /// Width of the glyph-cache texture, in pixels. The default is
-    /// build-dependent, so read it back with [`Self::glyph_cache_width`] rather
-    /// than assuming a value.
+    /// build-dependent; read it back with [`Self::glyph_cache_width`].
     pub fn set_glyph_cache_width(&mut self, width: u32) {
         // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
         unsafe { noesis_render_device_set_glyph_cache_width(self.handle.as_ptr(), width) }
     }
 
     /// Height of the glyph-cache texture, in pixels. The default is
-    /// build-dependent, so read it back with [`Self::glyph_cache_height`] rather
-    /// than assuming a value.
+    /// build-dependent; read it back with [`Self::glyph_cache_height`].
     pub fn set_glyph_cache_height(&mut self, height: u32) {
         // SAFETY: handle is a live Noesis::RenderDevice* until this guard drops.
         unsafe { noesis_render_device_set_glyph_cache_height(self.handle.as_ptr(), height) }
     }
 
-    /// Configured offscreen texture width. `0` means automatic. Companion to
-    /// [`Self::set_offscreen_width`].
+    /// Offscreen texture width set by [`Self::set_offscreen_width`]. `0` means
+    /// automatic.
     #[must_use]
     pub fn offscreen_width(&self) -> u32 {
         // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
         unsafe { noesis_render_device_get_offscreen_width(self.handle.as_ptr()) }
     }
 
-    /// Configured offscreen texture height. `0` means automatic. Companion to
-    /// [`Self::set_offscreen_height`].
+    /// Offscreen texture height set by [`Self::set_offscreen_height`]. `0`
+    /// means automatic.
     #[must_use]
     pub fn offscreen_height(&self) -> u32 {
         // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
         unsafe { noesis_render_device_get_offscreen_height(self.handle.as_ptr()) }
     }
 
-    /// Configured offscreen multisample count. Companion to
-    /// [`Self::set_offscreen_sample_count`].
+    /// Offscreen multisample count set by [`Self::set_offscreen_sample_count`].
     #[must_use]
     pub fn offscreen_sample_count(&self) -> u32 {
         // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
         unsafe { noesis_render_device_get_offscreen_sample_count(self.handle.as_ptr()) }
     }
 
-    /// Configured startup offscreen-surface count. Companion to
+    /// Startup offscreen-surface count set by
     /// [`Self::set_offscreen_default_num_surfaces`].
     #[must_use]
     pub fn offscreen_default_num_surfaces(&self) -> u32 {
@@ -489,24 +475,22 @@ impl Registered {
         unsafe { noesis_render_device_get_offscreen_default_num_surfaces(self.handle.as_ptr()) }
     }
 
-    /// Configured maximum offscreen-surface count. `0` means unlimited.
-    /// Companion to [`Self::set_offscreen_max_num_surfaces`].
+    /// Maximum offscreen-surface count set by
+    /// [`Self::set_offscreen_max_num_surfaces`]. `0` means unlimited.
     #[must_use]
     pub fn offscreen_max_num_surfaces(&self) -> u32 {
         // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
         unsafe { noesis_render_device_get_offscreen_max_num_surfaces(self.handle.as_ptr()) }
     }
 
-    /// Configured glyph-cache texture width. Build-dependent default. Companion
-    /// to [`Self::set_glyph_cache_width`].
+    /// Glyph-cache texture width, in pixels. See [`Self::set_glyph_cache_width`].
     #[must_use]
     pub fn glyph_cache_width(&self) -> u32 {
         // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
         unsafe { noesis_render_device_get_glyph_cache_width(self.handle.as_ptr()) }
     }
 
-    /// Configured glyph-cache texture height. Build-dependent default. Companion
-    /// to [`Self::set_glyph_cache_height`].
+    /// Glyph-cache texture height, in pixels. See [`Self::set_glyph_cache_height`].
     #[must_use]
     pub fn glyph_cache_height(&self) -> u32 {
         // SAFETY: handle is a live Noesis::RenderDevice*; const accessor.
@@ -519,22 +503,23 @@ impl Drop for Registered {
         // SAFETY: `handle` came from `register`. This releases only the +1
         // `_create` ref; Noesis may keep its own Ptr<> and call back against
         // `userdata` afterward, so the box is freed by `drop_userdata` from
-        // `~RustRenderDevice`, not here. Freeing here is a use-after-free — an
-        // intermittent MapIndices-on-freed-device SIGSEGV under SDK 3.2.13.
+        // `~RustRenderDevice`, not here. Freeing it here was a use-after-free:
+        // an intermittent MapIndices-on-freed-device SIGSEGV under SDK 3.2.13.
         unsafe {
             noesis_render_device_destroy(self.handle.as_ptr());
         }
     }
 }
 
-/// Construct a C++ `RustRenderDevice` backed by the given Rust impl. Returns
-/// a [`Registered`] guard that owns both halves; drop it to tear everything
-/// down.
+/// Wrap `device` in a Noesis `RenderDevice` and return the guard that owns it.
+///
+/// Pass the guard to [`Renderer::init`](crate::view::Renderer::init). Dropping
+/// it releases the guard's reference; `device` itself is dropped once Noesis
+/// releases its last reference too, so shut the renderer down first.
 ///
 /// # Panics
 ///
-/// Panics if the C++ factory returns null (only possible on internal logic
-/// errors).
+/// Panics if the C++ factory returns null, which only an internal bug causes.
 pub fn register<D: RenderDevice + 'static>(device: D) -> Registered {
     // Box<dyn ...> is a fat pointer; wrap in another Box to get a stable thin
     // pointer we can pass through the C ABI as userdata.

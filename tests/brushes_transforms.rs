@@ -57,14 +57,12 @@ fn brushes_transforms_effects_round_trip() {
         let bg = border
             .get_component("Background")
             .expect("Background set after set_background");
-        // Noesis stores the *same* object (AddRef, not clone): pointer identity.
+        // Noesis stores the same object (AddRef, not a clone).
         assert_eq!(
             bg.as_ptr(),
             brush.raw(),
             "Background is the exact brush we assigned"
         );
-        // Read-back counterpart to set_background: the assigned SolidColorBrush's
-        // color is observable straight off the element.
         assert!(
             approx4(
                 border
@@ -130,9 +128,7 @@ fn brushes_transforms_effects_round_trip() {
         radial.add_stop(GradientStop::new(0.5, [0.2, 0.2, 0.2, 1.0]));
         assert_eq!(radial.stop_count(), 1);
 
-        // No GPU/imaging surface needed: construct, read the source back through
-        // Noesis GetImageSource (None proves it's a real ImageBrush, not a stub),
-        // then assign it and verify pointer identity through get_component.
+        // Headless: no image source is needed to construct and assign one.
         let ib = ImageBrush::new();
         assert!(
             ib.image_source().is_none(),
@@ -227,8 +223,8 @@ fn brushes_transforms_effects_round_trip() {
         let panel_xaml =
             format!("<Border {NS} Width=\"100\" Height=\"100\"><TextBlock Text=\"x\"/></Border>");
         let mut panel = FrameworkElement::parse(&panel_xaml).expect("parse panel");
-        // RenderTransform defaults to a non-null identity transform, so prove the
-        // assignment took by checking the read-back pointer is OUR group below.
+        // RenderTransform defaults to a non-null identity, so check identity
+        // against our group.
         assert!(panel.set_render_transform(&group), "set RenderTransform");
         assert_eq!(
             panel

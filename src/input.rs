@@ -1,24 +1,33 @@
-//! Input: keyboard/focus enums, input gestures and bindings, and the
-//! `FocusManager` / `KeyboardNavigation` static surfaces.
+//! Keyboard shortcuts, mouse gestures, and focus navigation.
 //!
-//! The per-element knobs (mouse/touch capture, keyboard-state queries,
-//! focus-state DPs, focus engagement, `MoveFocus` / `PredictFocus`) live as
-//! methods on [`FrameworkElement`], mirroring its
-//! existing [`focus`](crate::view::FrameworkElement::focus). This module holds
-//! the value types those methods speak in, plus the gesture/binding objects and
-//! the two attached-property static helpers.
+//! - [`KeyBinding`], [`MouseBinding`] and [`InputBinding`] bind a key chord or
+//!   mouse gesture to a command ([`AsCommand`]). Add one to an element with
+//!   `add_to`; the element's `InputBindings` then holds its own reference, so
+//!   the Rust handle may be dropped.
+//! - [`FocusManager`] and [`KeyboardNavigation`] read and set the focus and
+//!   Tab-order attached properties on any element.
+//! - [`ModifierKeys`], [`KeyStates`], [`CaptureMode`] and
+//!   [`FocusNavigationDirection`] are the value types used here and by the
+//!   per-element input methods on [`FrameworkElement`], such as
+//!   [`focus`](FrameworkElement::focus),
+//!   [`capture_mouse_mode`](FrameworkElement::capture_mouse_mode) and
+//!   [`move_focus`](FrameworkElement::move_focus).
 //!
-//! Gestures and bindings cross the FFI as opaque Noesis objects, exactly like
-//! [`Command`](crate::commands::Command): each owns a `+1` reference released on
-//! drop. A [`KeyBinding`] / [`MouseBinding`] / [`InputBinding`] is added to an
-//! element's `InputBindings`, after which the element's collection holds its own
-//! reference and drives the bound [`AsCommand`] when
-//! the gesture is matched.
+//! Gesture and binding handles each own one Noesis reference, released on
+//! drop. Like every element accessor, everything here runs on the thread that
+//! drives the `View`.
 //!
-//! # Threading
-//!
-//! Same View-thread affinity as the rest of the crate's element accessors: the
-//! statics and binding adds run on the thread driving the `View`.
+//! ```no_run
+//! use noesis_runtime::input::{KeyBinding, ModifierKeys};
+//! use noesis_runtime::view::Key;
+//! # fn demo<C: noesis_runtime::commands::AsCommand>(
+//! #     save: &C,
+//! #     root: &noesis_runtime::view::FrameworkElement,
+//! # ) {
+//! let binding = KeyBinding::new(save, Key::S, ModifierKeys::CONTROL).expect("not a command");
+//! binding.add_to(root);
+//! # }
+//! ```
 
 use core::ptr::NonNull;
 use std::ffi::c_void;
@@ -43,9 +52,8 @@ use crate::ffi::{
 };
 use crate::view::{FrameworkElement, Key};
 
-/// A typed bitset of `Noesis::ModifierKeys`: the chord modifiers held down
-/// (`Alt` / `Control` / `Shift` / `Windows`). Compose with [`Self::with`] /
-/// [`FromIterator`] and test with [`Self::contains`].
+/// A set of modifier keys (Alt, Control, Shift, Windows). Combine with `|`,
+/// [`Self::with`] or [`FromIterator`], and test with [`Self::contains`].
 ///
 /// ```
 /// use noesis_runtime::input::ModifierKeys;
@@ -68,13 +76,13 @@ impl ModifierKeys {
     /// The Windows ("logo") key.
     pub const WINDOWS: Self = Self(8);
 
-    /// Wrap a raw `Noesis::ModifierKeys` bitmask.
+    /// Wraps a raw `Noesis::ModifierKeys` bitmask.
     #[must_use]
     pub const fn from_bits(bits: i32) -> Self {
         Self(bits)
     }
 
-    /// The raw bitmask Noesis uses.
+    /// The raw `Noesis::ModifierKeys` bitmask.
     #[must_use]
     pub const fn bits(self) -> i32 {
         self.0
@@ -86,8 +94,8 @@ impl ModifierKeys {
         Self(self.0 | other.0)
     }
 
-    /// Whether every bit of `other` is present (with [`Self::NONE`], always
-    /// `true`).
+    /// Whether every key in `other` is present. Always `true` for
+    /// [`Self::NONE`].
     #[must_use]
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -117,8 +125,8 @@ impl FromIterator<ModifierKeys> for ModifierKeys {
     }
 }
 
-/// A typed bitset of `Noesis::KeyStates`. Reports a key's state: `Down`
-/// (currently pressed) and/or `Toggled` (the toggle is on, e.g. `CapsLock`).
+/// A key's state: pressed ([`Self::DOWN`]), toggled on ([`Self::TOGGLED`],
+/// e.g. Caps Lock), both, or neither.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyStates(pub i32);
 
@@ -130,13 +138,13 @@ impl KeyStates {
     /// The key's toggle is on (`CapsLock` / `NumLock` style).
     pub const TOGGLED: Self = Self(2);
 
-    /// Wrap a raw `Noesis::KeyStates` bitmask.
+    /// Wraps a raw `Noesis::KeyStates` bitmask.
     #[must_use]
     pub const fn from_bits(bits: i32) -> Self {
         Self(bits)
     }
 
-    /// The raw bitmask Noesis uses.
+    /// The raw `Noesis::KeyStates` bitmask.
     #[must_use]
     pub const fn bits(self) -> i32 {
         self.0
@@ -149,8 +157,7 @@ impl KeyStates {
     }
 }
 
-/// Mirror of `Noesis::MouseAction`: the pointer gesture a [`MouseGesture`] /
-/// [`MouseBinding`] matches.
+/// The mouse action a [`MouseGesture`] or [`MouseBinding`] matches.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -165,7 +172,7 @@ pub enum MouseAction {
     MiddleDoubleClick = 7,
 }
 
-/// Mirror of `Noesis::CaptureMode`: how an element captures the mouse via
+/// How an element captures the mouse, for
 /// [`FrameworkElement::capture_mouse_mode`].
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -179,10 +186,10 @@ pub enum CaptureMode {
     SubTree = 2,
 }
 
-/// Mirror of `Noesis::FocusNavigationDirection`: the direction for
-/// [`FrameworkElement::move_focus`] / [`FrameworkElement::predict_focus`].
-/// `Next` / `Previous` / `First` / `Last` are tab-order traversal (not supported
-/// by `predict_focus`), while `Left` / `Right` / `Up` / `Down` are directional.
+/// Direction for [`FrameworkElement::move_focus`] and
+/// [`FrameworkElement::predict_focus`]. `Next`, `Previous`, `First` and `Last`
+/// follow tab order and are not supported by `predict_focus`; `Left`, `Right`,
+/// `Up` and `Down` are directional.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -197,31 +204,31 @@ pub enum FocusNavigationDirection {
     Down = 7,
 }
 
-/// Mirror of `Noesis::KeyboardNavigationMode`: how Tab / directional traversal
-/// behaves inside a container, for the [`KeyboardNavigation`] attached
-/// properties.
+/// How Tab or arrow-key traversal behaves inside a container, for the
+/// [`KeyboardNavigation`] attached properties.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum KeyboardNavigationMode {
-    /// Tab moves out of the container into the rest of the tab order.
+    /// Each element is a stop; navigation leaves the container at either end.
     Continue = 0,
-    /// Focus returns to the first/active element on re-entry, then leaves.
+    /// The container gets focus once as a whole, on its first child or the
+    /// last one focused, then navigation moves on.
     Once = 1,
-    /// Tab cycles within the container, wrapping at the ends.
+    /// Navigation wraps around at the ends and never leaves the container.
     Cycle = 2,
-    /// Tab does not navigate within the container.
+    /// No keyboard navigation inside the container.
     None = 3,
-    /// Tab stays contained: it never leaves the container.
+    /// Navigation stops at the ends without wrapping or leaving the container.
     Contained = 4,
-    /// Tab cycles locally but, unlike `Cycle`, restarts at the container start.
+    /// `TabIndex` values are compared only within this container; otherwise
+    /// behaves like `Continue`.
     Local = 5,
 }
 
-/// A `Noesis::KeyGesture`: a [`Key`] plus chord [`ModifierKeys`] that, when
-/// matched, fires a bound command. Owns a `+1` reference released on drop;
-/// hand it to [`InputBinding::with_gesture`] (or use the all-in-one
-/// [`KeyBinding`]).
+/// A [`Key`] plus [`ModifierKeys`] chord. Pass it to
+/// [`InputBinding::with_gesture`], or use [`KeyBinding`] to build gesture and
+/// binding in one step.
 pub struct KeyGesture {
     ptr: NonNull<c_void>,
 }
@@ -230,7 +237,7 @@ pub struct KeyGesture {
 unsafe impl Send for KeyGesture {}
 
 impl KeyGesture {
-    /// Build a key gesture for `key` + `modifiers`.
+    /// Creates a gesture for `key` with `modifiers` held.
     #[must_use]
     pub fn new(key: Key, modifiers: ModifierKeys) -> Self {
         // SAFETY: the C side constructs a KeyGesture at +1; never null.
@@ -254,8 +261,8 @@ impl Drop for KeyGesture {
     }
 }
 
-/// A `Noesis::MouseGesture`: a [`MouseAction`] plus chord [`ModifierKeys`].
-/// Owns a `+1` reference released on drop. See [`KeyGesture`].
+/// A [`MouseAction`] plus [`ModifierKeys`] chord. Pass it to
+/// [`InputBinding::with_mouse_gesture`], or use [`MouseBinding`].
 pub struct MouseGesture {
     ptr: NonNull<c_void>,
 }
@@ -264,7 +271,7 @@ pub struct MouseGesture {
 unsafe impl Send for MouseGesture {}
 
 impl MouseGesture {
-    /// Build a mouse gesture for `action` + `modifiers`.
+    /// Creates a gesture for `action` with `modifiers` held.
     #[must_use]
     pub fn new(action: MouseAction, modifiers: ModifierKeys) -> Self {
         // SAFETY: the C side constructs a MouseGesture at +1; never null.
@@ -288,11 +295,9 @@ impl Drop for MouseGesture {
     }
 }
 
-/// A `Noesis::KeyBinding`: a [`Key`] + [`ModifierKeys`] chord bound to a
-/// command. Add it to an element with [`Self::add_to`]; when the focused element
-/// (or one routing through it) sees that key chord, the bound command's
-/// `Execute` runs. Owns a `+1` reference released on drop (the element's
-/// `InputBindings` collection holds its own reference once added).
+/// A key chord bound to a command. Add it to an element with [`Self::add_to`];
+/// when that element or a descendant has focus and the chord is pressed, the
+/// command executes.
 pub struct KeyBinding {
     ptr: NonNull<c_void>,
 }
@@ -301,8 +306,8 @@ pub struct KeyBinding {
 unsafe impl Send for KeyBinding {}
 
 impl KeyBinding {
-    /// Bind `command` (any [`AsCommand`]) to the `key` + `modifiers` chord.
-    /// Returns `None` if `command`'s pointer is not an `ICommand`.
+    /// Binds `command` to `key` with `modifiers` held. Returns `None` if
+    /// `command`'s pointer is not an `ICommand`.
     #[must_use]
     pub fn new<C: AsCommand>(command: &C, key: Key, modifiers: ModifierKeys) -> Option<Self> {
         // SAFETY: command_ptr() is a borrowed live ICommand* for the call; the C
@@ -313,18 +318,15 @@ impl KeyBinding {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Add this binding to `element`'s `InputBindings`. Returns `false` if
-    /// `element` is not a `UIElement`. After this, the chord drives the command
-    /// while `element` (or its focus subtree) has focus.
+    /// Adds this binding to `element`'s `InputBindings`. Returns `false` if
+    /// `element` is not a `UIElement`.
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
-    /// Remove this binding from `element`'s `InputBindings`, the teardown
-    /// counterpart to [`Self::add_to`]. Returns `true` if the binding was
-    /// present and removed, `false` otherwise (e.g. never added, or `element`
-    /// is not a `UIElement`).
+    /// Removes this binding from `element`'s `InputBindings`. Returns `false`
+    /// if it wasn't there or `element` is not a `UIElement`.
     pub fn remove_from(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_remove_input_binding(element.raw(), self.ptr.as_ptr()) }
@@ -344,8 +346,7 @@ impl Drop for KeyBinding {
     }
 }
 
-/// A `Noesis::MouseBinding`: a [`MouseAction`] + [`ModifierKeys`] chord bound
-/// to a command. See [`KeyBinding`].
+/// A mouse gesture bound to a command. Works like [`KeyBinding`].
 pub struct MouseBinding {
     ptr: NonNull<c_void>,
 }
@@ -354,8 +355,8 @@ pub struct MouseBinding {
 unsafe impl Send for MouseBinding {}
 
 impl MouseBinding {
-    /// Bind `command` (any [`AsCommand`]) to the `action` + `modifiers` chord.
-    /// Returns `None` if `command`'s pointer is not an `ICommand`.
+    /// Binds `command` to `action` with `modifiers` held. Returns `None` if
+    /// `command`'s pointer is not an `ICommand`.
     #[must_use]
     pub fn new<C: AsCommand>(
         command: &C,
@@ -369,15 +370,15 @@ impl MouseBinding {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Add this binding to `element`'s `InputBindings`. See
-    /// [`KeyBinding::add_to`].
+    /// Adds this binding to `element`'s `InputBindings`. Returns `false` if
+    /// `element` is not a `UIElement`.
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
-    /// Remove this binding from `element`'s `InputBindings`, the teardown
-    /// counterpart to [`Self::add_to`]. See [`KeyBinding::remove_from`].
+    /// Removes this binding from `element`'s `InputBindings`. Returns `false`
+    /// if it wasn't there or `element` is not a `UIElement`.
     pub fn remove_from(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_remove_input_binding(element.raw(), self.ptr.as_ptr()) }
@@ -397,10 +398,9 @@ impl Drop for MouseBinding {
     }
 }
 
-/// A `Noesis::InputBinding`: a command bound to a [`KeyGesture`] or
-/// [`MouseGesture`] built separately. The general form of [`KeyBinding`] /
-/// [`MouseBinding`]; use it to reuse a single gesture across bindings. Owns a
-/// `+1` reference released on drop.
+/// A command bound to a separately built [`KeyGesture`] or [`MouseGesture`].
+/// The general form of [`KeyBinding`] and [`MouseBinding`]; use it to share
+/// one gesture between bindings.
 pub struct InputBinding {
     ptr: NonNull<c_void>,
 }
@@ -409,10 +409,9 @@ pub struct InputBinding {
 unsafe impl Send for InputBinding {}
 
 impl InputBinding {
-    /// Bind `command` (any [`AsCommand`]) to a [`KeyGesture`]. Returns `None` if
-    /// either pointer fails its `ICommand` / `InputGesture` cast. The binding
-    /// adds its own reference to the gesture, so `gesture` may be dropped
-    /// afterwards.
+    /// Binds `command` to a [`KeyGesture`]. Returns `None` if `command`'s
+    /// pointer is not an `ICommand`. The binding takes its own reference to the
+    /// gesture, so `gesture` may be dropped afterwards.
     #[must_use]
     pub fn with_gesture<C: AsCommand>(command: &C, gesture: &KeyGesture) -> Option<Self> {
         // SAFETY: command/gesture pointers are borrowed live for the call; the C
@@ -429,15 +428,15 @@ impl InputBinding {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Add this binding to `element`'s `InputBindings`. See
-    /// [`KeyBinding::add_to`].
+    /// Adds this binding to `element`'s `InputBindings`. Returns `false` if
+    /// `element` is not a `UIElement`.
     pub fn add_to(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_add_input_binding(element.raw(), self.ptr.as_ptr()) }
     }
 
-    /// Remove this binding from `element`'s `InputBindings`, the teardown
-    /// counterpart to [`Self::add_to`]. See [`KeyBinding::remove_from`].
+    /// Removes this binding from `element`'s `InputBindings`. Returns `false`
+    /// if it wasn't there or `element` is not a `UIElement`.
     pub fn remove_from(&self, element: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live InputBinding*; element.raw() a live element.
         unsafe { noesis_ui_element_remove_input_binding(element.raw(), self.ptr.as_ptr()) }
@@ -457,17 +456,16 @@ impl Drop for InputBinding {
     }
 }
 
-/// The `Noesis::FocusManager` static surface: attached-property helpers for
-/// querying and steering logical focus within a *focus scope*. A focus scope
-/// (e.g. a `Window`, `Menu`, or `ToolBar`) remembers its own focused element
-/// independently of keyboard focus, so menus can restore selection on re-entry.
+/// Logical focus within focus scopes (`FocusManager` attached properties). A
+/// focus scope, such as a `Window`, `Menu` or `ToolBar`, remembers its own
+/// focused element independently of keyboard focus, so focus can return there
+/// on re-entry.
 pub struct FocusManager;
 
 impl FocusManager {
-    /// The element with logical focus inside the scope `scope` (its
-    /// `FocusManager.FocusedElement`), as a **borrowed** pointer (no `+1`).
-    /// `None` if nothing is focused or `scope` is not a `DependencyObject`.
-    /// Compare against [`FrameworkElement::raw`] to identify it.
+    /// The element with logical focus in `scope` (`FocusManager.FocusedElement`),
+    /// as a borrowed pointer with no reference added. `None` if nothing is
+    /// focused. Compare against [`FrameworkElement::raw`] to identify it.
     #[must_use]
     pub fn focused_element(scope: &FrameworkElement) -> Option<NonNull<c_void>> {
         // SAFETY: scope.raw() is a live DependencyObject*; the C side returns a
@@ -476,9 +474,8 @@ impl FocusManager {
         NonNull::new(p)
     }
 
-    /// Set the logically-focused element within `scope`. Pass `Some(element)`
-    /// (a `UIElement`) or `None` to clear. Returns `false` if `scope` is not a
-    /// `DependencyObject` or `element` is given but is not a `UIElement`.
+    /// Sets the logically focused element in `scope`, or clears it with
+    /// `None`. Returns `false` if `element` is not a `UIElement`.
     #[must_use = "a false return means focus was not set (element is not a UIElement / DependencyObject)"]
     pub fn set_focused_element(
         scope: &FrameworkElement,
@@ -497,17 +494,15 @@ impl FocusManager {
         unsafe { noesis_focus_manager_get_is_focus_scope(element.raw()) }
     }
 
-    /// Mark `element` as a focus scope (or not). Returns `false` if `element`
-    /// is not a `DependencyObject`.
+    /// Makes `element` a focus scope, or stops it being one.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_focus_scope(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe { noesis_focus_manager_set_is_focus_scope(element.raw(), value) }
     }
 
-    /// The nearest ancestor of `element` (inclusive) that is a focus scope,
-    /// as a **borrowed** `DependencyObject*` (no `+1`). `None` if there is no
-    /// enclosing scope.
+    /// The nearest focus scope at or above `element`, as a borrowed
+    /// `DependencyObject*` with no reference added. `None` if there is none.
     #[must_use]
     pub fn focus_scope(element: &FrameworkElement) -> Option<NonNull<c_void>> {
         // SAFETY: element.raw() is a live DependencyObject*; borrowed or null.
@@ -516,17 +511,15 @@ impl FocusManager {
     }
 }
 
-/// The `Noesis::KeyboardNavigation` static surface: attached properties that
-/// shape Tab / directional focus traversal (`TabIndex`, `IsTabStop`,
-/// `TabNavigation`, `ControlTabNavigation`, `DirectionalNavigation`,
-/// `AcceptsReturn`). Each is a round-trippable attached property: set it on any
-/// element, read it back. Getters return `None` only if `element` is not a
-/// `DependencyObject`.
+/// Tab and arrow-key traversal settings (`KeyboardNavigation` attached
+/// properties). Set them on any element. Getters return `None` and setters
+/// `false` only if `element` is not a `DependencyObject`, which a live
+/// [`FrameworkElement`] always is.
 pub struct KeyboardNavigation;
 
 impl KeyboardNavigation {
-    /// `KeyboardNavigation.TabIndex`: the element's position in tab order
-    /// (lower goes first).
+    /// `KeyboardNavigation.TabIndex`: the element's position in tab order;
+    /// lower values come first.
     #[must_use]
     pub fn tab_index(element: &FrameworkElement) -> Option<i32> {
         let mut out = 0;
@@ -534,8 +527,7 @@ impl KeyboardNavigation {
         unsafe { noesis_keyboard_navigation_get_tab_index(element.raw(), &mut out) }.then_some(out)
     }
 
-    /// Set `KeyboardNavigation.TabIndex`. `false` if `element` is not a
-    /// `DependencyObject`.
+    /// Sets `KeyboardNavigation.TabIndex`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tab_index(element: &FrameworkElement, value: i32) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
@@ -551,7 +543,7 @@ impl KeyboardNavigation {
             .then_some(out)
     }
 
-    /// Set `KeyboardNavigation.IsTabStop`.
+    /// Sets `KeyboardNavigation.IsTabStop`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_is_tab_stop(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
@@ -565,7 +557,7 @@ impl KeyboardNavigation {
         Self::get_mode(element, noesis_keyboard_navigation_get_tab_navigation)
     }
 
-    /// Set `KeyboardNavigation.TabNavigation`.
+    /// Sets `KeyboardNavigation.TabNavigation`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_tab_navigation(element: &FrameworkElement, mode: KeyboardNavigationMode) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
@@ -581,7 +573,7 @@ impl KeyboardNavigation {
         )
     }
 
-    /// Set `KeyboardNavigation.ControlTabNavigation`.
+    /// Sets `KeyboardNavigation.ControlTabNavigation`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_control_tab_navigation(
         element: &FrameworkElement,
@@ -600,7 +592,7 @@ impl KeyboardNavigation {
         )
     }
 
-    /// Set `KeyboardNavigation.DirectionalNavigation`.
+    /// Sets `KeyboardNavigation.DirectionalNavigation`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_directional_navigation(
         element: &FrameworkElement,
@@ -620,14 +612,13 @@ impl KeyboardNavigation {
             .then_some(out)
     }
 
-    /// Set `KeyboardNavigation.AcceptsReturn`.
+    /// Sets `KeyboardNavigation.AcceptsReturn`.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_accepts_return(element: &FrameworkElement, value: bool) -> bool {
         // SAFETY: element.raw() is a live DependencyObject*.
         unsafe { noesis_keyboard_navigation_set_accepts_return(element.raw(), value) }
     }
 
-    /// Read a `KeyboardNavigationMode`-typed DP's ordinal and map it to the enum.
     fn get_mode(
         element: &FrameworkElement,
         getter: unsafe extern "C" fn(*mut c_void, *mut i32) -> bool,

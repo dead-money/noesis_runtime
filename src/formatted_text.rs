@@ -1,22 +1,31 @@
-//! Code-built [`FormattedText`] measurement / layout: measure a string in a
-//! given font without authoring XAML or building a `TextBlock`.
+//! Measure and lay out a string in a given font from code, without XAML or a
+//! `TextBlock`.
 //!
-//! A [`FormattedText`] is an owning handle over a freshly-created Noesis
-//! `FormattedText` holding a single `+1` reference, released on [`Drop`], the
-//! same pattern as [`crate::brushes::SolidColorBrush`]. Noesis computes the
-//! glyph metrics and text layout while the object is constructed (there are no
-//! separate layout *setters* in 3.2.13; the constraints are constructor
-//! arguments), so every getter here re-reads the result from the live object.
+//! Configure a [`Builder`] with [`FormattedText::builder`], then call
+//! [`Builder::build`]. Noesis computes glyph metrics and layout when the
+//! object is constructed, so every layout constraint is a builder option and
+//! the [`FormattedText`] getters read the result back. The handle owns one
+//! Noesis reference and releases it on drop.
+//!
+//! The enum-valued options are plain `i32` ordinals; use the constants in
+//! [`font_weight`], [`font_style`], [`font_stretch`], [`text_alignment`],
+//! [`text_trimming`], [`text_wrapping`], [`line_stacking_strategy`] and
+//! [`flow_direction`].
 //!
 //! # Font resolution
 //!
-//! This module deliberately exposes **no** [`FontFamily`](crate::typography::FontFamily) entrypoint. The
-//! typography unit owns that. [`FormattedText::builder`] takes the family as a
-//! plain name string and builds the Noesis `FontFamily` internally in C++. The
-//! name resolves through the registered font provider / fallback chain (see
-//! [`crate::font_provider`]); without a real face for that family Noesis cannot
-//! shape glyphs and the metrics collapse to zero; drive a font provider in any
-//! test that asserts non-zero metrics.
+//! The font family is a name string, resolved through the registered font
+//! provider and fallback chain (see [`crate::font_provider`]). If no face
+//! matches, Noesis cannot shape glyphs and every metric is zero.
+//!
+//! ```no_run
+//! use noesis_runtime::formatted_text::FormattedText;
+//!
+//! let text = FormattedText::builder("Hello, world", "Fonts/#Roboto", 16.0)
+//!     .max_width(120.0)
+//!     .build();
+//! println!("{} x {} DIPs, {} lines", text.width(), text.height(), text.num_lines());
+//! ```
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
@@ -98,7 +107,7 @@ pub mod flow_direction {
     pub const RIGHT_TO_LEFT: i32 = 1;
 }
 
-/// A laid-out line's metrics, mirroring `Noesis::LineInfo`.
+/// Metrics of one laid-out line, from [`FormattedText::line_info`].
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct LineInfo {
     /// Number of glyphs on the line.
@@ -120,8 +129,8 @@ pub struct HitTest {
     pub is_trailing: bool,
 }
 
-/// Builder for a [`FormattedText`]. All metrics/layout constraints are baked in
-/// at construction time, so they are configured here before [`Self::build`].
+/// Configures a [`FormattedText`]. Layout constraints can't be changed after
+/// [`Self::build`], so set them all here.
 #[derive(Clone, Debug)]
 pub struct Builder {
     text: String,
@@ -140,10 +149,10 @@ pub struct Builder {
 }
 
 impl Builder {
-    /// Start a builder for `text` in the family named `font_family` at
-    /// `font_size` DIPs. Defaults: normal weight/stretch/style, left-to-right,
-    /// unconstrained width/height, natural line height, left alignment, word
-    /// ellipsis trimming, opaque-black foreground.
+    /// Starts a builder for `text` in the family named `font_family` at
+    /// `font_size` DIPs. Defaults: normal weight, stretch and style,
+    /// left-to-right, unconstrained width and height, natural line height, left
+    /// alignment, word-ellipsis trimming, opaque black foreground.
     #[must_use]
     pub fn new(text: impl Into<String>, font_family: impl Into<String>, font_size: f32) -> Self {
         Self {
@@ -191,22 +200,22 @@ impl Builder {
         self
     }
 
-    /// Constrain the layout width in DIPs (negative ⇒ unconstrained). Wrapping
-    /// only happens when a finite width is set.
+    /// Constrains the layout width in DIPs; negative means unconstrained. Text
+    /// wraps only when a width is set.
     #[must_use]
     pub fn max_width(mut self, max_width: f32) -> Self {
         self.max_width = max_width;
         self
     }
 
-    /// Constrain the layout height in DIPs (negative ⇒ unconstrained).
+    /// Constrains the layout height in DIPs; negative means unconstrained.
     #[must_use]
     pub fn max_height(mut self, max_height: f32) -> Self {
         self.max_height = max_height;
         self
     }
 
-    /// Force a fixed line height in DIPs (0 ⇒ natural / font-derived).
+    /// Sets a fixed line height in DIPs; `0` uses the font's natural height.
     #[must_use]
     pub fn line_height(mut self, line_height: f32) -> Self {
         self.line_height = line_height;
@@ -227,14 +236,16 @@ impl Builder {
         self
     }
 
-    /// Set the foreground brush color as `[r, g, b, a]` (each `0..=1`).
+    /// Sets the foreground color as `[r, g, b, a]`, each in `0.0..=1.0`. This is
+    /// the color used when the text is drawn with
+    /// [`DrawingContext::draw_text`](crate::drawing::DrawingContext::draw_text).
     #[must_use]
     pub fn foreground(mut self, rgba: [f32; 4]) -> Self {
         self.foreground = Some(rgba);
         self
     }
 
-    /// Construct the [`FormattedText`], computing its metrics now.
+    /// Creates the [`FormattedText`] and computes its layout.
     ///
     /// # Panics
     ///
@@ -274,8 +285,8 @@ impl Builder {
     }
 }
 
-/// An owning handle to a Noesis `FormattedText`. Construct via
-/// [`FormattedText::builder`]; drop releases the `+1` reference.
+/// A laid-out run of text with read-back metrics. Create one with
+/// [`FormattedText::builder`]. Lengths are in DIPs.
 pub struct FormattedText {
     ptr: NonNull<c_void>,
 }
@@ -284,8 +295,7 @@ pub struct FormattedText {
 unsafe impl Send for FormattedText {}
 
 impl FormattedText {
-    /// Begin building a [`FormattedText`] for `text` in `font_family` at
-    /// `font_size` DIPs. See [`Builder`] for the configurable constraints.
+    /// Starts a [`Builder`] for `text` in `font_family` at `font_size` DIPs.
     #[must_use]
     pub fn builder(
         text: impl Into<String>,
@@ -296,14 +306,13 @@ impl FormattedText {
     }
 
     /// Raw `Noesis::FormattedText*` (a `BaseComponent*`), borrowed for `self`'s
-    /// lifetime.
+    /// lifetime. No reference is added.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Layout bounds `[x, y, width, height]` in DIPs, read back from the live
-    /// object.
+    /// Layout bounds as `[x, y, width, height]` in DIPs.
     #[must_use]
     pub fn bounds(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
@@ -380,9 +389,11 @@ impl FormattedText {
         out
     }
 
-    /// Re-measure the stored runs under fresh constraints, returning the
-    /// resulting `(width, height)` in DIPs. Negative `max_width`/`max_height`
-    /// mean unconstrained. Enum args use the modules in this file.
+    /// Measures the text under different constraints and returns
+    /// `(width, height)` in DIPs. Negative `max_width` / `max_height` mean
+    /// unconstrained. The `i32` arguments take the constants from
+    /// [`text_alignment`], [`text_wrapping`], [`text_trimming`],
+    /// [`line_stacking_strategy`] and [`flow_direction`].
     #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn measure(
@@ -417,9 +428,9 @@ impl FormattedText {
         (w, h)
     }
 
-    /// `(x, y)` position of the glyph at character `ch_index` (after the char
-    /// when `after_char`). Noesis returns `(-10, -10)` when the index is outside
-    /// the layout limits.
+    /// Position `(x, y)` of the glyph at character index `ch_index`, or of the
+    /// point just after it when `after_char` is set. Returns `(-10.0, -10.0)`
+    /// when the glyph is outside the layout limits.
     #[must_use]
     pub fn glyph_position(&self, ch_index: u32, after_char: bool) -> (f32, f32) {
         let mut x = 0.0f32;
@@ -437,8 +448,7 @@ impl FormattedText {
         (x, y)
     }
 
-    /// Glyph index under the point `(x, y)` in layout DIPs, with inside /
-    /// trailing flags.
+    /// The glyph under the point `(x, y)`, in layout DIPs.
     #[must_use]
     pub fn hit_test(&self, x: f32, y: f32) -> HitTest {
         let mut index = 0u32;

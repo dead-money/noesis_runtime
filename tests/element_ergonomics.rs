@@ -1,5 +1,5 @@
-//! Element-creation ergonomics: set/clear `Content`, add `Panel` children, and assign
-//! `Command`s from Rust code, then round-trip every value from the live Noesis object.
+//! Setting and clearing `Content`, adding `Panel` children, and assigning
+//! `Command`s from Rust, each read back from the live Noesis object.
 
 use noesis_runtime::commands::Command;
 use noesis_runtime::view::FrameworkElement;
@@ -55,8 +55,7 @@ fn element_ergonomics_round_trip() {
         let mut tb = FrameworkElement::parse(&format!("<TextBlock {NS}/>")).expect("parse tb");
         assert!(!tb.add_child(&c0), "TextBlock is not a Panel");
 
-        // `Tag` is a BaseComponent-typed DP on every FrameworkElement, so a Command
-        // (also a BaseComponent at runtime) can round-trip through it by pointer identity.
+        // `Tag` is a BaseComponent DP on every FrameworkElement, so any command fits.
         let command = Command::new(|_param| {});
         assert!(
             tb.set_command("Tag", &command),

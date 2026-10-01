@@ -1,19 +1,18 @@
-//! Code-built `TextBlock` inline content: construct the `Inline` element family
-//! ([`Run`], [`Span`], [`Bold`], [`Italic`], [`Underline`], [`Hyperlink`],
-//! [`LineBreak`], [`InlineUIContainer`]) from Rust and assemble them into a
-//! `TextBlock`'s (or a `Span`'s) [`InlineCollection`].
+//! Build `TextBlock` inline content from Rust: create [`Run`], [`Span`],
+//! [`Bold`], [`Italic`], [`Underline`], [`Hyperlink`], [`LineBreak`], and
+//! [`InlineUIContainer`] elements and add them to a `TextBlock`'s
+//! ([`text_block_inlines`]) or a `Span`'s ([`Span::inlines`])
+//! [`InlineCollection`].
 //!
-//! Each inline is an owning handle over a freshly-created Noesis object holding
-//! a single `+1` reference, released on [`Drop`]. Adding an inline to an
-//! [`InlineCollection`] makes the collection take its own reference, so the
-//! builder handle may be dropped right after the add.
+//! Each inline handle owns one reference to its Noesis object and releases it
+//! on [`Drop`]. Adding an inline to a collection makes the collection take its
+//! own reference, so the handle may be dropped right after the add.
 //!
-//! Read-back getters ([`Run::text`], [`Hyperlink::navigate_uri`],
-//! [`InlineCollection::count`] / [`InlineCollection::get_raw`],
-//! [`InlineUIContainer::child_raw`], [`Inline::text_decorations`]) re-read from
-//! the live Noesis object rather than echoing a Rust-side cache.
+//! Getters such as [`Run::text`] and [`Inline::text_decorations`] read from the
+//! live Noesis object, so they see changes made by XAML or bindings too.
 //!
-//! The crate owns no `FontFamily` surface.
+//! Font properties (`FontFamily`, `FontSize`, `FontWeight`, ...) live in
+//! [`crate::typography`].
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
@@ -35,8 +34,7 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// The `TextDecorations` an [`Inline`] can carry, mirroring
-/// `Noesis::TextDecorations`.
+/// The line decoration an [`Inline`] draws on its text.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
 #[non_exhaustive]
@@ -66,17 +64,17 @@ impl TextDecorations {
     }
 }
 
-/// A handle to a Noesis `Inline`. Implemented by every inline type in this
-/// module so [`InlineCollection::add`] accepts any of them while keeping
-/// non-inline objects out, and so the shared `TextDecorations` accessors work
-/// uniformly.
+/// A handle to a Noesis `Inline`. Every inline type in this module implements
+/// it, so [`InlineCollection::add`] accepts any of them and the
+/// `TextDecorations` accessors work on all of them.
 pub trait Inline {
     /// Borrowed `Noesis::Inline*` (a `BaseComponent*`), valid for `self`'s
-    /// lifetime. Used by the collection sugar; not normally called directly.
+    /// lifetime. You don't normally call this directly.
     fn inline_raw(&self) -> *mut c_void;
 
-    /// Apply a [`TextDecorations`] value to this inline (the base `Inline`
-    /// property; affects the inline and its descendants).
+    /// Set `TextDecorations` on this inline. It applies to the inline and its
+    /// children. Returns `false` if Noesis rejects the object as not an
+    /// `Inline`, which doesn't happen for this module's types.
     fn set_text_decorations(&self, decorations: TextDecorations) -> bool {
         // SAFETY: `inline_raw()` is a live Inline* for `self`'s lifetime.
         unsafe {
@@ -84,8 +82,8 @@ pub trait Inline {
         }
     }
 
-    /// Read the [`TextDecorations`] back from the live Noesis object. `None` if
-    /// the value is outside the known enum (not expected for a live inline).
+    /// Read `TextDecorations` from the live Noesis object. `None` if the value
+    /// is not a known [`TextDecorations`] variant.
     fn text_decorations(&self) -> Option<TextDecorations> {
         // SAFETY: `inline_raw()` is a live Inline* for `self`'s lifetime.
         let v = unsafe { noesis_text_inlines_inline_get_text_decorations(self.inline_raw()) };
@@ -132,8 +130,8 @@ inline_handle!(
     Run
 );
 inline_handle!(
-    /// A `Span`: groups other inlines with no inherent rendering. Its nested
-    /// inlines are reachable via [`Span::inlines`].
+    /// A `Span`: groups other inlines and adds no formatting of its own. Add
+    /// children through [`Span::inlines`].
     Span
 );
 inline_handle!(
@@ -149,8 +147,8 @@ inline_handle!(
     Underline
 );
 inline_handle!(
-    /// A `Hyperlink`: a `Span` subclass that hosts a navigable URI
-    /// ([`Hyperlink::navigate_uri`]).
+    /// A `Hyperlink`: a `Span` subclass with a navigable URI
+    /// ([`Hyperlink::set_navigate_uri`]).
     Hyperlink
 );
 inline_handle!(
@@ -168,7 +166,7 @@ fn new_handle(ptr: *mut c_void, what: &str) -> NonNull<c_void> {
 }
 
 impl Run {
-    /// Construct a `Run` with the given `text` (copied into the Run's storage).
+    /// Create a `Run` holding a copy of `text`.
     ///
     /// # Panics
     ///
@@ -184,7 +182,7 @@ impl Run {
         }
     }
 
-    /// Replace the Run's unformatted text.
+    /// Replace the Run's text. Always returns `true` for a live `Run`.
     ///
     /// # Panics
     ///
@@ -196,7 +194,8 @@ impl Run {
         unsafe { noesis_text_inlines_run_set_text(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
-    /// Read the Run's text back from the live Noesis object.
+    /// Read the Run's text from the live Noesis object. Invalid UTF-8 is
+    /// replaced with U+FFFD.
     #[must_use]
     pub fn text(&self) -> Option<String> {
         // SAFETY: self.ptr is a live Run*; the returned pointer is borrowed
@@ -211,7 +210,7 @@ impl Run {
 }
 
 impl Span {
-    /// Construct an empty `Span`.
+    /// Create an empty `Span`.
     ///
     /// # Panics
     ///
@@ -225,7 +224,8 @@ impl Span {
         }
     }
 
-    /// The Span's nested [`InlineCollection`] (its child inlines).
+    /// The Span's child inlines. Add to the returned collection to nest content
+    /// inside the Span.
     #[must_use]
     pub fn inlines(&self) -> Option<InlineCollection> {
         // SAFETY: self.ptr is a live Span*; the C side hands out a +1 collection.
@@ -243,7 +243,7 @@ impl Default for Span {
 macro_rules! span_subclass {
     ($name:ident, $create:ident, $what:literal) => {
         impl $name {
-            /// Construct an empty instance.
+            /// Create an empty instance.
             ///
             /// # Panics
             ///
@@ -257,7 +257,8 @@ macro_rules! span_subclass {
                 }
             }
 
-            /// The nested [`InlineCollection`] (this is a `Span` subclass).
+            /// The child inlines. Add to the returned collection to nest
+            /// content inside this element.
             #[must_use]
             pub fn inlines(&self) -> Option<InlineCollection> {
                 // SAFETY: self.ptr is a live Span subclass*; +1 collection out.
@@ -296,7 +297,8 @@ span_subclass!(
 );
 
 impl Hyperlink {
-    /// Set the URI navigated to when the hyperlink is activated.
+    /// Set the URI navigated to when the hyperlink is activated. Always returns
+    /// `true` for a live `Hyperlink`.
     ///
     /// # Panics
     ///
@@ -308,8 +310,8 @@ impl Hyperlink {
         unsafe { noesis_text_inlines_hyperlink_set_navigate_uri(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
-    /// Read the `NavigateUri` back from the live Noesis object. `None` if unset
-    /// (the C accessor returns null) or empty.
+    /// Read `NavigateUri` from the live Noesis object. `None` if unset or
+    /// empty.
     #[must_use]
     pub fn navigate_uri(&self) -> Option<String> {
         // SAFETY: self.ptr is a live Hyperlink*; borrowed storage copied out.
@@ -324,7 +326,7 @@ impl Hyperlink {
 }
 
 impl LineBreak {
-    /// Construct a `LineBreak`.
+    /// Create a `LineBreak`.
     ///
     /// # Panics
     ///
@@ -346,7 +348,7 @@ impl Default for LineBreak {
 }
 
 impl InlineUIContainer {
-    /// Construct an empty `InlineUIContainer` (no hosted child yet).
+    /// Create an empty `InlineUIContainer`.
     ///
     /// # Panics
     ///
@@ -370,9 +372,9 @@ impl InlineUIContainer {
         unsafe { noesis_text_inlines_ui_container_set_child(self.ptr.as_ptr(), child.raw()) }
     }
 
-    /// Borrowed raw `BaseComponent*` of the hosted child, or null. The address
-    /// matches [`FrameworkElement::raw`] of the element set, so it can be
-    /// compared for identity. Does not transfer ownership.
+    /// Borrowed `BaseComponent*` of the hosted child, or null. It equals
+    /// [`FrameworkElement::raw`] of the element passed to
+    /// [`set_child`](Self::set_child), so you can compare them for identity.
     #[must_use]
     pub fn child_raw(&self) -> *mut c_void {
         // SAFETY: self.ptr is a live InlineUIContainer*.
@@ -392,11 +394,10 @@ impl Default for InlineUIContainer {
     }
 }
 
-/// An owning handle over a live `Noesis::InlineCollection` (a
-/// `UICollection<Inline>`), obtained from a `TextBlock` ([`text_block_inlines`])
-/// or a [`Span`] ([`Span::inlines`]). Holds a `+1` reference released on
-/// [`Drop`]; the collection is also owned by its host element, so the handle is
-/// a non-exclusive view that keeps the collection alive while held.
+/// The live inline collection of a `TextBlock` ([`text_block_inlines`]) or a
+/// [`Span`] ([`Span::inlines`]). The host element still owns the collection;
+/// this handle holds an extra reference that keeps it alive and releases it on
+/// [`Drop`].
 pub struct InlineCollection {
     ptr: NonNull<c_void>,
 }
@@ -409,8 +410,9 @@ impl InlineCollection {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Append `inline` to the collection (the collection takes its own
-    /// reference). Returns the insertion index, or `None` on failure.
+    /// Append `inline`. The collection takes its own reference, so `inline`
+    /// may be dropped afterwards. Returns the insertion index, or `None` if
+    /// Noesis rejects the add.
     pub fn add<I: Inline>(&mut self, inline: &I) -> Option<usize> {
         // SAFETY: self.ptr is a live InlineCollection*; inline_raw() is a live
         // Inline* for the call.
@@ -427,17 +429,16 @@ impl InlineCollection {
         n.max(0) as usize
     }
 
-    /// Borrowed raw `Inline*` at `index`, or null if out of range. Useful for
-    /// proving structure (e.g. that a nested `Run` landed where expected) via
-    /// pointer identity against the inline that was added.
+    /// Borrowed `Inline*` at `index`, or null if out of range. Compare it with
+    /// an inline's `raw()` to check which element sits at a position.
     #[must_use]
     pub fn get_raw(&self, index: usize) -> *mut c_void {
         // SAFETY: self.ptr is a live InlineCollection*; bounds checked C-side.
         unsafe { noesis_text_inlines_collection_get(self.ptr.as_ptr(), index as u32) }
     }
 
-    /// Remove all inlines, so the collection can be repopulated (e.g. to
-    /// re-apply changed formatted content without rebuilding the host element).
+    /// Remove all inlines. Use it to replace a `TextBlock`'s content without
+    /// rebuilding the element.
     pub fn clear(&mut self) {
         // SAFETY: self.ptr is a live InlineCollection*.
         unsafe { noesis_text_inlines_collection_clear(self.ptr.as_ptr()) }
@@ -454,6 +455,18 @@ impl Drop for InlineCollection {
 
 /// The top-level [`InlineCollection`] of a `TextBlock`. `None` if `element` is
 /// not a `TextBlock`.
+///
+/// ```no_run
+/// use noesis_runtime::text_inlines::{Bold, Inline, Run, text_block_inlines};
+/// # fn demo(text_block: &noesis_runtime::view::FrameworkElement) {
+/// let mut inlines = text_block_inlines(text_block).expect("not a TextBlock");
+/// inlines.clear();
+/// inlines.add(&Run::new("Hello, "));
+/// let bold = Bold::new();
+/// bold.inlines().unwrap().add(&Run::new("world"));
+/// inlines.add(&bold);
+/// # }
+/// ```
 #[must_use]
 pub fn text_block_inlines(element: &FrameworkElement) -> Option<InlineCollection> {
     // SAFETY: element.raw() is a live FrameworkElement*; the C side DynamicCasts

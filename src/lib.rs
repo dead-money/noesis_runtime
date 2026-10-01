@@ -1,55 +1,78 @@
-//! Safe Rust bindings to the Noesis GUI native SDK, a XAML-based UI engine,
-//! wrapped here by a hand-written C ABI over opaque, reference-counted handles.
+//! Safe Rust bindings to the Noesis GUI native SDK, a XAML-based UI engine.
 //!
-//! The crate is renderer-agnostic: it builds UI trees, drives input, and ticks
-//! the layout/animation engine, but leaves drawing to you through the
-//! [`render_device::RenderDevice`] trait. A ready-made Bevy/wgpu integration
-//! lives in the sibling crate `noesis_bevy`.
+//! The crate builds UI trees, drives input, and ticks layout and animation.
+//! It does no drawing itself: Noesis renders through a
+//! [`render_device::RenderDevice`] you implement for your GPU API. The sibling
+//! crate `noesis_bevy` provides one for Bevy/wgpu.
 //!
 //! # Getting started
 //!
-//! The lifecycle is process-wide: call [`init`] exactly once at startup and
-//! [`shutdown`] once at exit, after every Noesis handle has been dropped. In
-//! between, a typical session looks like:
+//! Call [`init`] once at startup and [`shutdown`] once at exit, after every
+//! Noesis handle has been dropped. In between:
 //!
-//! 1. Install an asset source with [`xaml_provider::set_xaml_provider`] (plus
-//!    optional font and texture providers).
-//! 2. Build a UI root: [`view::FrameworkElement::load`] from a URI, or
-//!    [`view::FrameworkElement::parse`] from an in-memory XAML string.
-//! 3. Wrap it in a [`view::View`] with [`view::View::create`], then feed it the
-//!    surface size, input events, and per-frame time updates.
-//! 4. Render the view through your [`render_device::RenderDevice`].
+//! 1. Install an asset source with [`xaml_provider::set_xaml_provider`] (and,
+//!    optionally, [`font_provider`] and [`texture_provider`] sources).
+//! 2. Build a root element with [`view::FrameworkElement::load`] (from a URI)
+//!    or [`view::FrameworkElement::parse`] (from a XAML string).
+//! 3. Host it in a [`view::View`] with [`view::View::create`], then feed it the
+//!    surface size, input events, and the current time each frame.
+//! 4. Register your device with [`render_device::register`], bind it with
+//!    [`view::Renderer::init`], and render each frame.
 //!
-//! For a quick import of the types most code reaches for, glob the [`prelude`].
+//! ```no_run
+//! use noesis_runtime::render_device::Registered;
+//! use noesis_runtime::view::{FrameworkElement, View};
+//!
+//! fn run(device: &Registered, time_seconds: f64) {
+//!     noesis_runtime::init();
+//!
+//!     let root = FrameworkElement::parse(
+//!         r#"<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+//!                <TextBlock Text="Hello"/>
+//!            </Grid>"#,
+//!     )
+//!     .expect("XAML parses");
+//!     let mut view = View::create(root);
+//!     view.set_size(1280, 720);
+//!     view.renderer().init(device);
+//!
+//!     // Each frame:
+//!     view.update(time_seconds);
+//!     let mut renderer = view.renderer();
+//!     renderer.update_render_tree();
+//!     renderer.render_offscreen();
+//!     renderer.render(false, true);
+//!
+//!     // Teardown: release device resources, drop every handle, then shut down.
+//!     renderer.shutdown();
+//!     drop(view);
+//!     noesis_runtime::shutdown();
+//! }
+//! ```
+//!
+//! The [`prelude`] re-exports the types most code uses.
 //!
 //! # Setup
 //!
-//! Set `NOESIS_SDK_DIR` to the extracted Noesis Native SDK 3.2.13 root (the
-//! directory containing `Include/` and `Bin/`). See `README.md`.
+//! Building requires the Noesis Native SDK 3.2.13. Set `NOESIS_SDK_DIR` to its
+//! root (the directory containing `Include/` and `Bin/`). See `README.md`.
 //!
 //! # Thread affinity
 //!
-//! Noesis objects are **thread-affine**: the engine expects every method on a
-//! given object (and on the [`view::View`] that owns it) to be called from the
-//! one thread that drives that view. The owning handle types in this crate
-//! (geometries, brushes, transforms, commands, bindings, the RAII registration
-//! guards, etc.) therefore implement [`Send`] but deliberately **not** [`Sync`]:
+//! Noesis objects are thread-affine: every call on an object, and on the
+//! [`view::View`] that owns it, must come from the one thread that drives that
+//! view. Owning handles in this crate are therefore [`Send`] but not [`Sync`]:
 //!
-//! - **`Send` is sound.** `Noesis::BaseRefCounted::mRefCount` is an
-//!   `AtomicInteger`, so the `-1` release performed by [`Drop`] is safe on any
-//!   thread. Ownership of a handle may be *moved* to whichever thread owns the
-//!   Noesis view, after which all calls happen on that thread.
-//! - **`Sync` is unsound.** Many `&self` methods call into Noesis (FFI reads,
-//!   and some lazily mutate engine state, e.g. resource-dictionary or
-//!   collection getters). Sharing a `&handle` across threads would let two
-//!   threads invoke those concurrently on a thread-affine engine, which races.
+//! - `Send` is sound because Noesis reference counts are atomic, so the release
+//!   in [`Drop`] is safe on any thread. You can move a handle to the view's
+//!   thread and use it there.
+//! - `Sync` would be unsound because many `&self` methods call into Noesis, and
+//!   some mutate engine state lazily. Shared references across threads would
+//!   race.
 //!
-//! Callers must invoke Noesis methods only from the view's thread. SAFETY
-//! comments on the individual `unsafe impl Send` blocks point back here rather
-//! than restating this contract. (The render-device *trait* is the exception:
-//! a user [`render_device::RenderDevice`] impl must be `Send + Sync` because
-//! Noesis may call its trampolines from a dedicated render thread. That bound
-//! is on the trait, not on these owning handles.)
+//! The `unsafe impl Send` blocks throughout the crate rely on this contract.
+//! [`render_device::RenderDevice`] is the exception: implementations must be
+//! `Send + Sync` because Noesis may call them from a dedicated render thread.
 
 use std::ffi::{CStr, CString};
 
@@ -94,8 +117,8 @@ pub mod view;
 pub mod xaml;
 pub mod xaml_provider;
 
-/// Optional. Apply Indie license credentials before [`init`] to suppress the
-/// trial watermark. Pass empty strings (or skip the call) to run in trial mode.
+/// Applies Noesis license credentials. Call before [`init`]; without a license
+/// Noesis runs in trial mode and draws a watermark.
 ///
 /// # Panics
 ///
@@ -107,52 +130,38 @@ pub fn set_license(name: &str, key: &str) {
     unsafe { ffi::noesis_set_license(n.as_ptr(), k.as_ptr()) }
 }
 
-/// Disable the Hot Reload feature before [`init`]. Hot Reload is on by default
-/// in Debug/Profile SDK builds and costs a little extra memory; disabling it is
-/// purely an optimization. No-op once [`init`] has run, and a no-op on a
-/// Release dylib where the feature is compiled out.
+/// Disables Hot Reload. Call before [`init`].
 ///
-/// Part of the inspector / hot-reload control surface (see
-/// [`disable_inspector`], [`disable_socket_init`], [`is_inspector_connected`],
-/// [`update_inspector`]). There is intentionally no `enable_*` counterpart:
-/// these features default on in instrumented SDK builds, so we only expose the
-/// off switches plus the runtime queries.
-///
-/// Must be called **before** [`init`].
+/// Hot Reload is on by default in Debug and Profile SDK builds and costs some
+/// memory. This is a no-op after [`init`] and on a Release SDK build, where the
+/// feature is compiled out.
 pub fn disable_hot_reload() {
     // SAFETY: a pre-init GUI:: free call with no arguments or preconditions
     // beyond "call before Init", which is the caller's contract.
     unsafe { ffi::noesis_disable_hot_reload() }
 }
 
-/// Skip the Inspector's socket initialization (e.g. `WSAStartup` on Windows)
-/// before [`init`]. Use this only when the host process has already initialized
-/// sockets itself, to avoid a double init. No-op after [`init`] / on a Release
-/// dylib.
+/// Skips the Inspector's socket initialization (`WSAStartup` on Windows). Call
+/// before [`init`], and only when the host has already initialized sockets.
 ///
-/// Must be called **before** [`init`].
+/// No-op after [`init`] and on a Release SDK build.
 pub fn disable_socket_init() {
     // SAFETY: pre-init GUI:: free call; see `disable_hot_reload`.
     unsafe { ffi::noesis_disable_socket_init() }
 }
 
-/// Disable all remote Inspector connections before [`init`]. The Inspector is
-/// enabled by default in Debug/Profile SDK builds (it opens a socket and waits
-/// for the remote tool); call this to keep it off. No-op after [`init`] / on a
-/// Release dylib where the Inspector is compiled out.
+/// Disables remote Inspector connections. Call before [`init`].
 ///
-/// Must be called **before** [`init`].
+/// Debug and Profile SDK builds open a socket for the Inspector by default.
+/// No-op after [`init`] and on a Release SDK build, where the Inspector is
+/// compiled out.
 pub fn disable_inspector() {
     // SAFETY: pre-init GUI:: free call; see `disable_hot_reload`.
     unsafe { ffi::noesis_disable_inspector() }
 }
 
-/// Returns whether a remote Inspector is currently connected.
-///
-/// Always `false` when nothing is attached, and always `false` on a Release
-/// dylib (the Inspector is compiled out of Release SDK builds). The value of
-/// exposing it is the query itself plus the [`update_inspector`] pump for hosts
-/// running an instrumented build.
+/// Returns whether a remote Inspector is connected. Always `false` on a
+/// Release SDK build.
 #[must_use]
 pub fn is_inspector_connected() -> bool {
     // SAFETY: runtime GUI:: query; safe to call any time, returns false if the
@@ -160,55 +169,46 @@ pub fn is_inspector_connected() -> bool {
     unsafe { ffi::noesis_is_inspector_connected() }
 }
 
-/// Keep the Inspector connection alive. [`crate::view::View`] updates call this
-/// internally, so it is only needed when the Inspector connects before any view
-/// exists. No-op on a Release dylib.
+/// Keeps the Inspector connection alive. [`View::update`](view::View::update)
+/// does this internally, so you only need it while no view exists. No-op on a
+/// Release SDK build.
 pub fn update_inspector() {
     // SAFETY: runtime GUI:: call; safe to call any time (no-op without an
     // active Inspector connection).
     unsafe { ffi::noesis_update_inspector() }
 }
 
-/// Initialize Noesis subsystems. Call exactly once per process; Noesis does
-/// not support re-init after [`shutdown`].
+/// Initializes Noesis. Call exactly once per process, before creating any
+/// Noesis object. Noesis cannot be initialized again after [`shutdown`].
 pub fn init() {
     // SAFETY: no preconditions other than "call once", documented by Noesis.
     unsafe { ffi::noesis_init() }
 }
 
-/// Shut Noesis down. Call once at process exit, after all Noesis-owned objects
-/// have been released.
+/// Shuts Noesis down. Call once at exit, after every handle from this crate
+/// has been dropped; dropping one afterwards touches freed engine state.
 pub fn shutdown() {
     // SAFETY: caller responsibility per docs.
     unsafe { ffi::noesis_shutdown() }
 }
 
-/// Curated re-exports of the items most code reaches for. Glob-import it
-/// (`use noesis_runtime::prelude::*;`) to pull in the core view/element
-/// handles, the brush/transform/geometry traits and their common concrete
-/// types, data-binding and collection types, the custom-control and
-/// markup-extension surface, the provider traits, the lifecycle free functions,
-/// and the most-used enums.
+/// Re-exports of the most-used items: views and elements, brushes,
+/// transforms, geometry, data binding, custom classes and markup extensions,
+/// the asset-provider traits, the lifecycle functions, and common enums.
 ///
-/// This is a convenience surface, not the full API. Anything not listed here is
-/// still reachable through its owning module (`crate::animation`,
-/// `crate::input`, `crate::diagnostics`, ...).
-///
-/// Compiled (so the names stay honest) but not executed: Noesis [`init`] runs
-/// once per process, and `cargo test` merges all doctests into one binary.
+/// Everything else is reached through its module ([`animation`], [`input`],
+/// [`diagnostics`], ...).
 ///
 /// ```no_run
 /// use noesis_runtime::prelude::*;
 ///
 /// noesis_runtime::init();
-/// // Freestanding objects round-trip through the FFI without a live view.
 /// let mut items = ObservableCollection::new();
 /// assert!(items.is_empty());
 /// items.push_string("first");
 /// items.push_string("second");
 /// assert_eq!(items.len(), 2);
 ///
-/// // Build a brush and read its color back across the FFI boundary.
 /// let mut brush = SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]);
 /// brush.set_color([0.0, 1.0, 0.0, 1.0]);
 /// assert_eq!(brush.color(), [0.0, 1.0, 0.0, 1.0]);
@@ -250,7 +250,8 @@ pub mod prelude {
     pub use crate::view::{HAlign, Key, MouseButton, VAlign};
 }
 
-/// Returns the Noesis runtime build version (e.g. `"3.2.13"`).
+/// Returns the version of the linked Noesis runtime, such as `"3.2.13"`, or an
+/// empty string if Noesis reports none.
 #[must_use]
 pub fn version() -> String {
     // SAFETY: version string is owned by the Noesis runtime and stays valid for

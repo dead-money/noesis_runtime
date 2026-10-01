@@ -1,11 +1,7 @@
-//! Custom `Freezable` base class with custom DPs and freeze state machine.
+//! Custom `Freezable` subclass: DP round-trip and the freeze state.
 //!
-//! The property-changed callback is NOT asserted here: it does not fire on
-//! code-created (un-parsed, tree-detached) `Freezable` instances; see
-//! LIMITATIONS.md. The handler below is a `Noop` for that reason.
-//!
-//! The sibling `Animatable` subtrees (`Brush`/`Geometry`/`Transform`/`Effect`)
-//! are NOT subclassable this way; see LIMITATIONS.md.
+//! The property-changed callback is not asserted because it does not fire on
+//! code-created (unparsed, tree-detached) instances.
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
 use noesis_runtime::ffi::{ClassBase, PropType};
@@ -33,8 +29,6 @@ fn custom_freezable() {
         let inst = reg.create_instance().expect("create_instance");
         let h = inst.handle();
 
-        // A stubbed trampoline (no real synthetic TypeClass / DependencyData)
-        // could not store and read this back.
         h.set_int32(amount, 42);
         assert_eq!(h.get_int32(amount), Some(42), "Freezable DP round-trip");
         h.set_int32(amount, -9);

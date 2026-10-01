@@ -1,28 +1,24 @@
-//! Mirrors of the public Noesis types in `Include/NsRender/RenderDevice.h`.
+//! Plain-data types a [`RenderDevice`](crate::render_device::RenderDevice)
+//! receives from Noesis: texture formats, sampler and render state, shader
+//! ids, vertex-format lookup tables, [`DeviceCaps`], [`Tile`] and the
+//! per-draw [`Batch`].
 //!
-//! These types cross the FFI boundary into our C++ shim and on into Noesis,
-//! so any drift from the Noesis-side declarations is a hard ABI bug. Layout
-//! is verified at compile time at the bottom of this file.
+//! Each type has the same layout as its counterpart in Noesis's
+//! `Include/NsRender/RenderDevice.h`; compile-time assertions at the bottom
+//! of this file fail the build if one drifts.
 //!
 //! ABI notes:
-//! - Unscoped C++ `enum`s default to `int` (4 bytes on Linux x86-64).
-//!   `#[repr(C)]` Rust enums match that.
-//! - `Shader`, `SamplerState`, and `RenderState` are stored as a single
-//!   `uint8_t` in `Batch`. We mirror them as `#[repr(transparent)]` newtypes
-//!   over `u8` rather than Rust enums; that preserves the size *and* keeps
-//!   any incoming byte value valid (no UB if Noesis adds variants we haven't
-//!   mirrored yet).
-//! - Bitfield ordering follows the LSB-first convention used by GCC and
-//!   Clang on x86-64 / aarch64 / wasm targets.
+//! - Unscoped C++ `enum`s are `int`-sized, which `#[repr(C)]` Rust enums match.
+//! - [`Shader`], [`SamplerState`] and [`RenderState`] are single bytes inside
+//!   [`Batch`]. They are `#[repr(transparent)]` newtypes over `u8` rather than
+//!   Rust enums, so any byte Noesis sends is a valid value.
+//! - Bitfields are packed LSB-first, the GCC/Clang convention on x86-64,
+//!   aarch64 and wasm.
 
 #![allow(clippy::enum_variant_names)] // mirroring Noesis-side names verbatim
 
 use core::mem::{align_of, size_of};
 use std::os::raw::c_void;
-
-// ────────────────────────────────────────────────────────────────────────────
-// Texture formats: `Noesis::TextureFormat::Enum`
-// ────────────────────────────────────────────────────────────────────────────
 
 /// Pixel layout of a texture you create for the render device.
 #[repr(C)]
@@ -39,11 +35,6 @@ pub enum TextureFormat {
 
 /// Number of [`TextureFormat`] variants.
 pub const TEXTURE_FORMAT_COUNT: usize = 3;
-
-// ────────────────────────────────────────────────────────────────────────────
-// Sampler state: `Noesis::WrapMode::Enum`, `MinMagFilter::Enum`,
-// `MipFilter::Enum`, `Noesis::SamplerState`
-// ────────────────────────────────────────────────────────────────────────────
 
 /// How a sampler treats texture coordinates outside the `[0, 1]` range.
 #[repr(C)]
@@ -97,10 +88,11 @@ pub enum MipFilter {
 /// Number of [`MipFilter`] variants.
 pub const MIP_FILTER_COUNT: usize = 3;
 
-/// Mirror of `Noesis::SamplerState`.
+/// How a texture in a [`Batch`] is sampled, packed into one byte.
 ///
-/// Packed bitfield in a single byte: bits 0-2 wrap mode, bit 3 min/mag
-/// filter, bits 4-5 mip filter, bits 6-7 unused.
+/// Bits 0-2 hold the [`WrapMode`], bit 3 the [`MinMagFilter`], bits 4-5 the
+/// [`MipFilter`]; bits 6-7 are unused. Build one with [`SamplerState::new`]
+/// and read fields back with the `*_raw` accessors.
 #[repr(transparent)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct SamplerState(pub u8);
@@ -113,7 +105,7 @@ impl SamplerState {
         Self(bits)
     }
 
-    /// Raw 3-bit wrap-mode field. Matches `WrapMode as u8` for valid values.
+    /// Raw 3-bit wrap-mode field. Equals `WrapMode as u8` for known values.
     #[must_use]
     pub const fn wrap_mode_raw(self) -> u8 {
         self.0 & 0b111
@@ -131,11 +123,6 @@ impl SamplerState {
         (self.0 >> 4) & 0b11
     }
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Blend & stencil: `Noesis::BlendMode::Enum`, `Noesis::StencilMode::Enum`,
-// `Noesis::RenderState`
-// ────────────────────────────────────────────────────────────────────────────
 
 /// Blend equation a batch uses to combine its output with the target.
 ///
@@ -186,10 +173,12 @@ pub enum StencilMode {
 /// Number of [`StencilMode`] variants.
 pub const STENCIL_MODE_COUNT: usize = 7;
 
-/// Mirror of `Noesis::RenderState`.
+/// Color-write, blend, stencil and wireframe state for a [`Batch`], packed
+/// into one byte.
 ///
-/// Packed bitfield in a single byte: bit 0 colorEnable, bits 1-3 blendMode,
-/// bits 4-6 stencilMode, bit 7 wireframe.
+/// Bit 0 enables color writes, bits 1-3 hold the [`BlendMode`], bits 4-6 the
+/// [`StencilMode`], bit 7 the wireframe flag. Build one with
+/// [`RenderState::new`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct RenderState(pub u8);
@@ -235,23 +224,19 @@ impl RenderState {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Shader / vertex / format taxonomy: `Noesis::Shader` and nested types
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Mirror of `Noesis::Shader`.
+/// Which built-in shader a [`Batch`] uses.
 ///
-/// The C++ side is a struct with a single `uint8_t v` field. We use a
-/// transparent newtype rather than a Rust enum so any incoming byte stays
-/// valid. Noesis is allowed to extend the variant set in a point release
-/// without us reading uninitialised discriminants.
+/// A newtype over the raw byte rather than an enum, so any value Noesis sends
+/// is valid. Compare against the associated constants; values below
+/// [`SHADER_COUNT`] index the lookup tables such as [`VERTEX_FOR_SHADER`].
+/// The `SDF_LCD_*` shaders are only used when
+/// [`DeviceCaps::subpixel_rendering`] is set.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Shader(pub u8);
 
 #[allow(non_upper_case_globals)]
 impl Shader {
-    // Debug
     /// Debug shader: flat per-vertex RGBA color.
     pub const RGBA: Self = Self(0);
     /// Stencil-only rendering for masks.
@@ -259,7 +244,6 @@ impl Shader {
     /// Clear render target.
     pub const CLEAR: Self = Self(2);
 
-    // Path (no PPAA)
     /// Path fill, solid color.
     pub const PATH_SOLID: Self = Self(3);
     /// Path fill, linear gradient.
@@ -279,7 +263,6 @@ impl Shader {
     /// Path fill, texture pattern, mirror wrap.
     pub const PATH_PATTERN_MIRROR: Self = Self(11);
 
-    // Path (with PPAA)
     /// Antialiased path fill, solid color.
     pub const PATH_AA_SOLID: Self = Self(12);
     /// Antialiased path fill, linear gradient.
@@ -299,7 +282,6 @@ impl Shader {
     /// Antialiased path fill, texture pattern, mirror wrap.
     pub const PATH_AA_PATTERN_MIRROR: Self = Self(20);
 
-    // SDF (text)
     /// SDF text glyphs, solid color.
     pub const SDF_SOLID: Self = Self(21);
     /// SDF text glyphs, linear gradient.
@@ -319,7 +301,6 @@ impl Shader {
     /// SDF text glyphs, texture pattern, mirror wrap.
     pub const SDF_PATTERN_MIRROR: Self = Self(29);
 
-    // SDF LCD (subpixel text; needs DeviceCaps::subpixel_rendering)
     /// LCD subpixel SDF text, solid color.
     pub const SDF_LCD_SOLID: Self = Self(30);
     /// LCD subpixel SDF text, linear gradient.
@@ -339,7 +320,6 @@ impl Shader {
     /// LCD subpixel SDF text, texture pattern, mirror wrap.
     pub const SDF_LCD_PATTERN_MIRROR: Self = Self(38);
 
-    // Opacity (offscreen)
     /// Offscreen opacity-group composite, solid color.
     pub const OPACITY_SOLID: Self = Self(39);
     /// Offscreen opacity-group composite, linear gradient.
@@ -359,7 +339,6 @@ impl Shader {
     /// Offscreen opacity-group composite, texture pattern, mirror wrap.
     pub const OPACITY_PATTERN_MIRROR: Self = Self(47);
 
-    // Misc
     /// Upsample pass (blur/effect resolve).
     pub const UPSAMPLE: Self = Self(48);
     /// Downsample pass (blur/effect resolve).
@@ -375,7 +354,7 @@ impl Shader {
 /// Number of [`Shader`] values.
 pub const SHADER_COUNT: usize = 53;
 
-/// Mirror of `Noesis::Shader::Vertex::Enum`.
+/// Vertex shader a [`Shader`] runs with. Look it up with [`VERTEX_FOR_SHADER`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -427,7 +406,8 @@ pub enum VertexShader {
 /// Number of [`VertexShader`] variants.
 pub const VERTEX_SHADER_COUNT: usize = 21;
 
-/// Mirror of `Noesis::Shader::Vertex::Format::Enum`.
+/// Vertex layout a [`VertexShader`] consumes. Look it up with
+/// [`FORMAT_FOR_VERTEX`]; [`SIZE_FOR_FORMAT`] gives its stride.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -469,7 +449,8 @@ pub enum VertexFormat {
 /// Number of [`VertexFormat`] variants.
 pub const VERTEX_FORMAT_COUNT: usize = 16;
 
-/// Mirror of `Noesis::Shader::Vertex::Format::Attr::Enum`.
+/// One attribute of a [`VertexFormat`]. [`ATTRIBUTES_FOR_FORMAT`] lists which
+/// a format contains.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -495,7 +476,7 @@ pub enum VertexAttr {
 /// Number of [`VertexAttr`] variants.
 pub const VERTEX_ATTR_COUNT: usize = 8;
 
-/// Mirror of `Noesis::Shader::Vertex::Format::Attr::Type::Enum`.
+/// Storage type of a [`VertexAttr`]. Look it up with [`TYPE_FOR_ATTR`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -515,55 +496,50 @@ pub enum VertexAttrType {
 /// Number of [`VertexAttrType`] variants.
 pub const VERTEX_ATTR_TYPE_COUNT: usize = 5;
 
-// ────────────────────────────────────────────────────────────────────────────
-// Static lookup tables: mirrors of the `static constexpr const uint8_t` arrays
-// declared inline in `RenderDevice.h`. Length-checked at compile time against
-// the corresponding `*_COUNT` constants.
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Vertex-shader index for each `Shader` value. Index with `shader.0 as usize`.
+/// [`VertexShader`] ordinal for each [`Shader`]. Index with `shader.0 as usize`.
 pub const VERTEX_FOR_SHADER: [u8; SHADER_COUNT] = [
     0, 0, 0, 1, 2, 2, 2, 3, 4, 4, 4, 4, 5, 6, 6, 6, 7, 8, 8, 8, 8, 9, 10, 10, 10, 11, 12, 12, 12,
     12, 9, 10, 10, 10, 11, 12, 12, 12, 12, 13, 14, 14, 14, 15, 16, 16, 16, 16, 17, 18, 19, 13, 20,
 ];
 
-/// Vertex-format index for each `VertexShader` value.
+/// [`VertexFormat`] ordinal for each [`VertexShader`].
 pub const FORMAT_FOR_VERTEX: [u8; VERTEX_SHADER_COUNT] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 9, 10, 11, 12, 13, 10, 14, 15,
 ];
 
-/// Total vertex stride (bytes) for each `VertexFormat`.
+/// Vertex stride in bytes for each [`VertexFormat`].
 pub const SIZE_FOR_FORMAT: [u8; VERTEX_FORMAT_COUNT] = [
     8, 12, 16, 24, 40, 16, 20, 28, 44, 20, 24, 32, 48, 28, 28, 44,
 ];
 
-/// Bitmask of `VertexAttr` values present in each `VertexFormat`.
+/// Bitmask of the [`VertexAttr`]s in each [`VertexFormat`]; bit `n` is the
+/// attribute with ordinal `n`.
 pub const ATTRIBUTES_FOR_FORMAT: [u8; VERTEX_FORMAT_COUNT] = [
     1, 3, 5, 37, 101, 19, 21, 53, 117, 11, 13, 45, 109, 15, 43, 167,
 ];
 
-/// `VertexAttrType` index for each `VertexAttr`.
+/// [`VertexAttrType`] ordinal for each [`VertexAttr`].
 pub const TYPE_FOR_ATTR: [u8; VERTEX_ATTR_COUNT] = [1, 3, 1, 1, 0, 4, 2, 2];
 
-/// Size in bytes for each `VertexAttrType`.
+/// Size in bytes of each [`VertexAttrType`].
 pub const SIZE_FOR_TYPE: [u8; VERTEX_ATTR_TYPE_COUNT] = [4, 8, 16, 4, 8];
 
-// ────────────────────────────────────────────────────────────────────────────
-// Frame primitives: `DeviceCaps`, `Tile`, `UniformData`
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Mirror of `Noesis::DeviceCaps`.
+/// Capabilities your device reports from
+/// [`RenderDevice::caps`](crate::render_device::RenderDevice::caps).
+///
+/// The [`Default`] matches Noesis's own defaults, including
+/// `depth_range_zero_to_one: true`.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct DeviceCaps {
-    /// Offset in pixel units from top-left corner to center of pixel.
+    /// Offset from a pixel's top-left corner to its center, in pixels.
     pub center_pixel_offset: f32,
-    /// When true, internal textures + offscreens use sRGB; vertex colors are
-    /// expected in sRGB, target writes are linear.
+    /// Render in linear space: internal textures and offscreens are sRGB,
+    /// vertex colors arrive in sRGB, and writes to the target are linear.
     pub linear_rendering: bool,
     /// Device supports LCD subpixel rendering (needs dual-source blending).
     pub subpixel_rendering: bool,
-    /// Clip-space depth range is [0, 1] rather than [-1, 1].
+    /// Clip-space depth range is `[0, 1]` rather than `[-1, 1]`.
     pub depth_range_zero_to_one: bool,
     /// Clip-space Y is inverted (top = -1, bottom = +1).
     pub clip_space_y_inverted: bool,
@@ -571,8 +547,7 @@ pub struct DeviceCaps {
 
 impl Default for DeviceCaps {
     fn default() -> Self {
-        // Values must match the C++ in-class member initializers
-        // (depth_range_zero_to_one defaults to true, not false).
+        // Must match the C++ member initializers; depth_range_zero_to_one is true there.
         Self {
             center_pixel_offset: 0.0,
             linear_rendering: false,
@@ -583,8 +558,8 @@ impl Default for DeviceCaps {
     }
 }
 
-/// Mirror of `Noesis::Tile`: a region of the render target with origin at
-/// the lower-left corner.
+/// A region of a render target, in pixels, with the origin at the lower-left
+/// corner.
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct Tile {
@@ -598,11 +573,12 @@ pub struct Tile {
     pub height: u32,
 }
 
-/// Mirror of `Noesis::UniformData`: a span of dwords for uniform-buffer
-/// updates, plus a content hash so the device can skip redundant uploads.
+/// Uniform-buffer contents for one shader slot of a [`Batch`], plus a content
+/// hash so the device can skip redundant uploads.
 ///
-/// `values` points into Noesis-owned memory that lives at least until the
-/// `DrawBatch` call returns.
+/// `values` points into Noesis-owned memory that stays valid until
+/// [`RenderDevice::draw_batch`](crate::render_device::RenderDevice::draw_batch)
+/// returns. Read it with [`UniformData::as_bytes`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct UniformData {
@@ -625,20 +601,12 @@ impl Default for UniformData {
 }
 
 impl UniformData {
-    /// Borrow the uniform bytes as a slice. Returns an empty slice when
-    /// `num_dwords == 0` or `values` is null. Tightly packed; length is
-    /// `num_dwords * 4` bytes.
+    /// The uniform data as tightly packed bytes, `num_dwords * 4` long. Empty
+    /// when `num_dwords == 0` or `values` is null.
     ///
-    /// Quarantines the dereference so `unsafe_code = forbid` crates (e.g.
-    /// `noesis_bevy`) can consume Noesis uniforms without opting in
-    /// themselves.
-    ///
-    /// # Safety contract relied on
-    ///
-    /// Noesis guarantees `values` is valid for `num_dwords * 4` bytes for the
-    /// duration of the `DrawBatch` call this `UniformData` came from. Callers
-    /// must not retain the returned slice past the `draw_batch` callback
-    /// where the parent [`Batch`] was passed.
+    /// Only call this on a `UniformData` from the [`Batch`] passed to the
+    /// current `draw_batch` call, and don't keep the slice past it: Noesis
+    /// guarantees the memory only for that call.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         if self.num_dwords == 0 || self.values.is_null() {
@@ -651,36 +619,31 @@ impl UniformData {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Opaque C++ resource handles + the `Batch` struct passed to `DrawBatch`
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Opaque handle to a `Noesis::Texture` instance.
+/// Opaque Noesis texture, seen only behind a `*mut Texture` in [`Batch`].
 ///
-/// Your device's `create_texture` callback produces these; they then come back
-/// to you in `update_texture`, in `Batch.pattern`/`ramps`/`image`/`glyphs`/`shadow`,
-/// and the other texture-bearing callbacks. Only ever hold it behind a
-/// `*mut Texture`: the underlying class is owned by the C++ shim, so you can
-/// never construct or dereference one from Rust.
+/// The C++ shim wraps each texture your
+/// [`RenderDevice::create_texture`](crate::render_device::RenderDevice::create_texture)
+/// returns, and each render target's resolve texture, in one of these. You
+/// can't construct or dereference it; turn the pointers in a `Batch` back into
+/// your [`TextureHandle`](crate::render_device::TextureHandle) with
+/// [`Batch::pattern_handle`] and its siblings.
 #[repr(C)]
 pub struct Texture {
     _opaque: [u8; 0],
-    /// Force `!Send + !Sync` and prevent direct construction.
+    // !Send + !Sync, !Unpin
     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 
-/// Mirror of `Noesis::Batch`: a single indexed-triangle draw call.
+/// One indexed-triangle draw call, passed to
+/// [`RenderDevice::draw_batch`](crate::render_device::RenderDevice::draw_batch).
 ///
-/// Hot-path payload to `RenderDevice::draw_batch`. Texture pointers are null
-/// when unused. Vertex data starts at the most recent `map_vertices()` return
-/// plus `vertex_offset` bytes; indices are 16 bits each and start at the most
-/// recent `map_indices()` return plus `start_index * 2` bytes.
-///
-/// The `*_handle()` helpers translate the opaque `*mut Texture` pointers
-/// (which come from Noesis and reference `RustTexture` instances inside the
-/// C++ shim) into the `TextureHandle` values originally returned by
-/// `RenderDevice::create_texture`. Safe to call: the shim getter does a
-/// null check and reads a stored handle field; no further dereferencing.
+/// Vertex data starts `vertex_offset` bytes into the buffer returned by the
+/// most recent `map_vertices`. Indices are 16-bit and start `start_index * 2`
+/// bytes into the buffer returned by the most recent `map_indices`. Texture
+/// pointers are null when unused; the `*_handle` methods
+/// ([`pattern_handle`](Self::pattern_handle) and siblings) turn them back into
+/// the [`TextureHandle`](crate::render_device::TextureHandle)s your device
+/// returned from `create_texture` or as a render target's `resolve_texture`.
 #[repr(C)]
 #[derive(Debug)]
 pub struct Batch {
@@ -690,16 +653,15 @@ pub struct Batch {
     pub render_state: RenderState,
     /// Reference value for the stencil test selected by `render_state`.
     pub stencil_ref: u8,
-    /// When `true`, the batch renders both left and right eye images in one
-    /// pass (single-pass stereo).
+    /// Render both eyes in one pass (single-pass stereo).
     pub single_pass_stereo: bool,
 
-    /// Byte offset into the most recent `map_vertices()` buffer.
+    /// Byte offset into the most recent `map_vertices` buffer.
     pub vertex_offset: u32,
     /// Number of vertices in the batch.
     pub num_vertices: u32,
-    /// First index, in indices (multiply by 2 for the byte offset into the
-    /// most recent `map_indices()` buffer).
+    /// First index to draw, counted in indices; the byte offset into the most
+    /// recent `map_indices` buffer is `start_index * 2`.
     pub start_index: u32,
     /// Number of 16-bit indices to draw.
     pub num_indices: u32,
@@ -727,21 +689,23 @@ pub struct Batch {
     /// Sampler state for `shadow`.
     pub shadow_sampler: SamplerState,
 
-    /// Vertex-shader uniform buffers, one per slot. `num_dwords == 0` marks
-    /// an unused slot.
+    /// Vertex-shader uniform buffers, one per slot. `num_dwords == 0` marks an
+    /// unused slot.
     pub vertex_uniforms: [UniformData; 2],
-    /// Pixel-shader uniform buffers, one per slot.
+    /// Pixel-shader uniform buffers, one per slot. `num_dwords == 0` marks an
+    /// unused slot.
     pub pixel_uniforms: [UniformData; 2],
 
-    /// Custom pixel-shader pointer used by custom effects (set on the Noesis
-    /// side via `ShaderEffect::SetPixelShader` or `BrushShader::SetPixelShader`).
-    /// Null unless the batch uses a custom effect.
+    /// Custom pixel shader set through Noesis's `ShaderEffect::SetPixelShader`
+    /// or `BrushShader::SetPixelShader`. Null unless the batch uses a custom
+    /// effect.
     pub pixel_shader: *mut c_void,
 }
 
 impl Batch {
-    /// Translate the pattern texture pointer into the `TextureHandle` the
-    /// Rust-side device returned from `create_texture`. `None` when unused.
+    /// The pattern texture as your device's
+    /// [`TextureHandle`](crate::render_device::TextureHandle), or `None` when
+    /// unused.
     #[must_use]
     pub fn pattern_handle(&self) -> Option<crate::render_device::TextureHandle> {
         handle_from_texture_ptr(self.pattern)
@@ -776,10 +740,6 @@ impl Batch {
     }
 }
 
-/// Safely translate a Noesis-owned `Texture*` into its Rust-side handle.
-/// The shim getter is null-safe and performs a single member read; the
-/// pointer either came from `RenderDevice::create_texture` (and is live for
-/// the `draw_batch` call) or is null.
 fn handle_from_texture_ptr(ptr: *mut Texture) -> Option<crate::render_device::TextureHandle> {
     if ptr.is_null() {
         return None;
@@ -793,12 +753,8 @@ fn handle_from_texture_ptr(ptr: *mut Texture) -> Option<crate::render_device::Te
     core::num::NonZeroU64::new(raw).map(crate::render_device::TextureHandle)
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Layout assertions: these fire at compile time if any mirror drifts from
-// the Noesis-side layout. Sizes for the byte-packed types are checked
-// explicitly; the `#[repr(C)]` enums get their size from the platform's int
-// representation, which already matches Noesis's unscoped enum default.
-// ────────────────────────────────────────────────────────────────────────────
+// Fail the build if a mirror drifts from the Noesis layout. `#[repr(C)]` enums
+// take the platform `int` size, which already matches Noesis's unscoped enums.
 
 const _: () = assert!(size_of::<Shader>() == 1);
 const _: () = assert!(align_of::<Shader>() == 1);

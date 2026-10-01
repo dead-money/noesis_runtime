@@ -5,9 +5,7 @@
 //!   1. Bare reorder: moving an item permutes the collection (order changes,
 //!      object identity is preserved, `Count` is unchanged).
 //!   2. Bound `ListBox`: the selection rides the moved item to its new slot,
-//!      which a Remove+Add reconcile (raising Reset/Remove) would drop. This is
-//!      the "selection survives a reorder" guarantee the ECS-UI list contract
-//!      leans on.
+//!      which a Remove+Add reconcile (raising Reset/Remove) would drop.
 
 use noesis_runtime::binding::{ObservableCollection, box_string};
 use noesis_runtime::view::{FrameworkElement, View};

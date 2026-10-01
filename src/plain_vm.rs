@@ -1,42 +1,39 @@
-//! Plain (non-`DependencyObject`) view models for data binding.
+//! View models that expose Rust data to XAML bindings.
 //!
-//! The bevy-bridge unblocker. A plain view model is a Rust-owned binding
-//! source that is **not** a `DependencyObject`: a plain Noesis `BaseComponent`
-//! that implements `INotifyPropertyChanged` and carries a synthetic reflection
-//! type whose properties resolve (through reflection) to a per-instance value
-//! store that Rust pushes into. That is what makes `{Binding Title}` work
-//! against a Rust view model used as a `DataContext`, and, paired with a
-//! [`PlainInstance::notify`] call, what refreshes a bound UI target when Rust
-//! mutates the model.
+//! A plain view model is a binding source, not a UI element. You declare a type
+//! with named, typed properties, create instances, and push values into them
+//! from Rust. Set an instance as an element's `DataContext` and
+//! `{Binding Title}` in XAML reads its `Title` property. Call
+//! [`PlainInstance::notify`] after a change and bound targets update.
 //!
-//! This is the lighter-weight sibling of [`crate::classes`]: where a
-//! [`ClassBuilder`](crate::classes::ClassBuilder) synthesizes a
-//! `ContentControl` subclass with real `DependencyProperty` metadata (so it can
-//! be *instantiated from XAML* and participate in the visual tree), a plain VM
-//! is purely a binding *source*. Use a plain VM when all you need is to expose
-//! Rust state to `{Binding}` (the common Bevy case: feed game state into the UI)
-//! without the weight (or the `DependencyObject` thread affinity) of a full
-//! control.
+//! Use [`crate::classes`] instead when you need a custom control that XAML can
+//! instantiate and place in the visual tree.
 //!
-//! # Lifecycle
+//! ```no_run
+//! use noesis_runtime::plain_vm::{PlainType, PlainValue, PlainVmBuilder};
+//! use noesis_runtime::view::FrameworkElement;
 //!
-//! 1. [`PlainVmBuilder::new`] → [`add_property`](PlainVmBuilder::add_property) →
-//!    [`register`](PlainVmBuilder::register) → [`PlainVmClass`].
-//! 2. [`PlainVmClass::create_instance`] → [`PlainInstance`].
-//! 3. [`PlainInstance::set`] a property value, then
-//!    [`PlainInstance::set_data_context`] it onto an element (or use the raw
-//!    pointer via [`PlainInstance::raw`]) and author `{Binding PropName}`.
-//! 4. Mutate from Rust with [`PlainInstance::set`] + [`PlainInstance::notify`]
-//!    (or the combined [`PlainInstance::set_and_notify`]); the bound target
-//!    refreshes on the next `View::update`.
-//! 5. Drop the [`PlainInstance`]s, then the [`PlainVmClass`].
+//! fn show_score(root: &mut FrameworkElement) {
+//!     let mut builder = PlainVmBuilder::new("MyGame.HudVm");
+//!     let score = builder.add_property("Score", PlainType::Int32);
+//!     let class = builder.register().expect("type name not yet registered");
+//!
+//!     let vm = class.create_instance().expect("instance");
+//!     vm.set(score, PlainValue::Int32(0));
+//!     assert!(vm.set_data_context(root));
+//!
+//!     // Later, after the score changes:
+//!     let _ = vm.set_and_notify(score, "Score", PlainValue::Int32(10));
+//! }
+//! ```
+//!
+//! Instances keep their type's registration alive, so handles can be dropped
+//! in any order.
 //!
 //! # Threading
 //!
-//! Reflection reads / `PropertyChanged` notifications happen on the thread that
-//! drives the `View` (in practice the main thread). The optional
-//! [`PlainSetHandler`] (a `TwoWay` writeback hook) fires from inside the binding
-//! pump on that same thread.
+//! Bindings read properties and receive change notifications on the thread
+//! that drives the view. A [`PlainSetHandler`] runs on that thread too.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -54,42 +51,36 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// Content type of a reflected plain-VM property. Mirrors `noesis_plain_type`
-/// in `cpp/noesis_shim.h`; the ordinal is the FFI tag.
+/// The type of a view-model property, as bindings see it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PlainType {
     Int32 = 0,
     Double = 1,
     Bool = 2,
-    /// The most common case: bind a `TextBlock.Text` to a Rust `String`.
     String = 3,
-    /// An opaque `BaseComponent*` (e.g. a nested view model or a boxed object).
+    /// Any Noesis object, such as a nested view model.
     BaseComponent = 4,
-    /// A `uint64` (boxed). Carries a stable 64-bit row identity (e.g. a Bevy
-    /// `Entity`'s bits) on a plain view model.
+    /// An unsigned 64-bit integer, useful for IDs such as a Bevy `Entity`'s
+    /// bits.
     U64 = 5,
 }
 
-/// A value to push into a plain-VM property. The crate boxes it into the
-/// `BaseComponent*` the binding engine reads.
+/// A value to store in a view-model property with [`PlainInstance::set`].
 #[derive(Debug, Clone)]
 pub enum PlainValue {
     Int32(i32),
     Double(f64),
     Bool(bool),
-    /// A string. Must not contain an interior NUL byte; setting one panics
-    /// (matching the property-name entry points).
+    /// A string. Storing one with an interior NUL byte panics.
     String(String),
-    /// A `uint64` (e.g. a packed row identity). Pairs with [`PlainType::U64`].
     U64(u64),
-    /// An explicit null (clears the property).
+    /// Clears the property.
     Null,
 }
 
 impl PlainValue {
-    /// Box into a `+1`-owned `BaseComponent*` (caller owns the reference), or
-    /// null for [`PlainValue::Null`].
+    /// A `+1`-owned boxed `BaseComponent*`, or null for [`PlainValue::Null`].
     fn into_boxed(self) -> *mut c_void {
         match self {
             // SAFETY: each box fn returns a +1-owned BaseComponent*.
@@ -108,9 +99,9 @@ impl PlainValue {
     }
 }
 
-/// A borrowed, boxed value handed to a [`PlainSetHandler`] (a `TwoWay`
-/// writeback). The typed accessors return `None` when the boxed runtime type
-/// doesn't match / the value is null.
+/// A value the UI wrote to a view-model property, passed to a
+/// [`PlainSetHandler`]. The typed accessors return `None` if the value is null
+/// or of another type.
 pub struct PlainValueRef(Option<NonNull<c_void>>);
 
 impl PlainValueRef {
@@ -124,7 +115,7 @@ impl PlainValueRef {
         self.0.is_none()
     }
 
-    /// Unbox an `i32`, or `None` on type mismatch / null.
+    /// The value as an `i32`.
     #[must_use]
     pub fn as_i32(&self) -> Option<i32> {
         let p = self.0?;
@@ -134,7 +125,7 @@ impl PlainValueRef {
         ok.then_some(out)
     }
 
-    /// Unbox an `f64`, or `None` on type mismatch / null.
+    /// The value as an `f64`.
     #[must_use]
     pub fn as_f64(&self) -> Option<f64> {
         let p = self.0?;
@@ -144,7 +135,7 @@ impl PlainValueRef {
         ok.then_some(out)
     }
 
-    /// Unbox a `u64`, or `None` on type mismatch / null.
+    /// The value as a `u64`.
     #[must_use]
     pub fn as_u64(&self) -> Option<u64> {
         let p = self.0?;
@@ -154,7 +145,7 @@ impl PlainValueRef {
         ok.then_some(out)
     }
 
-    /// Unbox a `bool`, or `None` on type mismatch / null.
+    /// The value as a `bool`.
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
         let p = self.0?;
@@ -164,8 +155,8 @@ impl PlainValueRef {
         ok.then_some(out)
     }
 
-    /// Borrowed view of a boxed string, valid for the callback. `None` on type
-    /// mismatch / null / non-UTF-8.
+    /// The value as a string, borrowed for the callback. `None` also for
+    /// invalid UTF-8.
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         let p = self.0?;
@@ -180,18 +171,14 @@ impl PlainValueRef {
     }
 }
 
-/// A `TwoWay` / `OneWayToSource` writeback hook: fires when a binding pushes a
-/// value from the UI **back** to a plain-VM property. The value is already
-/// stored in the instance (a subsequent `get_*` read returns it); this
-/// callback only lets the model author observe the edit.
+/// Observes values the UI writes back through `TwoWay` or `OneWayToSource`
+/// bindings. The value is already stored when the handler runs; `get_*` reads
+/// return it. Closures of the same signature implement it.
 pub trait PlainSetHandler: Send + 'static {
-    /// `prop_index` is the dense index from
-    /// [`PlainVmBuilder::add_property`]; `value` is the boxed value the UI
-    /// pushed (borrowed for the call).
+    /// `prop_index` is the index [`PlainVmBuilder::add_property`] returned.
     fn on_set(&self, prop_index: u32, value: &PlainValueRef);
 }
 
-/// A bare closure is a [`PlainSetHandler`].
 impl<F> PlainSetHandler for F
 where
     F: Fn(u32, &PlainValueRef) + Send + 'static,
@@ -202,7 +189,7 @@ where
 }
 
 /// SAFETY: `userdata` is the `Box<Box<dyn PlainSetHandler>>` leaked in
-/// [`PlainVmBuilder::register`], alive until the free trampoline runs.
+/// `PlainVmBuilder::register`, alive until the free trampoline runs.
 unsafe extern "C" fn plain_set_trampoline(
     userdata: *mut c_void,
     _instance: *mut c_void,
@@ -219,7 +206,7 @@ unsafe extern "C" fn plain_set_trampoline(
     })
 }
 
-/// SAFETY: `userdata` was produced by [`PlainVmBuilder::register`] and C++ owns
+/// SAFETY: `userdata` was produced by `PlainVmBuilder::register` and C++ owns
 /// it; this is the matching `Box::from_raw` that ends that ownership, run
 /// exactly once when the registration refcount hits zero.
 unsafe extern "C" fn plain_free_trampoline(userdata: *mut c_void) {
@@ -231,7 +218,8 @@ unsafe extern "C" fn plain_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// Builder for a plain-VM type registration.
+/// Declares a view-model type. Add properties, then call
+/// [`register`](Self::register).
 pub struct PlainVmBuilder {
     name: CString,
     props: Vec<(CString, PlainType)>,
@@ -239,8 +227,8 @@ pub struct PlainVmBuilder {
 }
 
 impl PlainVmBuilder {
-    /// Begin a registration for a type named `name` (must be unique across all
-    /// Noesis-reflected types).
+    /// Starts a type named `name`, which must not match any type already
+    /// registered with Noesis.
     ///
     /// # Panics
     ///
@@ -254,9 +242,9 @@ impl PlainVmBuilder {
         }
     }
 
-    /// Append a reflected property. Returns the dense index used by
-    /// [`PlainInstance::set`], the `get_*` accessors, and the
-    /// [`PlainSetHandler`]; indices grow from 0 in addition order.
+    /// Adds a property named `name`, the name XAML bindings use. Returns its
+    /// index for [`PlainInstance::set`] and the `get_*` accessors. Indices
+    /// count up from 0 in the order properties are added.
     ///
     /// # Panics
     ///
@@ -270,22 +258,21 @@ impl PlainVmBuilder {
         idx
     }
 
-    /// Install a `TwoWay` writeback hook (see [`PlainSetHandler`]). Optional;
-    /// omit it for read-only / `OneWay` view models.
+    /// Sets a handler for values the UI writes back. Not needed for `OneWay`
+    /// bindings.
     #[must_use]
     pub fn on_set<H: PlainSetHandler>(mut self, handler: H) -> Self {
         self.handler = Some(Box::new(handler));
         self
     }
 
-    /// Finalize the registration. Returns `None` if the type name is already
-    /// registered or a property registration failed.
+    /// Registers the type. Returns `None` if the name is already taken or a
+    /// property could not be registered. The name stays registered for the
+    /// rest of the process, even after the returned class is dropped.
     #[must_use]
     pub fn register(self) -> Option<PlainVmClass> {
-        // Double-Box the handler for a stable thin pointer across the C ABI,
-        // matching the Command / Converter pattern. A `None` handler registers
-        // with null userdata and no callbacks, so C++ takes no ownership and the
-        // free trampoline is never installed.
+        // Double box: a thin pointer for the C ABI. No handler means null
+        // userdata and no free callback.
         let (userdata, on_set): (*mut c_void, Option<PlainSetFn>) = match self.handler {
             Some(h) => {
                 let boxed: Box<Box<dyn PlainSetHandler>> = Box::new(h);
@@ -338,9 +325,8 @@ impl PlainVmBuilder {
     }
 }
 
-/// A registered plain-VM type. Owns the registration's `+1`; dropping it stops
-/// new instances being created and releases that reference (live instances keep
-/// the registration alive until they drop).
+/// A registered view-model type; creates instances. Live instances keep the
+/// registration alive after this handle drops.
 pub struct PlainVmClass {
     token: NonNull<c_void>,
     prop_count: u32,
@@ -350,8 +336,8 @@ pub struct PlainVmClass {
 unsafe impl Send for PlainVmClass {}
 
 impl PlainVmClass {
-    /// Create an instance of this type. Returns `None` only on an impossible
-    /// null-token invariant.
+    /// Creates an instance with every property unset. Returns `None` only if
+    /// Noesis fails to create it.
     #[must_use]
     pub fn create_instance(&self) -> Option<PlainInstance> {
         // SAFETY: token is a live registration handle; the result is a
@@ -379,9 +365,10 @@ impl Drop for PlainVmClass {
     }
 }
 
-/// A live plain-VM instance: a binding source. Owns a `+1` reference released on
-/// drop. Set it as a `DataContext` ([`Self::set_data_context`]) or hand its
-/// [`raw`](Self::raw) pointer to any API taking a `BaseComponent*`.
+/// An instance of a view-model type, usable as a binding source. Set it as a
+/// `DataContext` with [`Self::set_data_context`], or pass its
+/// [`raw`](Self::raw) pointer to any API taking a `BaseComponent*`. The handle
+/// holds one reference, released on drop.
 pub struct PlainInstance {
     ptr: NonNull<c_void>,
     prop_count: u32,
@@ -391,16 +378,18 @@ pub struct PlainInstance {
 unsafe impl Send for PlainInstance {}
 
 impl PlainInstance {
-    /// Raw `Noesis::BaseComponent*`, borrowed for the lifetime of `self`.
+    /// The underlying `Noesis::BaseComponent*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Store `value` as property `prop_index`'s current value. Does **not**
-    /// raise the change notification; call [`Self::notify`] (or use
-    /// [`Self::set_and_notify`]). Returns `false` if `prop_index` is out of
-    /// range.
+    /// Stores `value` in property `prop_index` without notifying bindings;
+    /// follow with [`Self::notify`], or use [`Self::set_and_notify`]. Returns
+    /// `false` if `prop_index` is out of range. The value is not checked
+    /// against the property's [`PlainType`].
+    ///
+    /// # Panics
     ///
     /// Panics if `value` is a [`PlainValue::String`] containing an interior NUL
     /// byte.
@@ -420,9 +409,9 @@ impl PlainInstance {
         ok
     }
 
-    /// Raise `INotifyPropertyChanged.PropertyChanged` for `prop_name`, so every
-    /// binding sourced from that property re-reads on the next pump. Returns
-    /// `true` once the notification is raised.
+    /// Tells bindings that property `prop_name` changed, so they read it again.
+    /// The name is not checked against the type's properties. Always returns
+    /// `true`.
     ///
     /// # Panics
     ///
@@ -433,62 +422,64 @@ impl PlainInstance {
         unsafe { noesis_plain_vm_notify(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
-    /// Convenience: [`set`](Self::set) then [`notify`](Self::notify).
+    /// [`set`](Self::set), then [`notify`](Self::notify) if the set succeeded.
+    /// `prop_name` must be the name of property `prop_index`.
     ///
     /// # Panics
     ///
-    /// Panics if `prop_name` contains an interior NUL byte.
+    /// Panics if `prop_name`, or a string `value`, contains an interior NUL
+    /// byte.
     #[must_use = "a false return means the property was not set (prop_index out of range)"]
     pub fn set_and_notify(&self, prop_index: u32, prop_name: &str, value: PlainValue) -> bool {
         self.set(prop_index, value) && self.notify(prop_name)
     }
 
-    /// Read the current boxed value of `prop_index` back as a `String` (copying
-    /// it). `None` if unset, out of range, or not a boxed string. Reads the
-    /// reflection-visible store directly (not through any binding), handy for
-    /// verifying a `TwoWay` writeback landed.
+    /// The current value of property `prop_index` as a `String`. `None` if the
+    /// property is unset, out of range, or not a string. Includes values the UI
+    /// wrote back.
     #[must_use]
     pub fn get_string(&self, prop_index: u32) -> Option<String> {
         self.get(prop_index)
             .and_then(|v| v.as_str().map(str::to_owned))
     }
 
-    /// Read the current boxed value of `prop_index` as an `i32`. `None` if
-    /// unset / out of range / type mismatch.
+    /// The current value of property `prop_index` as an `i32`. `None` if the
+    /// property is unset, out of range, or another type.
     #[must_use]
     pub fn get_i32(&self, prop_index: u32) -> Option<i32> {
         self.get(prop_index).and_then(|v| v.as_i32())
     }
 
-    /// Read the current boxed value of `prop_index` as an `f64`.
+    /// The current value of property `prop_index` as an `f64`. `None` if the
+    /// property is unset, out of range, or another type.
     #[must_use]
     pub fn get_f64(&self, prop_index: u32) -> Option<f64> {
         self.get(prop_index).and_then(|v| v.as_f64())
     }
 
-    /// Read the current boxed value of `prop_index` as a `u64`. `None` if
-    /// unset / out of range / type mismatch.
+    /// The current value of property `prop_index` as a `u64`. `None` if the
+    /// property is unset, out of range, or another type.
     #[must_use]
     pub fn get_u64(&self, prop_index: u32) -> Option<u64> {
         self.get(prop_index).and_then(|v| v.as_u64())
     }
 
-    /// Read the current boxed value of `prop_index` as a `bool`.
+    /// The current value of property `prop_index` as a `bool`. `None` if the
+    /// property is unset, out of range, or another type.
     #[must_use]
     pub fn get_bool(&self, prop_index: u32) -> Option<bool> {
         self.get(prop_index).and_then(|v| v.as_bool())
     }
 
-    /// Fetch a +1-owned boxed value, wrapped so it's released on drop. Returns
-    /// `None` if unset / out of range.
+    /// `None` if unset or out of range.
     fn get(&self, prop_index: u32) -> Option<OwnedBoxed> {
         // SAFETY: ptr is a live instance; result is +1-owned (or null).
         let raw = unsafe { noesis_plain_vm_get_value(self.ptr.as_ptr(), prop_index) };
         NonNull::new(raw).map(OwnedBoxed)
     }
 
-    /// Set this instance as `element`'s `DataContext`. Noesis takes its own
-    /// reference. Returns `false` if `element` is not a `FrameworkElement`.
+    /// Sets this instance as `element`'s `DataContext`. Noesis holds its own
+    /// reference. Returns `false` if the context was not set.
     #[must_use = "a false return means the data context was not set (element is not a FrameworkElement)"]
     pub fn set_data_context(&self, element: &mut FrameworkElement) -> bool {
         // SAFETY: self.raw() is a live BaseComponent* valid for the call;
@@ -504,7 +495,7 @@ impl Drop for PlainInstance {
     }
 }
 
-/// RAII wrapper for a `+1`-owned boxed value fetched from the instance store.
+/// A `+1`-owned boxed value, released on drop.
 struct OwnedBoxed(NonNull<c_void>);
 
 impl OwnedBoxed {

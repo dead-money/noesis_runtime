@@ -1,32 +1,17 @@
-// FrameworkElement traversal + event subscription FFI.
+// FrameworkElement lookup and helpers, and event subscription.
 //
-// Pieces:
-//   * `noesis_framework_element_find_name`: wraps Noesis's `FindName`.
-//     Returns an owning (+1 ref) `FrameworkElement*` so the Rust side
-//     manages lifetime via the same release path as `GUI::LoadXaml`.
-//   * `noesis_subscribe_click`: installs a Rust callback on the
-//     `BaseButton::Click` routed event. `noesis_unsubscribe_click`
-//     removes it. The token returned to Rust is a heap-allocated
-//     `RustClickHandler` whose lifetime is tied 1:1 to the subscription;
-//     it owns a +1 ref on the button so the subscription stays valid
-//     even if the only other reference is the parent FrameworkElement
-//     that the Rust caller dropped.
-//   * `noesis_subscribe_keydown` / `_unsubscribe_keydown`: same shape
-//     as click but for `UIElement::KeyDown`. The callback receives the
-//     pressed Key as a raw int and a writable `out_handled` flag the
-//     Rust side can set to `true` to suppress further routing (e.g.
-//     swallow backtick so it doesn't get typed into the focused TextBox).
-//   * `noesis_text_get` / `_text_set` / `_text_caret_to_end`: read /
-//     write `TextBox::Text` (and `TextBlock::Text` for read), plus a
-//     caret-to-end helper for command-history navigation.
-//   * `noesis_focus_element`: `UIElement::Focus()` so Rust can move
-//     keyboard focus to a named element programmatically (the input box
-//     when the console opens, etc.).
+//   * find_name / register_name, visibility, margin, text get/set, focus,
+//     Path polyline data and polygon clips.
+//   * Typed subscriptions: Button Click, KeyDown, Selector SelectionChanged.
+//   * Generic routed-event subscription by name, with typed arg accessors
+//     keyed on an arg-kind discriminant.
+//   * DragDrop source side, DataObject Copying / Pasting handlers.
+//   * Non-routed lifecycle events (Initialized, LayoutUpdated, Is*Changed).
 //
-// Why a separate translation unit (rather than appending to noesis_view.cpp):
-// the headers we pull in here (`BaseButton.h`, `RoutedEvent.h`, `Delegate.h`)
-// are heavy enough that we'd rather not pay for them in the input-pump file
-// every other FFI surface depends on.
+// Every subscription returns a heap handler as its token. The handler holds a
+// +1 ref on the element, so the subscription stays valid after the caller
+// drops its other handles, and owns the Rust userdata box (see
+// RustSubscription).
 
 #include "noesis_shim.h"
 
@@ -59,44 +44,31 @@
 
 namespace {
 
-// Shared teardown machinery for every Rust-owned event subscription in this
-// file. Two hazards it addresses:
+// Shared teardown for every Rust-owned subscription in this file.
 //
-//   * Donated userdata ownership. The Rust side hands us its handler box plus a
-//     free-fn and forgets about it; we free the box exactly once, in our
-//     destructor, via `mFree`. Rust's Drop only calls the unsubscribe
-//     entrypoint (it never frees the box), so the box can't be freed while a
-//     callback's borrow of it is still live.
+//   * Donated userdata. Rust hands over its handler box plus a free fn and
+//     forgets it. The box is freed exactly once, in the destructor. Rust's Drop
+//     only calls unsubscribe, so the box can't be freed while a callback still
+//     borrows it.
 //
-//   * Self-drop from inside a callback. A handler may drop its own subscription
-//     (Rust Drop -> noesis_unsubscribe_*) while its callback is still on the
-//     dispatch stack. Deleting the handler there would be a use-after-free (the
-//     running callback's `this`, plus any member access in the dispatch
-//     epilogue, would dangle). So each derived handler brackets the user
-//     callback with `enterDispatch()` / `leaveDispatch()`, and the unsubscribe
-//     entrypoints call `deferDeleteIfDispatching()`: when a callback is live it
-//     marks the handler and returns true, so unsubscribe skips the delete and
-//     the outermost dispatch frame performs `delete this` once it unwinds.
-//     Detaching the Noesis delegate (`-=`) from within its own dispatch is
-//     already safe: MultiDelegate nulls the slot and defers compaction until
-//     the invoke nesting hits zero.
+//   * Unsubscribe from inside the handler's own callback. Deleting there would
+//     leave the running callback's `this` dangling. Handlers bracket the
+//     callback with enterDispatch() / leaveDispatch(); unsubscribe calls
+//     deferDeleteIfDispatching(), and the outermost dispatch frame does
+//     `delete this` as it unwinds. Detaching the Noesis delegate (`-=`) during
+//     its own dispatch is already safe: MultiDelegate nulls the slot and defers
+//     compaction until invoke nesting reaches zero.
 //
-// A depth counter (not a bool) tracks dispatch nesting because a handler may
-// synchronously re-raise its own event and re-enter its callback; only the
-// OUTERMOST frame may delete, otherwise an inner frame would free the object
-// out from under the outer one.
+// Dispatch depth is a counter, not a bool: a callback can re-raise its own
+// event, and only the outermost frame may delete. Plain counter, no atomics:
+// everything runs on the single view thread.
 //
-// Thread affinity: subscriptions are created, dispatched and torn down on the
-// single view-driving thread, so a plain counter suffices — no atomics.
-//
-// The destructor is non-virtual: every unsubscribe path deletes through the
-// concrete handler type, never through a `RustSubscription*`.
+// Non-virtual destructor: every unsubscribe path deletes through the concrete
+// handler type.
 class RustSubscription {
 public:
-    // Called by an unsubscribe entrypoint. True => a callback for this handler
-    // is on the stack, so destruction was deferred (the outermost dispatch
-    // frame will `delete this`); the caller must NOT delete. False => the caller
-    // deletes now.
+    // True: a callback is on the stack and deletion is deferred; the caller
+    // must not delete. False: the caller deletes now.
     bool deferDeleteIfDispatching() {
         if (mDispatchDepth > 0) {
             mPendingDelete = true;
@@ -105,9 +77,8 @@ public:
         return false;
     }
 
-    // Give the donated box back to Rust: after this the destructor won't free
-    // it. Used only when a subscribe entrypoint constructs a handler but then
-    // fails to register it and returns NULL, so ownership never transferred.
+    // Hands the box back to Rust so the destructor won't free it. For a
+    // subscribe that fails after construction and returns NULL.
     void abandonDonation() {
         mUserdata = nullptr;
         mFree = nullptr;
@@ -118,7 +89,6 @@ protected:
         : mUserdata(userdata), mFree(free) {}
 
     ~RustSubscription() {
-        // Donated box freed exactly once, when the handler is really torn down.
         if (mFree && mUserdata) {
             mFree(mUserdata);
         }
@@ -126,9 +96,8 @@ protected:
 
     void enterDispatch() { mDispatchDepth++; }
 
-    // Pair with enterDispatch() at the end of a callback. Returns true iff this
-    // is the outermost dispatch frame AND an unsubscribe arrived during dispatch,
-    // in which case the caller must `delete this` (nothing else will).
+    // True when this is the outermost frame and an unsubscribe arrived during
+    // dispatch; the caller must then `delete this`.
     bool leaveDispatch() { return (--mDispatchDepth == 0) && mPendingDelete; }
 
     void* mUserdata;
@@ -137,13 +106,8 @@ protected:
     bool mPendingDelete = false;
 };
 
-// Adapter between Noesis's `Delegate<void(BaseComponent*, const
-// RoutedEventArgs&)>` and the C ABI callback. Stores the function pointer +
-// userdata that the Rust trampoline registered, plus a +1 ref on the button
-// so the subscription remains valid even if Rust drops every other handle to
-// the element. A handler owns its subscription; pair construction with
-// `Click() +=` and destruction with `Click() -=` so the reference symmetry
-// between this object and the routed-event-handler list is exact.
+// Click handler. Holds a +1 ref on the button; paired `Click() +=` on
+// subscribe and `Click() -=` on unsubscribe.
 class RustClickHandler final: public RustSubscription {
 public:
     RustClickHandler(noesis_click_fn cb, void* userdata,
@@ -178,7 +142,7 @@ public:
 
 private:
     noesis_click_fn mCb;
-    Noesis::BaseButton* mButton;  // raw + manual AddRef/Release; see ctor/dtor.
+    Noesis::BaseButton* mButton;
 };
 
 }  // namespace
@@ -188,10 +152,7 @@ extern "C" void* noesis_framework_element_find_name(void* element, const char* n
     auto* fe = static_cast<Noesis::FrameworkElement*>(element);
     Noesis::BaseComponent* found = fe->FindName(name);
     if (!found) return nullptr;
-    // FindName returns a non-owning raw pointer (the parent FE owns the named
-    // child). We need an owning +1-ref `FrameworkElement*` so the Rust wrapper
-    // can release it via `noesis_base_component_release` like every other
-    // FFI-provided component. Cast first; AddReference second.
+    // FindName's result is borrowed; hand out +1 for noesis_base_component_release
     auto* result = Noesis::DynamicCast<Noesis::FrameworkElement*>(found);
     if (!result) return nullptr;
     result->AddReference();
@@ -267,15 +228,9 @@ extern "C" void noesis_unsubscribe_click(void* token) {
 
 namespace {
 
-// Adapter between Noesis's `Delegate<void(BaseComponent*, const KeyEventArgs&)>`
-// and the C ABI callback. Mirrors `RustClickHandler`: owns a +1 ref on the
-// element so the subscription survives the caller dropping every other
-// handle. Pair construction with `KeyDown() +=` and destruction with
-// `KeyDown() -=`.
-//
-// `out_handled` lets the Rust side mark the event handled so further routing
-// stops, which matters for swallowing the backtick keystroke that opens the
-// console (otherwise it gets typed into the focused TextBox).
+// KeyDown handler. Holds a +1 ref on the element. The callback's `handled`
+// out-param stops further routing, e.g. so a hotkey isn't also typed into the
+// focused TextBox.
 class RustKeyDownHandler final: public RustSubscription {
 public:
     RustKeyDownHandler(noesis_keydown_fn cb, void* userdata,
@@ -301,8 +256,7 @@ public:
         if (mCb) {
             bool handled = false;
             mCb(mUserdata, static_cast<int32_t>(args.key), &handled);
-            // RoutedEventArgs::handled is `mutable`; writing through a const
-            // reference is supported by design.
+            // RoutedEventArgs::handled is `mutable`
             if (handled) {
                 args.handled = true;
             }
@@ -316,7 +270,7 @@ public:
 
 private:
     noesis_keydown_fn mCb;
-    Noesis::UIElement* mElement;  // raw + manual AddRef/Release; see ctor/dtor.
+    Noesis::UIElement* mElement;
 };
 
 }  // namespace
@@ -348,11 +302,7 @@ extern "C" void noesis_unsubscribe_keydown(void* token) {
 
 namespace {
 
-// Adapter between Noesis's `Delegate<void(BaseComponent*, const
-// SelectionChangedEventArgs&)>` and the C ABI callback. Mirrors
-// `RustClickHandler`: owns a +1 ref on the Selector so the subscription survives
-// the caller dropping every other handle. Pair construction with
-// `SelectionChanged() +=` and destruction with `SelectionChanged() -=`.
+// SelectionChanged handler. Holds a +1 ref on the Selector.
 class RustSelectionChangedHandler final: public RustSubscription {
 public:
     RustSelectionChangedHandler(noesis_selection_changed_fn cb, void* userdata,
@@ -388,7 +338,7 @@ public:
 
 private:
     noesis_selection_changed_fn mCb;
-    Noesis::Selector* mSelector;  // raw + manual AddRef/Release; see ctor/dtor.
+    Noesis::Selector* mSelector;
 };
 
 }  // namespace
@@ -471,12 +421,10 @@ extern "C" bool noesis_focus_element(void* element) {
     return uie->Focus();
 }
 
-// Build a single open polyline figure from `count` (x, y) pairs in `xy` (so
-// `xy` has `2*count` floats, in the Path's local coordinate space) and assign it
-// as a named `Path`'s `Data`. This is the geometry affordance behind the live
-// oscilloscope trace: a real vector polyline fed from Rust each frame, in place
-// of a rasterised text canvas. Returns false if the element is missing, not a
-// `Path`, or there are fewer than two points (no segment to draw).
+// Sets a Path's Data to one open, unfilled polyline through `count` (x, y)
+// pairs (`xy` holds `2*count` floats, in the Path's local space). Builds a new
+// StreamGeometry per call. Returns false if `element` is not a Path, `xy` is
+// null, or `count < 2`.
 extern "C" bool noesis_path_set_points(void* element, const float* xy, uint32_t count) {
     if (!element || !xy || count < 2) return false;
     auto* fe = static_cast<Noesis::FrameworkElement*>(element);
@@ -496,11 +444,9 @@ extern "C" bool noesis_path_set_points(void* element, const float* xy, uint32_t 
     return true;
 }
 
-// Clip any element to a closed polygon built from `count` (x, y) pairs in `xy`
-// (`2*count` floats, in the element's own coordinate space), by assigning a
-// filled `StreamGeometry` as its `UIElement::Clip`. `count == 0` clears the clip
-// (SetClip null). Returns false on a null element or a degenerate point count
-// (1 or 2 — no polygon).
+// Sets an element's Clip to a closed polygon through `count` (x, y) pairs
+// (`2*count` floats, in the element's own space). `count == 0` clears the
+// clip. Returns false on a null element, a null `xy`, or a `count` of 1 or 2.
 extern "C" bool noesis_element_set_clip_points(void* element, const float* xy, uint32_t count) {
     if (!element) return false;
     auto* fe = static_cast<Noesis::FrameworkElement*>(element);
@@ -525,37 +471,27 @@ extern "C" bool noesis_element_set_clip_points(void* element, const float* xy, u
 
 // ── Generic routed-event subscription ───────────────────────────────────────
 //
-// One mechanism replaces the bespoke Click/KeyDown wrappers for the whole
-// routed-event surface. Two facts about this SDK make it work:
+// Covers any routed event by name. Two SDK facts make one handler work:
 //
-//   1. `UIElement::AddHandler(const RoutedEvent*, const RoutedEventHandler&)`
-//      takes a *generic* `RoutedEventHandler` =
-//      `Delegate<void(BaseComponent*, const RoutedEventArgs&)>`. Every typed
-//      `RoutedEvent_<T>` wrapper in UIElement.h reinterpret_casts its handler
-//      to exactly that delegate before calling AddHandler, so a single
-//      delegate signature is ABI-correct for *every* routed event. We register
-//      one `OnEvent(BaseComponent*, const RoutedEventArgs&)` for all of them.
+//   1. UIElement::AddHandler takes the generic RoutedEventHandler
+//      (`Delegate<void(BaseComponent*, const RoutedEventArgs&)>`), and every
+//      typed RoutedEvent_<T> in UIElement.h reinterpret_casts its handler to
+//      that delegate. One OnEvent signature is ABI-correct for every event.
 //
-//   2. The event arg structs (`MouseEventArgs`, `KeyEventArgs`, ...) are plain
-//      structs WITHOUT reflection, so `DynamicCast` cannot downcast them. We
-//      instead classify the arg shape up-front from the event being subscribed
-//      to (see kEvents table) and carry an integer `kind` discriminant in the
-//      `DmEventArgs` wrapper handed to the callback. The typed accessors below
-//      `static_cast` on that `kind` (single, non-virtual inheritance → zero
-//      pointer offset, so the downcast is sound for the known type) and return
-//      a sentinel when the kind doesn't match.
+//   2. The arg structs (MouseEventArgs, KeyEventArgs, ...) have no reflection,
+//      so DynamicCast can't downcast them. The arg shape is classified from the
+//      subscribed event (kEvents) and carried as `kind` in DmEventArgs. The
+//      accessors static_cast on that kind (single non-virtual inheritance, zero
+//      offset) and return a sentinel on a mismatch.
 //
-// `handledEventsToo`: this SDK's `AddHandler` has NO third bool parameter, so
-// already-handled events are not re-delivered to a registered handler across
-// the bubble/tunnel route. The `handled_too` flag is still honoured *within*
-// the per-element multicast delegate: when false, the user callback is skipped
-// if a prior handler on the same element already set `handled`. See
-// `RustRoutedHandler::OnEvent`.
+// handledEventsToo: this SDK's AddHandler has no third parameter, so
+// already-handled events are never re-delivered along the route. `handled_too`
+// only applies within one element's multicast delegate: when false, the
+// callback is skipped if an earlier handler on the same element set `handled`.
 
 namespace {
 
-// Arg-shape discriminant. Mirrored by the `events::arg_kind` module in
-// src/events.rs and the accessor sentinels there. Keep the two in sync.
+// Arg-shape discriminant. Must match `arg_kind` in src/events.rs.
 enum DmArgKind : int32_t {
     ARG_ROUTED       = 0,  // RoutedEventArgs (source + handled only)
     ARG_MOUSE        = 1,  // MouseEventArgs (position)
@@ -580,12 +516,9 @@ struct DmEventArgs {
     const Noesis::RoutedEventArgs* args;
 };
 
-// Name → (static RoutedEvent* slot, arg kind). The slots are the
-// `UIElement::*Event` / `FrameworkElement::*Event` statics; we store their
-// addresses and dereference at lookup time (the pointers are populated during
-// Noesis registration, after init). Typed kinds get rich accessors; everything
-// else is exposed with `ARG_ROUTED` (source + handled), which is enough to
-// observe the event and read its originating element.
+// Name -> (RoutedEvent* static, arg kind). Stores the statics' addresses and
+// dereferences at lookup time: Noesis fills them during init. Events not
+// listed here get ARG_ROUTED (source + handled only).
 struct EventEntry {
     const char* name;
     const Noesis::RoutedEvent* const* slot;
@@ -653,9 +586,8 @@ const EventEntry kEvents[] = {
     {"ManipulationDelta",            &Noesis::UIElement::ManipulationDeltaEvent,            ARG_MANIP_DELTA},
     {"ManipulationInertiaStarting",  &Noesis::UIElement::ManipulationInertiaStartingEvent,  ARG_MANIP_INERTIA},
     {"ManipulationCompleted",        &Noesis::UIElement::ManipulationCompletedEvent,        ARG_MANIP_COMPLETED},
-    // Drag/drop: DragEventArgs (data / effects / allowedEffects / keyStates /
-    // position). Leave/QueryContinueDrag/GiveFeedback carry different args; the
-    // enter/over/drop family all use DragEventArgs.
+    // Drag/drop: DragEventArgs. QueryContinueDrag and GiveFeedback carry other
+    // arg types and resolve through the generic fallback as ARG_ROUTED.
     {"DragEnter",        &Noesis::UIElement::DragEnterEvent,        ARG_DRAG},
     {"DragOver",         &Noesis::UIElement::DragOverEvent,         ARG_DRAG},
     {"DragLeave",        &Noesis::UIElement::DragLeaveEvent,        ARG_DRAG},
@@ -666,11 +598,9 @@ const EventEntry kEvents[] = {
     {"PreviewDrop",      &Noesis::UIElement::PreviewDropEvent,      ARG_DRAG},
 };
 
-// Resolve `name` to a RoutedEvent + arg kind. Tries the curated table first
-// (gives the precise arg kind), then falls back to the SDK's generic
-// `FindRoutedEvent` over the element's class hierarchy (arg kind reported as
-// `ARG_ROUTED`, i.e. base accessors only). Returns nullptr if neither path
-// resolves the name.
+// Resolves `name` through kEvents, then through FindRoutedEvent on the
+// element's class hierarchy (reported as ARG_ROUTED). nullptr if neither
+// knows the name.
 const Noesis::RoutedEvent* LookupEvent(
     Noesis::UIElement* element, const char* name, int32_t& outKind)
 {
@@ -680,7 +610,6 @@ const Noesis::RoutedEvent* LookupEvent(
             return *e.slot;
         }
     }
-    // Generic fallback: a name we didn't curate but the reflection system knows.
     Noesis::Symbol sym(name, Noesis::Symbol::NullIfNotFound());
     if (sym.IsNull()) return nullptr;
     const Noesis::RoutedEvent* ev = Noesis::FindRoutedEvent(element->GetClassType(), sym);
@@ -690,12 +619,8 @@ const Noesis::RoutedEvent* LookupEvent(
     return ev;
 }
 
-// Adapter between a generic `RoutedEventHandler` and the C ABI callback.
-// Mirrors `RustClickHandler` / `RustKeyDownHandler`: owns a +1 ref on the
-// element (so the subscription survives the caller dropping every other handle)
-// and stores the RoutedEvent it registered against so `-=` is exact on
-// teardown. Pair construction with `AddHandler` and destruction with
-// `RemoveHandler`.
+// Generic routed-event handler. Holds a +1 ref on the element and the
+// RoutedEvent it registered against, for the matching RemoveHandler.
 class RustRoutedHandler final: public RustSubscription {
 public:
     RustRoutedHandler(noesis_routed_event_fn cb, void* userdata,
@@ -719,17 +644,14 @@ public:
     RustRoutedHandler& operator=(const RustRoutedHandler&) = delete;
 
     void OnEvent(Noesis::BaseComponent* /*sender*/, const Noesis::RoutedEventArgs& args) {
-        // handledEventsToo semantics: when false, respect a prior handler on
-        // this element that already marked the event handled. (No callback, so
-        // no re-entrant unsubscribe is possible on this path — return directly.)
+        // returns before enterDispatch: no callback, so no re-entrant unsubscribe
         if (!mCb || (!mHandledToo && args.handled)) return;
 
         enterDispatch();
         DmEventArgs wrap{mKind, &args};
         bool handled = args.handled;
         mCb(mUserdata, &wrap, &handled);
-        // RoutedEventArgs::handled is `mutable`; writing through the const
-        // reference is supported by design.
+        // RoutedEventArgs::handled is `mutable`
         if (handled) {
             args.handled = true;
         }
@@ -743,7 +665,7 @@ public:
 
 private:
     noesis_routed_event_fn mCb;
-    Noesis::UIElement* mElement;  // raw + manual AddRef/Release; see ctor/dtor.
+    Noesis::UIElement* mElement;
     const Noesis::RoutedEvent* mEvent;
     int32_t mKind;
     bool mHandledToo;
@@ -781,10 +703,9 @@ extern "C" void noesis_unsubscribe_event(void* token) {
 
 // ── Event-arg accessors ─────────────────────────────────────────────────────
 //
-// Each takes the opaque `args` the callback received (a `DmEventArgs*`) and
-// introspects via the carried `kind`. Returning a sentinel (false / -1 / 0)
-// when the kind doesn't match lets one generic callback safely probe whatever
-// arrived without knowing the concrete type up front.
+// Each takes the opaque `args` the callback received (a DmEventArgs*) and
+// returns a sentinel (false / -1 / 0) when its `kind` doesn't match. Valid only
+// during the callback.
 
 extern "C" bool noesis_mouse_args_position(const void* args, float* x, float* y) {
     if (!args) return false;
@@ -850,11 +771,9 @@ extern "C" void* noesis_routed_args_source(const void* args) {
     return w->args ? w->args->source : nullptr;
 }
 
-// The arg-shape discriminant (DmArgKind) carried by the opaque `args`. This is
-// the authoritative classifier: the typed accessors above deliberately share
-// sentinels (a MouseMove and a zero-delta MouseWheel both read as "position, no
-// button"), so the Rust side keys its is_* checks on this value rather than
-// inferring the kind from which accessor returned. Returns -1 if `args` is null.
+// The DmArgKind carried by `args`, or -1 if `args` is null. Classify on this,
+// not on which accessor succeeds: the accessors share sentinels (a MouseMove
+// and a zero-delta MouseWheel read the same).
 extern "C" int32_t noesis_event_args_kind(const void* args) {
     if (!args) return -1;
     return static_cast<const DmEventArgs*>(args)->kind;
@@ -862,12 +781,8 @@ extern "C" int32_t noesis_event_args_kind(const void* args) {
 
 // ── Typed arg accessors: focus / drag / manipulation ────────────────────────
 //
-// Same contract as the mouse/key accessors above: each gates on the carried
-// `kind` and `static_cast`s the borrowed `RoutedEventArgs*` to the concrete
-// derived struct (single, non-virtual inheritance → zero pointer offset).
-// Borrowed element pointers are NOT ref-counted; values are valid only for the
-// callback's duration. A `kind` mismatch yields a sentinel so a generic
-// callback can safely probe whichever args arrived.
+// Same contract as above. Returned element pointers are borrowed, not
+// ref-counted, and valid only during the callback.
 
 // KeyboardFocusChangedEventArgs::oldFocus: element that previously had focus.
 // Borrowed UIElement* (may be null even on a real focus event). Returns null
@@ -1062,10 +977,10 @@ extern "C" int32_t noesis_routed_events_manip_is_inertial(const void* args) {
 
 // ── DragDrop source side + DataObject copy/paste handlers ────────────────────
 
-// Noesis::DragDrop::DoDragDrop: initiates a drag from `source` carrying
-// `data`, advertising `allowed_effects` (DragDropEffects bitmask). The drag is
-// then driven by the host's pointer input; there is no headless completion.
-// Returns false if `source` or `data` is null.
+// Starts a drag from `source` carrying `data`, advertising `allowed_effects`
+// (DragDropEffects bitmask). The host's pointer input drives the drag from
+// there; nothing completes it headlessly. Returns false if `source` or `data`
+// is null or `source` is not a DependencyObject.
 extern "C" bool noesis_routed_events_do_drag_drop(
     void* source, void* data, uint32_t allowed_effects)
 {
@@ -1079,11 +994,9 @@ extern "C" bool noesis_routed_events_do_drag_drop(
 
 namespace {
 
-// Adapter for a DataObject.Copying / .Pasting handler. Owns a +1 ref on the
-// element and remembers which event it attached so teardown is exact. The
-// callback receives the data object pointer (borrowed), the isDragDrop flag,
-// and a writable cancel flag (Copying cancels the copy; Pasting cancels the
-// paste).
+// DataObject.Copying / Pasting handler. Holds a +1 ref on the element and
+// remembers which event it attached to. The callback gets the borrowed data
+// object, isDragDrop, and a writable cancel flag.
 class RustDataObjectHandler final: public RustSubscription {
 public:
     enum Kind { Copying, Pasting };
@@ -1137,7 +1050,7 @@ public:
 
 private:
     noesis_data_object_fn mCb;
-    Noesis::UIElement* mElement;  // raw + manual AddRef/Release.
+    Noesis::UIElement* mElement;
     Kind mKind;
 };
 
@@ -1191,20 +1104,14 @@ extern "C" void noesis_routed_events_remove_data_object_handler(void* token) {
 
 // ── Non-routed lifecycle events ─────────────────────────────────────────────
 //
-// `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
-// notifications are NOT routed events; they ride the `Event_<T>` mechanism
-// (`UIElement::AddEventHandler(Symbol, const EventHandler&)` /
-// `RemoveEventHandler`), not `AddHandler(RoutedEvent, ...)`. Rather than guess
-// the internal Symbol keys, we drive each event through its public accessor's
-// `operator+=` / `operator-=` (which forward to Add/RemoveEventHandler with the
-// right key). The two delegate signatures involved, `EventHandler`
-// (Initialized / LayoutUpdated) and `DependencyPropertyChangedEventHandler`
-// (everything else), are dispatched by the `ApplyLifecycle` table below. None
-// carry args we surface, so the Rust callback is a bare `void(userdata)`.
+// Initialized, LayoutUpdated, DataContextChanged and the Is*Changed
+// notifications are not routed events; they use Event_<T> (AddEventHandler
+// with an internal Symbol key). Each is driven through its public accessor's
+// `+=` / `-=`, which supplies the right key. No args are surfaced; the callback
+// is `void(userdata)`.
 //
-// Lifetime mirrors `RustRoutedHandler`: the heap handler owns a +1 ref on the
-// element (so the subscription survives the caller dropping every other handle)
-// and remembers the event name so teardown's `-=` is exact.
+// The handler holds a +1 ref on the element and copies the event name for the
+// matching `-=`.
 
 namespace {
 
@@ -1237,8 +1144,7 @@ public:
         dispatch();
     }
 
-    // DependencyPropertyChangedEventHandler signature (Is*Changed / Focusable /
-    // DataContext). The arg carries old/new DP values we don't surface here.
+    // DependencyPropertyChangedEventHandler signature (everything else).
     void OnDpEvent(Noesis::BaseComponent* /*sender*/,
         const Noesis::DependencyPropertyChangedEventArgs& /*args*/) {
         dispatch();
@@ -1248,8 +1154,6 @@ public:
     const char* name() const { return mName; }
 
 private:
-    // Both delegate shapes forward to the same argument-free callback; share the
-    // dispatch-guard / deferred-delete epilogue.
     void dispatch() {
         enterDispatch();
         if (mCb) mCb(mUserdata);
@@ -1259,14 +1163,12 @@ private:
     }
 
     noesis_lifecycle_fn mCb;
-    Noesis::FrameworkElement* mElement;  // raw + manual AddRef/Release.
+    Noesis::FrameworkElement* mElement;
     char* mName;
 };
 
-// Add (`add == true`) or remove the handler for the named lifecycle event by
-// driving the matching public accessor's `+=` / `-=`. Returns false if `name`
-// is not one of the supported lifecycle events. The same table services both
-// subscribe and unsubscribe so the registration is exactly symmetric.
+// Adds or removes the handler for the named lifecycle event. One table for
+// both directions keeps them symmetric. Returns false for an unknown name.
 bool ApplyLifecycle(
     Noesis::FrameworkElement* fe, const char* name, RustLifecycleHandler* h, bool add)
 {
@@ -1312,9 +1214,7 @@ extern "C" void* noesis_subscribe_lifecycle(
 
     auto* handler = new RustLifecycleHandler(cb, userdata, free_handler, fe, event_name);
     if (!ApplyLifecycle(fe, handler->name(), handler, true)) {
-        // Unknown event name: undo and report failure. Registration never
-        // happened, so ownership of the donated box never transferred — hand it
-        // back to Rust (which reclaims on the NULL return) rather than free it.
+        // ownership never transferred; Rust reclaims the box on NULL
         handler->abandonDonation();
         delete handler;
         return nullptr;
@@ -1332,20 +1232,12 @@ extern "C" void noesis_unsubscribe_lifecycle(void* token) {
     delete handler;
 }
 
-// ─── Test-only entrypoints ─────────────────────────────────────────────────
+// ── Test-only entry points (`test-utils` feature, NOESIS_TEST_UTILS) ────────
 //
-// Gated by the `test-utils` Cargo feature (which sets NOESIS_TEST_UTILS).
-// Production builds omit them entirely.
-//
-// Drag and manipulation events cannot be synthesized in a headless harness:
-// a real drag is driven by an OS pointer/drag loop, and manipulation events
-// are promoted from a multi-frame touch stream against a live render/layout
-// pass. To prove the typed-arg accessors genuinely read the live Noesis arg
-// fields (a stub returning 0 must fail), these helpers construct the real
-// `DragEventArgs` / `Manipulation*EventArgs` with known field values, wrap them
-// in the same `DmEventArgs` the live dispatcher uses, and invoke the supplied
-// callback, exactly mirroring `RustRoutedHandler::OnEvent`. The Rust test then
-// reads the values back through the production accessors.
+// Drag and manipulation events can't be synthesized headlessly: drags need an
+// OS drag loop, manipulations a multi-frame touch stream. These build the real
+// arg structs with known values, wrap them in DmEventArgs as OnEvent does, and
+// invoke the callback so tests can read them back through the accessors.
 
 #ifdef NOESIS_TEST_UTILS
 

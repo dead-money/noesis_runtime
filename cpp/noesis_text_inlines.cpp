@@ -1,26 +1,12 @@
-// TextBlock inline content model: the Inline element family that
-// ships in 3.2.13 (Run, Span, Bold, Italic, Underline, Hyperlink, LineBreak,
-// and InlineUIContainer), plus the InlineCollection (UICollection<Inline>) that
-// TextBlock and Span expose so inlines can be assembled from Rust.
+// TextBlock inline content: the Inline family (Run, Span, Bold, Italic,
+// Underline, Hyperlink, LineBreak, InlineUIContainer) and the InlineCollection
+// that TextBlock and Span expose.
 //
-// Ownership mirrors cpp/noesis_brushes.cpp / cpp/noesis_collections.cpp:
-//
-//   * Each *_create hands a freshly-`new`'d Inline out across the C ABI with a
-//     single owned +1 reference (handout()), balanced by the Rust handle's Drop
-//     calling noesis_base_component_release. Adding the Inline to an
-//     InlineCollection makes the collection take its own reference, so the Rust
-//     builder handle may be dropped afterwards.
-//
-//   * GetInlines (on TextBlock / Span) returns the live InlineCollection at +1
-//     (handout) so Rust holds an owning handle over it; the collection is also
-//     owned by its host element, and the +1 keeps it alive for the handle's
-//     lifetime. The collection's add/count/get entrypoints mirror the
-//     UICollection<Inline> surface (Add/Count/Get) the same way
-//     cpp/noesis_collections.cpp wraps ObservableCollection.
-//
-// Read-back getters (Run text, Hyperlink NavigateUri, collection Count/Get,
-// InlineUIContainer Child, Inline TextDecorations) re-read from the live Noesis
-// object so a stubbed constructor/setter fails the round-trip.
+// Ownership: each *_create returns a new Inline at +1, released by the Rust
+// handle's Drop via noesis_base_component_release. Adding an Inline to a
+// collection makes the collection take its own reference, so the Rust handle
+// may be dropped afterwards. *_get_inlines returns the host's live collection
+// at +1, keeping it alive for the handle's lifetime.
 
 #include "noesis_shim.h"
 
@@ -44,10 +30,8 @@
 
 namespace {
 
-// Hand a freshly-created (or borrowed) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller, balanced by
-// noesis_base_component_release. Safe on a refcount-0 `new`'d object
-// (bumps 0->1) or a live borrowed object (bumps N->N+1).
+// +1 for the caller, balanced by noesis_base_component_release. Works on a
+// refcount-0 `new`'d object (0->1) or a live borrowed one (N->N+1).
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -116,8 +100,7 @@ extern "C" void* noesis_text_inlines_ui_container_create(void) {
 extern "C" bool noesis_text_inlines_run_set_text(void* run, const char* text) {
     auto* r = cast<Noesis::Run>(run);
     if (!r) return false;
-    // Run::SetText copies into the Run's own storage; `text` need not outlive
-    // the call. A null pointer clears the run to the empty string.
+    // SetText copies; `text` need not outlive the call. NULL clears.
     r->SetText(text ? text : "");
     return true;
 }
@@ -243,8 +226,7 @@ extern "C" void* noesis_text_inlines_collection_get(void* collection, uint32_t i
     return static_cast<Noesis::BaseComponent*>(coll->Get(index));
 }
 
-// Remove all inlines from the collection (so it can be repopulated). No-op if
-// `collection` is not an InlineCollection.
+// No-op if `collection` is not an InlineCollection.
 extern "C" void noesis_text_inlines_collection_clear(void* collection) {
     InlineColl* coll = as_inlines(collection);
     if (coll) coll->Clear();

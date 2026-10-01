@@ -1,18 +1,32 @@
-//! Code-built brushes and effects: construct `Brush` / `Effect` objects from
-//! Rust and paint elements with them without authoring XAML.
+//! Brushes and effects built in code, for painting elements without XAML.
 //!
-//! Each type here is an owning handle over a freshly-created Noesis object
-//! holding a single `+1` reference, released on [`Drop`]. Same pattern as
-//! [`crate::binding::Boxed`] / [`crate::binding::ObservableCollection`].
-//! Assigning a brush/effect to an element makes Noesis take its own reference,
-//! so the Rust handle may be dropped right after assignment. The ergonomic way
-//! to assign is the typed sugar on [`FrameworkElement`](crate::view::FrameworkElement)
-//! (`set_background` / `set_foreground` / `set_fill` / `set_effect`), which
-//! routes through the generic `set_component` DP path.
+//! Brushes: [`SolidColorBrush`], [`LinearGradientBrush`],
+//! [`RadialGradientBrush`], [`ImageBrush`] and [`VisualBrush`]. Effects:
+//! [`BlurEffect`] and [`DropShadowEffect`].
 //!
-//! Read-back getters ([`SolidColorBrush::color`], [`BlurEffect::radius`], ...)
-//! re-read from the live Noesis object, so they reflect its current state rather
-//! than a Rust-side cache.
+//! Each type owns one reference to a new Noesis object and releases it on
+//! drop. Assign one with the typed setters on
+//! [`FrameworkElement`](crate::view::FrameworkElement)
+//! ([`set_background`](crate::view::FrameworkElement::set_background),
+//! [`set_foreground`](crate::view::FrameworkElement::set_foreground),
+//! [`set_fill`](crate::view::FrameworkElement::set_fill),
+//! [`set_stroke`](crate::view::FrameworkElement::set_stroke),
+//! [`set_effect`](crate::view::FrameworkElement::set_effect)). The element
+//! takes its own reference, so the Rust handle can be dropped after the call;
+//! keep it if you want to change the brush later, since edits to a shared
+//! brush show on every element that uses it.
+//!
+//! ```no_run
+//! # use noesis_runtime::brushes::SolidColorBrush;
+//! # use noesis_runtime::view::FrameworkElement;
+//! # fn paint(element: &mut FrameworkElement) {
+//! let brush = SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]);
+//! element.set_background(&brush);
+//! # }
+//! ```
+//!
+//! Colors are `[r, g, b, a]` floats in `0..=1`. Getters such as
+//! [`SolidColorBrush::color`] read the live Noesis object, not a Rust-side copy.
 
 use core::ptr::NonNull;
 use std::ffi::c_void;
@@ -45,17 +59,18 @@ use crate::ffi::{
     noesis_visual_brush_get_visual, noesis_visual_brush_set_visual,
 };
 
-/// A handle to a Noesis `Brush`. Implemented by every brush type in this module
-/// so the typed element sugar (e.g.
-/// [`FrameworkElement::set_background`](crate::view::FrameworkElement::set_background))
-/// accepts any of them while keeping non-brush objects out.
+/// Any brush in this module. Element setters such as
+/// [`FrameworkElement::set_background`](crate::view::FrameworkElement::set_background)
+/// take `&impl Brush`, so they accept every brush type and nothing else.
 pub trait Brush {
     /// Borrowed `Noesis::Brush*` (a `BaseComponent*`), valid for `self`'s
-    /// lifetime. Used by the assignment sugar; not normally called directly.
+    /// lifetime. The element setters use it; you rarely need it directly.
     fn brush_raw(&self) -> *mut c_void;
 }
 
-/// A handle to a Noesis `Effect` (post-process applied to an element's visual).
+/// Any effect in this module: a post-process applied to an element's rendered
+/// output. Assign with
+/// [`FrameworkElement::set_effect`](crate::view::FrameworkElement::set_effect).
 pub trait Effect {
     /// Borrowed `Noesis::Effect*` (a `BaseComponent*`), valid for `self`'s
     /// lifetime.
@@ -85,7 +100,7 @@ macro_rules! base_component_handle {
     };
 }
 
-/// A `SolidColorBrush` painting a flat `[r, g, b, a]` color (each `0..=1`).
+/// Paints a single color.
 pub struct SolidColorBrush {
     ptr: NonNull<c_void>,
 }
@@ -93,12 +108,12 @@ pub struct SolidColorBrush {
 base_component_handle!(SolidColorBrush);
 
 impl SolidColorBrush {
-    /// Create a solid brush of `rgba` (`{r, g, b, a}`, each in `0..=1`).
+    /// Creates a brush of `rgba` (`[r, g, b, a]`, each in `0..=1`).
     ///
     /// # Panics
     ///
-    /// Panics if Noesis fails to allocate the brush (not expected after
-    /// [`crate::init`]).
+    /// Panics if Noesis returns null, which does not happen after
+    /// [`crate::init`].
     #[must_use]
     pub fn new(rgba: [f32; 4]) -> Self {
         // SAFETY: `rgba` outlives the call; the C side copies it into a Color.
@@ -108,7 +123,7 @@ impl SolidColorBrush {
         }
     }
 
-    /// Replace the brush color with `rgba`.
+    /// Replaces the color. Every element painted with this brush updates.
     pub fn set_color(&mut self, rgba: [f32; 4]) {
         // SAFETY: self.ptr is a live SolidColorBrush*; `rgba` outlives the call.
         unsafe {
@@ -116,7 +131,7 @@ impl SolidColorBrush {
         }
     }
 
-    /// Read the brush color back from the live Noesis object as `[r, g, b, a]`.
+    /// The current color as `[r, g, b, a]`.
     #[must_use]
     pub fn color(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
@@ -134,25 +149,23 @@ impl Brush for SolidColorBrush {
     }
 }
 
-/// A single gradient stop: a color at a normalized `offset` (`0..=1`).
+/// A color at a position along a gradient.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct GradientStop {
     /// Position of the stop along the gradient axis, `0..=1`.
     pub offset: f32,
-    /// Stop color `{r, g, b, a}`, each `0..=1`.
+    /// `[r, g, b, a]`, each `0..=1`.
     pub color: [f32; 4],
 }
 
 impl GradientStop {
-    /// Construct a stop from an `offset` and `rgba` color.
+    /// A stop of `color` at `offset`.
     #[must_use]
     pub fn new(offset: f32, color: [f32; 4]) -> Self {
         Self { offset, color }
     }
 }
 
-// Shared gradient-stop helpers (LinearGradientBrush / RadialGradientBrush both
-// derive from GradientBrush, so the stop FFI is type-agnostic).
 fn gradient_add_stop(ptr: *mut c_void, stop: GradientStop) -> Option<usize> {
     // SAFETY: `ptr` is a live GradientBrush*; `color` outlives the call.
     let idx = unsafe { noesis_gradient_brush_add_stop(ptr, stop.offset, stop.color.as_ptr()) };
@@ -200,8 +213,7 @@ fn gradient_mapping_mode(ptr: *mut c_void) -> Option<BrushMappingMode> {
     BrushMappingMode::from_ordinal(unsafe { noesis_gradient_brush_get_mapping_mode(ptr) })
 }
 
-/// `Noesis::GradientSpreadMethod`: how a gradient paints the
-/// area outside its `[0, 1]` gradient vector. Ordinals match the C++ enum.
+/// How a gradient paints the area outside its `0..=1` range.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -225,8 +237,12 @@ impl GradientSpreadMethod {
     }
 }
 
-/// A `LinearGradientBrush` painting a gradient along the line from `StartPoint`
-/// to `EndPoint` (default `(0,0)`..`(1,1)`, relative to the painted area).
+/// Paints a gradient along the line from a start point to an end point.
+///
+/// Points default to `(0, 0)` and `(1, 1)` and, under the default
+/// [`BrushMappingMode::RelativeToBoundingBox`], are fractions of the painted
+/// area. A new brush has no stops; add them with [`add_stop`](Self::add_stop)
+/// or build one with [`builder`](Self::builder).
 pub struct LinearGradientBrush {
     ptr: NonNull<c_void>,
 }
@@ -240,7 +256,7 @@ impl Default for LinearGradientBrush {
 }
 
 impl LinearGradientBrush {
-    /// Create an empty linear gradient brush (no stops yet).
+    /// Creates a brush with no stops.
     ///
     /// # Panics
     ///
@@ -253,19 +269,21 @@ impl LinearGradientBrush {
         }
     }
 
-    /// Set the gradient start point (relative coordinates by default).
+    /// Sets the start point, in the units chosen by
+    /// [`set_mapping_mode`](Self::set_mapping_mode).
     pub fn set_start_point(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live LinearGradientBrush*.
         unsafe { noesis_linear_gradient_brush_set_start_point(self.ptr.as_ptr(), x, y) };
     }
 
-    /// Set the gradient end point.
+    /// Sets the end point, in the units chosen by
+    /// [`set_mapping_mode`](Self::set_mapping_mode).
     pub fn set_end_point(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live LinearGradientBrush*.
         unsafe { noesis_linear_gradient_brush_set_end_point(self.ptr.as_ptr(), x, y) };
     }
 
-    /// Read `({startX, startY}, {endX, endY})` back from the live object.
+    /// The current `([start_x, start_y], [end_x, end_y])`.
     #[must_use]
     pub fn points(&self) -> ([f32; 2], [f32; 2]) {
         let mut out = [0.0f32; 4];
@@ -274,46 +292,50 @@ impl LinearGradientBrush {
         ([out[0], out[1]], [out[2], out[3]])
     }
 
-    /// Append a gradient stop. Returns its index, or `None` on failure.
+    /// Appends a stop and returns its index. `None` only if Noesis rejects
+    /// the call.
     pub fn add_stop(&mut self, stop: GradientStop) -> Option<usize> {
         gradient_add_stop(self.ptr.as_ptr(), stop)
     }
 
-    /// Number of gradient stops currently on the brush.
+    /// Number of stops on the brush.
     #[must_use]
     pub fn stop_count(&self) -> usize {
         gradient_stop_count(self.ptr.as_ptr())
     }
 
-    /// Read back the stop at `index`, or `None` if out of range.
+    /// The stop at `index` (in insertion order), or `None` if out of range.
     #[must_use]
     pub fn stop(&self, index: usize) -> Option<GradientStop> {
         gradient_get_stop(self.ptr.as_ptr(), index)
     }
 
-    /// Set how the gradient paints outside its `[0, 1]` vector.
+    /// Sets how the gradient paints outside its `0..=1` range. Default
+    /// [`GradientSpreadMethod::Pad`]. Returns `true` on success.
     pub fn set_spread_method(&mut self, method: GradientSpreadMethod) -> bool {
         gradient_set_spread_method(self.ptr.as_ptr(), method)
     }
 
-    /// Read the spread method back from the live object.
+    /// The current spread method.
     #[must_use]
     pub fn spread_method(&self) -> Option<GradientSpreadMethod> {
         gradient_spread_method(self.ptr.as_ptr())
     }
 
-    /// Set whether start/end points are absolute or relative to the bounding box.
+    /// Sets whether the start and end points are absolute or fractions of the
+    /// painted area. Default [`BrushMappingMode::RelativeToBoundingBox`].
+    /// Returns `true` on success.
     pub fn set_mapping_mode(&mut self, mode: BrushMappingMode) -> bool {
         gradient_set_mapping_mode(self.ptr.as_ptr(), mode)
     }
 
-    /// Read the mapping mode back from the live object.
+    /// The current mapping mode.
     #[must_use]
     pub fn mapping_mode(&self) -> Option<BrushMappingMode> {
         gradient_mapping_mode(self.ptr.as_ptr())
     }
 
-    /// Start a [`LinearGradientBrushBuilder`] for fluent construction.
+    /// Starts a [`LinearGradientBrushBuilder`].
     pub fn builder() -> LinearGradientBrushBuilder {
         LinearGradientBrushBuilder {
             brush: LinearGradientBrush::new(),
@@ -321,8 +343,8 @@ impl LinearGradientBrush {
     }
 }
 
-/// Fluent builder for a [`LinearGradientBrush`]: set the start/end points, spread
-/// method and mapping mode, append `.stop(..)`s, then [`build`](Self::build).
+/// Chained construction of a [`LinearGradientBrush`]. Each method calls the
+/// matching setter on the brush; finish with [`build`](Self::build).
 ///
 /// ```no_run
 /// # use noesis_runtime::brushes::{LinearGradientBrush, GradientSpreadMethod, BrushMappingMode};
@@ -341,37 +363,37 @@ pub struct LinearGradientBrushBuilder {
 }
 
 impl LinearGradientBrushBuilder {
-    /// Set the gradient start point.
+    /// See [`LinearGradientBrush::set_start_point`].
     pub fn start(mut self, x: f32, y: f32) -> Self {
         self.brush.set_start_point(x, y);
         self
     }
 
-    /// Set the gradient end point.
+    /// See [`LinearGradientBrush::set_end_point`].
     pub fn end(mut self, x: f32, y: f32) -> Self {
         self.brush.set_end_point(x, y);
         self
     }
 
-    /// Set the spread method.
+    /// See [`GradientSpreadMethod`].
     pub fn spread_method(mut self, method: GradientSpreadMethod) -> Self {
         self.brush.set_spread_method(method);
         self
     }
 
-    /// Set the mapping mode.
+    /// See [`BrushMappingMode`].
     pub fn mapping_mode(mut self, mode: BrushMappingMode) -> Self {
         self.brush.set_mapping_mode(mode);
         self
     }
 
-    /// Append a gradient stop of `color` at `offset` (`0..=1`).
+    /// Appends a stop of `color` (`[r, g, b, a]`) at `offset` (`0..=1`).
     pub fn stop(mut self, offset: f32, color: [f32; 4]) -> Self {
         self.brush.add_stop(GradientStop { offset, color });
         self
     }
 
-    /// Finish and return the built brush.
+    /// Returns the brush.
     #[must_use]
     pub fn build(self) -> LinearGradientBrush {
         self.brush
@@ -384,8 +406,13 @@ impl Brush for LinearGradientBrush {
     }
 }
 
-/// A `RadialGradientBrush` painting a gradient from a focal `GradientOrigin`
-/// outward to the circle defined by `Center` + `RadiusX`/`RadiusY`.
+/// Paints a gradient from a focal point outward to an ellipse.
+///
+/// The ellipse is set by [`set_center`](Self::set_center) and
+/// [`set_radius`](Self::set_radius); the gradient's `0` offset sits at
+/// [`set_gradient_origin`](Self::set_gradient_origin). Under the default
+/// [`BrushMappingMode::RelativeToBoundingBox`] all three are fractions of the
+/// painted area (center and origin default to `(0.5, 0.5)`, radii to `0.5`).
 pub struct RadialGradientBrush {
     ptr: NonNull<c_void>,
 }
@@ -399,7 +426,7 @@ impl Default for RadialGradientBrush {
 }
 
 impl RadialGradientBrush {
-    /// Create an empty radial gradient brush (no stops yet).
+    /// Creates a brush with no stops.
     ///
     /// # Panics
     ///
@@ -412,25 +439,25 @@ impl RadialGradientBrush {
         }
     }
 
-    /// Set the center of the outermost circle.
+    /// Sets the center of the outer ellipse.
     pub fn set_center(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live RadialGradientBrush*.
         unsafe { noesis_radial_gradient_brush_set_center(self.ptr.as_ptr(), x, y) };
     }
 
-    /// Set the focal point where the gradient begins.
+    /// Sets the focal point where the gradient starts.
     pub fn set_gradient_origin(&mut self, x: f32, y: f32) {
         // SAFETY: self.ptr is a live RadialGradientBrush*.
         unsafe { noesis_radial_gradient_brush_set_gradient_origin(self.ptr.as_ptr(), x, y) };
     }
 
-    /// Set the horizontal/vertical radii of the outermost circle.
+    /// Sets the horizontal and vertical radii of the outer ellipse.
     pub fn set_radius(&mut self, rx: f32, ry: f32) {
         // SAFETY: self.ptr is a live RadialGradientBrush*.
         unsafe { noesis_radial_gradient_brush_set_radius(self.ptr.as_ptr(), rx, ry) };
     }
 
-    /// Read `(radiusX, radiusY)` back from the live object.
+    /// The current `(radius_x, radius_y)`.
     #[must_use]
     pub fn radius(&self) -> (f32, f32) {
         let mut rx = 0.0f32;
@@ -446,46 +473,50 @@ impl RadialGradientBrush {
         (rx, ry)
     }
 
-    /// Append a gradient stop. Returns its index, or `None` on failure.
+    /// Appends a stop and returns its index. `None` only if Noesis rejects
+    /// the call.
     pub fn add_stop(&mut self, stop: GradientStop) -> Option<usize> {
         gradient_add_stop(self.ptr.as_ptr(), stop)
     }
 
-    /// Number of gradient stops currently on the brush.
+    /// Number of stops on the brush.
     #[must_use]
     pub fn stop_count(&self) -> usize {
         gradient_stop_count(self.ptr.as_ptr())
     }
 
-    /// Read back the stop at `index`, or `None` if out of range.
+    /// The stop at `index` (in insertion order), or `None` if out of range.
     #[must_use]
     pub fn stop(&self, index: usize) -> Option<GradientStop> {
         gradient_get_stop(self.ptr.as_ptr(), index)
     }
 
-    /// Set how the gradient paints outside its `[0, 1]` vector.
+    /// Sets how the gradient paints outside its `0..=1` range. Default
+    /// [`GradientSpreadMethod::Pad`]. Returns `true` on success.
     pub fn set_spread_method(&mut self, method: GradientSpreadMethod) -> bool {
         gradient_set_spread_method(self.ptr.as_ptr(), method)
     }
 
-    /// Read the spread method back from the live object.
+    /// The current spread method.
     #[must_use]
     pub fn spread_method(&self) -> Option<GradientSpreadMethod> {
         gradient_spread_method(self.ptr.as_ptr())
     }
 
-    /// Set whether center/radius/origin are absolute or relative to the box.
+    /// Sets whether center, origin and radii are absolute or fractions of the
+    /// painted area. Default [`BrushMappingMode::RelativeToBoundingBox`].
+    /// Returns `true` on success.
     pub fn set_mapping_mode(&mut self, mode: BrushMappingMode) -> bool {
         gradient_set_mapping_mode(self.ptr.as_ptr(), mode)
     }
 
-    /// Read the mapping mode back from the live object.
+    /// The current mapping mode.
     #[must_use]
     pub fn mapping_mode(&self) -> Option<BrushMappingMode> {
         gradient_mapping_mode(self.ptr.as_ptr())
     }
 
-    /// Start a [`RadialGradientBrushBuilder`] for fluent construction.
+    /// Starts a [`RadialGradientBrushBuilder`].
     pub fn builder() -> RadialGradientBrushBuilder {
         RadialGradientBrushBuilder {
             brush: RadialGradientBrush::new(),
@@ -493,9 +524,8 @@ impl RadialGradientBrush {
     }
 }
 
-/// Fluent builder for a [`RadialGradientBrush`]: set the center, gradient origin,
-/// radii, spread method and mapping mode, append `.stop(..)`s, then
-/// [`build`](Self::build).
+/// Chained construction of a [`RadialGradientBrush`]. Each method calls the
+/// matching setter on the brush; finish with [`build`](Self::build).
 ///
 /// ```no_run
 /// # use noesis_runtime::brushes::{RadialGradientBrush, GradientSpreadMethod};
@@ -514,43 +544,43 @@ pub struct RadialGradientBrushBuilder {
 }
 
 impl RadialGradientBrushBuilder {
-    /// Set the center of the outermost circle.
+    /// See [`RadialGradientBrush::set_center`].
     pub fn center(mut self, x: f32, y: f32) -> Self {
         self.brush.set_center(x, y);
         self
     }
 
-    /// Set the focal point where the gradient begins.
+    /// See [`RadialGradientBrush::set_gradient_origin`].
     pub fn gradient_origin(mut self, x: f32, y: f32) -> Self {
         self.brush.set_gradient_origin(x, y);
         self
     }
 
-    /// Set the horizontal/vertical radii of the outermost circle.
+    /// See [`RadialGradientBrush::set_radius`].
     pub fn radius(mut self, rx: f32, ry: f32) -> Self {
         self.brush.set_radius(rx, ry);
         self
     }
 
-    /// Set the spread method.
+    /// See [`GradientSpreadMethod`].
     pub fn spread_method(mut self, method: GradientSpreadMethod) -> Self {
         self.brush.set_spread_method(method);
         self
     }
 
-    /// Set the mapping mode.
+    /// See [`BrushMappingMode`].
     pub fn mapping_mode(mut self, mode: BrushMappingMode) -> Self {
         self.brush.set_mapping_mode(mode);
         self
     }
 
-    /// Append a gradient stop of `color` at `offset` (`0..=1`).
+    /// Appends a stop of `color` (`[r, g, b, a]`) at `offset` (`0..=1`).
     pub fn stop(mut self, offset: f32, color: [f32; 4]) -> Self {
         self.brush.add_stop(GradientStop { offset, color });
         self
     }
 
-    /// Finish and return the built brush.
+    /// Returns the brush.
     #[must_use]
     pub fn build(self) -> RadialGradientBrush {
         self.brush
@@ -563,8 +593,7 @@ impl Brush for RadialGradientBrush {
     }
 }
 
-/// `Noesis::AlignmentX`: horizontal alignment of a tile's
-/// content within its base tile. Ordinals match the C++ enum.
+/// Horizontal placement of a tile brush's content within its tile.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -588,8 +617,7 @@ impl AlignmentX {
     }
 }
 
-/// `Noesis::AlignmentY`: vertical alignment of a tile's content
-/// within its base tile. Ordinals match the C++ enum.
+/// Vertical placement of a tile brush's content within its tile.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -613,11 +641,8 @@ impl AlignmentY {
     }
 }
 
-/// `Noesis::Stretch`: how content is resized to fill its
-/// allocated space. Ordinals match the C++ enum.
-///
-/// This is the crate's single `Stretch` type, used both by tile brushes here
-/// and by [shapes](crate::shapes::Shape::set_stretch), which re-exports it.
+/// How content is resized to fill its space. Used by [`TileBrush`] and by
+/// [`Shape::set_stretch`](crate::shapes::Shape::set_stretch).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -644,8 +669,7 @@ impl Stretch {
     }
 }
 
-/// `Noesis::TileMode`: how a base tile repeats to fill the
-/// painted area. Ordinals match the C++ enum.
+/// How a tile brush repeats its tile to fill the painted area.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -654,11 +678,11 @@ pub enum TileMode {
     None = 0,
     /// Repeat the base tile edge-to-edge.
     Tile = 1,
-    /// Like `Tile`, flipping alternate columns horizontally.
+    /// Like [`Tile`](Self::Tile), flipping alternate columns horizontally.
     FlipX = 2,
-    /// Like `Tile`, flipping alternate rows vertically.
+    /// Like [`Tile`](Self::Tile), flipping alternate rows vertically.
     FlipY = 3,
-    /// Combination of `FlipX` and `FlipY`.
+    /// [`FlipX`](Self::FlipX) and [`FlipY`](Self::FlipY) together.
     FlipXY = 4,
 }
 
@@ -675,16 +699,15 @@ impl TileMode {
     }
 }
 
-/// `Noesis::BrushMappingMode`: whether a `Viewport`/`Viewbox`
-/// Rect is in absolute coordinates or relative to the bounding box. Ordinals
-/// match the C++ enum.
+/// Whether brush coordinates (gradient points, tile viewport and viewbox) are
+/// absolute or fractions of the painted area.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BrushMappingMode {
-    /// Coordinates are absolute (local space).
+    /// Absolute, in the painted element's local space.
     Absolute = 0,
-    /// Coordinates are relative to the bounding box (`0..=1`).
+    /// Fractions of the painted area's bounding box, `0..=1`.
     RelativeToBoundingBox = 1,
 }
 
@@ -698,66 +721,68 @@ impl BrushMappingMode {
     }
 }
 
-/// The tiling knobs common to every `TileBrush` (the base of both
-/// [`ImageBrush`] and [`VisualBrush`]): content alignment, stretch, tile mode,
-/// and the `Viewport`/`Viewbox` Rects with their mapping units.
+/// Tiling settings shared by [`ImageBrush`] and [`VisualBrush`].
 ///
-/// Each `Viewport`/`Viewbox` Rect is expressed as `[x, y, width, height]`.
-/// Getters re-read from the live Noesis object, so they reflect its current
-/// state rather than a Rust cache.
+/// The *viewbox* selects the part of the content to show; the *viewport* is
+/// the base tile it is drawn into, which [`TileMode`] then repeats. Both are
+/// `[x, y, width, height]`, in the units set by
+/// [`set_viewbox_units`](Self::set_viewbox_units) and
+/// [`set_viewport_units`](Self::set_viewport_units).
+///
+/// Getters return `None` only if Noesis reports a value outside the Rust enum.
 pub trait TileBrush: Brush {
-    /// Set the horizontal alignment of content within the base tile.
+    /// Sets the horizontal placement of content within the tile.
     fn set_alignment_x(&mut self, value: AlignmentX) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe { noesis_tile_brush_set_alignment_x(self.brush_raw(), value as i32) };
     }
-    /// Read the horizontal alignment back from the live object.
+    /// The current horizontal placement.
     fn alignment_x(&self) -> Option<AlignmentX> {
         // SAFETY: brush_raw() is a live TileBrush*.
         AlignmentX::from_ordinal(unsafe { noesis_tile_brush_get_alignment_x(self.brush_raw()) })
     }
 
-    /// Set the vertical alignment of content within the base tile.
+    /// Sets the vertical placement of content within the tile.
     fn set_alignment_y(&mut self, value: AlignmentY) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe { noesis_tile_brush_set_alignment_y(self.brush_raw(), value as i32) };
     }
-    /// Read the vertical alignment back from the live object.
+    /// The current vertical placement.
     fn alignment_y(&self) -> Option<AlignmentY> {
         // SAFETY: brush_raw() is a live TileBrush*.
         AlignmentY::from_ordinal(unsafe { noesis_tile_brush_get_alignment_y(self.brush_raw()) })
     }
 
-    /// Set how content stretches to fit its tile.
+    /// Sets how content is resized to fit the tile.
     fn set_stretch(&mut self, value: Stretch) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe { noesis_tile_brush_set_stretch(self.brush_raw(), value as i32) };
     }
-    /// Read the stretch mode back from the live object.
+    /// The current stretch mode.
     fn stretch(&self) -> Option<Stretch> {
         // SAFETY: brush_raw() is a live TileBrush*.
         Stretch::from_ordinal(unsafe { noesis_tile_brush_get_stretch(self.brush_raw()) })
     }
 
-    /// Set how the base tile repeats to fill the painted area.
+    /// Sets how the tile repeats to fill the painted area.
     fn set_tile_mode(&mut self, value: TileMode) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe { noesis_tile_brush_set_tile_mode(self.brush_raw(), value as i32) };
     }
-    /// Read the tile mode back from the live object.
+    /// The current tile mode.
     fn tile_mode(&self) -> Option<TileMode> {
         // SAFETY: brush_raw() is a live TileBrush*.
         TileMode::from_ordinal(unsafe { noesis_tile_brush_get_tile_mode(self.brush_raw()) })
     }
 
-    /// Set the base-tile rectangle as `[x, y, width, height]`.
+    /// Sets the tile rectangle, `[x, y, width, height]`.
     fn set_viewport(&mut self, rect: [f32; 4]) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe {
             noesis_tile_brush_set_viewport(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
         };
     }
-    /// Read the `Viewport` Rect back as `[x, y, width, height]`.
+    /// The current tile rectangle, `[x, y, width, height]`.
     fn viewport(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: brush_raw() is a live TileBrush*; `out` is 4 floats.
@@ -765,12 +790,12 @@ pub trait TileBrush: Brush {
         out
     }
 
-    /// Set the mapping mode of the `Viewport` Rect.
+    /// Sets the units of the viewport.
     fn set_viewport_units(&mut self, value: BrushMappingMode) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe { noesis_tile_brush_set_viewport_units(self.brush_raw(), value as i32) };
     }
-    /// Read the `Viewport` mapping mode back from the live object.
+    /// The current viewport units.
     fn viewport_units(&self) -> Option<BrushMappingMode> {
         // SAFETY: brush_raw() is a live TileBrush*.
         BrushMappingMode::from_ordinal(unsafe {
@@ -778,14 +803,14 @@ pub trait TileBrush: Brush {
         })
     }
 
-    /// Set the content rectangle as `[x, y, width, height]`.
+    /// Sets the part of the content to show, `[x, y, width, height]`.
     fn set_viewbox(&mut self, rect: [f32; 4]) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe {
             noesis_tile_brush_set_viewbox(self.brush_raw(), rect[0], rect[1], rect[2], rect[3])
         };
     }
-    /// Read the `Viewbox` Rect back as `[x, y, width, height]`.
+    /// The current viewbox, `[x, y, width, height]`.
     fn viewbox(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
         // SAFETY: brush_raw() is a live TileBrush*; `out` is 4 floats.
@@ -793,12 +818,12 @@ pub trait TileBrush: Brush {
         out
     }
 
-    /// Set the mapping mode of the `Viewbox` Rect.
+    /// Sets the units of the viewbox.
     fn set_viewbox_units(&mut self, value: BrushMappingMode) {
         // SAFETY: brush_raw() is a live TileBrush*.
         unsafe { noesis_tile_brush_set_viewbox_units(self.brush_raw(), value as i32) };
     }
-    /// Read the `Viewbox` mapping mode back from the live object.
+    /// The current viewbox units.
     fn viewbox_units(&self) -> Option<BrushMappingMode> {
         // SAFETY: brush_raw() is a live TileBrush*.
         BrushMappingMode::from_ordinal(unsafe {
@@ -807,12 +832,13 @@ pub trait TileBrush: Brush {
     }
 }
 
-/// An `ImageBrush` tiling/stretching an `ImageSource` over the painted area.
+/// Paints an image, stretched or tiled per the [`TileBrush`] settings.
 ///
-/// Source wiring is via a borrowed `ImageSource*`, typically one obtained from
-/// [`FrameworkElement::get_component`](crate::view::FrameworkElement::get_component)
-/// on an element with a loaded image, since this crate does not yet build
-/// `ImageSource`s from raw pixels (that needs the imaging surface).
+/// The source is a raw `ImageSource*`: the `raw()` pointer of an
+/// [`imaging`](crate::imaging) type such as
+/// [`BitmapImage`](crate::imaging::BitmapImage), or one read off an existing
+/// element with
+/// [`FrameworkElement::get_component`](crate::view::FrameworkElement::get_component).
 pub struct ImageBrush {
     ptr: NonNull<c_void>,
 }
@@ -826,7 +852,7 @@ impl Default for ImageBrush {
 }
 
 impl ImageBrush {
-    /// Create an image brush with no source set.
+    /// Creates a brush with no image; it paints nothing until a source is set.
     ///
     /// # Panics
     ///
@@ -840,16 +866,14 @@ impl ImageBrush {
         }
     }
 
-    /// Create an image brush pointing at a borrowed `ImageSource*`. Noesis takes
-    /// its own reference to the source. Returns `None` only if allocation fails;
-    /// a non-null pointer that isn't an `ImageSource` yields a brush with no
-    /// source set (as if constructed with null).
+    /// Creates a brush painting `image_source`. The brush takes its own
+    /// reference, so the caller keeps ownership of the source. A pointer to a
+    /// non-`ImageSource` object gives a brush with no image. Returns `None`
+    /// only if Noesis returns null.
     ///
     /// # Safety
     ///
-    /// `image_source` must be a valid live `Noesis::ImageSource*` (e.g. from
-    /// [`FrameworkElement::get_component`](crate::view::FrameworkElement::get_component))
-    /// or null.
+    /// `image_source` must be null or a live `Noesis::BaseComponent*`.
     #[must_use]
     pub unsafe fn with_source(image_source: *mut c_void) -> Option<Self> {
         // SAFETY: per the contract, `image_source` is a live ImageSource* or null.
@@ -857,19 +881,20 @@ impl ImageBrush {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Point the brush at a borrowed `ImageSource*` (or null to clear). Noesis
-    /// takes its own reference.
+    /// Replaces the image. The brush takes its own reference. Null, or a
+    /// pointer to a non-`ImageSource` object, clears it. Returns `true` on
+    /// success.
     ///
     /// # Safety
     ///
-    /// `image_source` must be a valid live `Noesis::ImageSource*` or null.
+    /// `image_source` must be null or a live `Noesis::BaseComponent*`.
     pub unsafe fn set_image_source(&mut self, image_source: *mut c_void) -> bool {
         // SAFETY: self.ptr is a live ImageBrush*; `image_source` per contract.
         unsafe { noesis_image_brush_set_image_source(self.ptr.as_ptr(), image_source) }
     }
 
-    /// Borrowed `ImageSource*` currently set on the brush, or `None`. The
-    /// pointer has no `+1` reference; do not release it.
+    /// The current `ImageSource*`, or `None`. Borrowed: do not release it, and
+    /// do not use it after the brush's source changes or the brush is dropped.
     #[must_use]
     pub fn image_source(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live ImageBrush*; the returned pointer is borrowed.
@@ -886,16 +911,11 @@ impl Brush for ImageBrush {
 
 impl TileBrush for ImageBrush {}
 
-/// A `VisualBrush` painting an area with a `Visual`. Any element (a
-/// [`FrameworkElement`](crate::view::FrameworkElement)) is a Visual.
+/// Paints an area with the rendered content of another element, stretched or
+/// tiled per the [`TileBrush`] settings.
 ///
-/// It derives from [`TileBrush`], so the tiling knobs (alignment / stretch /
-/// tile mode / viewport / viewbox) apply here too.
-///
-/// A `VisualBrush` only *renders* when its visual is part of the live element
-/// tree. The property still round-trips ([`VisualBrush::visual`] reads the
-/// pointer straight back from the brush), but nothing paints until the visual
-/// is parented.
+/// The brush paints only while its source element is in a live element tree;
+/// an unparented element can be set and read back but draws nothing.
 pub struct VisualBrush {
     ptr: NonNull<c_void>,
 }
@@ -909,7 +929,7 @@ impl Default for VisualBrush {
 }
 
 impl VisualBrush {
-    /// Create a visual brush with no source set.
+    /// Creates a brush with no source; it paints nothing until one is set.
     ///
     /// # Panics
     ///
@@ -923,8 +943,8 @@ impl VisualBrush {
         }
     }
 
-    /// Create a visual brush painting `element` (its content). Noesis takes its
-    /// own reference to the visual.
+    /// Creates a brush painting `element`. The brush takes its own reference
+    /// to the element.
     ///
     /// # Panics
     ///
@@ -939,10 +959,9 @@ impl VisualBrush {
         }
     }
 
-    /// Point the brush at `element` as its visual source. Noesis takes its own
-    /// reference, so `element` may outlive or be dropped after the call (the
-    /// brush holds the live element alive). Returns `false` only if `self` is
-    /// somehow not a `VisualBrush` (not expected).
+    /// Replaces the source element. The brush takes its own reference, so the
+    /// element stays alive while the brush uses it even if your handle is
+    /// dropped. Always returns `true` for a live brush.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_visual(&mut self, element: &crate::view::FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live VisualBrush*; element.raw() is a live
@@ -950,14 +969,14 @@ impl VisualBrush {
         unsafe { noesis_visual_brush_set_visual(self.ptr.as_ptr(), element.raw()) }
     }
 
-    /// Clear the brush's visual source.
+    /// Removes the source element. Always returns `true` for a live brush.
     pub fn clear_visual(&mut self) -> bool {
         // SAFETY: self.ptr is a live VisualBrush*; null clears the source.
         unsafe { noesis_visual_brush_set_visual(self.ptr.as_ptr(), core::ptr::null_mut()) }
     }
 
-    /// Borrowed `Visual*` currently set on the brush, or `None`. The pointer has
-    /// no `+1` reference; do not release it.
+    /// The current source as a `Visual*`, or `None`. Borrowed: do not release
+    /// it, and do not use it after the source changes or the brush is dropped.
     #[must_use]
     pub fn visual(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live VisualBrush*; the returned pointer is borrowed.
@@ -974,7 +993,7 @@ impl Brush for VisualBrush {
 
 impl TileBrush for VisualBrush {}
 
-/// A `BlurEffect` blurring an element's visual by a `Radius` (in DIPs).
+/// Blurs an element's rendered output.
 pub struct BlurEffect {
     ptr: NonNull<c_void>,
 }
@@ -982,7 +1001,7 @@ pub struct BlurEffect {
 base_component_handle!(BlurEffect);
 
 impl BlurEffect {
-    /// Create a blur effect with the given `radius`.
+    /// Creates a blur of `radius`, in device-independent pixels.
     ///
     /// # Panics
     ///
@@ -995,13 +1014,13 @@ impl BlurEffect {
         }
     }
 
-    /// Change the blur radius.
+    /// Sets the radius, in device-independent pixels.
     pub fn set_radius(&mut self, radius: f32) {
         // SAFETY: self.ptr is a live BlurEffect*.
         unsafe { noesis_blur_effect_set_radius(self.ptr.as_ptr(), radius) };
     }
 
-    /// Read the blur radius back from the live object.
+    /// The current radius.
     #[must_use]
     pub fn radius(&self) -> f32 {
         let mut out = 0.0f32;
@@ -1017,31 +1036,35 @@ impl Effect for BlurEffect {
     }
 }
 
-/// A `DropShadowEffect` casting a colored shadow behind an element's visual.
+/// Draws a shadow behind an element's rendered output.
+///
+/// Build one with [`from_params`](Self::from_params) and
+/// [`DropShadowParams::default`], overriding the fields you need.
 pub struct DropShadowEffect {
     ptr: NonNull<c_void>,
 }
 
 base_component_handle!(DropShadowEffect);
 
-/// Read-back of a [`DropShadowEffect`]'s parameters.
+/// All parameters of a [`DropShadowEffect`]. [`Default`] gives Noesis's
+/// defaults.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct DropShadowParams {
-    /// Shadow color `{r, g, b, a}`.
+    /// `[r, g, b, a]`, each `0..=1`.
     pub color: [f32; 4],
-    /// Blur radius of the shadow edge.
+    /// Softness of the shadow edge, in device-independent pixels.
     pub blur_radius: f32,
-    /// Angle of the shadow, in degrees.
+    /// Direction the shadow is cast, in degrees counterclockwise from the
+    /// positive x-axis (`315` is down and to the right).
     pub direction: f32,
-    /// Distance of the shadow from the content.
+    /// Offset of the shadow from the content, in device-independent pixels.
     pub shadow_depth: f32,
     /// Shadow opacity, `0..=1`.
     pub opacity: f32,
 }
 
 impl Default for DropShadowParams {
-    /// Noesis's `DropShadowEffect` defaults: black, `5` blur, `315°` direction,
-    /// `5` depth, fully opaque.
+    /// Black, blur radius `5`, direction `315`, depth `5`, opacity `1`.
     fn default() -> Self {
         Self {
             color: [0.0, 0.0, 0.0, 1.0],
@@ -1054,8 +1077,7 @@ impl Default for DropShadowParams {
 }
 
 impl DropShadowEffect {
-    /// Create a drop-shadow effect from a [`DropShadowParams`] struct (the
-    /// ergonomic alternative to the 5-positional-argument [`new`](Self::new)).
+    /// Creates a shadow from `params`.
     ///
     /// # Panics
     ///
@@ -1071,7 +1093,8 @@ impl DropShadowEffect {
         )
     }
 
-    /// Create a drop-shadow effect with all parameters specified.
+    /// Creates a shadow from positional parameters, in the order and units of
+    /// [`DropShadowParams`].
     ///
     /// # Panics
     ///
@@ -1099,7 +1122,7 @@ impl DropShadowEffect {
         }
     }
 
-    /// Read all shadow parameters back from the live object.
+    /// The current parameters.
     #[must_use]
     pub fn params(&self) -> DropShadowParams {
         let mut color = [0.0f32; 4];
@@ -1127,7 +1150,7 @@ impl DropShadowEffect {
         }
     }
 
-    /// Replace all shadow parameters from a [`DropShadowParams`] struct.
+    /// Replaces every parameter.
     pub fn set_params(&mut self, params: DropShadowParams) {
         self.set_color(params.color);
         self.set_blur_radius(params.blur_radius);
@@ -1136,31 +1159,31 @@ impl DropShadowEffect {
         self.set_opacity(params.opacity);
     }
 
-    /// Set the shadow color `{r, g, b, a}`.
+    /// Sets the color, `[r, g, b, a]`.
     pub fn set_color(&mut self, rgba: [f32; 4]) {
         // SAFETY: self.ptr is a live DropShadowEffect*; `rgba` outlives the call.
         unsafe { noesis_drop_shadow_effect_set_color(self.ptr.as_ptr(), rgba.as_ptr()) };
     }
 
-    /// Set the blur radius of the shadow edge.
+    /// Sets the edge softness, in device-independent pixels.
     pub fn set_blur_radius(&mut self, blur_radius: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
         unsafe { noesis_drop_shadow_effect_set_blur_radius(self.ptr.as_ptr(), blur_radius) };
     }
 
-    /// Set the shadow direction, in degrees.
+    /// Sets the direction, in degrees counterclockwise from the positive x-axis.
     pub fn set_direction(&mut self, direction: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
         unsafe { noesis_drop_shadow_effect_set_direction(self.ptr.as_ptr(), direction) };
     }
 
-    /// Set the distance of the shadow from the content.
+    /// Sets the offset from the content, in device-independent pixels.
     pub fn set_shadow_depth(&mut self, shadow_depth: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
         unsafe { noesis_drop_shadow_effect_set_shadow_depth(self.ptr.as_ptr(), shadow_depth) };
     }
 
-    /// Set the shadow opacity, `0..=1`.
+    /// Sets the opacity, `0..=1`.
     pub fn set_opacity(&mut self, opacity: f32) {
         // SAFETY: self.ptr is a live DropShadowEffect*.
         unsafe { noesis_drop_shadow_effect_set_opacity(self.ptr.as_ptr(), opacity) };

@@ -1,20 +1,11 @@
-// C ABI shim for Noesis's system integration callbacks.
+// Host integration hooks from NsGui/IntegrationAPI.h: cursor, software
+// keyboard, open-URL and play-audio callbacks, the OpenUrl / PlayAudio
+// triggers, and the culture.
 //
-//   `NsGui/IntegrationAPI.h` (namespace Noesis::GUI) exposes a handful of
-//   process-global host hooks, each registered as a `(void* user, callback)`
-//   pair, plus the `OpenUrl` / `PlayAudio` triggers and `SetCulture` /
-//   `GetCulture`.
-//
-//   For the callback hooks we keep a static `(user, cb)` slot per hook and
-//   register a C++ trampoline that translates the Noesis-typed
-//   arguments, `Cursor*` (→ CursorType int) and `const Uri&` (→ const char*),
-//   into the plain C ABI the Rust side declared. The Rust user pointer is
-//   forwarded untouched. Passing a NULL `cb` clears the slot and the
-//   underlying Noesis callback.
-//
-//   These are single, process-global registrations (Noesis stores exactly
-//   one `(user, callback)` per hook), so static storage is the natural fit;
-//   no per-instance allocation is needed.
+// Noesis stores one process-global (user, callback) per hook, so each hook
+// has one static slot here. A trampoline converts the Noesis-typed arguments
+// (Cursor* to a CursorType int, Uri to const char*) and forwards the Rust user
+// pointer. A NULL `cb` clears both the slot and the Noesis callback.
 
 #include <cstdint>
 #include <string>
@@ -141,13 +132,11 @@ extern "C" void noesis_play_audio(const char* uri, float volume) {
 // ── Culture ──────────────────────────────────────────────────────────────────
 
 extern "C" void noesis_set_culture(const char* name) {
-    // CultureInfo stores `name` as a raw `const char*`; SetCulture copies the
-    // struct by value (and thus the pointer). Keep the string alive for the
-    // process lifetime in a static buffer so the pointer stays valid for any
-    // later GetCulture()/formatting use.
+    // CultureInfo keeps `name` as a raw pointer and SetCulture copies the
+    // struct, so the string must outlive every later GetCulture / formatting use.
     static std::string sCultureName;
     sCultureName = name ? name : "";
-    Noesis::CultureInfo culture;        // numberFormat keeps its literal defaults
+    Noesis::CultureInfo culture;
     culture.name = sCultureName.c_str();
     Noesis::GUI::SetCulture(culture);
 }

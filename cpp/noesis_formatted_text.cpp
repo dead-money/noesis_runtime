@@ -1,25 +1,11 @@
-// Code-built FormattedText measurement / layout.
+// Code-built FormattedText: measurement, layout queries and hit testing.
 //
-// FormattedText (NsGui/FormattedText.h) is a BaseComponent that computes glyph
-// metrics and a text layout for a string + font properties at construction time
-// (the public ctors call CalculateMetrics internally; there are no separate
-// Set* layout mutators in 3.2.13, the constraints are constructor arguments).
+// FormattedText lays out its text at construction; in 3.2.13 the layout
+// constraints are constructor arguments with no Set* mutators.
 //
-// OWNERSHIP: this unit deliberately exposes NO public FontFamily entrypoint
-// (the typography unit owns FontFamily). The create entrypoint takes the font
-// family as a const char* NAME and builds the Noesis::FontFamily INTERNALLY,
-// holding it in a local Ptr only for the duration of construction (the ctor
-// consumes it while building font faces). The optional foreground is likewise a
-// color built into a SolidColorBrush internally so callers never traffic in raw
-// Brush*/FontFamily* pointers here.
-//
-// The returned FormattedText* is handed out with a single owned +1 reference
-// (handout() idiom shared with cpp/noesis_brushes.cpp); the Rust handle's Drop
-// calls noesis_base_component_release.
-//
-// Read-back getters (GetBounds / GetNumLines / GetLineInfo / Measure / ...) let
-// tests prove metrics genuinely crossed into the live Noesis object: a stub
-// returning 0 fails the "width > 0 / longer string measures wider" assertions.
+// Create takes the font family by name and the foreground as a color, building
+// the FontFamily and SolidColorBrush internally. The FormattedText is handed
+// out at +1; release with noesis_base_component_release.
 
 #include "noesis_shim.h"
 
@@ -61,13 +47,11 @@ Noesis::FormattedText* cast(void* p) {
 // `max_width`/`max_height` (negative ⇒ unconstrained / FLT_MAX), `line_height`
 // (0 ⇒ natural), `text_alignment` (TextAlignment), `text_trimming`
 // (TextTrimming). `foreground` is an optional [r,g,b,a]; null ⇒ opaque black.
-// Returns a +1 FormattedText* (release with noesis_base_component_release),
-// or null on allocation failure.
+// Returns a +1 FormattedText* (release with noesis_base_component_release).
 extern "C" void* noesis_formatted_text_create(
     const char* text, const char* font_family, int32_t weight, int32_t stretch, int32_t style,
     float font_size, int32_t flow_direction, float max_width, float max_height, float line_height,
     int32_t text_alignment, int32_t text_trimming, const float foreground[4]) {
-    // FontFamily is built here and lives only for the construction call.
     Noesis::Ptr<Noesis::FontFamily> family =
         *new Noesis::FontFamily(font_family ? font_family : "");
 
@@ -143,10 +127,10 @@ extern "C" bool noesis_formatted_text_has_visual_brush(void* ft, bool* out) {
     return true;
 }
 
-// Re-measure the stored runs under fresh constraints, returning the resulting
-// Size to out_w/out_h (DIPs). `alignment`/`wrapping`/`trimming`/`line_stacking`/
-// `flow_direction` are the matching enum ordinals; negative max_* ⇒ FLT_MAX.
-// This is an independent read-back of the same metrics the ctor computes.
+// Measures the stored runs under new constraints; writes the size to
+// out_w/out_h (DIPs). `alignment`/`wrapping`/`trimming`/`line_stacking`/
+// `flow_direction` are the matching enum ordinals; negative max_* means
+// unconstrained.
 extern "C" bool noesis_formatted_text_measure(void* ft, int32_t alignment, int32_t wrapping,
                                                  int32_t trimming, float max_width, float max_height,
                                                  float line_height, int32_t line_stacking,

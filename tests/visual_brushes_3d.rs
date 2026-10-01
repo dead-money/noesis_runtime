@@ -29,8 +29,6 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
     noesis_runtime::init();
 
     {
-        // A fresh VisualBrush has no visual; GetVisual returns null rather than
-        // a dangling pointer.
         let mut vb = VisualBrush::new();
         assert!(vb.visual().is_none(), "fresh VisualBrush has no visual");
 
@@ -72,7 +70,7 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "Background is the exact VisualBrush we assigned"
         );
 
-        // Non-default values ensure the read-backs prove the setters crossed the FFI.
+        // Non-default values, so each read-back proves the setter reached Noesis.
         vb.set_alignment_x(AlignmentX::Right);
         vb.set_alignment_y(AlignmentY::Bottom);
         vb.set_stretch(Stretch::UniformToFill);
@@ -133,7 +131,6 @@ fn visual_brush_tile_knobs_and_3d_transforms() {
             "ib viewbox_units"
         );
 
-        // Second mutation proves setters aren't write-once.
         ib.set_stretch(Stretch::Uniform);
         assert_eq!(ib.stretch(), Some(Stretch::Uniform), "ib stretch re-set");
 

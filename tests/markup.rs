@@ -1,5 +1,5 @@
-//! Custom `MarkupExtension` integration: a Rust-backed `{sample:Loc}` extension resolves
-//! a positional key and the resulting string appears on the live element.
+//! A Rust-backed `{sample:Loc key}` markup extension's callback receives its
+//! positional key.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -73,15 +73,14 @@ fn markup_extension_resolves_positional_key() {
             "expected callback to fire with key='menu.greeting'; saw {observed:?}"
         );
 
-        // Duplicate registration must fail: C++ rejects a second claim on the same Reflection slot.
-        // Tested here because Noesis allows only one init/shutdown per process.
+        // Here rather than in its own test: Noesis allows one init per process.
         let dup = MarkupExtensionRegistration::from_closure("Sample.Loc", |_| Some(String::new()));
         assert!(
             dup.is_none(),
             "duplicate-name registration unexpectedly succeeded"
         );
 
-        // Drop wrappers before the registration so extension instances are freed first.
+        // Free extension instances before the registration.
         drop(greeting);
         drop(content);
         view.deactivate();

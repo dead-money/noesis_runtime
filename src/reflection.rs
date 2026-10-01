@@ -1,31 +1,22 @@
-//! Runtime registration of "other reflected entities": custom enums, custom
-//! routed events on Rust-backed types, factory/metadata introspection, and the
-//! reflection `TypeConverter` string→value path.
+//! Enums, routed events, and type metadata registered with Noesis reflection
+//! at runtime, plus XAML's string-to-value conversion.
 //!
-//! These complement [`crate::classes`] (Rust-backed XAML classes) and
-//! [`crate::converters`] (binding `IValueConverter`s). Everything here registers
-//! against Noesis's reflection database so the XAML parser / bindings resolve
-//! the entity the same way they resolve a compile-time `NS_REGISTER_*` macro.
+//! These complement [`crate::classes`], which registers custom controls. XAML
+//! and bindings find what you register here the same way they find types
+//! built into Noesis.
 //!
-//! # What each piece is for
+//! * [`register_enum`]: an enum usable for property values, `Style` setters
+//!   and XAML enum strings.
+//! * [`register_routed_event`] and [`raise_event`]: a routed event on a custom
+//!   control type, raised from Rust and handled through
+//!   [`crate::events::subscribe_event`].
+//! * [`is_component_registered`], [`set_content_property`] and
+//!   [`add_depends_on`]: inspect the factory and attach type metadata.
+//! * [`convert_from_string`]: convert a string to a typed value the way the
+//!   XAML parser does.
 //!
-//! * [`register_enum`]: a named enum usable as a dependency-property value /
-//!   `Style` setter / XAML enum string. Verify the registered string<->int
-//!   pairs with [`EnumType::value_from_name`] / [`EnumType::name_from_value`].
-//! * [`register_routed_event`] + [`raise_event`]: a [`RoutingStrategy`] routed
-//!   event on a Rust-backed [`crate::classes`] type, raised from Rust and
-//!   observed with [`crate::events::subscribe_event`].
-//! * [`is_component_registered`] / [`set_content_property`]: `Factory`
-//!   introspection and `ContentProperty` attribution for Rust-backed types.
-//! * [`convert_from_string`]: drive `TypeConverter::Get` +
-//!   `TryConvertFromString` (the XAML-parse string→value coercion path) for any
-//!   built-in / reflected type. Custom converter *registration* is deferred,
-//!   an SDK limitation; see the section comment by [`convert_from_string`].
-//!
-//! # Lifetime
-//!
-//! Registrations are process-global and live until [`crate::shutdown`]; there is
-//! no unregister (mirroring how compile-time reflection works).
+//! Registrations are process-wide and last until [`crate::shutdown`]; they
+//! cannot be removed.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -43,21 +34,17 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-// ── (A) Custom enums ──────────────────────────────────────────────────────────
-
-/// A handle to a registered runtime enum. Holds the reflected name so the
-/// query helpers can resolve the `Noesis::TypeEnum` on demand. The enum itself
-/// is owned by Noesis's reflection registry and lives until [`crate::shutdown`].
+/// An enum registered with [`register_enum`]. Dropping the handle does not
+/// unregister the enum.
 pub struct EnumType {
     name: CString,
 }
 
-/// Register a named runtime enum with the given `(variant_name, value)` pairs,
-/// so it is reachable by reflection name (XAML enum-typed properties, `Style`
-/// setters, the `EnumConverter` path).
+/// Registers an enum named `name` with the given `(variant_name, value)`
+/// members.
 ///
-/// Returns `None` if `name` is empty / already registered, or any variant name
-/// contains an interior NUL.
+/// Returns `None` if `name` is empty or already registered, or if a variant
+/// name contains an interior NUL byte.
 ///
 /// # Panics
 ///
@@ -94,14 +81,14 @@ pub fn register_enum(name: &str, variants: &[(&str, i32)]) -> Option<EnumType> {
 }
 
 impl EnumType {
-    /// The reflected name this enum was registered under.
+    /// The name this enum was registered under.
     #[must_use]
     pub fn name(&self) -> &str {
         self.name.to_str().unwrap_or_default()
     }
 
-    /// Integer value of the member named `variant_name`, read straight through
-    /// `Noesis::TypeEnum::HasName`. `None` if the name is not a member.
+    /// The value of member `variant_name`, or `None` if there is no such
+    /// member.
     #[must_use]
     pub fn value_from_name(&self, variant_name: &str) -> Option<i32> {
         let cn = CString::new(variant_name).ok()?;
@@ -111,8 +98,7 @@ impl EnumType {
         ok.then_some(out)
     }
 
-    /// Member name for an integer `value`, via `Noesis::TypeEnum::HasValue`.
-    /// `None` if no member maps to that value.
+    /// The name of the member with `value`, or `None` if no member has it.
     #[must_use]
     pub fn name_from_value(&self, value: i32) -> Option<String> {
         let mut out: *const core::ffi::c_char = ptr::null();
@@ -131,29 +117,26 @@ impl EnumType {
     }
 }
 
-// ── (B) Custom routed events ──────────────────────────────────────────────────
-
-/// Routing strategy for a custom routed event (mirrors `Noesis::RoutingStrategy`).
+/// How a routed event travels through the element tree.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RoutingStrategy {
-    /// Top-of-tree → source (preview events).
+    /// From the root down to the source, as preview events do.
     Tunnel = 0,
-    /// Source → top-of-tree (the WPF default).
+    /// From the source up to the root.
     Bubble = 1,
-    /// Delivered only to the originating element.
+    /// To the source element only.
     Direct = 2,
 }
 
-/// Register a routed event named `event_name` on the registered Rust-backed
-/// type `type_name` (a [`crate::classes`] `ContentControl`). After this,
-/// instances of that type accept handlers via
-/// [`crate::events::subscribe_event`] and the event can be raised with
-/// [`raise_event`].
+/// Registers a routed event named `event_name` on the element type
+/// `type_name`, typically a custom control from [`crate::classes`]. Instances
+/// then accept handlers through [`crate::events::subscribe_event`], and
+/// [`raise_event`] raises it.
 ///
-/// Returns `false` if the type is unknown, is not a Rust-backed
-/// element type (no `UIElementData`), or the event name is already registered.
+/// Returns `false` if the type is unknown or not an element type, or if it
+/// already has an event with that name.
 ///
 /// # Panics
 ///
@@ -167,12 +150,11 @@ pub fn register_routed_event(type_name: &str, event_name: &str, strategy: Routin
     unsafe { noesis_register_routed_event(ct.as_ptr(), ce.as_ptr(), strategy as i32) }
 }
 
-/// Raise the routed event `event_name` from `element`, dispatched per the
-/// event's registered [`RoutingStrategy`] (`Noesis::UIElement::RaiseEvent`).
-/// Handlers wired with [`crate::events::subscribe_event`] observe it.
+/// Raises the routed event `event_name` with `element` as its source, routed
+/// by the event's [`RoutingStrategy`].
 ///
-/// Returns `false` if `element` is not a `UIElement` or the event is not found
-/// in its class hierarchy.
+/// Returns `false` if `element` is not a `UIElement` or neither its type nor
+/// its base types define the event.
 ///
 /// # Panics
 ///
@@ -185,11 +167,9 @@ pub fn raise_event(element: &FrameworkElement, event_name: &str) -> bool {
     unsafe { noesis_raise_routed_event(element.raw(), ce.as_ptr()) }
 }
 
-// ── (C) Factory / component metadata ──────────────────────────────────────────
-
-/// Whether a component named `name` is registered in `Noesis::Factory`, i.e.
-/// `<ns:name/>` can be instantiated by the XAML parser. Rust-backed classes
-/// register their factory creator in [`crate::classes::ClassBuilder::register`].
+/// Whether the XAML parser can create a component named `name`.
+/// [`ClassBuilder::register`](crate::classes::ClassBuilder::register) makes a
+/// custom class creatable.
 #[must_use]
 pub fn is_component_registered(name: &str) -> bool {
     let Ok(c) = CString::new(name) else {
@@ -199,9 +179,9 @@ pub fn is_component_registered(name: &str) -> bool {
     unsafe { noesis_factory_is_registered(c.as_ptr()) }
 }
 
-/// Attach a `ContentProperty` to the registered type `type_name`, so XAML child
-/// content (`<ns:Thing><Child/></ns:Thing>`) is routed into `prop_name` instead
-/// of the inherited content property. Returns `false` if the type is unknown.
+/// Makes `prop_name` the content property of the type `type_name`, so child
+/// content in XAML (`<ns:Thing><Child/></ns:Thing>`) goes into that property.
+/// Use it on types you registered. Returns `false` if the type is unknown.
 ///
 /// # Panics
 ///
@@ -214,14 +194,8 @@ pub fn set_content_property(type_name: &str, prop_name: &str) -> bool {
     unsafe { noesis_type_set_content_property(ct.as_ptr(), cp.as_ptr()) }
 }
 
-/// Read the property name recorded by [`set_content_property`] on `type_name`,
-/// read straight back through the live reflection metadata
-/// (`FindMeta<ContentPropertyMetaData>` → `GetContentProperty`). `None` if the
-/// type is unknown or carries no `ContentProperty` metadata.
-///
-/// `FindMeta` is keyed by the metadata `TypeClass`, so this reads the
-/// `ContentProperty` independently of any [`add_depends_on`] record on the same
-/// type.
+/// The content property recorded on `type_name`, such as one set with
+/// [`set_content_property`]. `None` if the type is unknown or has none.
 ///
 /// # Panics
 ///
@@ -244,19 +218,12 @@ pub fn get_content_property(type_name: &str) -> Option<String> {
     )
 }
 
-/// Attach `DependsOn` metadata to the registered type `type_name`, recording
-/// that an attributed property depends on the value of `prop_name`
-/// (`Noesis::DependsOnMetaData`, the type-level metadata Noesis exposes for
-/// this). Returns `false` if the type is unknown.
+/// Attaches `DependsOn` metadata naming `prop_name` to the type `type_name`.
+/// Returns `false` if the type is unknown.
 ///
-/// `DependsOn` is attached at the *type* level (via `TypeMeta::AddMeta`), not
-/// per-property as in WPF, and `FindMeta` returns only the first matching
-/// record, so multiple `DependsOn` records on one type are not individually
-/// retrievable. It DOES coexist with [`set_content_property`] on the same type:
-/// `FindMeta` is keyed by the metadata `TypeClass`, so a `ContentProperty` and a
-/// `DependsOn` record are stored and read back independently.
-///
-/// Read the recorded property back with [`get_depends_on`].
+/// Unlike WPF, Noesis attaches `DependsOn` to the type, not to a property.
+/// Only the first record on a type can be read back with [`get_depends_on`].
+/// It does not interfere with [`set_content_property`].
 ///
 /// # Panics
 ///
@@ -269,10 +236,8 @@ pub fn add_depends_on(type_name: &str, prop_name: &str) -> bool {
     unsafe { noesis_type_add_depends_on(ct.as_ptr(), cp.as_ptr()) }
 }
 
-/// Read the property name recorded by [`add_depends_on`] on `type_name`, read
-/// straight back through the live reflection metadata
-/// (`DependsOnMetaData::GetDependsOnProperty`). `None` if the type is unknown or
-/// carries no `DependsOn` metadata.
+/// The property named by the first `DependsOn` record on `type_name`. `None`
+/// if the type is unknown or has none.
 ///
 /// # Panics
 ///
@@ -295,20 +260,12 @@ pub fn get_depends_on(type_name: &str) -> Option<String> {
     )
 }
 
-// ── (D) String → value conversion via the reflection TypeConverter ────────────
-//
-// Custom (Rust-backed) reflection `TypeConverter` *registration* is DEFERRED:
-// `TypeConverter::Get` resolves converters through an internal registry that
-// `TypeConverterMetaData` + `Factory::RegisterComponent` do not drive at runtime
-// in 3.2.13 (a synthetic converter type registers in the Factory yet `Get` still
-// returns null). See LIMITATIONS.md "Known SDK limitations".
-//
-// The *consumption* side below is fully exposed: [`convert_from_string`] drives
-// `TypeConverter::Get` + `TryConvertFromString`, the exact string→value path the
-// XAML parser uses, for any built-in / reflected type.
+// No custom TypeConverter registration: in SDK 3.2.13 `TypeConverter::Get`
+// ignores runtime-registered converter types (see LIMITATIONS.md).
 
-/// An owned, boxed value returned by [`convert_from_string`]. Holds a `+1`
-/// reference released on drop. Unbox it with [`BoxedValue::as_i32`] etc.
+/// A value produced by [`convert_from_string`]. Read it with the typed
+/// accessors; each returns `None` if the value is another type. Holds one
+/// reference, released on drop.
 pub struct BoxedValue {
     ptr: NonNull<c_void>,
 }
@@ -317,13 +274,13 @@ pub struct BoxedValue {
 unsafe impl Send for BoxedValue {}
 
 impl BoxedValue {
-    /// Raw borrowed `Noesis::BaseComponent*`.
+    /// The underlying `Noesis::BaseComponent*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Unbox an `i32` (`BoxedValue<int>`), or `None` on type mismatch.
+    /// The value as an `i32`.
     #[must_use]
     pub fn as_i32(&self) -> Option<i32> {
         let mut out = 0i32;
@@ -331,7 +288,7 @@ impl BoxedValue {
         ok.then_some(out)
     }
 
-    /// Unbox a `bool`, or `None` on type mismatch.
+    /// The value as a `bool`.
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
         let mut out = false;
@@ -339,7 +296,7 @@ impl BoxedValue {
         ok.then_some(out)
     }
 
-    /// Unbox an `f64`, or `None` on type mismatch.
+    /// The value as an `f64`.
     #[must_use]
     pub fn as_f64(&self) -> Option<f64> {
         let mut out = 0.0f64;
@@ -347,8 +304,7 @@ impl BoxedValue {
         ok.then_some(out)
     }
 
-    /// Borrowed view of a boxed string, valid while `self` is alive. `None` on
-    /// type mismatch / non-UTF-8.
+    /// The value as a string. `None` also for invalid UTF-8.
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         let s = unsafe { noesis_unbox_string(self.ptr.as_ptr()) };
@@ -366,16 +322,13 @@ impl Drop for BoxedValue {
     }
 }
 
-/// Resolve the `TypeConverter` registered for `type_name` (`TypeConverter::Get`)
-/// and convert `s` to a boxed value via `TryConvertFromString`, the exact
-/// string→value path the XAML parser drives for a typed property. Returns
-/// `None` if the type / converter is unknown or the string does not convert.
+/// Converts `s` to a value of the type named `type_name`, the way the XAML
+/// parser converts attribute strings. Returns `None` if the type is unknown,
+/// has no converter, or `s` does not parse.
 ///
-/// Works for any built-in / reflected type that has a converter (e.g. `Bool`,
-/// `Int32`, `Single`, `Color`, `Thickness`). A custom [`register_enum`]'d enum
-/// does NOT get an auto-resolved converter here (`TypeConverter::Get` returns
-/// null for runtime-registered types); query enum members via
-/// [`EnumType::value_from_name`] instead.
+/// Works for built-in types with a converter, such as `Bool`, `Int32`,
+/// `Single`, `Color` and `Thickness`. Enums from [`register_enum`] have no
+/// converter; use [`EnumType::value_from_name`] for them.
 ///
 /// # Panics
 ///

@@ -35,7 +35,6 @@ fn collection_view_current_item_navigation() {
             .expect("GetView returns a CollectionView once Source is set");
         assert_eq!(view.count(), 3, "view sees all 3 source records");
 
-        // CurrentChanged counter to prove the event delegate crossed the FFI.
         let counter = Arc::new(AtomicU32::new(0));
         let counter_cb = Arc::clone(&counter);
         let _sub = view
@@ -93,8 +92,7 @@ fn collection_view_current_item_navigation() {
         );
         assert_eq!(view.current_position(), -1, "before-first position is -1");
 
-        // Pointer identity: the current item is the very object stored in the
-        // source collection, not a copy.
+        // The current item is the source collection's object, not a copy.
         assert!(view.move_current_to_first());
         let item = view.current_item().expect("current item");
         let src0 = list.get(0).expect("source[0]");

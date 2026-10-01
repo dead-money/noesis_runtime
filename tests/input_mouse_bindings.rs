@@ -1,4 +1,5 @@
-//! Mouse gesture bindings fire bound commands end-to-end across the FFI.
+//! Mouse gestures fire bound Rust commands: a `MouseBinding` (left click) and
+//! an `InputBinding` wrapping a `MouseGesture` (right click).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,8 +10,7 @@ use noesis_runtime::input::{InputBinding, ModifierKeys, MouseAction, MouseBindin
 use noesis_runtime::view::{FrameworkElement, MouseButton, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// A button that fully fills the 200x200 view, so a click at its centre (100,100)
-// is guaranteed to hit-test onto it.
+// The button fills the view, so a click at (100,100) hits it.
 const SCENE: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -86,7 +86,6 @@ fn mouse_bindings_fire_bound_commands() {
             "LeftClick fires the bound command exactly once"
         );
 
-        // Tearing the binding down must stop the click from firing it again.
         assert!(
             binding.remove_from(&target),
             "remove binding from InputBindings"
@@ -121,7 +120,7 @@ fn mouse_bindings_fire_bound_commands() {
             c2.fetch_add(1, Ordering::SeqCst);
         });
 
-        // The gesture can be dropped once the binding takes its own reference.
+        // The binding holds its own reference to the gesture.
         let binding = {
             let gesture = MouseGesture::new(MouseAction::RightClick, ModifierKeys::NONE);
             InputBinding::with_mouse_gesture(&command, &gesture).expect("input binding")

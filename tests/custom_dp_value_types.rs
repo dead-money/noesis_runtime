@@ -1,7 +1,7 @@
 //! Custom dependency-property value types: Point, Size, Vector, and runtime enum.
 //!
-//! Every assertion reads the value back through the live Noesis object, so a
-//! stub that did not actually marshal the struct/enum across the FFI would fail.
+//! Every assertion reads the value back through the live Noesis object, so
+//! values that never crossed the FFI would fail.
 
 use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyOptions, PropertyValue,
@@ -40,7 +40,7 @@ fn custom_dp_value_types() {
         let pt = b.add_property("Pt", PropType::Point);
         let sz = b.add_property("Sz", PropType::Size);
         let vec = b.add_property("Vec", PropType::Vector);
-        // Enum DP with a non-zero default so the default round-trip is meaningful.
+        // Non-zero default so the default read-back is meaningful.
         let m = b.add_enum_property("Mode", "NzVT.Mode", 2, PropertyOptions::default());
         assert_eq!((pt, sz, vec, m), (0, 1, 2, 3));
 
@@ -50,7 +50,6 @@ fn custom_dp_value_types() {
         let inst = reg.create_instance().expect("create_instance");
         let h = inst.handle();
 
-        // Defaults: Point/Size/Vector default to zero; enum to its registered 2.
         assert_eq!(h.get_point(pt), Some((0.0, 0.0)));
         assert_eq!(h.get_enum(m), Some(2), "enum DP default did not apply");
 
@@ -106,7 +105,6 @@ fn custom_dp_value_types() {
         assert_eq!(el.get_enum("Mode"), Some(5));
         assert!(matches!(el.get_dynamic("Mode"), Some(DynValue::Enum(5))));
 
-        // A type-mismatched access is rejected (Point DP read as a Rect).
         assert_eq!(el.get_rect("Pt"), None, "tag mismatch must be rejected");
 
         // `el` already has Pt=[1,2], Sz=[10,20], Vec=[-3,4], Mode=5 set locally.

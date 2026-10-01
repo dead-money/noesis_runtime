@@ -1,23 +1,10 @@
-// ICommand-from-Rust bridge.
+// Commands: a Rust-backed ICommand, RoutedCommand / RoutedUICommand,
+// CommandBinding, and the built-in Application/Component command libraries.
 //
-// A `RustCommand : Noesis::BaseCommand` trampoline lets XAML
-// `Command="{Binding ...}"` invoke Rust logic. `BaseCommand` already
-// implements the `ICommand` interface (CanExecute / Execute / the
-// CanExecuteChanged EventHandler) and exposes `RaiseCanExecuteChanged()`;
-// we only override CanExecute / Execute to forward into a Rust vtable and
-// re-expose the raise so bound controls re-query (drives button
-// enable/disable).
-//
-// Lifetime: unlike the synthetic-class / markup trampolines (which need a
-// refcounted side `ClassData` because one registration backs many
-// instances), a command is 1:1 with its Rust handler box. The box is owned
-// directly by the `RustCommand` instance and freed in its destructor. The
-// instance is an ordinary `BaseComponent`, so Noesis's intrusive refcount
-// guarantees the destructor (and therefore the free handler) runs exactly
-// once, after the LAST reference drops. That last reference may be the
-// binding (Button.Command) holding the command alive well past the Rust
-// `Command` handle being dropped, so CanExecute / Execute keep working until
-// the visual tree lets go.
+// RustCommand owns its Rust handler box and frees it in the destructor, which
+// runs once when the last reference drops. A binding (Button.Command) may hold
+// that reference after the Rust `Command` handle is gone, so CanExecute /
+// Execute keep working until the visual tree lets go.
 
 #include "noesis_shim.h"
 
@@ -48,10 +35,7 @@ public:
         : mVtable(*vt), mUserdata(userdata), mFree(free_handler) {}
 
     ~RustCommand() {
-        // Donated ownership: the Rust handler box is dropped here, exactly
-        // once, when the final BaseComponent reference goes away. Null the
-        // pointer first so a (currently-impossible) re-entrant teardown
-        // can't double-free.
+        // Null first so a re-entrant teardown can't double-free.
         void* ud = mUserdata;
         mUserdata = nullptr;
         if (mFree && ud) {
@@ -59,8 +43,7 @@ public:
         }
     }
 
-    // From ICommand (via BaseCommand). `param` is the borrowed command
-    // parameter BaseComponent* (may be null). Forwarded verbatim.
+    // `param` is borrowed and may be null.
     bool CanExecute(Noesis::BaseComponent* param) const override {
         if (mVtable.can_execute) {
             return mVtable.can_execute(mUserdata, param);
@@ -84,18 +67,13 @@ private:
 
 }  // namespace
 
-// ── C ABI surface ──────────────────────────────────────────────────────────
-
 extern "C" void* noesis_command_create(
     const noesis_command_vtable* vt,
     void* userdata,
     noesis_command_free_fn free_handler) {
     if (!vt) return nullptr;
-    // BaseRefCounted starts at refcount 1. That initial reference IS the
-    // caller's +1, balanced by noesis_command_destroy. (No AddReference:
-    // a binding that later stores the command takes its own ref via
-    // SetValueObject, so the handler box outlives our destroy until that ref
-    // also drops.)
+    // The initial refcount of 1 is the caller's +1, balanced by
+    // noesis_command_destroy.
     auto* cmd = new RustCommand(vt, userdata, free_handler);
     return static_cast<Noesis::BaseComponent*>(cmd);
 }
@@ -116,13 +94,9 @@ extern "C" void noesis_command_raise_can_execute_changed(void* command) {
 
 // ── RoutedCommand / RoutedUICommand ─────────────────────────────────────────
 //
-// A RoutedCommand routes Execute / CanExecute through the element tree to the
-// first matching CommandBinding (below). Construction needs an owner TypeClass;
-// we resolve it from a type name through the Core reflection registry (a
-// built-in like "UIElement" or a registered custom class). Both are
-// BaseCommand-derived, so noesis_command_raise_can_execute_changed works on
-// them too. Returned commands carry +1 (release via
-// noesis_base_component_release).
+// The owner TypeClass is resolved by name through reflection (a built-in like
+// "UIElement" or a registered custom class); an unknown name returns null.
+// Returned commands carry +1, released via noesis_base_component_release.
 
 namespace {
 const Noesis::TypeClass* resolve_owner(const char* owner_type_name) {
@@ -136,7 +110,7 @@ extern "C" void* noesis_routed_command_create(const char* name, const char* owne
     if (!name) return nullptr;
     const Noesis::TypeClass* owner = resolve_owner(owner_type_name);
     if (!owner) return nullptr;
-    // BaseRefCounted starts at refcount 1. That initial ref is the caller's +1.
+    // Initial refcount of 1 is the caller's +1.
     auto* cmd = new Noesis::RoutedCommand(Noesis::Symbol(name), owner);
     return static_cast<Noesis::BaseComponent*>(cmd);
 }
@@ -171,7 +145,7 @@ extern "C" bool noesis_routed_command_can_execute(void* command, void* param, vo
     return false;
 }
 
-// Registered name (RoutedCommand::GetName), borrowed (interned Symbol string).
+// Borrowed; interned Symbol string.
 extern "C" const char* noesis_routed_command_get_name(void* command) {
     auto* cmd = Noesis::DynamicCast<Noesis::RoutedCommand*>(
         static_cast<Noesis::BaseComponent*>(command));
@@ -194,12 +168,9 @@ extern "C" void noesis_routed_ui_command_set_text(void* command, const char* tex
 
 // ── CommandBinding ───────────────────────────────────────────────────────────
 //
-// Binds a command to Rust Executed / CanExecute handlers and attaches to an
-// element's CommandBindings, so an invoked RoutedCommand (or built-in) routing
-// through that element fires the handler. Lifetime mirrors the routed-event
-// bridges (noesis_events.cpp): a heap RustCommandBinding owns the donated Rust
-// box + a +1 on the CommandBinding, registers the delegates with `+=`, and
-// detaches with `-=` in its destructor.
+// A heap RustCommandBinding owns the donated Rust box and a +1 on the
+// CommandBinding; its destructor unhooks the delegates and detaches the binding
+// from the element it was attached to.
 
 namespace {
 
@@ -219,8 +190,7 @@ public:
     ~RustCommandBinding() {
         mBinding->Executed() -= Noesis::MakeDelegate(this, &RustCommandBinding::OnExecuted);
         mBinding->CanExecute() -= Noesis::MakeDelegate(this, &RustCommandBinding::OnCanExecute);
-        // Reverse attach: remove the (now inert) binding from the element's
-        // CommandBindings so it doesn't accumulate there for the element's life.
+        // Otherwise inert bindings accumulate for the element's lifetime.
         if (mAttached) {
             if (auto* bindings = mAttached->GetCommandBindings()) {
                 bindings->Remove(mBinding);
@@ -232,8 +202,6 @@ public:
         if (mFree && ud) {
             mFree(ud);
         }
-        // Drop our +1 on the CommandBinding (the element's collection, if still
-        // attached elsewhere, holds its own ref and keeps it alive as needed).
         mBinding.Reset();
     }
 
@@ -242,19 +210,14 @@ public:
 
     Noesis::CommandBinding* binding() const { return mBinding; }
 
-    // Record the element attach added the binding to, holding a +1 ref so the
-    // destructor can remove the binding from its collection again.
     void setAttached(Noesis::UIElement* element) {
         mAttached.Reset(element);
     }
 
-    // True => an Executed / CanExecute callback is on the stack, so destruction
-    // was deferred (the outermost dispatch frame deletes); the caller must NOT
-    // delete. A command binding may drop itself (Rust Drop -> destroy) from
-    // inside its own callback, and deleting `this` mid-dispatch would be a
-    // use-after-free. A depth counter (not a bool) tracks nesting because a
-    // callback may synchronously re-invoke the command and re-enter. Thread-
-    // affine to the view-driving thread, so no atomics are needed.
+    // True: a callback is on the stack, so the outermost dispatch frame deletes
+    // and the caller must not. Rust may drop the binding from inside its own
+    // callback. A depth counter because a callback may re-invoke the command.
+    // View thread only, so no atomics.
     bool deferDeleteIfDispatching() {
         if (mDispatchDepth > 0) {
             mPendingDelete = true;
@@ -271,7 +234,7 @@ private:
         }
         args.handled = true;
         if (--mDispatchDepth == 0 && mPendingDelete) {
-            delete this;  // deferred teardown from a destroy during dispatch
+            delete this;
         }
     }
 
@@ -284,12 +247,12 @@ private:
         args.canExecute = can;
         args.handled = true;
         if (--mDispatchDepth == 0 && mPendingDelete) {
-            delete this;  // deferred teardown from a destroy during dispatch
+            delete this;
         }
     }
 
     Noesis::Ptr<Noesis::CommandBinding> mBinding;
-    Noesis::Ptr<Noesis::UIElement> mAttached;  // element attach registered with, or null.
+    Noesis::Ptr<Noesis::UIElement> mAttached;
     noesis_cmd_executed_fn    mExecuted;
     noesis_cmd_can_execute_fn mCanExecute;
     void*                        mUserdata;
@@ -324,9 +287,6 @@ extern "C" bool noesis_command_binding_attach(void* token, void* element) {
 
 extern "C" void noesis_command_binding_destroy(void* token) {
     if (!token) return;
-    // Detaches the delegates, removes the binding from the attached element,
-    // frees the donated box, drops our binding ref. Deferred if a callback for
-    // this binding is currently on the dispatch stack (the epilogue deletes).
     auto* bridge = static_cast<RustCommandBinding*>(token);
     if (bridge->deferDeleteIfDispatching()) return;
     delete bridge;
@@ -334,10 +294,9 @@ extern "C" void noesis_command_binding_destroy(void* token) {
 
 // ── Built-in command libraries ───────────────────────────────────────────────
 //
-// Borrowed `const RoutedUICommand*` singletons owned by the framework. Do NOT
-// release. Indexed by the enums in src/commands.rs; the switch evaluates each
-// static at call time (after GUI init), so the pointers are live. NULL on an
-// out-of-range index.
+// Borrowed framework singletons; never release. Indexed by the enums in
+// src/commands.rs; null when out of range. Each static is read at call time,
+// after GUI init.
 
 extern "C" const void* noesis_application_command(uint32_t which) {
     using AC = Noesis::ApplicationCommands;

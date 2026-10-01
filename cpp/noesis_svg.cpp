@@ -1,27 +1,9 @@
-// SVG / SVGPath parsing and geometry queries.
+// SVG path data (Noesis::SVGPath) and whole-document parsing (Noesis::SVG::Image).
+// Both run on the CPU; no RenderDevice is needed.
 //
-// Two real 3.2.13 surfaces are wrapped here, both fully CPU/headless. No GPU
-// RenderDevice or render pass is required to exercise either one:
-//
-//   * NsDrawing/SVGPath.h: Noesis::SVGPath. We own a heap SVGPath built either
-//     by parsing an SVG path string (SVGPath::TryParse) or via the path-builder
-//     statics (MoveTo / LineTo / Close / AddRect / ...). The path's `commands`
-//     member is a Vector<uint32_t> (a BaseVector<uint32_t>) that we feed to the
-//     static query API: CalculateBounds(ArrayRef<uint32_t>) -> Rect,
-//     FillContains(ArrayRef<uint32_t>, Point, Fill) -> bool, and
-//     StrokeContains(ArrayRef<uint32_t>, Point, Pen) -> bool. We expose the
-//     command count + the query results to Rust; the raw command ints stay C++
-//     side (Rust never needs them).
-//
-//   * NsGui/SVG.h: Noesis::SVG::Parse(const char* svg, Image& image), the free
-//     function that parses a whole <svg> document into a Noesis::SVG::Image (a
-//     plain struct: width, height, Vector<Shape> shapes). We own that Image and
-//     expose its width/height + shape count + per-shape fill type so a test can
-//     prove a document actually parsed.
-//
-// NEITHER Noesis::SVGPath NOR Noesis::SVG::Image is a BaseComponent, so these
-// handles are owned with plain new/delete and released through the dedicated
-// *_destroy entrypoints below (NOT noesis_base_component_release).
+// Neither type is a BaseComponent: handles are plain new/delete objects and
+// must be released with their *_destroy entrypoint, never
+// noesis_base_component_release.
 
 #include "noesis_shim.h"
 
@@ -38,18 +20,14 @@ namespace {
 Noesis::SVGPath* as_path(void* p) { return static_cast<Noesis::SVGPath*>(p); }
 Noesis::SVG::Image* as_image(void* p) { return static_cast<Noesis::SVG::Image*>(p); }
 
-// A borrowed ArrayRef over a path's command buffer, valid for the call.
+// Borrows the command buffer; invalidated by any builder call on the path.
 Noesis::ArrayRef<uint32_t> commands_of(Noesis::SVGPath* path) {
     return Noesis::ArrayRef<uint32_t>(path->commands.Data(), path->commands.Size());
 }
 
 }  // namespace
 
-// ── SVGPath: parse / build ───────────────────────────────────────────────────
-
-// Parse an SVG path data string (e.g. "M0 0 L100 0 L100 50 Z") into a freshly
-// owned SVGPath. Returns null if the string fails to parse. The returned pointer
-// must be released with noesis_svg_path_destroy.
+// Null on a null or unparseable string. Release with noesis_svg_path_destroy.
 extern "C" void* noesis_svg_path_parse(const char* str) {
     if (!str) return nullptr;
     Noesis::SVGPath* path = new Noesis::SVGPath();
@@ -60,19 +38,14 @@ extern "C" void* noesis_svg_path_parse(const char* str) {
     return path;
 }
 
-// Create an empty SVGPath to be populated with the builder entrypoints below.
 extern "C" void* noesis_svg_path_create() { return new Noesis::SVGPath(); }
 
 extern "C" void noesis_svg_path_destroy(void* path) { delete as_path(path); }
 
-// Number of uint32 entries in the path's command buffer. A parsed/built path is
-// non-empty; this is the cheap "did anything cross the FFI" discriminator.
 extern "C" uint32_t noesis_svg_path_command_count(void* path) {
     Noesis::SVGPath* p = as_path(path);
     return p ? p->commands.Size() : 0u;
 }
-
-// ── SVGPath builder statics (append to the owned command buffer) ─────────────
 
 extern "C" void noesis_svg_path_move_to(void* path, float x, float y) {
     Noesis::SVGPath* p = as_path(path);
@@ -100,9 +73,7 @@ extern "C" void noesis_svg_path_add_ellipse(void* path, float x, float y, float 
     if (p) Noesis::SVGPath::AddEllipse(p->commands, x, y, rx, ry);
 }
 
-// ── SVGPath queries (static command-buffer API) ──────────────────────────────
-
-// Axis-aligned bounding box of the path geometry. out = [x, y, width, height].
+// out = [x, y, width, height].
 extern "C" bool noesis_svg_path_calculate_bounds(void* path, float out[4]) {
     Noesis::SVGPath* p = as_path(path);
     if (!p || !out) return false;
@@ -114,8 +85,7 @@ extern "C" bool noesis_svg_path_calculate_bounds(void* path, float out[4]) {
     return true;
 }
 
-// True if (x, y) lies inside the filled region. `fill_rule` selects the winding
-// rule: 0 = EvenOdd, 1 = NonZero (Noesis::SVGPath::Fill ordinals).
+// `fill_rule`: 0 EvenOdd, 1 NonZero (Noesis::SVGPath::Fill ordinals).
 extern "C" bool noesis_svg_path_fill_contains(void* path, float x, float y, int32_t fill_rule) {
     Noesis::SVGPath* p = as_path(path);
     if (!p) return false;
@@ -123,9 +93,8 @@ extern "C" bool noesis_svg_path_fill_contains(void* path, float x, float y, int3
                                          static_cast<Noesis::SVGPath::Fill>(fill_rule));
 }
 
-// True if (x, y) lies within the stroked outline of the path for the given pen.
-// `join` is a Noesis::SVGPath::StrokeJoinStyle ordinal; `start_cap`/`end_cap`
-// are Noesis::SVGPath::StrokeCapStyle ordinals.
+// `join` / `start_cap` / `end_cap` are SVGPath::StrokeJoinStyle /
+// StrokeCapStyle ordinals.
 extern "C" bool noesis_svg_path_stroke_contains(void* path, float x, float y, float width,
                                                    int32_t join, int32_t start_cap, int32_t end_cap,
                                                    float miter_limit) {
@@ -140,12 +109,8 @@ extern "C" bool noesis_svg_path_stroke_contains(void* path, float x, float y, fl
     return Noesis::SVGPath::StrokeContains(commands_of(p), Noesis::Point(x, y), pen);
 }
 
-// ── SVG document parsing (NsGui/SVG.h free function) ─────────────────────────
-
-// Parse a full <svg> document string into a freshly owned Noesis::SVG::Image.
-// Always returns a non-null handle (Parse populates it in place); release with
-// noesis_svg_image_destroy. A malformed document yields an image with zero
-// shapes, observable via noesis_svg_image_shape_count.
+// Null only for a null `svg`; a malformed document yields an image with zero
+// shapes. Release with noesis_svg_image_destroy.
 extern "C" void* noesis_svg_image_parse(const char* svg) {
     if (!svg) return nullptr;
     Noesis::SVG::Image* image = new Noesis::SVG::Image();
@@ -155,7 +120,6 @@ extern "C" void* noesis_svg_image_parse(const char* svg) {
 
 extern "C" void noesis_svg_image_destroy(void* image) { delete as_image(image); }
 
-// Parsed document size (the <svg> width/height). Returns false if `image` null.
 extern "C" bool noesis_svg_image_get_size(void* image, float* width, float* height) {
     Noesis::SVG::Image* img = as_image(image);
     if (!img) return false;
@@ -164,14 +128,13 @@ extern "C" bool noesis_svg_image_get_size(void* image, float* width, float* heig
     return true;
 }
 
-// Number of parsed shapes (paths) in the document.
 extern "C" uint32_t noesis_svg_image_shape_count(void* image) {
     Noesis::SVG::Image* img = as_image(image);
     return img ? img->shapes.Size() : 0u;
 }
 
-// Fill-brush type of shape `index` (Noesis::SVG::Brush::Type ordinal: 0 None,
-// 1 Solid, 2 Linear, 3 Radial), or -1 if the index is out of range.
+// SVG::Brush::Type ordinal (0 None, 1 Solid, 2 Linear, 3 Radial), or -1 if
+// `index` is out of range.
 extern "C" int32_t noesis_svg_image_shape_fill_type(void* image, uint32_t index) {
     Noesis::SVG::Image* img = as_image(image);
     if (!img || index >= img->shapes.Size()) return -1;

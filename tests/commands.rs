@@ -11,8 +11,8 @@ use noesis_runtime::ffi::{ClassBase, PropType};
 use noesis_runtime::view::{FrameworkElement, MouseButton, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// A Button bound to the VM's `Go` command, with a constant CommandParameter so
-// we can assert the parameter reaches Rust. Centered 100x40 in a 200x200 grid.
+// Button centered 100x40 in a 200x200 grid; the constant CommandParameter
+// lets the test check the parameter reaches Rust.
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -50,8 +50,7 @@ impl CommandHandler for Counting {
         self.enabled.load(Ordering::SeqCst) != 0
     }
     fn execute(&self, param: CommandParameterValue) {
-        // The XAML sets CommandParameter="42"; Noesis boxes it as a String, so
-        // it now decodes on the Rust side. Count only correctly-decoded hits.
+        // CommandParameter="42" arrives boxed as a String.
         if param.as_str() == Some("42") {
             self.saw_param.fetch_add(1, Ordering::SeqCst);
         }
@@ -59,9 +58,7 @@ impl CommandHandler for Counting {
     }
 }
 
-// Drop-counting handler for the lifecycle assertion. Increments a shared
-// counter exactly when the boxed handler is dropped (i.e. the free trampoline
-// ran).
+// Counts drops of the boxed handler, i.e. runs of the free trampoline.
 struct DropProbe(Arc<AtomicU32>);
 impl Drop for DropProbe {
     fn drop(&mut self) {
@@ -91,7 +88,6 @@ fn rust_command_drives_button() {
         assert_eq!(drop_count.load(Ordering::SeqCst), 0);
         {
             let probe = Command::new(DropProbe(Arc::clone(&drop_count)));
-            // Touch raw() so the command is genuinely live, not optimized away.
             assert!(!probe.raw().is_null());
             assert_eq!(
                 drop_count.load(Ordering::SeqCst),
@@ -119,7 +115,7 @@ fn rust_command_drives_button() {
             saw_param: Arc::clone(&saw_param),
             enabled: Arc::clone(&enabled),
         });
-        // `&command` borrow encodes the live-BaseComponent invariant; the VM stores its own reference.
+        // The VM stores its own reference to the command.
         vm.handle().set_command(go_idx, &command);
 
         let mut bytes = HashMap::new();
@@ -132,7 +128,6 @@ fn rust_command_drives_button() {
         view.activate();
 
         let mut content = view.content().expect("View::content returned None");
-        // SAFETY: vm is alive for the rest of this scope.
         assert!(
             content.set_data_context(&vm),
             "set_data_context returned false"

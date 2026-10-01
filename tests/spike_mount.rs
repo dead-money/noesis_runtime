@@ -1,21 +1,17 @@
-//! Spike-Mount: can ONE live `View` host two copies of the SAME sub-XAML, each
-//! with its own `DataContext` and its own namescope, mounted MID-FRAME into a
-//! shared named panel, without rebuilding the View?
+//! One live `View` hosts two copies of the same sub-XAML, each with its own
+//! `DataContext` and namescope, mounted into a shared named panel after the
+//! View is built and pumped, without rebuilding the View.
 //!
-//! This gates the "one panel View, many sub-trees" composition the ECS-UI
-//! design wants (a HUD View whose children are independently-bound fragments).
-//! The two risks it isolates:
+//! Checks:
 //!
 //!   1. `DataContext` isolation: copy A renders its `Title` and copy B renders
-//!      its OWN distinct `Title`, even though both were `load`ed from identical
+//!      its own distinct `Title`, though both were `load`ed from identical
 //!      markup.
 //!   2. Namescope isolation: both fragments define `x:Name="Leaf"`. Resolving
-//!      "Leaf" from fragment A's root must find A's `TextBlock`, and a
-//!      `set_and_notify` on A's view model must NOT bleed into B.
-//!
-//! Both fragments are inserted via `panel_children.add` AFTER the View is built
-//! and pumped (mid-frame), so we also prove the host panel realizes injected
-//! children without a View rebuild.
+//!      "Leaf" from fragment A's root finds A's `TextBlock`, and a
+//!      `set_and_notify` on A's view model does not bleed into B.
+//!   3. The host panel realizes children added through `panel_children.add`
+//!      mid-frame.
 
 use std::collections::HashMap;
 

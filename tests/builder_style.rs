@@ -1,8 +1,5 @@
-//! `Style::builder(target_type)` fluent construction.
-//!
-//! A built style is assigned to a `TextBlock` and `FontSize` is read back
-//! through Noesis after a layout pump; `based_on` is exercised via a derived
-//! builder.
+//! `Style::builder`: a built style applied to a `TextBlock` sets `FontSize`
+//! after a layout pass, and a `based_on` style's own setter overrides the base.
 
 use std::collections::HashMap;
 

@@ -1,5 +1,5 @@
-//! `MultiBinding` with a Rust `IMultiValueConverter`: two-source combination,
-//! initial value and source-change tracking.
+//! `MultiBinding` with a Rust `MultiConverter`: combines two sources and
+//! re-runs when a source changes.
 
 use std::collections::HashMap;
 use std::sync::Arc;

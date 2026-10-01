@@ -15,8 +15,7 @@ use noesis_runtime::render_device::{
 use noesis_runtime::view::{FrameworkElement, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// A TextBlock so a render pass produces real glyph geometry (proving the view
-// is alive and rendering after the threshold/stereo setters run).
+// The TextBlock gives each render pass real glyph geometry to count.
 const XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -37,9 +36,8 @@ impl XamlProvider for InMem {
     }
 }
 
-// Minimal headless RenderDevice that drops everything except monotonic handles
-// and scratch buffers. The `draws` counter lets stereo render paths be
-// verified to have actually issued geometry rather than no-op'd.
+// Headless device: hands out monotonic handles and scratch buffers, discards
+// everything else, and counts `draw_batch` calls.
 struct NullDevice {
     next: u64,
     vb: Vec<u8>,
@@ -132,8 +130,8 @@ impl RenderDevice for NullDevice {
     }
 }
 
-// With an identity projection any eye matrix is trivially "enclosed",
-// satisfying RenderStereo's culling precondition.
+// RenderStereo requires each eye matrix to be enclosed by the view projection;
+// identity for both makes that trivially true.
 const IDENTITY: [f32; 16] = [
     1.0, 0.0, 0.0, 0.0, //
     0.0, 1.0, 0.0, 0.0, //
@@ -161,9 +159,8 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         let provider = InMem { bytes };
         let _registered = noesis_runtime::xaml_provider::set_xaml_provider(provider);
 
-        // Defaults are version-dependent (e.g. SDK ships a 2048 glyph cache,
-        // not the 1024 the header suggests) so we print but do not assert them;
-        // we only assert writes made with values distinct from any plausible default.
+        // Defaults are build-dependent, so print them and assert only round-trips
+        // of values distinct from any plausible default.
         let mut device = register(NullDevice::new(Arc::clone(&draws)));
         eprintln!(
             "RenderDevice defaults: offscreen {}x{} samples={} default_surf={} max_surf={} glyph {}x{}",
@@ -226,14 +223,11 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
         let element = FrameworkElement::load("ui.xaml").expect("ui.xaml load failed");
         let mut view = View::create(element);
         view.set_size(200, 200);
-        // Identity projection: eye matrices must be enclosed by the view projection;
-        // identity makes that trivially true.
         view.set_projection_matrix(&IDENTITY);
         view.activate();
         assert!(view.update(0.0), "first Update should report change");
 
-        // These threshold setters have no SDK getter; correctness is confirmed
-        // by the view remaining healthy through the render pass at the end.
+        // No SDK getters for these; the final render pass checks the view survives.
         view.set_holding_time_threshold(750);
         view.set_holding_distance_threshold(20);
         view.set_manipulation_distance_threshold(15);
@@ -262,7 +256,6 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
             renderer.init(&device);
         }
 
-        // Drive several full frames to let the Rendering event fire.
         let mut t = 0.1_f64;
         for _ in 0..5 {
             view.update(t);
@@ -298,8 +291,7 @@ fn rendering_event_thresholds_stereo_and_device_tuning() {
             "Rendering handler must stop firing after its subscription is dropped"
         );
 
-        // Count draw_batch calls across the stereo block to prove the entrypoints
-        // drove the device to actual geometry rather than no-op'd.
+        // A draw_batch count increase shows the stereo entry points drew geometry.
         view.update(t);
         let draws_before_stereo = draws.load(Ordering::SeqCst);
         {

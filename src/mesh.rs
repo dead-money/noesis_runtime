@@ -1,26 +1,28 @@
-//! Code-built [`MeshData`] + [`Mesh`] element for immediate-mode drawing.
+//! Triangle meshes built in code.
 //!
-//! [`MeshData`] is the low-level CPU geometry payload Noesis submits straight to
-//! the GPU: interleaved `(x, y)` vertices, optional `(u, v)` texture
-//! coordinates, a 16-bit triangle index buffer, and an explicit bounding box. It
-//! is consumed two ways: by
-//! [`DrawingContext::draw_mesh`](crate::drawing::DrawingContext::draw_mesh) in an
-//! `OnRender` callback, or hosted in a [`Mesh`] [`FrameworkElement`](crate::view::FrameworkElement) in the
-//! element tree.
+//! [`MeshData`] holds raw geometry that Noesis sends to the GPU as is: `(x, y)`
+//! vertices, optional `(u, v)` texture coordinates, 16-bit triangle indices,
+//! and a bounding box. Draw it with
+//! [`DrawingContext::draw_mesh`](crate::drawing::DrawingContext::draw_mesh), or
+//! place it in the element tree inside a [`Mesh`] element.
 //!
-//! Both handles own a freshly-created Noesis object holding a single `+1`
-//! reference released on [`Drop`], the same ownership idiom as
-//! [`crate::brushes`] / [`crate::shapes`].
+//! ```no_run
+//! use noesis_runtime::brushes::SolidColorBrush;
+//! use noesis_runtime::mesh::{Mesh, MeshData};
 //!
-//! # Read-back
+//! let mut data = MeshData::new();
+//! data.set_vertices(&[[0.0, 0.0], [100.0, 0.0], [0.0, 100.0]]);
+//! data.set_indices(&[0, 1, 2]);
+//! data.set_bounds([0.0, 0.0, 100.0, 100.0]);
 //!
-//! The buffers live on the CPU, so the setters round-trip headlessly: write a
-//! buffer with [`MeshData::set_vertices`] / [`set_uvs`](MeshData::set_uvs) /
-//! [`set_indices`](MeshData::set_indices) and read the same values back with the
-//! matching getter, and the bounds round-trip through [`MeshData::bounds`].
-//! Noesis 3.2.13 exposes no `GetNumVertices`/`...` getter, so the element count is
-//! proven by the buffer data that reads back at that length (the handle tracks
-//! the count it last set so the getters know how many elements to read).
+//! let mut mesh = Mesh::new();
+//! let _ = mesh.set_data(&data);
+//! let _ = mesh.set_brush(&SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]));
+//! ```
+//!
+//! Each handle owns one reference to its Noesis object and releases it on drop.
+//! Noesis has no element-count getters, so [`MeshData`] remembers the counts it
+//! last set and its getters read back that many elements.
 
 use core::ptr::NonNull;
 use std::ffi::c_void;
@@ -34,10 +36,9 @@ use crate::ffi::{
     noesis_mesh_get_data, noesis_mesh_set_brush, noesis_mesh_set_data,
 };
 
-/// An owning handle to a Noesis `MeshData`: the CPU vertex / UV / index buffers
-/// plus a bounding box. Build it, then draw it via
-/// [`DrawingContext::draw_mesh`](crate::drawing::DrawingContext::draw_mesh) or
-/// host it in a [`Mesh`].
+/// Vertex, texture-coordinate and index buffers plus a bounding box. Draw it
+/// with [`DrawingContext::draw_mesh`](crate::drawing::DrawingContext::draw_mesh)
+/// or host it in a [`Mesh`].
 pub struct MeshData {
     ptr: NonNull<c_void>,
     num_vertices: u32,
@@ -49,7 +50,7 @@ pub struct MeshData {
 unsafe impl Send for MeshData {}
 
 impl MeshData {
-    /// Create an empty `MeshData` (no vertices / UVs / indices, zero bounds).
+    /// Creates an empty mesh with zero bounds.
     ///
     /// # Panics
     ///
@@ -66,15 +67,18 @@ impl MeshData {
         }
     }
 
-    /// Raw `Noesis::MeshData*` (a `BaseComponent*`), borrowed for `self`'s
-    /// lifetime.
+    /// The underlying `Noesis::MeshData*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Replace the vertex buffer with `vertices` (`(x, y)` pairs in DIPs),
-    /// resizing it to `vertices.len()`.
+    /// Replaces the vertex buffer with `vertices`, as `(x, y)` positions in
+    /// device-independent pixels.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are more than `u32::MAX` vertices.
     pub fn set_vertices(&mut self, vertices: &[[f32; 2]]) {
         let count = u32::try_from(vertices.len()).expect("vertex count exceeds u32");
         // SAFETY: live MeshData*; `vertices` is `2 * count` contiguous floats
@@ -86,8 +90,7 @@ impl MeshData {
         self.num_vertices = count;
     }
 
-    /// Read the vertex buffer back from the live object (length == the count
-    /// last set via [`Self::set_vertices`]).
+    /// Reads back the vertices last set with [`Self::set_vertices`].
     #[must_use]
     pub fn vertices(&self) -> Vec<[f32; 2]> {
         let mut out = vec![[0.0f32; 2]; self.num_vertices as usize];
@@ -109,8 +112,12 @@ impl MeshData {
         self.num_vertices
     }
 
-    /// Replace the texture-coordinate buffer with `uvs` (`(u, v)` pairs),
-    /// resizing it to `uvs.len()`.
+    /// Replaces the texture-coordinate buffer with `uvs`, one `(u, v)` pair
+    /// per vertex.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are more than `u32::MAX` coordinates.
     pub fn set_uvs(&mut self, uvs: &[[f32; 2]]) {
         let count = u32::try_from(uvs.len()).expect("uv count exceeds u32");
         // SAFETY: as `set_vertices`.
@@ -120,7 +127,7 @@ impl MeshData {
         self.num_uvs = count;
     }
 
-    /// Read the texture-coordinate buffer back from the live object.
+    /// Reads back the texture coordinates last set with [`Self::set_uvs`].
     #[must_use]
     pub fn uvs(&self) -> Vec<[f32; 2]> {
         let mut out = vec![[0.0f32; 2]; self.num_uvs as usize];
@@ -137,8 +144,11 @@ impl MeshData {
         self.num_uvs
     }
 
-    /// Replace the 16-bit triangle index buffer with `indices`, resizing it to
-    /// `indices.len()`.
+    /// Replaces the index buffer with `indices`, three per triangle.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are more than `u32::MAX` indices.
     pub fn set_indices(&mut self, indices: &[u16]) {
         let count = u32::try_from(indices.len()).expect("index count exceeds u32");
         // SAFETY: live MeshData*; `indices` is `count` contiguous u16s the C
@@ -149,7 +159,7 @@ impl MeshData {
         self.num_indices = count;
     }
 
-    /// Read the index buffer back from the live object.
+    /// Reads back the indices last set with [`Self::set_indices`].
     #[must_use]
     pub fn indices(&self) -> Vec<u16> {
         let mut out = vec![0u16; self.num_indices as usize];
@@ -166,7 +176,8 @@ impl MeshData {
         self.num_indices
     }
 
-    /// Set the bounding box `[x, y, w, h]` in DIPs.
+    /// Sets the bounding box as `[x, y, width, height]` in device-independent
+    /// pixels. Noesis does not compute it from the vertices.
     pub fn set_bounds(&mut self, bounds: [f32; 4]) {
         // SAFETY: live MeshData*.
         unsafe {
@@ -180,7 +191,7 @@ impl MeshData {
         }
     }
 
-    /// Read the bounding box `[x, y, w, h]` back from the live object.
+    /// The bounding box as `[x, y, width, height]`.
     #[must_use]
     pub fn bounds(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
@@ -205,10 +216,9 @@ impl Drop for MeshData {
     }
 }
 
-/// An owning handle to a Noesis `Mesh`: a [`FrameworkElement`] that renders a
-/// [`MeshData`] filled with a [`Brush`]. Hand its [`raw`](Mesh::raw) pointer to
-/// the element tree (Noesis takes its own reference) and the handle may then be
-/// dropped.
+/// A [`FrameworkElement`] that draws a [`MeshData`] filled with a [`Brush`].
+/// Once its [`raw`](Mesh::raw) pointer is in the element tree, Noesis holds its
+/// own reference and this handle can be dropped.
 ///
 /// [`FrameworkElement`]: crate::view::FrameworkElement
 pub struct Mesh {
@@ -219,7 +229,7 @@ pub struct Mesh {
 unsafe impl Send for Mesh {}
 
 impl Mesh {
-    /// Create an empty `Mesh` element (no data / brush set yet).
+    /// Creates a mesh element with no data or brush.
     ///
     /// # Panics
     ///
@@ -233,38 +243,37 @@ impl Mesh {
         }
     }
 
-    /// Raw `Noesis::Mesh*` (also a `FrameworkElement*` / `BaseComponent*`),
-    /// borrowed for `self`'s lifetime.
+    /// The underlying `Noesis::Mesh*` (also a `FrameworkElement*`), valid
+    /// while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Assign the [`MeshData`] to render (Noesis takes its own reference, so the
-    /// `MeshData` handle may be dropped afterwards).
+    /// Sets the geometry to draw. Noesis takes its own reference, so `data` can
+    /// be dropped afterwards. Returns `false` if the data was not set.
     #[must_use = "a false return means the data was not set (the Mesh pointer was null or not a Noesis::Mesh)"]
     pub fn set_data(&mut self, data: &MeshData) -> bool {
         // SAFETY: self.ptr is a live Mesh*; data.raw() is a live MeshData*.
         unsafe { noesis_mesh_set_data(self.ptr.as_ptr(), data.raw()) }
     }
 
-    /// Borrowed `Noesis::MeshData*` currently set, or `None`. The pointer has no
-    /// `+1` reference; do not release it.
+    /// The current `Noesis::MeshData*`, or `None`. Borrowed: do not release it.
     #[must_use]
     pub fn data(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live Mesh*; the returned pointer is borrowed.
         NonNull::new(unsafe { noesis_mesh_get_data(self.ptr.as_ptr()) })
     }
 
-    /// Set the fill [`Brush`] (Noesis takes its own reference).
+    /// Sets the fill brush. Noesis takes its own reference. Returns `false` if
+    /// the brush was not set.
     #[must_use = "a false return means the brush was not set (the Mesh pointer was null or not a Noesis::Mesh)"]
     pub fn set_brush(&mut self, brush: &dyn Brush) -> bool {
         // SAFETY: self.ptr is a live Mesh*; brush_raw() is a live Brush*.
         unsafe { noesis_mesh_set_brush(self.ptr.as_ptr(), brush.brush_raw()) }
     }
 
-    /// Borrowed `Noesis::Brush*` currently set, or `None`. The pointer has no
-    /// `+1` reference; do not release it.
+    /// The current `Noesis::Brush*`, or `None`. Borrowed: do not release it.
     #[must_use]
     pub fn brush(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live Mesh*; the returned pointer is borrowed.

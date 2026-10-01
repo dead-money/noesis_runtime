@@ -32,7 +32,7 @@ fn color_animation_drives_brush_color() {
         let content = view.content().expect("content");
         let mut box_el = content.find_name("Box").expect("Box");
 
-        // Retained so we can read the live animated color back through Noesis.
+        // Kept alive to read the animated color back.
         let brush = SolidColorBrush::new([1.0, 0.0, 0.0, 1.0]);
         assert!(box_el.set_background(&brush));
         assert_eq!(brush.color(), [1.0, 0.0, 0.0, 1.0]);

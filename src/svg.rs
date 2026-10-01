@@ -1,15 +1,15 @@
-//! SVG parsing and geometry queries, all CPU-side and headless. No GPU
-//! `RenderDevice` or render pass is needed, so you can use these in tests,
-//! tooling, or hit-testing without standing up a renderer.
+//! SVG parsing and geometry queries. Everything here runs on the CPU and needs
+//! no `RenderDevice` or view, so it works in tests, tooling, and hit-testing
+//! code without a renderer.
 //!
-//! There are two surfaces:
+//! There are two types:
 //!
 //! * [`SvgPath`] wraps `Noesis::SVGPath`, a single outline. Parse it from an
 //!   SVG *path data* string with [`SvgPath::parse`], or build one up with
 //!   [`SvgPath::move_to`], [`SvgPath::line_to`], [`SvgPath::add_rect`], and
 //!   friends. Then query it: [`SvgPath::bounds`] for the bounding box,
 //!   [`SvgPath::fill_contains`] and [`SvgPath::stroke_contains`] for
-//!   hit-testing. The queries read back from the live Noesis object each call.
+//!   hit-testing.
 //!
 //! * [`SvgImage`] wraps `Noesis::SVG::Image`, the shape collection parsed from
 //!   a whole `<svg>` document via [`SvgImage::parse`]. Inspect it with
@@ -64,11 +64,10 @@ pub enum StrokeCap {
     Triangle = 3,
 }
 
-/// A stroke pen for [`SvgPath::stroke_contains`], mirroring
-/// `Noesis::SVGPath::Pen`.
+/// The stroke used by [`SvgPath::stroke_contains`].
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Pen {
-    /// Stroke width.
+    /// Stroke width, in path coordinates.
     pub width: f32,
     /// Corner join style.
     pub join: StrokeJoin,
@@ -94,7 +93,8 @@ impl Default for Pen {
     }
 }
 
-/// An owned `Noesis::SVGPath`: a CPU command buffer describing an outline.
+/// An owned `Noesis::SVGPath`: a command buffer describing one outline. Parse
+/// it with [`SvgPath::parse`] or start from [`SvgPath::new`] and add commands.
 pub struct SvgPath {
     ptr: NonNull<c_void>,
 }
@@ -105,7 +105,7 @@ unsafe impl Send for SvgPath {}
 impl SvgPath {
     /// Parse an SVG *path data* string (e.g. `"M0 0 L100 0 L100 50 Z"`).
     ///
-    /// Returns `None` if the string fails to parse.
+    /// Returns `None` if the string fails to parse or contains an interior NUL.
     #[must_use]
     pub fn parse(path_data: &str) -> Option<Self> {
         let c = CString::new(path_data).ok()?;
@@ -166,8 +166,8 @@ impl SvgPath {
         unsafe { noesis_svg_path_add_ellipse(self.ptr.as_ptr(), x, y, rx, ry) };
     }
 
-    /// Tight axis-aligned bounding box `[x, y, width, height]` of the path
-    /// geometry, read back from the live Noesis object.
+    /// Axis-aligned bounding box of the path geometry, as
+    /// `[x, y, width, height]`.
     #[must_use]
     pub fn bounds(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
@@ -221,8 +221,7 @@ impl Drop for SvgPath {
     }
 }
 
-/// The fill-brush kind of a parsed SVG shape, mirroring
-/// `Noesis::SVG::Brush::Type`.
+/// The fill-brush kind of a shape in an [`SvgImage`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SvgBrushType {
@@ -248,8 +247,8 @@ impl SvgBrushType {
     }
 }
 
-/// An owned `Noesis::SVG::Image`: the path collection parsed from a whole
-/// `<svg>` document by `Noesis::SVG::Parse`.
+/// An owned `Noesis::SVG::Image`: the shapes parsed from a whole `<svg>`
+/// document.
 pub struct SvgImage {
     ptr: NonNull<c_void>,
 }
@@ -258,7 +257,7 @@ pub struct SvgImage {
 unsafe impl Send for SvgImage {}
 
 impl SvgImage {
-    /// Parse a full `<svg>...</svg>` document string into a path collection.
+    /// Parse a full `<svg>...</svg>` document string.
     ///
     /// Returns `None` only if `document` contains an interior NUL. A malformed
     /// document parses into an image with zero shapes (observable via
@@ -288,7 +287,7 @@ impl SvgImage {
         unsafe { noesis_svg_image_shape_count(self.ptr.as_ptr()) }
     }
 
-    /// Fill-brush type of shape `index`, or `None` if the index is out of range.
+    /// Fill-brush type of shape `index`, or `None` if `index` is out of range.
     #[must_use]
     pub fn shape_fill_type(&self, index: u32) -> Option<SvgBrushType> {
         // SAFETY: self.ptr is a live SVG::Image*.

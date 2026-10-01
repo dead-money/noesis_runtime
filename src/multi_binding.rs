@@ -1,38 +1,35 @@
-//! `MultiBinding` + `IMultiValueConverter` from Rust.
+//! Bindings that combine several sources into one value.
 //!
-//! A [`MultiBinding`] combines N child [`Binding`]s through a Rust
-//! [`MultiValueConverter`] into a single target value, the code-built
-//! equivalent of authoring a `<MultiBinding>` with several `<Binding>` children
-//! and a `Converter` in XAML. The converter receives the source values as an
-//! array of boxed arguments (one per child binding, in order) and returns a
-//! single combined value.
+//! A [`MultiBinding`] feeds the values of several child [`Binding`]s to a
+//! [`MultiConverter`], which returns one value for the target property. It is
+//! the code equivalent of a XAML `<MultiBinding>` with a `Converter`.
 //!
-//! ```ignore
-//! let conv = MultiConverter::new(|values: &[ConvertArg], _p: &ConvertArg| {
-//!     let a = values.first().and_then(ConvertArg::as_str).unwrap_or_default();
-//!     let b = values.get(1).and_then(ConvertArg::as_str).unwrap_or_default();
-//!     Some(Converted::String(format!("{a} {b}")))
-//! });
-//! let mb = MultiBinding::new()
-//!     .converter(&conv)
-//!     .add_binding(Binding::new("First"))
-//!     .add_binding(Binding::new("Last"));
-//! mb.set_on(&label, "Text");
+//! ```no_run
+//! use noesis_runtime::binding::Binding;
+//! use noesis_runtime::converters::{ConvertArg, Converted};
+//! use noesis_runtime::multi_binding::{MultiBinding, MultiConverter};
+//! use noesis_runtime::view::FrameworkElement;
+//!
+//! fn bind_full_name(label: &FrameworkElement) {
+//!     let conv = MultiConverter::new(|values: &[ConvertArg], _param: &ConvertArg| {
+//!         let first = values.first().and_then(ConvertArg::as_str).unwrap_or_default();
+//!         let last = values.get(1).and_then(ConvertArg::as_str).unwrap_or_default();
+//!         Some(Converted::String(format!("{first} {last}")))
+//!     });
+//!     let mb = MultiBinding::new()
+//!         .converter(&conv)
+//!         .add_binding(Binding::new("First"))
+//!         .add_binding(Binding::new("Last"));
+//!     assert!(mb.set_on(label, "Text"));
+//! }
 //! ```
 //!
-//! # Lifetime
+//! Both handles own a reference released on drop. Once wired, Noesis holds its
+//! own references, so the handles can be dropped; the converter's closure is
+//! freed after the last reference goes away.
 //!
-//! Both [`MultiConverter`] and [`MultiBinding`] own a `+1` reference released on
-//! drop. [`MultiBinding::set_on`] makes Noesis take its own reference, so the
-//! handle may be dropped after wiring; the converter stays alive while the
-//! binding references it. The converter's handler box is freed exactly once, by
-//! the C++ destructor, after the last reference drops. Modelled on
-//! [`crate::converters::Converter`].
-//!
-//! # Threading
-//!
-//! `convert` fires from inside Noesis's binding pump on whatever thread drives
-//! the view. The handler is stored behind `Send`; keep the work small.
+//! The converter runs during binding updates, on the thread that drives the
+//! view.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -52,17 +49,16 @@ use crate::view::FrameworkElement;
 
 pub use crate::binding::BindingMode;
 
-/// Rust-side multi-value conversion logic: combine the source values of the
-/// child bindings into one target value. Returning `None` signals `UnsetValue`
-/// (the binding falls back to its `FallbackValue` / the property default).
+/// Combines the values of a [`MultiBinding`]'s children into one target value.
+/// Closures of the same signature implement it.
 pub trait MultiValueConverter: Send + 'static {
-    /// `values` holds one borrowed boxed argument per child [`Binding`], in the
-    /// order they were [`added`](MultiBinding::add_binding). `param` is the
-    /// optional converter parameter.
+    /// `values` holds one value per child [`Binding`], in the order they were
+    /// [added](MultiBinding::add_binding). `param` is the converter parameter;
+    /// [`ConvertArg::is_none`] if none was set. Returning `None` makes the binding use its
+    /// fallback value or the property default.
     fn convert(&self, values: &[ConvertArg], param: &ConvertArg) -> Option<Converted>;
 }
 
-/// A bare closure is a [`MultiValueConverter`].
 impl<F> MultiValueConverter for F
 where
     F: Fn(&[ConvertArg], &ConvertArg) -> Option<Converted> + Send + 'static,
@@ -77,7 +73,7 @@ static MULTI_CONVERTER_VTABLE: MultiValueConverterVTable = MultiValueConverterVT
 };
 
 /// SAFETY: `userdata` is the `Box<Box<dyn MultiValueConverter>>` leaked in
-/// [`MultiConverter::new`], alive until the free trampoline runs. `values`
+/// `MultiConverter::new`, alive until the free trampoline runs. `values`
 /// points at `count` borrowed boxed `BaseComponent*`.
 unsafe extern "C" fn multi_convert_trampoline(
     userdata: *mut c_void,
@@ -110,7 +106,7 @@ unsafe extern "C" fn multi_convert_trampoline(
     })
 }
 
-/// SAFETY: `userdata` was produced by [`MultiConverter::new`] and C++ owns it;
+/// SAFETY: `userdata` was produced by `MultiConverter::new` and C++ owns it;
 /// this is the matching `Box::from_raw`, run exactly once on last release.
 unsafe extern "C" fn multi_converter_free_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
@@ -123,8 +119,8 @@ unsafe extern "C" fn multi_converter_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// A Rust-backed `IMultiValueConverter`. Owns a `+1` reference released on drop.
-/// Attach it to a [`MultiBinding`] with [`MultiBinding::converter`].
+/// A Noesis `IMultiValueConverter` that calls a Rust [`MultiValueConverter`].
+/// Attach it with [`MultiBinding::converter`].
 pub struct MultiConverter {
     ptr: NonNull<c_void>,
 }
@@ -133,13 +129,8 @@ pub struct MultiConverter {
 unsafe impl Send for MultiConverter {}
 
 impl MultiConverter {
-    /// Build a multi-value converter from a [`MultiValueConverter`]. A bare
-    /// `Fn(&[ConvertArg], &ConvertArg) -> Option<Converted>` closure also works.
-    ///
-    /// # Panics
-    ///
-    /// Panics only on an impossible internal invariant (the C side returning
-    /// null for a valid vtable).
+    /// Wraps `converter`, which may be a
+    /// `Fn(&[ConvertArg], &ConvertArg) -> Option<Converted>` closure.
     #[must_use]
     pub fn new<C: MultiValueConverter>(converter: C) -> Self {
         let boxed: Box<Box<dyn MultiValueConverter>> = Box::new(Box::new(converter));
@@ -168,8 +159,7 @@ impl MultiConverter {
         }
     }
 
-    /// Raw `Noesis::BaseComponent*` (an `IMultiValueConverter`). Borrowed for the
-    /// lifetime of `self`.
+    /// The underlying `Noesis::BaseComponent*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
@@ -185,13 +175,10 @@ impl Drop for MultiConverter {
     }
 }
 
-/// A code-built `Noesis::MultiBinding`. Add child [`Binding`]s with
-/// [`add_binding`](Self::add_binding), attach a [`MultiConverter`] with
-/// [`converter`](Self::converter), then wire it onto a target DP with
+/// A `Noesis::MultiBinding` built in code. Add children with
+/// [`add_binding`](Self::add_binding), set a [`MultiConverter`] with
+/// [`converter`](Self::converter), then attach it to a property with
 /// [`set_on`](Self::set_on).
-///
-/// Owns a `+1` reference released on drop. [`set_on`](Self::set_on) makes Noesis
-/// take its own reference.
 pub struct MultiBinding {
     ptr: NonNull<c_void>,
 }
@@ -206,11 +193,11 @@ impl Default for MultiBinding {
 }
 
 impl MultiBinding {
-    /// Create an empty `MultiBinding`.
+    /// Creates a multi-binding with no children and no converter.
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis allocation fails.
+    /// Panics if Noesis fails to allocate it.
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: no preconditions; returns a +1-owned MultiBinding*.
@@ -220,10 +207,8 @@ impl MultiBinding {
         }
     }
 
-    /// Append a child [`Binding`]. Order matters: it determines the index of
-    /// this binding's value in the [`MultiValueConverter::convert`] `values`
-    /// slice. The `MultiBinding` takes its own reference to the child, so the
-    /// passed [`Binding`] is consumed (dropped after wiring). Chainable.
+    /// Appends a child binding. Its value appears at the matching index of the
+    /// `values` passed to [`MultiValueConverter::convert`].
     #[must_use]
     pub fn add_binding(self, binding: Binding) -> Self {
         // SAFETY: both pointers are live; the MultiBinding takes its own ref.
@@ -231,8 +216,8 @@ impl MultiBinding {
         self
     }
 
-    /// Attach a Rust [`MultiConverter`]. The binding takes its own reference, so
-    /// the handle may be dropped afterwards. Chainable.
+    /// Sets the converter. The binding holds its own reference, so `converter`
+    /// can be dropped afterwards.
     #[must_use]
     pub fn converter(self, converter: &MultiConverter) -> Self {
         // SAFETY: both pointers are live; the binding stores its own ref.
@@ -240,8 +225,7 @@ impl MultiBinding {
         self
     }
 
-    /// Set the converter parameter (a boxed value passed to the converter on
-    /// every call). The binding stores its own reference. Chainable.
+    /// Sets the `param` value passed to every converter call.
     #[must_use]
     pub fn converter_parameter(self, parameter: &crate::binding::Boxed) -> Self {
         // SAFETY: both pointers are live; the binding stores its own ref.
@@ -249,7 +233,7 @@ impl MultiBinding {
         self
     }
 
-    /// Set the [`BindingMode`]. Chainable.
+    /// Sets the binding direction.
     #[must_use]
     pub fn mode(self, mode: BindingMode) -> Self {
         // SAFETY: ptr is live.
@@ -257,16 +241,15 @@ impl MultiBinding {
         self
     }
 
-    /// Raw `Noesis::MultiBinding*` (a `BaseComponent*`). Borrowed for the
-    /// lifetime of `self`.
+    /// The underlying `Noesis::MultiBinding*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Wire this `MultiBinding` onto `element`'s `dp_name` dependency property.
-    /// Returns `false` if `element` is not a `DependencyObject` or `dp_name` is
-    /// unknown on its type.
+    /// Binds `element`'s dependency property `dp_name` to this multi-binding.
+    /// Noesis holds its own reference afterwards. Returns `false` if `element`
+    /// has no dependency property named `dp_name`.
     ///
     /// # Panics
     ///

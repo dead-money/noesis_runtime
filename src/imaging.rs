@@ -1,34 +1,22 @@
-//! Code-built `ImageSource` / `BitmapSource` family: construct
-//! [`CroppedBitmap`], [`TextureSource`], [`BitmapImage`], and
-//! [`DynamicTextureSource`] objects from Rust without authoring XAML.
+//! Image sources built from code: [`BitmapImage`] (an image file by URI),
+//! [`CroppedBitmap`], [`TextureSource`] and [`DynamicTextureSource`].
 //!
-//! Each type here is an owning handle over a freshly-created Noesis object
-//! holding a single `+1` reference, released on [`Drop`], the same pattern as
-//! [`crate::brushes::SolidColorBrush`]. Assigning the object to an element
-//! (e.g. as an `Image.Source`, or via
-//! [`ImageBrush::with_source`](crate::brushes::ImageBrush::with_source) using
-//! [`raw`](CroppedBitmap::raw)) makes Noesis take its own reference, so the Rust
-//! handle may be dropped afterwards.
+//! Each type owns one Noesis reference and releases it on drop. Assigning one
+//! to an element, as an `Image.Source` or through
+//! [`ImageBrush::with_source`](crate::brushes::ImageBrush::with_source) with
+//! its `raw()` pointer, makes Noesis take its own reference, so the Rust handle
+//! may be dropped afterwards.
 //!
-//! Read-back getters re-read from the live Noesis object so they prove a value
-//! crossed the FFI rather than echoing a Rust-side cache.
+//! # Values that need a render device
 //!
-//! # GPU dependencies
+//! Some values only resolve once a render device is drawing:
 //!
-//! [`CroppedBitmap`] (source pointer + crop rect) round-trips fully headless and
-//! is the centerpiece. The remaining surface has values that resolve only on a
-//! `RenderDevice` render pass and read back null / `0` headless:
-//!
-//! - [`TextureSource::texture`] is `None` until a host
-//!   `RenderDevice`-created `Texture` is bound (a `Noesis::Texture*` is only
-//!   minted by a live render device; see "Known SDK limitations" in
-//!   `LIMITATIONS.md`).
-//! - [`BitmapSource`] pixel dims / dpi ([`BitmapSource::pixel_size`],
-//!   [`BitmapSource::dpi`]) stay `0` until a texture provider resolves the image.
-//! - [`DynamicTextureSource`]'s callback fires from the render thread, so it is
-//!   only invoked under a live render pass; construction +
-//!   [`resize`](DynamicTextureSource::resize) + the pixel-size getter are
-//!   exercised here.
+//! - [`BitmapSource::pixel_size`] and [`BitmapSource::dpi`] stay at their
+//!   defaults until a texture provider loads the image.
+//! - [`TextureSource::texture`] is `None` until you bind a `Noesis::Texture*`,
+//!   which only a render device can create.
+//! - The [`DynamicTextureSource`] callback runs on the render thread, only
+//!   while a view showing the source is rendered.
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString};
@@ -46,9 +34,8 @@ use crate::ffi::{
     noesis_texture_source_set_texture,
 };
 
-/// An integer rectangle (`Noesis::Int32Rect`): top-left `(x, y)` and unsigned
-/// `width` / `height`. An all-zero rect is the "Empty" sentinel that renders the
-/// entire source image.
+/// An integer pixel rectangle. An all-zero rect means "empty", which a
+/// [`CroppedBitmap`] treats as the whole source image.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Int32Rect {
     /// Left edge, in pixels.
@@ -62,7 +49,6 @@ pub struct Int32Rect {
 }
 
 impl Int32Rect {
-    /// Construct a rect from its four fields.
     #[must_use]
     pub fn new(x: i32, y: i32, width: u32, height: u32) -> Self {
         Self {
@@ -74,18 +60,16 @@ impl Int32Rect {
     }
 }
 
-/// A handle to a Noesis `BitmapSource` (the constructible imaging types here all
-/// derive from it). Lets the source-wiring sugar accept any of them while
-/// keeping non-bitmap objects out.
+/// Any Noesis `BitmapSource`. Implemented by [`CroppedBitmap`],
+/// [`TextureSource`] and [`BitmapImage`], so any of them can be a
+/// [`CroppedBitmap`] source.
 pub trait BitmapSource {
     /// Borrowed `Noesis::BitmapSource*` (a `BaseComponent*`), valid for `self`'s
     /// lifetime.
     fn bitmap_source_raw(&self) -> *mut c_void;
 
-    /// Pixel dimensions `(width, height)` read back from the live object.
-    ///
-    /// `(0, 0)` headless until a texture provider resolves the bitmap on a
-    /// `RenderDevice` render pass.
+    /// Pixel dimensions `(width, height)`. `(0, 0)` until a texture provider
+    /// has loaded the bitmap during rendering.
     #[must_use]
     fn pixel_size(&self) -> (i32, i32) {
         let mut w = 0i32;
@@ -101,9 +85,8 @@ pub trait BitmapSource {
         (w, h)
     }
 
-    /// Horizontal / vertical DPI `(dpiX, dpiY)` read back from the live object.
-    ///
-    /// Defaults headless until resolved on a render pass.
+    /// Horizontal and vertical DPI. Holds Noesis's default until the bitmap
+    /// has loaded during rendering.
     #[must_use]
     fn dpi(&self) -> (f32, f32) {
         let mut x = 0f32;
@@ -143,8 +126,7 @@ macro_rules! base_component_handle {
     };
 }
 
-/// A `CroppedBitmap`: an image source that crops another [`BitmapSource`] to a
-/// rectangular [`Int32Rect`]. Fully round-trippable headless, no GPU needed.
+/// An image source that crops another [`BitmapSource`] to an [`Int32Rect`].
 pub struct CroppedBitmap {
     ptr: NonNull<c_void>,
 }
@@ -158,7 +140,8 @@ impl Default for CroppedBitmap {
 }
 
 impl CroppedBitmap {
-    /// Create an empty cropped bitmap (no source, Empty source rect).
+    /// Creates a cropped bitmap with no source and an empty (whole-image) crop
+    /// rect.
     ///
     /// # Panics
     ///
@@ -172,18 +155,19 @@ impl CroppedBitmap {
         }
     }
 
-    /// Point the crop at a `source` bitmap. Noesis takes its own reference, so
-    /// the `source` handle may be dropped afterwards.
+    /// Sets the bitmap to crop. Noesis takes its own reference, so `source` may
+    /// be dropped afterwards. Returns `false` only if this handle is not a
+    /// `CroppedBitmap`, which can't happen.
     pub fn set_source<S: BitmapSource>(&mut self, source: &S) -> bool {
         // SAFETY: self.ptr is a live CroppedBitmap*; source raw is a live
         // BitmapSource* (Noesis AddRefs it).
         unsafe { noesis_cropped_bitmap_set_source(self.ptr.as_ptr(), source.bitmap_source_raw()) }
     }
 
-    /// Borrowed `BitmapSource*` currently set as the source, or `None`. The
-    /// pointer has no `+1`; do not release it. It equals the
-    /// [`raw`](BitmapSource::bitmap_source_raw) of the handle passed to
-    /// [`set_source`](Self::set_source).
+    /// Borrowed `BitmapSource*` currently set as the source, or `None`. No
+    /// reference is added; don't release it. It equals the
+    /// [`bitmap_source_raw`](BitmapSource::bitmap_source_raw) of the handle
+    /// passed to [`set_source`](Self::set_source).
     #[must_use]
     pub fn source(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live CroppedBitmap*; returned pointer is borrowed.
@@ -191,7 +175,8 @@ impl CroppedBitmap {
         NonNull::new(p)
     }
 
-    /// Set the crop rectangle. An all-zero rect renders the entire source image.
+    /// Sets the crop rectangle in source pixels. An all-zero rect shows the
+    /// whole source image.
     pub fn set_source_rect(&mut self, rect: Int32Rect) {
         // SAFETY: self.ptr is a live CroppedBitmap*.
         unsafe {
@@ -205,7 +190,7 @@ impl CroppedBitmap {
         }
     }
 
-    /// Read the crop rectangle back from the live object.
+    /// The crop rectangle.
     #[must_use]
     pub fn source_rect(&self) -> Int32Rect {
         let mut r = Int32Rect::default();
@@ -229,12 +214,11 @@ impl BitmapSource for CroppedBitmap {
     }
 }
 
-/// A `TextureSource`: a [`BitmapSource`] backed by a `Noesis::Texture`.
+/// A [`BitmapSource`] backed by a `Noesis::Texture`, for showing a texture your
+/// renderer already owns.
 ///
-/// A real `Texture` is only minted by a host `RenderDevice`, so the default-
-/// constructed form here has no texture ([`texture`](Self::texture) is `None`)
-/// until one is bound via [`set_texture`](Self::set_texture) with a borrowed
-/// `Texture*` from such a device.
+/// Only a render device can create a `Texture`, so [`TextureSource::new`] has
+/// none until you bind one with [`set_texture`](Self::set_texture).
 pub struct TextureSource {
     ptr: NonNull<c_void>,
 }
@@ -248,7 +232,7 @@ impl Default for TextureSource {
 }
 
 impl TextureSource {
-    /// Default-construct a texture source with no texture bound.
+    /// Creates a texture source with no texture bound.
     ///
     /// # Panics
     ///
@@ -262,9 +246,9 @@ impl TextureSource {
         }
     }
 
-    /// Construct a texture source bound to a borrowed `Noesis::Texture*`. Noesis
-    /// stores it in an owning `Ptr<Texture>`. Returns `None` only if allocation
-    /// fails.
+    /// Creates a texture source bound to `texture`. Noesis takes its own
+    /// reference to the texture. A null `texture` gives the same result as
+    /// [`new`](Self::new). Returns `None` only if allocation fails.
     ///
     /// # Safety
     ///
@@ -277,7 +261,9 @@ impl TextureSource {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Bind a borrowed `Noesis::Texture*` (or null to clear).
+    /// Binds `texture`, or clears the binding when it is null. Noesis takes its
+    /// own reference. Returns `false` only if this handle is not a
+    /// `TextureSource`, which can't happen.
     ///
     /// # Safety
     ///
@@ -287,9 +273,8 @@ impl TextureSource {
         unsafe { noesis_texture_source_set_texture(self.ptr.as_ptr(), texture) }
     }
 
-    /// Borrowed `Texture*` currently bound, or `None`. The pointer has no `+1`;
-    /// do not release it. `None` until a host `RenderDevice`-created `Texture` is
-    /// bound.
+    /// Borrowed `Texture*` currently bound, or `None`. No reference is added;
+    /// don't release it.
     #[must_use]
     pub fn texture(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live TextureSource*; returned pointer is borrowed.
@@ -304,10 +289,9 @@ impl BitmapSource for TextureSource {
     }
 }
 
-/// A `BitmapImage`: a [`BitmapSource`] created from an image file at a URI.
-///
-/// The [`uri_source`](Self::uri_source) round-trips headless; pixel dims / dpi
-/// stay `0` until a texture provider resolves the image on a render pass.
+/// A [`BitmapSource`] that loads an image file by URI through the texture
+/// provider. Pixel size and DPI are unknown until the image loads during
+/// rendering.
 pub struct BitmapImage {
     ptr: NonNull<c_void>,
 }
@@ -321,7 +305,7 @@ impl Default for BitmapImage {
 }
 
 impl BitmapImage {
-    /// Default-construct a bitmap image with an empty URI source.
+    /// Creates a bitmap image with an empty URI.
     ///
     /// # Panics
     ///
@@ -335,7 +319,7 @@ impl BitmapImage {
         }
     }
 
-    /// Construct a bitmap image with its `uri` source set.
+    /// Creates a bitmap image that loads from `uri`.
     ///
     /// # Panics
     ///
@@ -350,7 +334,8 @@ impl BitmapImage {
         }
     }
 
-    /// Replace the URI source.
+    /// Replaces the URI. Returns `false` only if this handle is not a
+    /// `BitmapImage`, which can't happen.
     ///
     /// # Panics
     ///
@@ -362,9 +347,8 @@ impl BitmapImage {
         unsafe { noesis_bitmap_image_set_uri_source(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
-    /// Read the canonicalized URI source back from the live object.
-    ///
-    /// Returns an empty string for a default-constructed image.
+    /// The URI as Noesis canonicalized it; empty for an image created with
+    /// [`new`](Self::new).
     #[must_use]
     pub fn uri_source(&self) -> String {
         // SAFETY: self.ptr is a live BitmapImage*; the returned pointer is
@@ -385,12 +369,8 @@ impl BitmapSource for BitmapImage {
     }
 }
 
-/// A `DynamicTextureSource`: an `ImageSource` that regenerates its texture per
-/// frame via a render-thread callback (appropriate for video-like content).
-///
-/// The callback is only invoked under a live `RenderDevice` render pass.
-/// Construction, [`resize`](Self::resize), and [`pixel_size`](Self::pixel_size)
-/// are exercisable headless.
+/// An image source whose texture a callback supplies each frame on the render
+/// thread, for video and other content that changes every frame.
 pub struct DynamicTextureSource {
     ptr: NonNull<c_void>,
 }
@@ -398,12 +378,12 @@ pub struct DynamicTextureSource {
 base_component_handle!(DynamicTextureSource);
 
 impl DynamicTextureSource {
-    /// Create a dynamic texture source of `width` x `height` pixels driven by
-    /// `callback`. `user` is passed back to the callback verbatim.
+    /// Creates a `width` x `height` pixel source driven by `callback`. `user`
+    /// is passed back to the callback unchanged.
     ///
-    /// The callback receives a borrowed `Noesis::RenderDevice*` and must return
-    /// a borrowed `Noesis::Texture*` (or null). It is invoked from the render
-    /// thread, so it only fires while a view containing this source is rendered.
+    /// The callback receives a borrowed `Noesis::RenderDevice*` and returns a
+    /// borrowed `Noesis::Texture*`, or null. It runs on the render thread, only
+    /// while a view showing this source is rendered.
     ///
     /// # Panics
     ///
@@ -411,9 +391,9 @@ impl DynamicTextureSource {
     ///
     /// # Safety
     ///
-    /// `callback` must uphold the render-thread `TextureRenderCallback` contract:
-    /// returning a `Texture*` valid for the device it is handed, and `user` must
-    /// remain valid for as long as this source can be rendered.
+    /// `callback` must return a `Texture*` valid for the device it is given, and
+    /// `user` must stay valid, and safe to use from the render thread, for as
+    /// long as this source can be rendered.
     #[must_use]
     pub unsafe fn new(
         width: u32,
@@ -429,14 +409,15 @@ impl DynamicTextureSource {
         }
     }
 
-    /// Resize the dynamic texture.
+    /// Resizes the dynamic texture. Returns `false` only if this
+    /// handle is not a `DynamicTextureSource`, which can't happen.
     pub fn resize(&mut self, width: u32, height: u32) -> bool {
         // SAFETY: self.ptr is a live DynamicTextureSource*.
         unsafe { noesis_dynamic_texture_source_resize(self.ptr.as_ptr(), width, height) }
     }
 
-    /// Read the texture pixel dimensions `(width, height)` back from the live
-    /// object (the values passed to [`new`](Self::new) / [`resize`](Self::resize)).
+    /// Pixel dimensions `(width, height)` from [`new`](Self::new) or the last
+    /// [`resize`](Self::resize).
     #[must_use]
     pub fn pixel_size(&self) -> (u32, u32) {
         let mut w = 0u32;

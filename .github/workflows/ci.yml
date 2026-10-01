@@ -8,13 +8,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Opt in to Node 24 for any JS-based actions. Node 20 is deprecated
-  # and will be forced off by GitHub in June 2026; this flips the
-  # switch early so we're running on the same Node they'll default to.
+  # Run JS-based actions on Node 24; Node 20 is deprecated on GitHub runners.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  # Runs everywhere, including fork PRs — no SDK needed.
+  # No SDK needed, so this runs on hosted runners, including for fork PRs.
   fmt:
     name: fmt
     runs-on: ubuntu-latest
@@ -48,9 +46,8 @@ jobs:
       - name: cargo doc
         run: cargo doc --no-deps --all-features
 
-  # build / clippy / test need the closed-source Noesis SDK, which only lives on
-  # our self-hosted runner. Never run untrusted fork-PR code there: skip any PR
-  # whose head is a fork. Same-repo branch PRs and pushes to main/tags are fine.
+  # Needs the Noesis SDK, which only the self-hosted runner has. Fork PRs are
+  # skipped so untrusted code never runs there.
   build-test:
     name: build • clippy • test
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -59,11 +56,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Keep target/ between runs for fast incremental builds.
+          # Keep target/ for incremental builds.
           clean: false
 
-      # The self-hosted pool can contain machines with other SDK installs;
-      # the crate is developed and released against exactly this version.
+      # Runners may have other SDK versions installed; pin the one the crate targets.
       - name: Verify Noesis SDK version
         run: |
           grep -Fxq "3.2.13 (r17073)" "$NOESIS_SDK_DIR/version.txt" || {

@@ -1,44 +1,36 @@
-//! Rust value converters for data binding.
+//! Value converters written in Rust, for data binding.
 //!
-//! A [`Converter`] wraps a `Noesis::BaseValueConverter` subclass whose
-//! `TryConvert` / `TryConvertBack` forward into a Rust [`ValueConverter`]. This
-//! is what real bindings need: mapping a source value to a target-shaped value
-//! (bool → text/Visibility, number formatting, enum mapping, ...) as the data
-//! crosses the binding.
+//! A [`Converter`] is an `IValueConverter` that calls a Rust
+//! [`ValueConverter`] to turn a source value into the value the target property
+//! shows (bool to text, number formatting, enum mapping, ...) and, for two-way
+//! bindings, back again.
 //!
-//! Binding values cross the FFI as boxed `Noesis::BaseComponent*`. The callback
-//! receives the source [`value`](ValueConverter::convert) and the optional
-//! `ConverterParameter` as [`ConvertArg`]s (unbox them with
-//! [`ConvertArg::as_i32`] / [`as_bool`](ConvertArg::as_bool) /
-//! [`as_f64`](ConvertArg::as_f64) / [`as_str`](ConvertArg::as_str)), and returns
-//! a [`Converted`] the trampoline re-boxes for Noesis (or `None` to signal
-//! `UnsetValue`, so the binding falls back to its `FallbackValue` / the
-//! property default).
+//! The converter receives the source value and the optional
+//! `ConverterParameter` as [`ConvertArg`]s and decodes them with the typed
+//! accessors ([`ConvertArg::as_bool`], [`as_i32`](ConvertArg::as_i32),
+//! [`as_f64`](ConvertArg::as_f64), [`as_str`](ConvertArg::as_str)). It returns
+//! a [`Converted`] value, or `None` to report `UnsetValue`, which makes the
+//! binding use its `FallbackValue` or the property default.
 //!
-//! # Reaching a binding
+//! # Using a converter
 //!
-//! Two ways, both wired the same on the C++ side:
-//!
-//! * **Code-built binding**, the primary path for Rust integration:
-//!   `Binding::new("Path").converter(&converter)` then
+//! * In code: `Binding::new("Path").converter(&converter)`, then
 //!   [`set_binding`](crate::binding::set_binding). See [`crate::binding`].
-//! * **XAML resource**: insert the converter into an element's
-//!   `ResourceDictionary` with [`add_resource`](crate::binding::add_resource)
-//!   and author `{Binding Path, Converter={StaticResource Key}}` in XAML.
+//! * From XAML: add it to an element's resources with
+//!   [`add_resource`](crate::binding::add_resource) and write
+//!   `{Binding Path, Converter={StaticResource Key}}`.
 //!
 //! # Lifetime
 //!
-//! [`Converter`] holds the caller's `+1` reference, released on drop. If a
-//! binding still references the converter (the common case while it's wired
-//! onto a live element), the underlying object (and the boxed handler) stay
-//! alive until that reference also drops. The handler is freed exactly once, by
-//! the C++ destructor, after the last reference goes away.
+//! [`Converter`] holds one reference, released on drop. A binding that uses the
+//! converter holds its own, so the converter and its handler stay alive until
+//! the last reference goes. The handler is freed exactly once, by the C++
+//! destructor.
 //!
 //! # Threading
 //!
-//! `convert` / `convert_back` fire from inside Noesis's binding pump on whatever
-//! thread drives the view. The handler is stored behind `Send`; keep the work
-//! small.
+//! Conversions run during Noesis's binding updates, on the thread that drives
+//! the view. Keep them short.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -51,10 +43,10 @@ use crate::ffi::{
     noesis_value_converter_create, noesis_value_converter_destroy,
 };
 
-/// A borrowed, boxed binding value handed to a [`ValueConverter`]. `None`-valued
-/// (the bound source produced null / the control supplied no parameter) reports
-/// [`is_none`](Self::is_none); the typed accessors return `None` when the boxed
-/// runtime type doesn't match.
+/// A value or parameter passed to a [`ValueConverter`]: a borrowed, boxed
+/// `Noesis::BaseComponent*`, valid only during the call. It is null when the
+/// source value is null or no parameter was given. The typed accessors return
+/// `None` when the boxed type doesn't match.
 pub struct ConvertArg(Option<NonNull<c_void>>);
 
 impl ConvertArg {
@@ -62,19 +54,19 @@ impl ConvertArg {
         Self(NonNull::new(raw))
     }
 
-    /// Whether the argument carried no value (a null `BaseComponent*`).
+    /// Whether the argument is null.
     #[must_use]
     pub fn is_none(&self) -> bool {
         self.0.is_none()
     }
 
-    /// Raw borrowed `Noesis::BaseComponent*` (the boxed value), or null.
+    /// The borrowed `Noesis::BaseComponent*`, or null.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.0.map_or(ptr::null_mut(), NonNull::as_ptr)
     }
 
-    /// Unbox a `bool` (a `BoxedValue<bool>`), or `None` on type mismatch / null.
+    /// Unbox a `bool`. `None` on a type mismatch or null.
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
         let p = self.0?;
@@ -83,7 +75,7 @@ impl ConvertArg {
         ok.then_some(out)
     }
 
-    /// Unbox an `i32` (a `BoxedValue<int>`), or `None` on type mismatch / null.
+    /// Unbox an `i32`. `None` on a type mismatch or null.
     #[must_use]
     pub fn as_i32(&self) -> Option<i32> {
         let p = self.0?;
@@ -92,7 +84,7 @@ impl ConvertArg {
         ok.then_some(out)
     }
 
-    /// Unbox an `f64` (a `BoxedValue<double>`), or `None` on type mismatch / null.
+    /// Unbox an `f64`. `None` on a type mismatch or null.
     #[must_use]
     pub fn as_f64(&self) -> Option<f64> {
         let p = self.0?;
@@ -101,8 +93,8 @@ impl ConvertArg {
         ok.then_some(out)
     }
 
-    /// Borrowed view of a boxed string (a `BoxedValue<String>`), valid for the
-    /// callback. `None` on type mismatch / null / non-UTF-8.
+    /// Borrow a boxed string. `None` on a type mismatch, null, or invalid
+    /// UTF-8. A literal `ConverterParameter` in XAML arrives as a string.
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         let p = self.0?;
@@ -114,21 +106,17 @@ impl ConvertArg {
     }
 }
 
-/// A value a [`ValueConverter`] produces. The trampoline re-boxes it into the
-/// `Noesis::BaseComponent*` the binding engine expects.
+/// The result of a [`ValueConverter`], boxed for Noesis when returned.
 #[derive(Debug, Clone)]
 pub enum Converted {
     Bool(bool),
     Int32(i32),
     Double(f64),
-    /// A string, the most common converted target (e.g. a `TextBlock`'s `Text`,
-    /// or a value coerced to an enum like `Visibility` via Noesis's
-    /// string→enum type converter). Must not contain an interior NUL byte;
-    /// boxing one panics (caught by the trampoline as a clean conversion
-    /// failure).
+    /// A string. Besides text properties, this works for enum targets such as
+    /// `Visibility`, which Noesis parses from the string. An interior NUL byte
+    /// makes the conversion fail, as if the converter had returned `None`.
     String(String),
-    /// An explicit null value (distinct from returning `None`, which signals
-    /// `UnsetValue` / fallback).
+    /// A null value. Returning `None` instead means `UnsetValue`.
     Null,
 }
 
@@ -149,24 +137,24 @@ impl Converted {
     }
 }
 
-/// Rust-side conversion logic. `convert` maps a binding source value to the
-/// target; `convert_back` (only reached on a `TwoWay` / `OneWayToSource`
-/// binding) maps a target value back to the source. Returning `None` signals
-/// `UnsetValue`.
+/// The logic behind a [`Converter`]. Returning `None` from either method
+/// reports `UnsetValue`.
+///
+/// The binding's target type is not passed in. Return a value that converts to
+/// it; a [`Converted::String`] works for most targets.
 pub trait ValueConverter: Send + 'static {
-    /// Source → target. Called when the binding propagates from source to
-    /// target.
+    /// Convert a source value for the target property.
     fn convert(&self, value: &ConvertArg, param: &ConvertArg) -> Option<Converted>;
 
-    /// Target → source. Default: `None` (no back-conversion). Only invoked for
-    /// `TwoWay` / `OneWayToSource` bindings.
+    /// Convert a target value back to the source. Called only for `TwoWay` and
+    /// `OneWayToSource` bindings. Defaults to `None`.
     fn convert_back(&self, _value: &ConvertArg, _param: &ConvertArg) -> Option<Converted> {
         None
     }
 }
 
-/// Adapter so a bare `Fn(&ConvertArg, &ConvertArg) -> Option<Converted>` closure
-/// is a one-way [`ValueConverter`] (`convert_back` returns `None`).
+/// Any `Fn(&ConvertArg, &ConvertArg) -> Option<Converted>` closure is a one-way
+/// converter.
 impl<F> ValueConverter for F
 where
     F: Fn(&ConvertArg, &ConvertArg) -> Option<Converted> + Send + 'static,
@@ -241,10 +229,10 @@ unsafe extern "C" fn converter_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// A Rust-backed `IValueConverter`. Owns a `+1` reference released on drop.
-/// Attach it to a binding with
-/// [`Binding::converter`](crate::binding::Binding::converter), or insert it into
-/// an element's resources with [`add_resource`](crate::binding::add_resource).
+/// An `IValueConverter` backed by a Rust [`ValueConverter`]. Use it with
+/// [`Binding::converter`](crate::binding::Binding::converter), or add it to an
+/// element's resources with [`add_resource`](crate::binding::add_resource).
+/// Holds one reference, released on drop.
 pub struct Converter {
     ptr: NonNull<c_void>,
 }
@@ -253,17 +241,14 @@ pub struct Converter {
 unsafe impl Send for Converter {}
 
 impl Converter {
-    /// Build a converter from a [`ValueConverter`]. A bare
-    /// `Fn(&ConvertArg, &ConvertArg) -> Option<Converted>` closure also works
-    /// (one-way: its `convert_back` returns `None`).
+    /// Create a converter from a [`ValueConverter`] or a closure.
     ///
     /// # Panics
     ///
-    /// Panics only on an impossible internal invariant (the C side returning
-    /// null for a valid vtable, which it never does).
+    /// Never in practice: the C side returns null only for a null vtable.
     #[must_use]
     pub fn new<C: ValueConverter>(converter: C) -> Self {
-        // Double-Box for a stable thin pointer across the C ABI.
+        // Double box: `Box<dyn _>` is a fat pointer; the C ABI needs a thin one.
         let boxed: Box<Box<dyn ValueConverter>> = Box::new(Box::new(converter));
         let userdata = Box::into_raw(boxed);
 
@@ -280,8 +265,6 @@ impl Converter {
         match NonNull::new(ptr) {
             Some(ptr) => Converter { ptr },
             None => {
-                // The C side only returns null for a null vtable, which we
-                // never pass. Reclaim the leaked box defensively.
                 // SAFETY: userdata came from Box::into_raw above; C++ never
                 // stored it (null return = nothing took ownership).
                 unsafe { drop(Box::from_raw(userdata)) };
@@ -290,8 +273,8 @@ impl Converter {
         }
     }
 
-    /// Raw `Noesis::BaseComponent*` (an `IValueConverter`), for handing to a
-    /// binding or a resource dictionary. Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::BaseComponent*` (an `IValueConverter`), valid while `self`
+    /// is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()

@@ -92,7 +92,6 @@ fn custom_base_classes() {
 
         let content = view.content().expect("content");
         let c = content.find_name("C").expect("find C");
-        // ActualWidth read back THROUGH Noesis after layout.
         assert_eq!(
             c.actual_width(),
             Some(120.0),

@@ -1,9 +1,8 @@
 name: Release
 
-# Publishes to crates.io when a version tag (vX.Y.Z) is pushed. cargo-release
-# creates and pushes that tag (see RELEASING.md). Runs on the self-hosted runner
-# that has the Noesis SDK, so `cargo publish` does a real verification build and
-# the full test suite gates the release.
+# Publishes to crates.io when cargo-release pushes a vX.Y.Z tag (see RELEASING.md).
+# Runs on the SDK runner so `cargo publish` does a real verification build and
+# the test suite gates the release.
 
 on:
   push:
@@ -21,8 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Never publish a build verified against a different SDK than the one
-      # the crate is developed for (the pool can contain other SDK installs).
+      # Never publish a build verified against a different SDK version.
       - name: Verify Noesis SDK version
         run: |
           grep -Fxq "3.2.13 (r17073)" "$NOESIS_SDK_DIR/version.txt" || {
@@ -34,9 +32,7 @@ jobs:
       - name: cargo test
         run: cargo test --all-features
 
-      # Skip publishing if this version is already on crates.io (the first
-      # release is published manually). Keeps the tag run green and makes a
-      # re-run idempotent.
+      # Skip if this version is already on crates.io, so a re-run stays green.
       - name: Check if version already published
         id: check
         run: |

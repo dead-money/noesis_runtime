@@ -1,19 +1,20 @@
-//! Build `Transform` objects from Rust and apply them as an element's
-//! `RenderTransform`.
+//! Build 2D and 3D transforms from Rust and apply them to elements.
 //!
-//! Each type owns a freshly-created Noesis object holding a single `+1`
-//! reference released on [`Drop`] (the [`crate::binding::Boxed`] pattern).
-//! Assign one with
-//! [`FrameworkElement::set_render_transform`](crate::view::FrameworkElement::set_render_transform);
-//! Noesis takes its own reference, so the Rust handle may drop afterwards.
+//! 2D transforms ([`TranslateTransform`], [`ScaleTransform`],
+//! [`RotateTransform`], [`SkewTransform`], [`MatrixTransform`],
+//! [`CompositeTransform`], and [`TransformGroup`] to combine them) implement
+//! [`Transform`]. Assign one as an element's `RenderTransform` with
+//! [`FrameworkElement::set_render_transform`](crate::view::FrameworkElement::set_render_transform).
 //!
-//! Getters re-read field values from the live Noesis object, so they reflect
-//! the object's current state rather than a Rust-side cache.
-//!
-//! 3D transforms ([`CompositeTransform3D`] / [`MatrixTransform3D`], both
-//! implementing the [`Transform3D`] marker) are assigned to an element through
+//! 3D transforms ([`CompositeTransform3D`], [`MatrixTransform3D`]) implement
+//! [`Transform3D`] and go through
 //! [`FrameworkElement::set_transform3d`](crate::view::FrameworkElement::set_transform3d)
-//! (`UIElement::SetTransform3D`), NOT via `RenderTransform`.
+//! instead; they are not a `RenderTransform`.
+//!
+//! Each handle owns one reference to its Noesis object and releases it on
+//! [`Drop`]. Assigning it to an element makes Noesis take its own reference, so
+//! the handle may be dropped afterwards. Getters read from the live object, so
+//! they also see changes made by animations or XAML. Angles are in degrees.
 
 use core::ptr::NonNull;
 use std::ffi::c_void;
@@ -70,11 +71,10 @@ macro_rules! transform_handle {
     };
 }
 
-/// An owning, **type-erased** handle to a `Noesis::Transform` read back from an
-/// element, e.g. via
+/// An owning handle to a transform of unknown kind, returned by
 /// [`FrameworkElement::render_transform`](crate::view::FrameworkElement::render_transform).
-/// It doesn't expose the concrete transform kind, but it implements
-/// [`Transform`], so it can be re-applied to another element through
+/// It doesn't expose the concrete type, but it implements [`Transform`], so you
+/// can assign it to another element with
 /// [`FrameworkElement::set_render_transform`](crate::view::FrameworkElement::set_render_transform).
 pub struct AnyTransform {
     ptr: NonNull<c_void>,
@@ -83,15 +83,13 @@ pub struct AnyTransform {
 transform_handle!(AnyTransform);
 
 impl AnyTransform {
-    /// Wrap a raw `Noesis::Transform*` that already carries a `+1` reference
-    /// this handle takes ownership of (released on drop). Crate-internal: used
-    /// by the render-transform getter, which `AddRef`s the borrowed pointer.
+    /// Takes ownership of one reference on `ptr`, a live `Noesis::Transform*`.
     pub(crate) unsafe fn from_owned(ptr: NonNull<c_void>) -> Self {
         Self { ptr }
     }
 }
 
-/// Offsets an element by `(X, Y)`.
+/// Offsets an element by `(x, y)`.
 pub struct TranslateTransform {
     ptr: NonNull<c_void>,
 }
@@ -118,7 +116,7 @@ impl TranslateTransform {
         unsafe { noesis_translate_transform_set(self.ptr.as_ptr(), x, y) };
     }
 
-    /// Read `(x, y)` back from the live object.
+    /// The current `(x, y)` offset.
     #[must_use]
     pub fn get(&self) -> (f32, f32) {
         let mut x = 0.0f32;
@@ -135,7 +133,8 @@ impl TranslateTransform {
     }
 }
 
-/// Scales an element by `(ScaleX, ScaleY)` about a center `(CenterX, CenterY)`.
+/// Scales an element by `(scale_x, scale_y)` about the point
+/// `(center_x, center_y)`.
 pub struct ScaleTransform {
     ptr: NonNull<c_void>,
 }
@@ -164,7 +163,7 @@ impl ScaleTransform {
         };
     }
 
-    /// Read `[scaleX, scaleY, centerX, centerY]` back from the live object.
+    /// The current `[scale_x, scale_y, center_x, center_y]`.
     #[must_use]
     pub fn get(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
@@ -174,7 +173,7 @@ impl ScaleTransform {
     }
 }
 
-/// Rotates an element by `Angle` (degrees) about `(CenterX, CenterY)`.
+/// Rotates an element by an angle in degrees about `(center_x, center_y)`.
 pub struct RotateTransform {
     ptr: NonNull<c_void>,
 }
@@ -195,13 +194,13 @@ impl RotateTransform {
         }
     }
 
-    /// Set the rotation angle (degrees).
+    /// Set the rotation angle in degrees. The center is unchanged.
     pub fn set_angle(&mut self, angle: f32) {
         // SAFETY: self.ptr is a live RotateTransform*.
         unsafe { noesis_rotate_transform_set_angle(self.ptr.as_ptr(), angle) };
     }
 
-    /// Read `[angle, centerX, centerY]` back from the live object.
+    /// The current `[angle, center_x, center_y]`.
     #[must_use]
     pub fn get(&self) -> [f32; 3] {
         let mut out = [0.0f32; 3];
@@ -210,14 +209,14 @@ impl RotateTransform {
         out
     }
 
-    /// Convenience reader for just the angle (degrees).
+    /// The current angle in degrees.
     #[must_use]
     pub fn angle(&self) -> f32 {
         self.get()[0]
     }
 }
 
-/// Skews an element by `(AngleX, AngleY)` (degrees) about a center.
+/// Skews an element by `(angle_x, angle_y)` degrees about a center point.
 pub struct SkewTransform {
     ptr: NonNull<c_void>,
 }
@@ -238,7 +237,7 @@ impl SkewTransform {
         }
     }
 
-    /// Read `[angleX, angleY, centerX, centerY]` back from the live object.
+    /// The current `[angle_x, angle_y, center_x, center_y]`.
     #[must_use]
     pub fn get(&self) -> [f32; 4] {
         let mut out = [0.0f32; 4];
@@ -248,7 +247,10 @@ impl SkewTransform {
     }
 }
 
-/// Applies an arbitrary affine `Matrix` (`[m00, m01, m10, m11, m20, m21]`).
+/// Applies an arbitrary 2D affine matrix.
+///
+/// The matrix is six floats `[m00, m01, m10, m11, m20, m21]`: three rows of
+/// two, with the last row holding the translation.
 pub struct MatrixTransform {
     ptr: NonNull<c_void>,
 }
@@ -256,8 +258,8 @@ pub struct MatrixTransform {
 transform_handle!(MatrixTransform);
 
 impl MatrixTransform {
-    /// Create a matrix transform from the 6 affine coefficients
-    /// `[m00, m01, m10, m11, m20, m21]` (Noesis `Transform2` row-major layout).
+    /// Create a matrix transform from the six coefficients described on
+    /// [`MatrixTransform`].
     ///
     /// # Panics
     ///
@@ -277,7 +279,7 @@ impl MatrixTransform {
         unsafe { noesis_matrix_transform_set(self.ptr.as_ptr(), matrix.as_ptr()) };
     }
 
-    /// Read the 6 matrix coefficients back from the live object.
+    /// The current six matrix coefficients.
     #[must_use]
     pub fn get(&self) -> [f32; 6] {
         let mut out = [0.0f32; 6];
@@ -315,7 +317,8 @@ impl TransformGroup {
     }
 
     /// Append a child transform. The group takes its own reference, so `child`
-    /// may be dropped afterwards. Returns `false` if `child` is not a transform.
+    /// may be dropped afterwards. Returns `false` if Noesis rejects `child` as
+    /// not a `Transform`, which doesn't happen for this module's types.
     pub fn add_child<T: Transform>(&mut self, child: &T) -> bool {
         // SAFETY: self.ptr is a live TransformGroup*; child.transform_raw() is a
         // live Transform* borrowed for the duration of the call.
@@ -331,15 +334,15 @@ impl TransformGroup {
     }
 }
 
-/// The combined scale/skew/rotate/translate transform (the XAML
-/// `CompositeTransform`), applied in that canonical order about a center.
+/// Scale, skew, rotation, and translation in one transform, applied in that
+/// order. Scale, skew, and rotation share one center point.
 pub struct CompositeTransform {
     ptr: NonNull<c_void>,
 }
 
 transform_handle!(CompositeTransform);
 
-/// The 9 fields of a [`CompositeTransform`], in their FFI order.
+/// The fields of a [`CompositeTransform`]. [`Default`] is the identity.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct CompositeFields {
     /// Center X for scale/skew/rotate.
@@ -425,7 +428,7 @@ impl CompositeTransform {
         }
     }
 
-    /// Read all fields back from the live object.
+    /// The current field values.
     #[must_use]
     pub fn get(&self) -> CompositeFields {
         let mut out = [0.0f32; 9];
@@ -435,13 +438,13 @@ impl CompositeTransform {
     }
 }
 
-/// A handle to a Noesis `Transform3D`. Implemented by every 3D transform type
-/// here so
+/// A handle to a Noesis `Transform3D`. Every 3D transform type here implements
+/// it, so
 /// [`FrameworkElement::set_transform3d`](crate::view::FrameworkElement::set_transform3d)
-/// accepts any of them while keeping 2D transforms out.
+/// accepts any of them and rejects 2D transforms at compile time.
 pub trait Transform3D {
     /// Borrowed `Noesis::Transform3D*` (a `BaseComponent*`), valid for `self`'s
-    /// lifetime. Used by the element assignment sugar.
+    /// lifetime.
     fn transform3d_raw(&self) -> *mut c_void;
 }
 
@@ -474,10 +477,9 @@ macro_rules! transform3d_handle {
     };
 }
 
-/// An owning, **type-erased** handle to a `Noesis::Transform3D` read back from an
-/// element, e.g. via
+/// An owning handle to a 3D transform of unknown kind, returned by
 /// [`FrameworkElement::transform3d`](crate::view::FrameworkElement::transform3d).
-/// It implements [`Transform3D`], so it can be re-applied to another element via
+/// It implements [`Transform3D`], so you can assign it to another element with
 /// [`FrameworkElement::set_transform3d`](crate::view::FrameworkElement::set_transform3d).
 pub struct AnyTransform3D {
     ptr: NonNull<c_void>,
@@ -486,15 +488,13 @@ pub struct AnyTransform3D {
 transform3d_handle!(AnyTransform3D);
 
 impl AnyTransform3D {
-    /// Wrap a raw `Noesis::Transform3D*` that already carries a `+1` reference
-    /// this handle takes ownership of (released on drop). Crate-internal: used
-    /// by the element getter, which `AddRef`s the borrowed pointer.
+    /// Takes ownership of one reference on `ptr`, a live `Noesis::Transform3D*`.
     pub(crate) unsafe fn from_owned(ptr: NonNull<c_void>) -> Self {
         Self { ptr }
     }
 }
 
-/// The 12 fields of a [`CompositeTransform3D`], in their FFI order.
+/// The fields of a [`CompositeTransform3D`]. [`Default`] is the identity.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Composite3DFields {
     /// Center X of the transformation, in pixels.
@@ -579,8 +579,7 @@ impl Composite3DFields {
     }
 }
 
-/// The 3D scale/rotation/translation transform (XAML `CompositeTransform3D`),
-/// with 12 float dependency properties. Assign via
+/// Scale, rotation, and translation in 3D, about a center point. Assign it with
 /// [`FrameworkElement::set_transform3d`](crate::view::FrameworkElement::set_transform3d).
 pub struct CompositeTransform3D {
     ptr: NonNull<c_void>,
@@ -611,7 +610,7 @@ impl CompositeTransform3D {
         unsafe { noesis_composite_transform3d_set(self.ptr.as_ptr(), arr.as_ptr()) };
     }
 
-    /// Read all fields back from the live object.
+    /// The current field values.
     #[must_use]
     pub fn get(&self) -> Composite3DFields {
         let mut out = [0.0f32; 12];
@@ -621,9 +620,10 @@ impl CompositeTransform3D {
     }
 }
 
-/// Applies an arbitrary 3D matrix (XAML `MatrixTransform3D`). The matrix is a
-/// Noesis `Transform3`: 12 floats laid out as 4 rows of a `Vector3`
-/// (`[row0(xyz), row1(xyz), row2(xyz), row3(xyz)]`, row 3 being translation).
+/// Applies an arbitrary 3D affine matrix.
+///
+/// The matrix is 12 floats: four rows of `xyz`, with the last row holding the
+/// translation.
 pub struct MatrixTransform3D {
     ptr: NonNull<c_void>,
 }
@@ -631,7 +631,8 @@ pub struct MatrixTransform3D {
 transform3d_handle!(MatrixTransform3D);
 
 impl MatrixTransform3D {
-    /// Create a 3D matrix transform from the 12 `Transform3` coefficients.
+    /// Create a 3D matrix transform from the 12 coefficients described on
+    /// [`MatrixTransform3D`].
     ///
     /// # Panics
     ///
@@ -651,7 +652,7 @@ impl MatrixTransform3D {
         unsafe { noesis_matrix_transform3d_set(self.ptr.as_ptr(), matrix.as_ptr()) };
     }
 
-    /// Read the 12 matrix coefficients back from the live object.
+    /// The current 12 matrix coefficients.
     #[must_use]
     pub fn get(&self) -> [f32; 12] {
         let mut out = [0.0f32; 12];

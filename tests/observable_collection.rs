@@ -67,7 +67,7 @@ fn observable_collection() {
         coll.clear();
         assert!(coll.is_empty());
 
-        // Typed items round-trip alongside strings (purely additive surface).
+        // Typed items round-trip alongside strings.
         assert_eq!(coll.push_string("s"), Some(0));
         assert_eq!(coll.push_bool(true), Some(1));
         assert_eq!(coll.push_i32(7), Some(2));

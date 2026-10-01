@@ -57,7 +57,6 @@ fn keyframe_animation_interpolates_and_reaches_end() {
             "linear-keyframe midpoint should be ~50, got {mid}"
         );
 
-        // Just before the discrete frame: at the 100 key value.
         view.update(1.2);
         let at_linear_end = box_el.get_f32("Width").expect("width");
         assert!(

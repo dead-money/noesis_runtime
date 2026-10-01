@@ -7,9 +7,8 @@ use noesis_runtime::reflection::{
     add_depends_on, get_content_property, get_depends_on, set_content_property,
 };
 
-// NOTE: convention is one `#[test]` per integration binary (Noesis `init` once
-// per process), so the ContentProperty/DependsOn coexistence proof lives in the
-// single test below alongside the original DependsOn round-trip.
+// One `#[test]` per binary: Noesis `init` runs once per process, so both
+// metadata checks share the single test below.
 
 struct Noop;
 impl PropertyChangeHandler for Noop {

@@ -1,26 +1,23 @@
-// Diagnostics shim: error / assert handlers, memory-usage queries. All of these
-// are NsCore kernel functions. The kernel must be up (GUI::Init / noesis_init
-// has run) before they do anything meaningful.
+// Error and assert handlers and memory-usage queries (NsCore kernel functions).
+// They do nothing useful until the kernel is up (noesis_init has run).
 //
 // Two handler shapes:
 //
-//   * SetErrorHandler / SetAssertHandler take a BARE C function pointer with no
-//     userdata, so the Rust callback lives in a process-global slot here. A
-//     fixed trampoline reads the slot and forwards to (cb, userdata). The very
-//     first install captures the Noesis default handler so clearing restores it
-//     (mirrors the house "restore the PREVIOUS handler on Drop" convention).
-//     Each setter also returns the previous (cb, userdata) pair via out-params
-//     so a Rust RAII guard can restore a nested predecessor.
+//   * SetErrorHandler / SetAssertHandler take a bare function pointer with no
+//     userdata, so the Rust callback lives in a process-global slot and a fixed
+//     trampoline forwards to (cb, userdata). The first install captures the
+//     Noesis default handler so clearing restores it. Each setter returns the
+//     previous (cb, userdata) through out-params so a Rust guard can restore a
+//     nested predecessor.
 //
-//   * SetThreadErrorHandler / ErrorHandler2 carries a void* user, so the boxed
-//     Rust closure threads straight through it, no global slot needed. The
-//     C struct noesis_error_context is binary-compatible with
-//     Noesis::ErrorContext, and noesis_error2_fn with Noesis::ErrorHandler2,
-//     so we reinterpret_cast across the ABI (static_assert'd below).
+//   * SetThreadErrorHandler takes an ErrorHandler2 plus a void* user, so the
+//     Rust closure passes straight through. noesis_error_context and
+//     noesis_error2_fn are layout-compatible with Noesis::ErrorContext and
+//     Noesis::ErrorHandler2 (static_assert'd below), so they reinterpret_cast.
 //
-// The Invoke* entrypoints wrap the SDK's public invokers so Rust tests can
-// drive the registered handlers through the real Noesis dispatch path. Always
-// drive with fatal=false: a fatal error or a failed NS_ASSERT can abort.
+// The Invoke* entry points run the registered handlers through the real Noesis
+// dispatch path. Pass fatal=false: a fatal error or a failed NS_ASSERT can
+// abort.
 
 #include "noesis_shim.h"
 
@@ -28,8 +25,8 @@
 #include <NsCore/Error.h>
 #include <NsCore/Memory.h>
 
-// noesis_error_context must mirror Noesis::ErrorContext bit-for-bit so we can
-// hand the same pointer to both sides of the ABI.
+// noesis_error_context must match Noesis::ErrorContext bit-for-bit: the same
+// pointer is handed to both sides of the ABI.
 static_assert(sizeof(noesis_error_context) == sizeof(Noesis::ErrorContext),
               "noesis_error_context layout drift vs Noesis::ErrorContext");
 static_assert(offsetof(noesis_error_context, uri) == offsetof(Noesis::ErrorContext, uri),
@@ -121,9 +118,7 @@ extern "C" void noesis_set_assert_handler(noesis_assert_fn cb, void* userdata,
 extern "C" void noesis_set_thread_error_handler(noesis_error2_fn handler, void* userdata,
     noesis_error2_fn* out_prev_handler, void** out_prev_user)
 {
-    // noesis_error2_fn and noesis_error_context are layout-compatible with
-    // Noesis::ErrorHandler2 / Noesis::ErrorContext (static_assert'd above), so a
-    // reinterpret_cast is sound in both directions.
+    // sound both ways: layouts static_assert'd above
     Noesis::ErrorHandlerData prev = Noesis::SetThreadErrorHandler(
         userdata, reinterpret_cast<Noesis::ErrorHandler2>(handler));
 

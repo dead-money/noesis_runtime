@@ -1,18 +1,17 @@
-// Code-built animation & timing: Storyboard, the common
-// animation classes (Double/Color/Thickness/Point), their key-frame variants
-// (Discrete/Linear/Easing for Double and Color), the easing-function family,
-// and a storyboard-less BeginAnimation path off the view's TimeManager.
+// Code-built animation: Storyboard, ParallelTimeline, BeginStoryboard,
+// From/To/By animations, key-frame animations, KeySpline, easing functions, and
+// storyboard-less animation of a single property.
 //
-// Ownership: every `*_create` hands out exactly one owned reference (the owning
-// Rust handle in src/animation.rs releases it on Drop via
-// noesis_base_component_release).
-// Adding a timeline to a Storyboard's TimelineCollection, or assigning a key
-// frame / easing function to its parent, makes Noesis take its own reference,
-// so the Rust builder handle can be dropped after wiring.
+// Every *_create returns a +1 the caller releases with
+// noesis_base_component_release. Adding a child, key frame, or easing function
+// to its parent takes Noesis's own reference.
 //
-// Animations advance off the View clock: drive them with view.update(t) for
-// increasing t. A target element must be connected to a live View before
-// Storyboard::Begin / AnimationTimeline::Start can resolve a TimeManager.
+// Animations advance with View::Update. The target must be connected to a live
+// View so a TimeManager exists.
+//
+// Key-frame `kind`: 0 Discrete, 1 Linear, 2 Easing (`extra` is an
+// EasingFunctionBase*), 3 Spline (`extra` is a KeySpline*). Key-time getters
+// return seconds, or -1.0 for a bad index or a non-TimeSpan KeyTime.
 
 #include "noesis_shim.h"
 
@@ -137,9 +136,8 @@
 
 namespace {
 
-// Hand a freshly-created (refcount-1) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller; the local Ptr releases its own on
-// scope exit, leaving the caller's +1.
+// Returns `c` with a +1 owned by the caller. When `c` came from a local Ptr,
+// that Ptr releases its own reference.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -152,21 +150,18 @@ T* cast(void* p) {
     return Noesis::DynamicCast<T*>(static_cast<Noesis::BaseComponent*>(p));
 }
 
-// EasingMode ordinals must match Noesis::EasingMode (EaseOut/EaseIn/EaseInOut).
+// The Rust enums pass these ordinals directly.
 static_assert(Noesis::EasingMode_EaseOut == 0, "EasingMode ordinal drift");
 static_assert(Noesis::EasingMode_EaseIn == 1, "EasingMode ordinal drift");
 static_assert(Noesis::EasingMode_EaseInOut == 2, "EasingMode ordinal drift");
 
-// FillBehavior ordinals must match Noesis::FillBehavior (HoldEnd/Stop).
 static_assert(Noesis::FillBehavior_HoldEnd == 0, "FillBehavior ordinal drift");
 static_assert(Noesis::FillBehavior_Stop == 1, "FillBehavior ordinal drift");
 
-// HandoffBehavior ordinals must match Noesis::HandoffBehavior.
 static_assert(Noesis::HandoffBehavior_SnapshotAndReplace == 0, "HandoffBehavior ordinal drift");
 static_assert(Noesis::HandoffBehavior_Compose == 1, "HandoffBehavior ordinal drift");
 
-// Build a Noesis::Rect from an {x, y, width, height} float[4] (the field layout
-// the Rust side marshals), bypassing the side-coordinate Rect(l,t,r,b) ctor.
+// {x, y, width, height}; avoids the Rect(left, top, right, bottom) ctor.
 Noesis::Rect makeRect(const float r[4]) {
     Noesis::Rect rect;
     rect.x = r[0];
@@ -183,19 +178,14 @@ void readRect(const Noesis::Rect& rect, float out[4]) {
     out[3] = rect.height;
 }
 
-// A key frame's KeyTime as seconds, or -1.0 if it is not a resolved TimeSpan.
-// GetTimeSpan() is only valid for KeyTimeType_TimeSpan; a Uniform / Percent /
-// Paced key time (from XAML like KeyTime="Uniform" or "50%") would assert in
-// debug and read a stale TimeSpan in release, so it maps to the -1.0 sentinel.
+// GetTimeSpan() asserts for Uniform / Percent / Paced key times (and reads a
+// stale value in release), so those map to -1.0.
 double keyTimeSeconds(const Noesis::KeyTime& kt) {
     if (kt.GetType() != Noesis::KeyTimeType_TimeSpan) return -1.0;
     return kt.GetTimeSpan().GetTotalSeconds();
 }
 
-// key-frame `kind`: 0 Discrete, 1 Linear, 2 Easing (uses `extra` as an
-// EasingFunctionBase*), 3 Spline (uses `extra` as a KeySpline*). Returns a key
-// frame with its KeyTime set; the caller sets the typed value. Disc/Lin/Eas/Spl
-// are the concrete key-frame classes for the animated type.
+// Sets KeyTime only; the caller sets the value. Null for an unknown `kind`.
 template <class KF, class Disc, class Lin, class Eas, class Spl>
 Noesis::Ptr<KF> makeKeyFrame(int32_t kind, double key_time_seconds, void* extra) {
     Noesis::Ptr<KF> kf;
@@ -229,9 +219,7 @@ extern "C" void* noesis_storyboard_create() {
     return handout(sb.GetPtr());
 }
 
-// Append a child Timeline (an animation) to the Storyboard's children
-// collection, creating it if absent. The collection takes its own reference;
-// the caller keeps ownership of `timeline`. Returns false on type mismatch.
+// The caller keeps its `timeline` reference. False on a type mismatch.
 extern "C" bool noesis_storyboard_add_child(void* sb, void* timeline) {
     auto* s = cast<Noesis::Storyboard>(sb);
     auto* t = cast<Noesis::Timeline>(timeline);
@@ -253,9 +241,7 @@ extern "C" int32_t noesis_storyboard_child_count(void* sb) {
     return children ? children->Count() : 0;
 }
 
-// Storyboard.TargetName attached property: names the element a child animation
-// targets, resolved against the namescope passed to Begin. `timeline` is the
-// child animation (a DependencyObject).
+// Resolved against the namescope of the element passed to Begin.
 extern "C" bool noesis_storyboard_set_target_name(void* timeline, const char* name) {
     auto* d = cast<Noesis::DependencyObject>(timeline);
     if (!d || !name) return false;
@@ -263,8 +249,7 @@ extern "C" bool noesis_storyboard_set_target_name(void* timeline, const char* na
     return true;
 }
 
-// Storyboard.TargetProperty attached property: the property path the child
-// animation drives (e.g. "Opacity", "(UIElement.RenderTransform).(ScaleX)").
+// e.g. "Opacity" or "(UIElement.RenderTransform).(ScaleX)".
 extern "C" bool noesis_storyboard_set_target_property(void* timeline, const char* path) {
     auto* d = cast<Noesis::DependencyObject>(timeline);
     if (!d || !path) return false;
@@ -273,8 +258,7 @@ extern "C" bool noesis_storyboard_set_target_property(void* timeline, const char
     return true;
 }
 
-// Storyboard.Target attached property: a direct object reference, an
-// alternative to TargetName when the target isn't in a namescope.
+// Alternative to TargetName for a target outside any namescope.
 extern "C" bool noesis_storyboard_set_target(void* timeline, void* target) {
     auto* d = cast<Noesis::DependencyObject>(timeline);
     auto* tg = cast<Noesis::DependencyObject>(target);
@@ -283,9 +267,8 @@ extern "C" bool noesis_storyboard_set_target(void* timeline, void* target) {
     return true;
 }
 
-// Begin the storyboard. `fe` (nullable) is both the target root and namescope
-// used to resolve TargetName. `controllable` must be true for the
-// Pause/Resume/Stop/Seek actions to have any effect.
+// `fe` (nullable) is the target root and the namescope for TargetName.
+// Pause / Resume / Stop / Seek have no effect unless `controllable`.
 extern "C" bool noesis_storyboard_begin(void* sb, void* fe, bool controllable) {
     auto* s = cast<Noesis::Storyboard>(sb);
     if (!s) return false;
@@ -298,10 +281,7 @@ extern "C" bool noesis_storyboard_begin(void* sb, void* fe, bool controllable) {
     return true;
 }
 
-// Begin the storyboard with an explicit HandoffBehavior (how its new clocks
-// interact with animations already running on the same properties). `fe` is the
-// target root + namescope and is required for this overload. handoff: matches
-// Noesis::HandoffBehavior (0 SnapshotAndReplace, 1 Compose).
+// `fe` is required here. `handoff`: 0 SnapshotAndReplace, 1 Compose.
 extern "C" bool noesis_storyboard_begin_handoff(void* sb, void* fe, int32_t handoff,
                                                    bool controllable) {
     auto* s = cast<Noesis::Storyboard>(sb);
@@ -374,7 +354,7 @@ extern "C" bool noesis_storyboard_is_paused(void* sb, void* fe) {
     return f ? s->IsPaused(f) : s->IsPaused();
 }
 
-// ── Timeline common knobs (apply to any Timeline / animation) ────────────────
+// ── Timeline (any Timeline or animation) ─────────────────────────────────────
 
 extern "C" bool noesis_timeline_set_duration_seconds(void* tl, double seconds) {
     auto* t = cast<Noesis::Timeline>(tl);
@@ -397,8 +377,7 @@ extern "C" bool noesis_timeline_set_duration_forever(void* tl) {
     return true;
 }
 
-// Returns the duration in seconds, or -1.0 if the duration is not a resolved
-// TimeSpan (Automatic / Forever / not a Timeline).
+// -1.0 for Automatic, Forever, or a non-Timeline.
 extern "C" double noesis_timeline_get_duration_seconds(void* tl) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return -1.0;
@@ -428,7 +407,7 @@ extern "C" bool noesis_timeline_set_speed_ratio(void* tl, float value) {
     return true;
 }
 
-// behavior: 0 = HoldEnd, 1 = Stop (matches Noesis::FillBehavior).
+// `behavior`: 0 HoldEnd, 1 Stop.
 extern "C" bool noesis_timeline_set_fill_behavior(void* tl, int32_t behavior) {
     auto* t = cast<Noesis::Timeline>(tl);
     if (!t) return false;
@@ -578,10 +557,10 @@ extern "C" bool noesis_point_animation_set_by(void* anim, bool has, float x, flo
     return true;
 }
 
-// Attach an easing function to a From/To animation. DynamicCasts across the
-// supported animation types. Noesis takes its own reference to `easing`.
+// Works on every From/To animation type here. Null `easing` clears. False if
+// `anim` is not one of them.
 extern "C" bool noesis_animation_set_easing_function(void* anim, void* easing) {
-    auto* e = cast<Noesis::EasingFunctionBase>(easing);  // may be null to clear
+    auto* e = cast<Noesis::EasingFunctionBase>(easing);
     if (auto* d = cast<Noesis::DoubleAnimation>(anim)) {
         d->SetEasingFunction(e);
         return true;
@@ -625,7 +604,7 @@ extern "C" bool noesis_animation_set_easing_function(void* anim, void* easing) {
 //
 // kind: 0 Quadratic, 1 Cubic, 2 Quartic, 3 Quintic, 4 Sine, 5 Circle, 6 Back,
 //       7 Bounce, 8 Elastic, 9 Exponential, 10 Power.
-// mode: matches Noesis::EasingMode (0 EaseOut, 1 EaseIn, 2 EaseInOut).
+// mode: 0 EaseOut, 1 EaseIn, 2 EaseInOut. Null for an unknown `kind`.
 extern "C" void* noesis_easing_function_create(int32_t kind, int32_t mode) {
     Noesis::Ptr<Noesis::EasingFunctionBase> e;
     switch (kind) {
@@ -646,7 +625,6 @@ extern "C" void* noesis_easing_function_create(int32_t kind, int32_t mode) {
     return handout(e.GetPtr());
 }
 
-// BackEase.Amplitude.
 extern "C" bool noesis_easing_function_set_amplitude(void* easing, float value) {
     auto* b = cast<Noesis::BackEase>(easing);
     if (!b) return false;
@@ -654,7 +632,6 @@ extern "C" bool noesis_easing_function_set_amplitude(void* easing, float value) 
     return true;
 }
 
-// PowerEase.Power.
 extern "C" bool noesis_easing_function_set_power(void* easing, float value) {
     auto* p = cast<Noesis::PowerEase>(easing);
     if (!p) return false;
@@ -662,7 +639,6 @@ extern "C" bool noesis_easing_function_set_power(void* easing, float value) {
     return true;
 }
 
-// ExponentialEase.Exponent.
 extern "C" bool noesis_easing_function_set_exponent(void* easing, float value) {
     auto* e = cast<Noesis::ExponentialEase>(easing);
     if (!e) return false;
@@ -670,7 +646,7 @@ extern "C" bool noesis_easing_function_set_exponent(void* easing, float value) {
     return true;
 }
 
-// ElasticEase.Oscillations / BounceEase.Bounces (both integer counts).
+// ElasticEase.Oscillations or BounceEase.Bounces.
 extern "C" bool noesis_easing_function_set_oscillations(void* easing, int32_t value) {
     if (auto* el = cast<Noesis::ElasticEase>(easing)) {
         el->SetOscillations(value);
@@ -704,8 +680,6 @@ extern "C" void* noesis_double_animation_keyframes_create() {
     return handout(a.GetPtr());
 }
 
-// kind: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3 Spline
-// (`extra` = KeySpline*).
 extern "C" bool noesis_double_animation_add_keyframe(void* anim, int32_t kind,
                                                         double key_time_seconds, float value,
                                                         void* extra) {
@@ -729,8 +703,6 @@ extern "C" void* noesis_color_animation_keyframes_create() {
     return handout(a.GetPtr());
 }
 
-// kind: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3 Spline
-// (`extra` = KeySpline*).
 extern "C" bool noesis_color_animation_add_keyframe(void* anim, int32_t kind,
                                                        double key_time_seconds,
                                                        const float color[4], void* extra) {
@@ -748,14 +720,11 @@ extern "C" bool noesis_color_animation_add_keyframe(void* anim, int32_t kind,
     return true;
 }
 
-// ── Storyboard-less direct animation (BeginAnimation / ApplyAnimationClock) ──
+// ── Storyboard-less animation ────────────────────────────────────────────────
 //
-// Resolve `dp_name` against `target`'s type, fetch the TimeManager from the
-// connected FrameworkElement, and Start the animation directly on that property.
-// `target` MUST be a FrameworkElement attached to a live View (so it has a
-// TimeManager). handoff: matches Noesis::HandoffBehavior (0 SnapshotAndReplace,
-// 1 Compose). Returns false on null/type mismatch, unknown property, or no
-// TimeManager (target not connected to a view).
+// Starts `anim` on `target`'s `dp_name`. `target` must be a FrameworkElement
+// connected to a View. `handoff`: 0 SnapshotAndReplace, 1 Compose. False on a
+// type mismatch, unknown property, or missing TimeManager.
 extern "C" bool noesis_animation_begin_on(void* anim, void* target, const char* dp_name,
                                              int32_t handoff) {
     auto* a = cast<Noesis::AnimationTimeline>(anim);
@@ -775,9 +744,8 @@ extern "C" bool noesis_animation_begin_on(void* anim, void* target, const char* 
 
 // ── Rect / Size From-To animations ───────────────────────────────────────────
 //
-// Rect values cross the ABI as an {x, y, width, height} float[4]; Size values as
-// a {width, height} float[2]. Each setter takes a `has` flag (false clears the
-// Nullable); each getter fills `out` and returns whether the Nullable was set.
+// Rect is {x, y, width, height}; Size is {width, height}. Setters clear the
+// value when `has` is false; getters return false when it is unset.
 
 extern "C" void* noesis_animation_rect_animation_create() {
     Noesis::Ptr<Noesis::RectAnimation> a = *new Noesis::RectAnimation();
@@ -893,8 +861,8 @@ extern "C" bool noesis_animation_size_animation_get_by(void* anim, float out[2])
 
 // ── Int16 / Int32 / Int64 From-To animations ─────────────────────────────────
 //
-// Int16/Int32 cross the ABI as int32_t (narrowed on the C++ side); Int64 as
-// int64_t. Setters take a `has` flag; getters fill `*out` and return HasValue.
+// Int16 crosses as int32_t and is narrowed here. Setters clear the value when
+// `has` is false; getters return false when it is unset.
 
 #define INT_FROMTO(SUFFIX, CLASS, T, ABIT)                                                 \
     extern "C" void* noesis_animation_##SUFFIX##_animation_create() {                      \
@@ -954,10 +922,6 @@ INT_FROMTO(int64, Int64Animation, int64_t, int64_t)
 #undef INT_FROMTO
 
 // ── Rect / Size key-frame animations ─────────────────────────────────────────
-//
-// `kind`: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3
-// Spline (`extra` = KeySpline*). Read-back exposes the key-frame count, value,
-// and key time so a test can prove each frame crossed.
 
 extern "C" void* noesis_animation_rect_keyframes_create() {
     Noesis::Ptr<Noesis::RectAnimationUsingKeyFrames> a = *new Noesis::RectAnimationUsingKeyFrames();
@@ -1056,9 +1020,6 @@ extern "C" double noesis_animation_size_keyframes_get_key_time(void* anim, int32
 }
 
 // ── Point key-frame animation ─────────────────────────────────────────────────
-//
-// `kind`: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3
-// Spline (`extra` = KeySpline*). Points cross the ABI as {x, y} float[2].
 
 extern "C" void* noesis_animation_point_keyframes_create() {
     Noesis::Ptr<Noesis::PointAnimationUsingKeyFrames> a =
@@ -1112,9 +1073,7 @@ extern "C" double noesis_animation_point_keyframes_get_key_time(void* anim, int3
 
 // ── Thickness key-frame animation ─────────────────────────────────────────────
 //
-// `kind`: 0 Discrete, 1 Linear, 2 Easing (`extra` = EasingFunctionBase*), 3
-// Spline (`extra` = KeySpline*). Thicknesses cross as {left, top, right, bottom}
-// float[4].
+// {left, top, right, bottom}.
 
 extern "C" void* noesis_animation_thickness_keyframes_create() {
     Noesis::Ptr<Noesis::ThicknessAnimationUsingKeyFrames> a =
@@ -1227,10 +1186,7 @@ INT_KEYFRAMES(int64, Int64AnimationUsingKeyFrames, Int64KeyFrameCollection, Int6
 
 // ── Object key-frame animation ───────────────────────────────────────────────
 //
-// ObjectAnimationUsingKeyFrames has no From-To form and only discrete frames
-// (an arbitrary BaseComponent can't be interpolated). The value crosses as a
-// borrowed BaseComponent*; the collection takes its own reference. The value
-// getter hands out a +1 reference (released by the caller).
+// Discrete frames only. `add` borrows `value`; the value getter returns +1.
 
 extern "C" void* noesis_animation_object_keyframes_create() {
     Noesis::Ptr<Noesis::ObjectAnimationUsingKeyFrames> a =
@@ -1276,8 +1232,7 @@ extern "C" double noesis_animation_object_keyframes_get_key_time(void* anim, int
 
 // ── Boolean key-frame animation ───────────────────────────────────────────────
 //
-// BooleanAnimationUsingKeyFrames has no From-To form and only discrete frames (a
-// bool can't be interpolated). The value crosses the ABI as a C bool.
+// Discrete frames only.
 
 extern "C" void* noesis_animation_boolean_keyframes_create() {
     Noesis::Ptr<Noesis::BooleanAnimationUsingKeyFrames> a =
@@ -1305,7 +1260,6 @@ extern "C" int32_t noesis_animation_boolean_keyframes_count(void* anim) {
     return frames ? frames->Count() : 0;
 }
 
-// Returns the frame value into *out; returns false on a bad handle / index.
 extern "C" bool noesis_animation_boolean_keyframes_get_value(void* anim, int32_t index,
                                                                 bool* out) {
     auto* a = cast<Noesis::BooleanAnimationUsingKeyFrames>(anim);
@@ -1326,10 +1280,8 @@ extern "C" double noesis_animation_boolean_keyframes_get_key_time(void* anim, in
 
 // ── String key-frame animation ────────────────────────────────────────────────
 //
-// StringAnimationUsingKeyFrames has no From-To form and only discrete frames (a
-// string can't be interpolated). The value crosses as a NUL-terminated C string;
-// the getter returns a pointer borrowed from the live key frame (copy it
-// immediately) or NULL on a bad handle / index.
+// Discrete frames only. The value getter returns a string borrowed from the
+// key frame, or null on a bad index.
 
 extern "C" void* noesis_animation_string_keyframes_create() {
     Noesis::Ptr<Noesis::StringAnimationUsingKeyFrames> a =
@@ -1375,9 +1327,8 @@ extern "C" double noesis_animation_string_keyframes_get_key_time(void* anim, int
 
 // ── Matrix key-frame animation ───────────────────────────────────────────────
 //
-// MatrixAnimationUsingKeyFrames has no From-To form and only discrete frames (a
-// matrix is not componentwise-interpolated). The matrix crosses as a 6-float
-// {m00, m01, m10, m11, m20, m21} array (Noesis::Transform2 row layout).
+// Discrete frames only. Matrices are {m00, m01, m10, m11, m20, m21}
+// (Transform2 row-major).
 
 extern "C" void* noesis_animation_matrix_keyframes_create() {
     Noesis::Ptr<Noesis::MatrixAnimationUsingKeyFrames> a =
@@ -1427,8 +1378,8 @@ extern "C" double noesis_animation_matrix_keyframes_get_key_time(void* anim, int
 
 // ── KeySpline ────────────────────────────────────────────────────────────────
 //
-// The two Bezier control points that shape a spline key frame's progress curve.
-// Points cross as {x, y} float[2].
+// Bezier control points of a spline key frame's progress curve. Getters write
+// {x, y}.
 
 extern "C" void* noesis_animation_keyspline_create(float c1x, float c1y, float c2x, float c2y) {
     Noesis::Ptr<Noesis::KeySpline> k = *new Noesis::KeySpline(c1x, c1y, c2x, c2y);
@@ -1469,10 +1420,8 @@ extern "C" bool noesis_animation_keyspline_get_control_point2(void* ks, float ou
 
 // ── ParallelTimeline (timeline group) ─────────────────────────────────────────
 //
-// A code-built nestable timeline container. Children (any Timeline, including
-// animations or nested ParallelTimelines) run in parallel off the group's clock.
-// The children collection takes its own reference; the caller keeps ownership of
-// each added child.
+// Children (any Timeline, including nested groups) run in parallel. The caller
+// keeps its reference to each added child.
 
 extern "C" void* noesis_animation_parallel_timeline_create() {
     Noesis::Ptr<Noesis::ParallelTimeline> p = *new Noesis::ParallelTimeline();
@@ -1502,8 +1451,7 @@ extern "C" int32_t noesis_animation_parallel_timeline_child_count(void* group) {
 
 // ── BeginStoryboard (trigger action) ─────────────────────────────────────────
 //
-// A TriggerAction that begins a Storyboard with a chosen HandoffBehavior. Useful
-// inside a trigger's actions; code-driven Storyboard::Begin covers the rest.
+// TriggerAction that begins a Storyboard. The storyboard getter returns +1.
 
 extern "C" void* noesis_animation_begin_storyboard_create() {
     Noesis::Ptr<Noesis::BeginStoryboard> b = *new Noesis::BeginStoryboard();
@@ -1523,7 +1471,7 @@ extern "C" void* noesis_animation_begin_storyboard_get_storyboard(void* bs) {
     return handout(b->GetStoryboard());
 }
 
-// behavior: matches Noesis::HandoffBehavior (0 SnapshotAndReplace, 1 Compose).
+// `behavior`: 0 SnapshotAndReplace, 1 Compose.
 extern "C" bool noesis_animation_begin_storyboard_set_handoff(void* bs, int32_t behavior) {
     auto* b = cast<Noesis::BeginStoryboard>(bs);
     if (!b) return false;

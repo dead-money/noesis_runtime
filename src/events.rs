@@ -1,35 +1,70 @@
-//! Subscribe Rust callbacks to Noesis routed events.
+//! Subscribe Rust callbacks to Noesis events.
 //!
-//! Start with [`subscribe_click`] for `BaseButton::Click` and
-//! [`subscribe_keydown`] for `UIElement::KeyDown`. For any other routed
-//! event reach for the generic [`subscribe_event`] (typed by [`RoutedEvent`])
-//! or its `&str` escape hatch [`subscribe_event_by_name`]. Non-routed
-//! lifecycle notifications (`Loaded`, `IsEnabledChanged`, and friends) go
-//! through [`subscribe_lifecycle`]. Every subscription returns an RAII token:
-//! a heap-allocated handler that owns its registration and holds a `+1` ref on
-//! the source element, so dropping the token unsubscribes.
+//! Pick the entry point by event:
+//!
+//! - [`subscribe_click`] for `BaseButton::Click`.
+//! - [`subscribe_keydown`] for `UIElement::KeyDown`, with the option to mark it handled.
+//! - [`subscribe_selection_changed`] for `Selector::SelectionChanged`.
+//! - [`subscribe_event`] for any routed event listed in [`RoutedEvent`]. The
+//!   handler gets an [`EventArgs`] with typed accessors for mouse, key, text,
+//!   focus, drag and manipulation data. [`subscribe_event_by_name`] takes the
+//!   event name as a string for events the enum doesn't list.
+//! - [`subscribe_lifecycle`] for non-routed notifications ([`LifecycleEvent`]):
+//!   `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
+//!   family. `Loaded`, `Unloaded` and `SizeChanged` are routed events and go
+//!   through [`subscribe_event`].
+//! - [`subscribe_data_object`] for `DataObject.Copying` / `DataObject.Pasting`.
+//! - [`do_drag_drop`] starts a drag from an element.
+//!
+//! Every handler can be a closure. Each `subscribe_*` function returns `None`
+//! when the element is the wrong type for the event or the event name is
+//! unknown.
+//!
+//! ```no_run
+//! use noesis_runtime::events::{subscribe_click, subscribe_event, EventArgs, RoutedEvent};
+//! use noesis_runtime::view::FrameworkElement;
+//!
+//! let root = FrameworkElement::parse(
+//!     r#"<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+//!          <Button x:Name="Ok" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"/>
+//!        </Grid>"#,
+//! )
+//! .unwrap();
+//! let ok = root.find_name("Ok").unwrap();
+//!
+//! let _click = subscribe_click(&ok, || println!("clicked")).unwrap();
+//! let _wheel = subscribe_event(&root, RoutedEvent::MouseWheel, false, |args: &EventArgs| {
+//!     if let Some(delta) = args.wheel_delta() {
+//!         println!("wheel {delta}");
+//!     }
+//!     false
+//! })
+//! .unwrap();
+//! // Keep the subscriptions alive for as long as you want the callbacks.
+//! ```
 //!
 //! # Threading
 //!
-//! Click callbacks fire from inside Noesis's input pump (typically
-//! `IView::MouseButtonUp` or `IView::Update`), on whatever thread is driving
-//! the view. The callback signature has no `Send` bound at the FFI level;
-//! the safe wrapper enforces it on the Rust side via the trait. Keep work
-//! in the callback small: push to a queue / channel and process from a
-//! regular Bevy system step if you need anything heavier than a flag flip.
+//! Callbacks run synchronously inside Noesis, on the thread that drives the
+//! view, from whichever `View` call raised the event (input injection or
+//! `update`). Keep callbacks short: set a flag or push to a queue and do the
+//! real work from your own update loop. Handlers must be `Send + 'static` so
+//! the subscription can move to the view's thread.
+//!
+//! Handlers take `&self` and may be re-entered: a handler that raises its own
+//! event again (for example through [`crate::reflection::raise_event`]) runs a
+//! second time before the first call returns. Keep mutable handler state in a
+//! `Cell` or an atomic.
 //!
 //! # Lifetime
 //!
-//! [`ClickSubscription`] is RAII: while alive, the registered handler stays
-//! on the button's `Click` event. Drop the subscription to unsubscribe.
-//! The subscription holds a `+1` ref on the button so the handler list
-//! stays valid even if the only other reference to the element was the
-//! [`crate::view::FrameworkElement`] you used to subscribe.
+//! Each subscription is an RAII token. While it lives, the handler stays
+//! installed and the token holds a `+1` ref on the element, so the element
+//! survives even if you drop every [`FrameworkElement`] handle to it. Drop the
+//! token to unsubscribe; drop it before [`crate::shutdown`].
 //!
-//! Every subscription type here may be dropped from *inside its own callback*:
-//! the C++ handler owns the boxed closure and defers its own destruction until
-//! the callback frame unwinds, so unsubscribing re-entrantly is safe (no
-//! use-after-free of the handler object or the boxed closure).
+//! A token may be dropped from inside its own callback. Destruction of the
+//! handler and its closure is deferred until the callback returns.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -55,14 +90,12 @@ use crate::ffi::{
 };
 use crate::view::{FrameworkElement, Key, MouseButton};
 
-/// Free trampoline for a donated `Box<Box<dyn Handler>>` subscription box (`T`
-/// is the inner `Box<dyn Handler>`). Every subscription in this module donates
-/// its box to the C++ handler along with one of these; the handler calls it
-/// exactly once when it is actually destroyed (deferred past any in-flight
-/// callback), so the box is never freed while a callback's borrow is live.
+/// Frees a handler box donated to a C++ subscription (`T` is the inner
+/// `Box<dyn Handler>`). C++ calls it once, when the handler is destroyed, which
+/// is deferred past any in-flight callback.
 ///
-/// SAFETY: `userdata` is a `Box<T>` produced by `Box::into_raw` in the matching
-/// subscribe, and the C++ side invokes this at most once.
+/// SAFETY: `userdata` is a `Box<T>` from `Box::into_raw` in the matching
+/// subscribe, and C++ invokes this at most once.
 unsafe extern "C" fn free_donated<T>(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
         if userdata.is_null() {
@@ -73,24 +106,19 @@ unsafe extern "C" fn free_donated<T>(userdata: *mut c_void) {
     })
 }
 
-/// Arg-shape discriminant mirroring the C++ `DmArgKind` in `noesis_events.cpp`
-/// (exposed by [`noesis_event_args_kind`]). This is the authoritative event
-/// classifier: the typed accessors deliberately share sentinels, so the `is_*`
-/// checks key on the discriminant rather than probing accessors. Keep in sync
-/// with the C++ enum.
+/// Values of the C++ `DmArgKind` enum in `noesis_events.cpp`; keep in sync.
+/// Classify events by this discriminant, not by probing accessors: the
+/// accessors share sentinels (a `MouseMove` and a zero-delta `MouseWheel` both
+/// report a position and no button).
 mod arg_kind {
     pub const MOUSE_WHEEL: i32 = 3;
 }
 
-/// Rust-side click handler. Implementors receive a single `()` notification
-/// per fired click; if you need the sender or event args, subscribe through
-/// the generic [`subscribe_event`] / [`RoutedEventHandler`] instead.
+/// Handler for [`subscribe_click`], called once per click with no arguments.
+/// Any `Fn() + Send + 'static` closure implements it. For the event args, use
+/// [`subscribe_event`] instead.
 ///
-/// The `Send + 'static` bounds let the handler live inside a Bevy
-/// `Resource` or be moved onto the render thread.
-/// Takes `&self` (re-entrant: a handler may re-raise the subscribed event on
-/// the same element via [`crate::reflection::raise_event`], re-entering this
-/// same box; use interior mutability for handler state).
+/// May be re-entered (see the module docs on threading).
 pub trait ClickHandler: Send + 'static {
     fn on_click(&self);
 }
@@ -111,12 +139,10 @@ unsafe extern "C" fn click_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// RAII subscription token. Drop to unsubscribe and free the boxed handler.
+/// Keeps a [`subscribe_click`] handler installed. Drop it to unsubscribe.
 ///
-/// Holds a `+1` ref on the underlying button (managed C++-side); dropping
-/// this releases that ref and removes the handler from the routed-event
-/// list. Drop before [`crate::shutdown`] like every other owning handle in
-/// this crate.
+/// Holds a `+1` ref on the button, released on drop. Drop before
+/// [`crate::shutdown`].
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct ClickSubscription {
     token: NonNull<c_void>,
@@ -134,19 +160,17 @@ impl Drop for ClickSubscription {
     }
 }
 
-/// Subscribe `handler` to `BaseButton::Click` on `element`. Returns `None`
-/// if the element is not castable to `BaseButton` (e.g. it's a plain
-/// `ContentControl` or a `UserControl` whose root isn't a button).
+/// Subscribes `handler` to `BaseButton::Click` on `element`.
 ///
-/// The returned [`ClickSubscription`] keeps the handler installed for as
-/// long as it lives; drop it (or replace it) to unsubscribe. Dropping it from
-/// inside the click callback is safe (see the module "Lifetime" docs).
+/// Returns `None` if `element` is not a `BaseButton` (`Button`, `ToggleButton`,
+/// `CheckBox`, ...). A `UserControl` wrapping a button is not one; look up the
+/// inner button by name. The handler stays installed while the returned
+/// [`ClickSubscription`] lives, and it may be dropped from inside the callback.
 pub fn subscribe_click<H: ClickHandler>(
     element: &FrameworkElement,
     handler: H,
 ) -> Option<ClickSubscription> {
-    // Double-Box gives a stable thin pointer for the C ABI userdata, same
-    // pattern as the providers.
+    // Double box: the C ABI userdata needs a thin pointer.
     let outer: Box<Box<dyn ClickHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
@@ -165,8 +189,7 @@ pub fn subscribe_click<H: ClickHandler>(
     if let Some(token) = NonNull::new(token) {
         Some(ClickSubscription { token })
     } else {
-        // Subscription failed (e.g. element wasn't a button); C++ took no
-        // ownership. Free the userdata we leaked above so we don't leak it.
+        // C++ took no ownership on failure.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -174,15 +197,13 @@ pub fn subscribe_click<H: ClickHandler>(
     }
 }
 
-/// Rust-side handler for `Selector::SelectionChanged`. Receives a single `()`
-/// notification each time the selection moves; the authoritative selection is
-/// read back afterwards (through `ICollectionView` currency or the bound model),
-/// so this handler only signals "re-poll".
+/// Handler for [`subscribe_selection_changed`], called with no arguments each
+/// time the selection changes. Read the new selection from the control, its
+/// collection view, or the bound model. Any `Fn() + Send + 'static` closure
+/// implements it.
 ///
-/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource` or
-/// be moved onto the render thread. Takes `&self` (re-entrant: a handler that
-/// mutates the selection re-enters this same box; use interior mutability for
-/// handler state).
+/// May be re-entered: a handler that changes the selection runs again before
+/// it returns.
 pub trait SelectionChangedHandler: Send + 'static {
     fn on_selection_changed(&self);
 }
@@ -204,8 +225,8 @@ unsafe extern "C" fn selection_changed_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// RAII subscription token for [`subscribe_selection_changed`]. Drop to
-/// unsubscribe and free the boxed handler. Mirrors [`ClickSubscription`].
+/// Keeps a [`subscribe_selection_changed`] handler installed. Drop it to
+/// unsubscribe. Holds a `+1` ref on the element.
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct SelectionChangedSubscription {
     token: NonNull<c_void>,
@@ -223,21 +244,16 @@ impl Drop for SelectionChangedSubscription {
     }
 }
 
-/// Subscribe `handler` to `Selector::SelectionChanged` on `element` (a
-/// `Selector`: `ListBox` / `ListView` / `ComboBox` / `TabControl` / ...).
-/// Returns `None` if `element` is not a `Selector`.
+/// Subscribes `handler` to `Selector::SelectionChanged` on `element`.
 ///
-/// The returned [`SelectionChangedSubscription`] keeps the handler installed for
-/// as long as it lives; drop it (or replace it) to unsubscribe. This is the
-/// push counterpart of polling the selection each frame: pair it with
-/// `ICollectionView` currency / the bound `Selected` marker to learn *what*
-/// changed. Dropping the subscription from inside the callback is safe (see the
-/// module "Lifetime" docs).
+/// Returns `None` if `element` is not a `Selector` (`ListBox`, `ListView`,
+/// `ComboBox`, `TabControl`, ...). The handler stays installed while the
+/// returned [`SelectionChangedSubscription`] lives. Use it instead of polling
+/// the selection every frame.
 pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
     element: &FrameworkElement,
     handler: H,
 ) -> Option<SelectionChangedSubscription> {
-    // Double-Box: stable thin pointer for the C ABI userdata.
     let outer: Box<Box<dyn SelectionChangedHandler>> = Box::new(Box::new(handler));
     let userdata = Box::into_raw(outer);
 
@@ -255,8 +271,7 @@ pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
     if let Some(token) = NonNull::new(token) {
         Some(SelectionChangedSubscription { token })
     } else {
-        // Subscription failed (not a Selector); C++ took no ownership. Free the
-        // leaked userdata.
+        // C++ took no ownership on failure.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -264,20 +279,13 @@ pub fn subscribe_selection_changed<H: SelectionChangedHandler>(
     }
 }
 
-/// Rust-side keydown handler. Receives the pressed key plus a writable flag;
-/// setting the flag to `true` marks the routed event handled, stopping
-/// propagation (e.g. prevents the backtick keystroke that opens the console
-/// from also being typed into a focused `TextBox`).
-///
-/// The `Send + 'static` bounds let the handler live inside a Bevy
-/// `Resource` or be moved onto the render thread.
+/// Handler for [`subscribe_keydown`]. Any `Fn(Key) -> bool + Send + 'static`
+/// closure implements it.
 pub trait KeyDownHandler: Send + 'static {
-    /// Called once per `KeyDown` event on the subscribed element. Return
-    /// value: `true` to mark the routed event handled, `false` to let it
-    /// continue propagating.
-    ///
-    /// Takes `&self` (re-entrant per [`ClickHandler`]; use interior mutability
-    /// for handler state).
+    /// Called once per `KeyDown` on the element. Keys outside the [`Key`] enum
+    /// arrive as [`Key::None`]. Return `true` to mark the event handled and
+    /// stop it from routing further, for example to keep a console hotkey from
+    /// also being typed into a focused `TextBox`.
     fn on_keydown(&self, key: Key) -> bool;
 }
 
@@ -295,9 +303,6 @@ unsafe extern "C" fn keydown_trampoline(userdata: *mut c_void, key: i32, out_han
     crate::panic_guard::guard(|| {
         // Shared `&`: re-entrant handler box (see `KeyDownHandler`).
         let handler = &*userdata.cast::<Box<dyn KeyDownHandler>>();
-        // Best-effort map of the raw ordinal back to our safe `Key` mirror.
-        // Anything outside the mirrored set arrives as `Key::None`; callers
-        // can still observe the event and choose to ignore unmapped keys.
         let mapped = key_from_raw(key);
         let handled = handler.on_keydown(mapped);
         if !out_handled.is_null() {
@@ -306,14 +311,11 @@ unsafe extern "C" fn keydown_trampoline(userdata: *mut c_void, key: i32, out_han
     })
 }
 
-/// Convert a raw `Noesis::Key` ordinal back into the safe [`Key`] mirror.
-/// Unmapped ordinals collapse to [`Key::None`]; the caller's handler can
-/// still match on the value but won't be able to distinguish *which*
-/// unmapped key fired. Add variants to [`Key`] (and the C++ `static_assert`s
-/// in `noesis_view.cpp`) when a missing key earns it.
+/// Maps a raw `Noesis::Key` ordinal to [`Key`]; unmapped ordinals become
+/// [`Key::None`]. New [`Key`] variants need a matching `static_assert` in
+/// `noesis_view.cpp`.
 fn key_from_raw(raw: i32) -> Key {
-    // Match table rather than transmute: transmute would be UB for an ordinal
-    // outside the declared variants. Order mirrors the `Key` enum in src/view.rs.
+    // Not a transmute: an ordinal outside the declared variants would be UB.
     match raw {
         0 => Key::None,
         2 => Key::Back,
@@ -464,8 +466,8 @@ fn key_from_raw(raw: i32) -> Key {
     }
 }
 
-/// RAII subscription token for [`subscribe_keydown`]. Drop to unsubscribe
-/// and free the boxed handler. Mirrors [`ClickSubscription`].
+/// Keeps a [`subscribe_keydown`] handler installed. Drop it to unsubscribe.
+/// Holds a `+1` ref on the element.
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct KeyDownSubscription {
     token: NonNull<c_void>,
@@ -483,18 +485,13 @@ impl Drop for KeyDownSubscription {
     }
 }
 
-/// Subscribe `handler` to `UIElement::KeyDown` on `element`. Returns
-/// `None` if the element is not a `UIElement` (rare: essentially every
-/// visual element is, but the cast is included so callers don't have to
-/// trust the FFI blindly).
+/// Subscribes `handler` to `UIElement::KeyDown` on `element`.
 ///
-/// The returned [`KeyDownSubscription`] keeps the handler installed for
-/// as long as it lives; drop it (or replace it) to unsubscribe.
-///
-/// Setting the handler's return value to `true` marks the routed event
-/// handled, useful for swallowing the backtick that opens the console
-/// so it doesn't get typed into a focused `TextBox`. Dropping the subscription
-/// from inside the callback is safe (see the module "Lifetime" docs).
+/// The handler returns `true` to mark the key handled (see
+/// [`KeyDownHandler::on_keydown`]). It stays installed while the returned
+/// [`KeyDownSubscription`] lives. Returns `None` if `element` is not a
+/// `UIElement`. For `KeyUp` or the `Preview*` key events, use
+/// [`subscribe_event`].
 pub fn subscribe_keydown<H: KeyDownHandler>(
     element: &FrameworkElement,
     handler: H,
@@ -516,8 +513,7 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
     if let Some(token) = NonNull::new(token) {
         Some(KeyDownSubscription { token })
     } else {
-        // Subscription failed (e.g. element wasn't a UIElement); C++ took no
-        // ownership. Free the userdata we leaked above so we don't leak it.
+        // C++ took no ownership on failure.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing
         // else ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -525,35 +521,32 @@ pub fn subscribe_keydown<H: KeyDownHandler>(
     }
 }
 
-/// Borrowed view over a routed event's arguments, handed to a
-/// [`RoutedEventHandler`] **by reference** for the duration of one callback.
-/// Backed by the opaque C++ `args` pointer; the typed accessors read whichever
-/// concrete arg struct actually fired (a generic callback can probe several and
-/// act on the one that returns `Some`).
+/// The arguments of a routed event, lent to a [`RoutedEventHandler`] for one
+/// callback.
 ///
-/// The handler receives `&EventArgs`, never an owned value. The underlying C++
-/// args live on the stack of the Noesis input pump and are valid only while the
-/// callback runs; do not stash the borrow or the `source_ptr` beyond the call.
-/// (The type deliberately carries no lifetime parameter: a generic-lifetime
-/// arg type defeats closure HRTB inference, so the borrow is expressed through
-/// the `&EventArgs` the handler is handed instead.)
+/// Each accessor returns `None` (or `false`) unless the event carries that kind
+/// of data, so one handler can probe several. Which accessors apply depends on
+/// the [`RoutedEvent`]: mouse events have [`position`](Self::position), key
+/// events [`key`](Self::key), drag events [`drag`](Self::drag), and so on.
+/// Events subscribed by a name outside [`RoutedEvent`] only support
+/// [`source_ptr`](Self::source_ptr) and
+/// [`source_data_context_u64`](Self::source_data_context_u64).
+///
+/// The underlying C++ args live on Noesis's stack and are valid only during
+/// the callback. Don't keep raw pointers read from them past the call.
 pub struct EventArgs {
     raw: *const c_void,
     _not_send: PhantomData<*const c_void>,
 }
 
 impl EventArgs {
-    /// Wrap a borrowed live-args pointer (the opaque handle a
-    /// [`RoutedEventHandler`] receives) in an [`EventArgs`] view. Hidden from
-    /// the public docs: it exists so test harnesses and advanced callers that
-    /// dispatch through a custom C trampoline can reuse the typed accessors.
+    /// Wraps the opaque args handle the C++ shim passes to an event callback,
+    /// for test harnesses and custom C trampolines.
     ///
     /// # Safety
     ///
-    /// `raw` must be a valid args handle produced by the C++ shim and alive for
-    /// the lifetime of the returned value (i.e. only for the duration of the
-    /// callback that handed it over). The returned `EventArgs` must not outlive
-    /// that callback.
+    /// `raw` must be an args handle from the C++ shim, and the returned value
+    /// must not outlive the callback that received it.
     #[doc(hidden)]
     pub unsafe fn from_raw(raw: *const c_void) -> Self {
         EventArgs {
@@ -562,8 +555,9 @@ impl EventArgs {
         }
     }
 
-    /// Pointer position in the source element's coordinate space, for mouse,
-    /// mouse-button and mouse-wheel events. `None` for other event kinds.
+    /// Pointer position in view (screen) coordinates, not relative to the
+    /// element, for mouse, mouse-button and mouse-wheel events. `None` for
+    /// other events.
     pub fn position(&self) -> Option<(f32, f32)> {
         let mut x = 0.0f32;
         let mut y = 0.0f32;
@@ -573,7 +567,7 @@ impl EventArgs {
         ok.then_some((x, y))
     }
 
-    /// Changed mouse button for a mouse-button event; `None` otherwise.
+    /// The button that changed, for a mouse-button event. `None` otherwise.
     pub fn mouse_button(&self) -> Option<MouseButton> {
         // SAFETY: opaque handle; accessor returns -1 unless it's a button event.
         let raw = unsafe { noesis_mouse_button_args_button(self.raw) };
@@ -587,12 +581,9 @@ impl EventArgs {
         }
     }
 
-    /// Wheel rotation delta for a mouse-wheel event (signed, ~120 per notch).
-    /// `None` for non-wheel events (including plain `MouseMove`, which also
-    /// carries a position). Classification is exact: it reads the event's
-    /// arg-kind discriminant rather than probing the 0-delta sentinel, so a
-    /// zero-scroll wheel event still yields `Some(0)` and a mouse-move yields
-    /// `None`.
+    /// Wheel rotation for a mouse-wheel event, signed, typically 120 per
+    /// notch. A wheel event with no rotation returns `Some(0)`; any other
+    /// event returns `None`.
     pub fn wheel_delta(&self) -> Option<i32> {
         if !self.is_wheel() {
             return None;
@@ -601,30 +592,26 @@ impl EventArgs {
         Some(unsafe { noesis_mouse_wheel_args_delta(self.raw) })
     }
 
-    /// The event's arg-shape discriminant (see [`arg_kind`]), or `-1` if the
-    /// handle is null. The authoritative event classifier.
+    /// The [`arg_kind`] discriminant, or `-1` for a null handle.
     fn kind(&self) -> i32 {
         // SAFETY: opaque handle; the accessor reads the carried discriminant.
         unsafe { noesis_event_args_kind(self.raw) }
     }
 
-    /// Whether the live args are a mouse-wheel event, keyed on the exact arg-kind
-    /// discriminant (not the ambiguous position/button/0-delta heuristics).
     fn is_wheel(&self) -> bool {
         self.kind() == arg_kind::MOUSE_WHEEL
     }
 
-    /// Pressed/released key for a key event, mapped to the safe [`Key`] mirror.
-    /// `None` for non-key events. Keys outside the mirrored set arrive as
-    /// `Some(Key::None)`.
+    /// The key for a key event. `None` for other events. Keys outside the
+    /// [`Key`] enum return `Some(Key::None)`.
     pub fn key(&self) -> Option<Key> {
         // SAFETY: opaque handle; accessor returns -1 unless it's a key event.
         let raw = unsafe { noesis_key_args_key(self.raw) };
         (raw >= 0).then(|| key_from_raw(raw))
     }
 
-    /// Input character (UTF-32 code point) for a `TextInput` event; `None`
-    /// otherwise.
+    /// The typed character for a `TextInput` event. `None` for other events or
+    /// an invalid code point.
     pub fn text_char(&self) -> Option<char> {
         // SAFETY: opaque handle; accessor returns -1 unless it's text input.
         let raw = unsafe { noesis_text_args_ch(self.raw) };
@@ -634,7 +621,8 @@ impl EventArgs {
         char::from_u32(raw as u32)
     }
 
-    /// New size for a `SizeChanged` event (DIPs); `None` otherwise.
+    /// The new `(width, height)` for a `SizeChanged` event, in DIPs. `None`
+    /// otherwise.
     pub fn new_size(&self) -> Option<(f32, f32)> {
         let mut w = 0.0f32;
         let mut h = 0.0f32;
@@ -643,29 +631,28 @@ impl EventArgs {
         ok.then_some((w, h))
     }
 
-    /// Borrowed raw pointer to the event's originating element
+    /// Raw pointer to the element that raised the event
     /// (`RoutedEventArgs::source`). `None` if there is no source.
     ///
-    /// The pointer is NOT reference-counted and is valid only for the callback
-    /// duration; do not wrap it in a [`FrameworkElement`] (that would
-    /// over-release) and do not let it escape the handler.
+    /// The pointer is borrowed, not ref-counted, and valid only during the
+    /// callback. Don't wrap it in a [`FrameworkElement`]; that would
+    /// over-release it.
     pub fn source_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
         let p = unsafe { noesis_routed_args_source(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
-    /// Read a `u64` field named `prop_name` off the (inherited) `DataContext` of
-    /// this event's originating element (`RoutedEventArgs::source`). This is the
-    /// per-row identity hook for templated list rows: a handler subscribed once
-    /// on the `ItemsControl` recovers the clicked row's stable id (e.g. a Bevy
-    /// `Entity`'s bits stashed via the hidden `__entity` field) straight from the
-    /// event source: no `x:Name`, no per-row subscription, no borrowed pointer
-    /// kept past the callback.
+    /// Reads the `u64` property `prop_name` from the `DataContext` (inherited
+    /// if not set locally) of the element that raised the event.
     ///
-    /// Returns `None` if the event carries no source, the source is not a
-    /// `FrameworkElement`, it has no `DataContext`, or that context exposes no
-    /// `u64` field of that name. See
+    /// Use it to identify the row in a templated list: subscribe once on the
+    /// `ItemsControl`, and read an id stored on each row's view model from the
+    /// clicked element, with no per-row subscription.
+    ///
+    /// Returns `None` if the event has no source, the source is not a
+    /// `FrameworkElement`, it has no `DataContext`, or the context has no
+    /// `u64` property of that name. See
     /// [`FrameworkElement::data_context_u64`](crate::view::FrameworkElement::data_context_u64)
     /// for the field-resolution rules.
     ///
@@ -684,33 +671,32 @@ impl EventArgs {
         ok.then_some(out)
     }
 
-    /// Borrowed pointer to the element that previously had focus
-    /// (`KeyboardFocusChangedEventArgs::oldFocus`), for the `GotKeyboardFocus` /
-    /// `LostKeyboardFocus` events (and their `Preview*` variants). `None` for
-    /// other event kinds, or when there was no previously-focused element.
+    /// Raw pointer to the element that had focus before
+    /// (`KeyboardFocusChangedEventArgs::oldFocus`), for `GotKeyboardFocus`,
+    /// `LostKeyboardFocus` and their `Preview*` variants. `None` for other
+    /// events or when nothing had focus.
     ///
-    /// Not reference-counted; valid only for the callback duration (same
-    /// contract as [`source_ptr`](Self::source_ptr)).
+    /// Borrowed; same contract as [`source_ptr`](Self::source_ptr).
     pub fn focus_old_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
         let p = unsafe { noesis_routed_events_focus_old(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
-    /// Borrowed pointer to the element focus moved to
+    /// Raw pointer to the element receiving focus
     /// (`KeyboardFocusChangedEventArgs::newFocus`), for the keyboard-focus
-    /// events. `None` for other kinds / when there is no new focus. Not
-    /// reference-counted; valid only for the callback duration.
+    /// events. `None` for other events or when nothing receives focus.
+    ///
+    /// Borrowed; same contract as [`source_ptr`](Self::source_ptr).
     pub fn focus_new_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
         let p = unsafe { noesis_routed_events_focus_new(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
-    /// Drag effect / allowed-effect / key-state bitsets for a drag event
-    /// (`DragEnter` / `DragOver` / `DragLeave` / `Drop` and their `Preview*`
-    /// variants). `None` for non-drag events. See [`DragEffects`] /
-    /// [`DragKeyStates`].
+    /// Effects and key state for a drag event (`DragEnter`, `DragOver`,
+    /// `DragLeave`, `Drop` and their `Preview*` variants). `None` for other
+    /// events.
     pub fn drag(&self) -> Option<DragInfo> {
         let mut effects = 0u32;
         let mut allowed = 0u32;
@@ -726,27 +712,28 @@ impl EventArgs {
         })
     }
 
-    /// Set the drop result (`DragEventArgs::effects`) a `Drop` / `DragOver`
-    /// handler reports back to the drag source. Returns `true` if written (i.e.
-    /// the live args are a drag event).
+    /// Sets `DragEventArgs::effects`, the result a `DragOver` or `Drop` handler
+    /// reports back to the drag source. Returns `false`, writing nothing, if
+    /// this is not a drag event.
     #[must_use = "a false return means the effect was not set because the live args are not a drag event"]
     pub fn set_drag_effects(&self, effects: DragEffects) -> bool {
         // SAFETY: opaque handle; accessor validates the kind before writing.
         unsafe { noesis_routed_events_drag_set_effects(self.raw, effects.bits()) }
     }
 
-    /// Borrowed pointer to the dragged data object (`DragEventArgs::data`).
-    /// `None` for non-drag events or when no data is carried. Not
-    /// reference-counted; valid only for the callback duration.
+    /// Raw pointer to the dragged data (`DragEventArgs::data`), the object
+    /// passed to [`do_drag_drop`]. `None` for other events or when no data is
+    /// carried.
+    ///
+    /// Borrowed; same contract as [`source_ptr`](Self::source_ptr).
     pub fn drag_data_ptr(&self) -> Option<*mut c_void> {
         // SAFETY: opaque handle; returns a borrowed pointer or null.
         let p = unsafe { noesis_routed_events_drag_data(self.raw) };
         (!p.is_null()).then_some(p)
     }
 
-    /// Drop point in `relative_to`'s coordinate space
-    /// (`DragEventArgs::GetPosition`). `None` for non-drag events. `relative_to`
-    /// must be a live element.
+    /// The pointer position during a drag, in `relative_to`'s coordinate space
+    /// (`DragEventArgs::GetPosition`). `None` for other events.
     pub fn drag_position(&self, relative_to: &FrameworkElement) -> Option<(f32, f32)> {
         let mut x = 0.0f32;
         let mut y = 0.0f32;
@@ -758,9 +745,9 @@ impl EventArgs {
         ok.then_some((x, y))
     }
 
-    /// Manipulation origin point (`manipulationOrigin`), present on the
-    /// `ManipulationStarted` / `Delta` / `Completed` / `InertiaStarting`
-    /// events. `None` for other kinds.
+    /// The manipulation origin (`manipulationOrigin`) for `ManipulationStarted`,
+    /// `ManipulationDelta`, `ManipulationCompleted` and
+    /// `ManipulationInertiaStarting`. `None` for other events.
     pub fn manip_origin(&self) -> Option<(f32, f32)> {
         let mut x = 0.0f32;
         let mut y = 0.0f32;
@@ -769,9 +756,9 @@ impl EventArgs {
         ok.then_some((x, y))
     }
 
-    /// The most-recent manipulation transform: `deltaManipulation` on a
-    /// `ManipulationDelta` event, `totalManipulation` on a
-    /// `ManipulationCompleted` event. `None` for other kinds.
+    /// The change since the last `ManipulationDelta` (`deltaManipulation`), or
+    /// the total on `ManipulationCompleted` (`totalManipulation`). `None` for
+    /// other events.
     pub fn manip_delta(&self) -> Option<ManipulationDelta> {
         let mut d = ManipulationDelta::default();
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
@@ -789,8 +776,8 @@ impl EventArgs {
         ok.then_some(d)
     }
 
-    /// The cumulative manipulation transform (`cumulativeManipulation`) on a
-    /// `ManipulationDelta` event. `None` for other kinds.
+    /// The change since the manipulation started (`cumulativeManipulation`),
+    /// on `ManipulationDelta`. `None` for other events.
     pub fn manip_cumulative(&self) -> Option<ManipulationDelta> {
         let mut d = ManipulationDelta::default();
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
@@ -808,9 +795,9 @@ impl EventArgs {
         ok.then_some(d)
     }
 
-    /// Manipulation velocities: `velocities` (Delta), `finalVelocities`
-    /// (Completed) or `initialVelocities` (`InertiaStarting`). `None` for other
-    /// kinds.
+    /// Velocities on `ManipulationDelta` (`velocities`), `ManipulationCompleted`
+    /// (`finalVelocities`) or `ManipulationInertiaStarting`
+    /// (`initialVelocities`). `None` for other events.
     pub fn manip_velocities(&self) -> Option<ManipulationVelocities> {
         let mut v = ManipulationVelocities::default();
         // SAFETY: opaque handle; accessor validates the kind and writes on match.
@@ -827,8 +814,8 @@ impl EventArgs {
         ok.then_some(v)
     }
 
-    /// Whether a `ManipulationDelta` / `ManipulationCompleted` event occurred
-    /// during the inertia phase (`isInertial`). `None` for other kinds.
+    /// Whether a `ManipulationDelta` or `ManipulationCompleted` event happened
+    /// during inertia (`isInertial`). `None` for other events.
     pub fn manip_is_inertial(&self) -> Option<bool> {
         // SAFETY: opaque handle; accessor returns -1 unless it's a delta/completed event.
         match unsafe { noesis_routed_events_manip_is_inertial(self.raw) } {
@@ -839,11 +826,9 @@ impl EventArgs {
     }
 }
 
-/// A typed bitset of `Noesis::DragDropEffects` (`DragEventArgs` effects /
-/// allowed-effects): the operations a drag offers or reports. Compose with
-/// [`Self::with`] / [`FromIterator`] and test with [`Self::contains`]; convert
-/// to/from the raw bitmask Noesis uses with [`Self::bits`] / [`Self::from_bits`].
-/// Modeled on [`crate::input::ModifierKeys`] / [`crate::view::RenderFlags`].
+/// `Noesis::DragDropEffects` flags: the operations a drag allows or a drop
+/// target accepts. Combine with `|`, [`Self::with`] or `collect()`, and test
+/// with [`Self::contains`].
 ///
 /// ```
 /// use noesis_runtime::events::DragEffects;
@@ -886,8 +871,7 @@ impl DragEffects {
         Self(self.0 | other.0)
     }
 
-    /// Whether every bit of `other` is present (with [`Self::NONE`], always
-    /// `true`).
+    /// Whether every flag in `other` is set. Always `true` for [`Self::NONE`].
     #[must_use]
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -917,9 +901,8 @@ impl FromIterator<DragEffects> for DragEffects {
     }
 }
 
-/// A typed bitset of `Noesis::DragDropKeyStates` (`DragEventArgs::keyStates`):
-/// the modifier-key / mouse-button state during a drag. Compose and test like
-/// [`DragEffects`].
+/// `Noesis::DragDropKeyStates` flags (`DragEventArgs::keyStates`): the
+/// modifier keys and mouse buttons held during a drag.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DragKeyStates(pub u32);
 
@@ -957,8 +940,7 @@ impl DragKeyStates {
         Self(self.0 | other.0)
     }
 
-    /// Whether every bit of `other` is present (with [`Self::NONE`], always
-    /// `true`).
+    /// Whether every flag in `other` is set. Always `true` for [`Self::NONE`].
     #[must_use]
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -988,46 +970,49 @@ impl FromIterator<DragKeyStates> for DragKeyStates {
     }
 }
 
-/// Drag bitmask snapshot read from a [`DragEventArgs`](EventArgs::drag).
-/// `effects` is the current/result effect, `allowed_effects` the operations the
-/// source permits, `key_states` the modifier/button state.
+/// Drag state returned by [`EventArgs::drag`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DragInfo {
+    /// The effect currently reported by the drop target.
     pub effects: DragEffects,
+    /// The effects the drag source allows.
     pub allowed_effects: DragEffects,
+    /// Modifier keys and mouse buttons held.
     pub key_states: DragKeyStates,
 }
 
-/// Accumulated manipulation transform (`Noesis::ManipulationDelta`). Translation
-/// in pixels, `scale` as a multiplier, `rotation` in degrees, `expansion` in
-/// pixels.
+/// A manipulation transform (`Noesis::ManipulationDelta`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ManipulationDelta {
+    /// `(x, y)` translation in pixels.
     pub translation: (f32, f32),
+    /// Scale factor; `1.0` is no change.
     pub scale: f32,
+    /// Rotation in degrees.
     pub rotation: f32,
+    /// `(x, y)` expansion in pixels.
     pub expansion: (f32, f32),
 }
 
-/// Manipulation velocities (`Noesis::ManipulationVelocities`). `angular` in
-/// degrees/ms, `linear` and `expansion` in pixels/ms.
+/// Manipulation velocities (`Noesis::ManipulationVelocities`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ManipulationVelocities {
+    /// Degrees per millisecond.
     pub angular: f32,
+    /// `(x, y)` pixels per millisecond.
     pub linear: (f32, f32),
+    /// `(x, y)` pixels per millisecond.
     pub expansion: (f32, f32),
 }
 
-/// Rust-side handler for the generic routed-event path. Receives a borrowed
-/// [`EventArgs`] and returns `true` to mark the routed event handled (stops
-/// same-element handlers that opted out of `handled_too`, plus cross-element
-/// bubbling/tunneling).
+/// Handler for [`subscribe_event`] and [`subscribe_event_by_name`]. Any
+/// `Fn(&EventArgs) -> bool + Send + 'static` closure implements it.
 ///
-/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
-/// or be moved onto the render thread.
-/// Takes `&self` (re-entrant: a handler may re-raise the same event via
-/// [`crate::reflection::raise_event`], re-entering this box; use interior
-/// mutability for handler state).
+/// Return `true` to mark the event handled. That stops it routing to other
+/// elements and skips later handlers on the same element subscribed with
+/// `handled_too = false`. Returning `false` leaves the flag as it was.
+///
+/// May be re-entered (see the module docs on threading).
 pub trait RoutedEventHandler: Send + 'static {
     fn on_event(&self, args: &EventArgs) -> bool;
 }
@@ -1061,8 +1046,8 @@ unsafe extern "C" fn event_trampoline(
     })
 }
 
-/// RAII subscription token for [`subscribe_event`]. Drop to unsubscribe and
-/// free the boxed handler. Mirrors [`ClickSubscription`] / [`KeyDownSubscription`].
+/// Keeps a [`subscribe_event`] handler installed. Drop it to unsubscribe.
+/// Holds a `+1` ref on the element.
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct EventSubscription {
     token: NonNull<c_void>,
@@ -1080,10 +1065,9 @@ impl Drop for EventSubscription {
     }
 }
 
-/// A documented `Noesis::RoutedEvent` accepted by [`subscribe_event`]. Each
-/// variant maps to a curated entry in the C++ event table (`noesis_events.cpp`),
-/// so the typed accessors on [`EventArgs`] know which concrete arg struct fired.
-/// Use [`subscribe_event_by_name`] for arbitrary/custom events not listed here.
+/// A routed event for [`subscribe_event`]. Handlers get the [`EventArgs`]
+/// accessors that match the event's argument type. For other events, use
+/// [`subscribe_event_by_name`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RoutedEvent {
@@ -1204,8 +1188,7 @@ pub enum RoutedEvent {
 }
 
 impl RoutedEvent {
-    /// The WPF/Noesis event name this variant maps to (the string the C++ event
-    /// table keys on).
+    /// The event's Noesis name, as accepted by [`subscribe_event_by_name`].
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -1270,17 +1253,15 @@ impl RoutedEvent {
     }
 }
 
-/// Subscribe `handler` to the typed routed `event` on `element`.
+/// Subscribes `handler` to the routed `event` on `element`.
 ///
-/// `handled_too`: when `false`, the handler is skipped if a prior handler on
-/// the same element already marked the event handled. (This SDK's `AddHandler`
-/// has no `handledEventsToo` parameter, so already-handled events are never
-/// re-routed across elements regardless; the flag governs the per-element
-/// handler chain.)
+/// With `handled_too == false`, the handler is skipped when an earlier handler
+/// on the same element already marked the event handled. Events handled on
+/// another element never reach this one, whatever the flag: Noesis's
+/// `AddHandler` has no `handledEventsToo` parameter.
 ///
-/// Returns `None` if `element` is not a `UIElement` or the C++ subscription
-/// fails. The returned [`EventSubscription`] keeps the handler installed until
-/// dropped. For arbitrary/custom events use [`subscribe_event_by_name`].
+/// Returns `None` if `element` is not a `UIElement`. The handler stays
+/// installed while the returned [`EventSubscription`] lives.
 pub fn subscribe_event<H: RoutedEventHandler>(
     element: &FrameworkElement,
     event: RoutedEvent,
@@ -1290,26 +1271,16 @@ pub fn subscribe_event<H: RoutedEventHandler>(
     subscribe_event_by_name(element, event.as_str(), handled_too, handler)
 }
 
-/// Subscribe `handler` to the routed event named `event_name` on `element`, the
-/// `&str` escape hatch behind the typed [`subscribe_event`], for custom or
-/// not-yet-enumerated events.
+/// Subscribes `handler` to the routed event named `event_name` on `element`.
 ///
-/// `event_name` uses the WPF/Noesis event names: `"MouseMove"`,
-/// `"MouseLeftButtonDown"`, `"MouseWheel"`, `"KeyDown"`, `"KeyUp"`,
-/// `"GotFocus"`, `"LostFocus"`, `"Loaded"`, `"Unloaded"`, `"SizeChanged"`,
-/// `"TextInput"`, `"Drop"`, `"Tapped"`, and the `Preview*` variants, among
-/// others. Unknown-but-reflected names fall back to the SDK's `FindRoutedEvent`
-/// lookup (only [`EventArgs::source_ptr`] applies to those).
+/// The names in [`RoutedEvent::as_str`] get the full typed [`EventArgs`]. Any
+/// other routed event registered on the element's class (a control's own
+/// event, or a custom one) is found by name through Noesis reflection; its
+/// handler only gets [`EventArgs::source_ptr`] and
+/// [`EventArgs::source_data_context_u64`].
 ///
-/// `handled_too`: when `false`, the handler is skipped if a prior handler on
-/// the same element already marked the event handled. (This SDK's `AddHandler`
-/// has no `handledEventsToo` parameter, so already-handled events are never
-/// re-routed across elements regardless; the flag governs the per-element
-/// handler chain.)
-///
-/// Returns `None` if `element` is not a `UIElement`, `event_name` is unknown
-/// or contains an interior NUL, or the C++ subscription fails. The returned
-/// [`EventSubscription`] keeps the handler installed until dropped.
+/// `handled_too` works as in [`subscribe_event`]. Returns `None` if `element`
+/// is not a `UIElement`, or `event_name` is unknown or contains a NUL byte.
 pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     element: &FrameworkElement,
     event_name: &str,
@@ -1338,8 +1309,7 @@ pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     if let Some(token) = NonNull::new(token) {
         Some(EventSubscription { token })
     } else {
-        // Subscription failed (unknown event / not a UIElement); C++ took no
-        // ownership. Free the userdata we leaked above so we don't leak it.
+        // C++ took no ownership on failure.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -1347,20 +1317,11 @@ pub fn subscribe_event_by_name<H: RoutedEventHandler>(
     }
 }
 
-// `Initialized`, `LayoutUpdated`, `DataContextChanged` and the `Is*Changed`
-// notifications are NOT routed events; they ride Noesis's `Event_<T>`
-// mechanism (`AddEventHandler(Symbol, EventHandler)`), so they go through a
-// separate name-keyed entrypoint rather than the routed `subscribe_event` path.
-// They carry no arguments we surface, so the handler is a bare `Fn()`.
-
-/// Rust-side handler for a non-routed lifecycle event. These notifications
-/// carry no arguments we surface, so the callback takes none.
+/// Handler for [`subscribe_lifecycle`], called with no arguments. Any
+/// `Fn() + Send + 'static` closure implements it.
 ///
-/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
-/// or be moved onto the render thread.
-/// Takes `&self` (re-entrant: a lifecycle handler that re-parents its element
-/// can trigger another lifecycle event synchronously on the same box; use
-/// interior mutability for handler state).
+/// May be re-entered: a handler that changes its element (for example by
+/// re-parenting it) can trigger the event again before it returns.
 pub trait LifecycleHandler: Send + 'static {
     fn on_event(&self);
 }
@@ -1381,8 +1342,8 @@ unsafe extern "C" fn lifecycle_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// RAII subscription token for [`subscribe_lifecycle`]. Drop to unsubscribe and
-/// free the boxed handler. Mirrors [`ClickSubscription`].
+/// Keeps a [`subscribe_lifecycle`] handler installed. Drop it to unsubscribe.
+/// Holds a `+1` ref on the element.
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct LifecycleSubscription {
     token: NonNull<c_void>,
@@ -1400,10 +1361,10 @@ impl Drop for LifecycleSubscription {
     }
 }
 
-/// A documented non-routed lifecycle event accepted by [`subscribe_lifecycle`].
-/// Each variant maps to an entry in the C++ `ApplyLifecycle` table
-/// (`noesis_events.cpp`). Use [`subscribe_lifecycle_by_name`] for any name not
-/// enumerated here.
+/// A non-routed element notification for [`subscribe_lifecycle`].
+///
+/// These are plain .NET-style events, not routed events, so they don't bubble
+/// and carry no arguments here. This enum lists every supported event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum LifecycleEvent {
@@ -1434,8 +1395,7 @@ pub enum LifecycleEvent {
 }
 
 impl LifecycleEvent {
-    /// The event name this variant maps to (the string the C++ lifecycle table
-    /// keys on).
+    /// The event's Noesis name, as accepted by [`subscribe_lifecycle_by_name`].
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -1455,13 +1415,11 @@ impl LifecycleEvent {
     }
 }
 
-/// Subscribe `handler` to the typed non-routed lifecycle `event` on `element`.
+/// Subscribes `handler` to the lifecycle `event` on `element`.
 ///
-/// Returns `None` if `element` is not a `FrameworkElement` or the C++
-/// subscription fails. The returned [`LifecycleSubscription`] keeps the handler
-/// installed until dropped; it holds a `+1` ref on the element so the
-/// subscription survives the caller dropping every other handle. For any name
-/// not enumerated by [`LifecycleEvent`] use [`subscribe_lifecycle_by_name`].
+/// The handler stays installed while the returned [`LifecycleSubscription`]
+/// lives. Returns `None` if `element` is not a `FrameworkElement` (a handle can
+/// also wrap a plain `Visual`).
 pub fn subscribe_lifecycle<H: LifecycleHandler>(
     element: &FrameworkElement,
     event: LifecycleEvent,
@@ -1470,20 +1428,11 @@ pub fn subscribe_lifecycle<H: LifecycleHandler>(
     subscribe_lifecycle_by_name(element, event.as_str(), handler)
 }
 
-/// Subscribe `handler` to the non-routed lifecycle event named `name` on
-/// `element`, the `&str` escape hatch behind the typed [`subscribe_lifecycle`].
+/// Subscribes `handler` to the lifecycle event named `name` on `element`.
 ///
-/// Supported names: `"Initialized"`, `"LayoutUpdated"`, `"DataContextChanged"`,
-/// `"IsEnabledChanged"`, `"IsVisibleChanged"`, `"IsHitTestVisibleChanged"`,
-/// `"IsKeyboardFocusedChanged"`, `"IsKeyboardFocusWithinChanged"`,
-/// `"IsMouseCapturedChanged"`, `"IsMouseCaptureWithinChanged"`,
-/// `"IsMouseDirectlyOverChanged"`, `"FocusableChanged"`.
-///
-/// Returns `None` if `element` is not a `FrameworkElement`, `name` is unknown
-/// or contains an interior NUL, or the C++ subscription fails. The returned
-/// [`LifecycleSubscription`] keeps the handler installed until dropped; it holds
-/// a `+1` ref on the element so the subscription survives the caller dropping
-/// every other handle.
+/// Only the names in [`LifecycleEvent::as_str`] are supported. Returns `None`
+/// if `name` is not one of them or contains a NUL byte, or if `element` is not
+/// a `FrameworkElement`.
 pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     element: &FrameworkElement,
     name: &str,
@@ -1510,8 +1459,7 @@ pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     if let Some(token) = NonNull::new(token) {
         Some(LifecycleSubscription { token })
     } else {
-        // Subscription failed (unknown name / not a FrameworkElement); C++ took
-        // no ownership. Free the userdata we leaked above so we don't leak it.
+        // C++ took no ownership on failure.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };
@@ -1519,17 +1467,14 @@ pub fn subscribe_lifecycle_by_name<H: LifecycleHandler>(
     }
 }
 
-/// Initiate a drag-and-drop operation from `source`, carrying `data` as the
-/// drag payload and advertising `allowed_effects` (a [`DragEffects`] set).
+/// Starts a drag from `source` carrying `data`, offering `allowed_effects`
+/// (`Noesis::DragDrop::DoDragDrop`).
 ///
-/// Wraps `Noesis::DragDrop::DoDragDrop`. The drag is subsequently driven by the
-/// host's pointer/drag input; there is no synchronous result and no headless
-/// completion. `data` may be any element used as
-/// the transferred payload (this SDK exposes no `DataObject` *builder*, so an
-/// element stands in for the data object).
+/// Returns immediately. The drag then follows the pointer input you feed the
+/// view, and drop targets see `data` through [`EventArgs::drag_data_ptr`].
+/// This crate has no `DataObject` builder, so the payload is an element.
 ///
-/// Returns `false` if `source` is not a `DependencyObject` (it always is for a
-/// `FrameworkElement`, so this is effectively infallible for live elements).
+/// Returns `false` if `source` is not a `DependencyObject`.
 pub fn do_drag_drop(
     source: &FrameworkElement,
     data: &FrameworkElement,
@@ -1540,20 +1485,16 @@ pub fn do_drag_drop(
     unsafe { noesis_routed_events_do_drag_drop(source.raw(), data.raw(), allowed_effects.bits()) }
 }
 
-/// Rust-side handler for the `DataObject.Copying` / `.Pasting` attached events.
-/// Receives a borrowed pointer to the clipboard data object (`None` when none
-/// is carried), whether the operation originates from a drag-drop, and returns
-/// `true` to cancel the copy/paste.
-///
-/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
-/// or be moved onto the render thread.
+/// Handler for [`subscribe_data_object`]. Any
+/// `Fn(Option<*mut c_void>, bool) -> bool + Send + 'static` closure implements
+/// it.
 pub trait DataObjectHandler: Send + 'static {
-    /// Called when the copy/paste fires. `data_object` is borrowed (valid only
-    /// for the call); `is_drag_drop` distinguishes a drag-drop transfer from a
-    /// clipboard one. Return `true` to cancel.
+    /// Called before a copy or paste. `data_object` is a raw pointer to the
+    /// `DataObject`, borrowed for this call only. `is_drag_drop` is `true`
+    /// when the transfer is a drag-drop rather than the clipboard.
     ///
-    /// Takes `&self` (re-entrant per [`ClickHandler`]; use interior mutability
-    /// for handler state).
+    /// The return value becomes the event's cancel flag: `true` cancels, and
+    /// `false` clears a cancel set by an earlier handler.
     fn on_data_object(&self, data_object: Option<*mut c_void>, is_drag_drop: bool) -> bool;
 }
 
@@ -1583,9 +1524,8 @@ unsafe extern "C" fn data_object_trampoline(
     })
 }
 
-/// RAII subscription token for a `DataObject.Copying` / `.Pasting` handler.
-/// Drop to detach the handler and free the boxed closure. Mirrors
-/// [`EventSubscription`]; holds a `+1` ref on the element.
+/// Keeps a [`subscribe_data_object`] handler installed. Drop it to
+/// unsubscribe. Holds a `+1` ref on the element.
 #[must_use = "dropping the subscription immediately unsubscribes the handler"]
 pub struct DataObjectSubscription {
     token: NonNull<c_void>,
@@ -1602,22 +1542,23 @@ impl Drop for DataObjectSubscription {
     }
 }
 
-/// Which `DataObject` attached event a [`subscribe_data_object`] call targets.
+/// The `DataObject` event for [`subscribe_data_object`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DataObjectEvent {
-    /// `DataObject.Copying`: raised before data is placed on the clipboard
-    /// (e.g. by `Ctrl+C` in a `TextBox`).
+    /// `DataObject.Copying`: raised before data is copied, for example by
+    /// `Ctrl+C` in a `TextBox`.
     Copying,
-    /// `DataObject.Pasting`: raised before clipboard data is consumed (e.g. by
-    /// `Ctrl+V`).
+    /// `DataObject.Pasting`: raised before data is pasted, for example by
+    /// `Ctrl+V`.
     Pasting,
 }
 
-/// Attach `handler` to the `DataObject.Copying` or `.Pasting` attached event on
-/// `element`. Returns `None` if `element` is not a `UIElement` or the C++
-/// subscription fails. The returned [`DataObjectSubscription`] keeps the handler
-/// installed until dropped.
+/// Subscribes `handler` to `DataObject.Copying` or `DataObject.Pasting` on
+/// `element`, typically a `TextBox`.
+///
+/// The handler stays installed while the returned [`DataObjectSubscription`]
+/// lives. Returns `None` if `element` is not a `UIElement`.
 pub fn subscribe_data_object<H: DataObjectHandler>(
     element: &FrameworkElement,
     event: DataObjectEvent,
@@ -1648,8 +1589,7 @@ pub fn subscribe_data_object<H: DataObjectHandler>(
     if let Some(token) = NonNull::new(token) {
         Some(DataObjectSubscription { token })
     } else {
-        // Subscription failed (not a UIElement); C++ took no ownership. Free the
-        // userdata we leaked.
+        // C++ took no ownership on failure.
         // SAFETY: userdata came from Box::into_raw moments ago; nothing else
         // ever saw the pointer.
         unsafe { drop(Box::from_raw(userdata)) };

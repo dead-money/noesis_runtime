@@ -49,9 +49,8 @@ impl XamlProvider for InMem {
     }
 }
 
-// Minimal headless RenderDevice: hands out monotonic handles and scratch
-// buffers, dropping everything else. Enough to drive a real Noesis render
-// pass (which fills ViewStats) without a GPU.
+// Headless device: hands out monotonic handles and scratch buffers and discards
+// everything else. Enough for a real render pass to fill ViewStats without a GPU.
 struct NullDevice {
     next: u64,
     vb: Vec<u8>,
@@ -284,9 +283,8 @@ fn view_timers_flags_stats_quality_hwheel() {
             "a timer cancelled before any update must never fire"
         );
 
-        // Necessary but not sufficient: the 16 ms interval already fires once
-        // per 50 ms step, so this alone cannot distinguish a working restart
-        // from a no-op. See the huge->short restart below for the real proof.
+        // Weak check: the old 16 ms interval also fires every 50 ms step. The
+        // long-to-short restart below is the real test.
         sub_const.restart(8);
         for _ in 0..10 {
             t += 0.05;
@@ -297,9 +295,8 @@ fn view_timers_flags_stats_quality_hwheel() {
             "timer should keep firing after restart()"
         );
 
-        // A no-op restart() leaves the ~10000 s interval in place, so the
-        // counter stays 0; this assertion fails iff RestartTimer did not cross
-        // into IView.
+        // If restart() never reaches IView::RestartTimer, the ~10000 s interval
+        // stays in place and the counter stays 0.
         let r = Arc::clone(&restart_ticks);
         let sub_restart = view
             .create_timer(10_000_000, move || {

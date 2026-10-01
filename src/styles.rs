@@ -1,6 +1,6 @@
-//! `Style` from code + template assignment.
+//! Build styles, triggers and templates in code.
 //!
-//! The XAML you'd write as:
+//! A [`Style`] is the code form of a XAML `<Style>`. This XAML:
 //!
 //! ```xml
 //! <Style TargetType="TextBlock">
@@ -8,7 +8,7 @@
 //! </Style>
 //! ```
 //!
-//! built programmatically:
+//! is built like this:
 //!
 //! ```no_run
 //! # use noesis_runtime::styles::Style;
@@ -18,25 +18,22 @@
 //! style.add_setter("FontSize", &box_f64(24.0));
 //! ```
 //!
-//! then assigned with
-//! [`FrameworkElement::set_style`](crate::view::FrameworkElement::set_style).
+//! Apply it with
+//! [`FrameworkElement::set_style`](crate::view::FrameworkElement::set_style),
+//! or [`Style::builder`] for the chained form.
 //!
-//! Templates ([`ControlTemplate`], [`DataTemplate`]) are authored by parsing a
-//! `<ControlTemplate>` / `<DataTemplate>` from an in-memory XAML string and
-//! assigning it: a `ControlTemplate` via
+//! Triggers ([`Trigger`], [`DataTrigger`], [`MultiTrigger`],
+//! [`MultiDataTrigger`], [`EventTrigger`]) are built here too and added with
+//! [`Style::add_trigger`]; [`Style::get_trigger`] reads them back.
+//!
+//! Templates come from XAML, because Noesis has no `FrameworkElementFactory`
+//! for building a template's visual tree in code. Parse a [`ControlTemplate`]
+//! and apply it with
 //! [`FrameworkElement::set_control_template`](crate::view::FrameworkElement::set_control_template),
-//! a `DataTemplate` via the existing `set_component` path on `ContentTemplate` /
-//! `ItemTemplate`.
-//!
-//! Style triggers are also built here: [`Trigger`], [`DataTrigger`],
-//! [`MultiTrigger`] and [`EventTrigger`] construct from code, attach to a
-//! [`Style`]'s `Triggers` collection ([`Style::add_trigger`]) and read back
-//! ([`Style::get_trigger`]). A [`TemplateSelector`] wraps a
-//! `Noesis::DataTemplateSelector` whose `SelectTemplate` dispatches into Rust.
-//!
-//! Noesis 3.2.13 has no `FrameworkElementFactory`, so the WPF-style code-built
-//! template *factory tree* does not exist here; the XAML-parse + assign path is
-//! the supported way to author a template's visual tree.
+//! or parse a [`DataTemplate`] and set it on `ContentTemplate` or
+//! `ItemTemplate` with
+//! [`FrameworkElement::set_component`](crate::view::FrameworkElement::set_component).
+//! A [`TemplateSelector`] picks a `DataTemplate` per item with Rust code.
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
@@ -78,16 +75,16 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// A code-built `Noesis::Style`: the programmatic equivalent of a XAML
-/// `<Style>`. Owns a `+1` reference released on drop.
+/// An owned `Noesis::Style`, the code form of a XAML `<Style>`. Released on
+/// drop.
 ///
-/// Assigning it to an element
+/// Applying it to an element
 /// ([`FrameworkElement::set_style`](crate::view::FrameworkElement::set_style))
 /// or adding it to a [`ResourceDictionary`](crate::resources::ResourceDictionary)
-/// makes Noesis take its own reference, so the handle may be dropped afterwards.
+/// gives Noesis its own reference, so you can drop the handle afterwards.
 ///
-/// A `Style` is *sealed* the first time it's applied; mutate it (target type,
-/// setters, based-on) **before** assigning it.
+/// A style is sealed the first time it is applied. Set its target type,
+/// setters, triggers and `BasedOn` before that.
 pub struct Style {
     ptr: NonNull<c_void>,
 }
@@ -106,7 +103,7 @@ impl Style {
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis allocation fails (returns null).
+    /// Panics if Noesis returns null.
     #[must_use]
     pub fn new() -> Self {
         // SAFETY: no preconditions beyond a live Noesis runtime.
@@ -116,8 +113,7 @@ impl Style {
         }
     }
 
-    /// Wrap an already-owned (`+1`) `Noesis::Style*`, e.g. the `AddRef`'d result
-    /// of `style`.
+    /// Wrap a `Noesis::Style*` that carries a reference this handle takes over.
     ///
     /// # Safety
     ///
@@ -128,20 +124,21 @@ impl Style {
         Self { ptr }
     }
 
-    /// Raw `Noesis::Style*` (a `BaseComponent*`). Borrowed for the lifetime of
+    /// Raw `Noesis::Style*` (a `BaseComponent*`), borrowed for the lifetime of
     /// `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Set the style's `TargetType` by registered type name (e.g. `"TextBlock"`,
-    /// `"Button"`). The type is resolved through Noesis's reflection registry.
-    /// It must already be registered, which the built-in controls do on first
-    /// use (and any type referenced from loaded XAML does). Returns `false`
-    /// (leaving the target type unset) if the name is unknown or contains an
-    /// interior NUL byte. Setting the target type is a prerequisite for
-    /// [`add_setter`](Self::add_setter), which resolves DPs on it.
+    /// Set the `TargetType` by type name, such as `"TextBlock"` or `"Button"`.
+    /// Call this before [`add_setter`](Self::add_setter), which looks up
+    /// properties on the target type.
+    ///
+    /// The type must already be registered with Noesis's reflection; built-in
+    /// controls register on first use, and so does any type referenced from
+    /// loaded XAML. Returns `false`, leaving the target type unchanged, if the
+    /// name is unknown or contains a NUL byte.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_target_type(&mut self, type_name: &str) -> bool {
         let Ok(c) = CString::new(type_name) else {
@@ -152,24 +149,22 @@ impl Style {
         unsafe { noesis_style_set_target_type(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
-    /// Append a `Setter` for the dependency property named `dp_name` (resolved
-    /// on the style's `TargetType`) with the boxed `value`. The setter stores
-    /// its own reference to `value`. Returns `false` if no target type is set,
-    /// `dp_name` is not a DP on that type, or `dp_name` contains an interior NUL
-    /// byte. Call [`set_target_type`](Self::set_target_type) first.
+    /// Add a `Setter` that sets the dependency property `dp_name` on the
+    /// target type to `value`. The setter keeps its own reference to `value`.
+    ///
+    /// Returns `false` if no target type is set, `dp_name` is not a dependency
+    /// property of it, or `dp_name` contains a NUL byte.
     pub fn add_setter(&mut self, dp_name: &str, value: &Boxed) -> bool {
         // SAFETY: value.raw() is a live BaseComponent* for the call.
         unsafe { self.add_setter_raw(dp_name, value.raw()) }
     }
 
-    /// Append a `Setter` taking a raw `BaseComponent*` value (e.g. a brush, a
-    /// nested object). See [`add_setter`](Self::add_setter) for the resolution
-    /// rules and return contract.
+    /// [`add_setter`](Self::add_setter) with a raw `BaseComponent*` value, such
+    /// as a brush. Also returns `false` if `value` is null.
     ///
     /// # Safety
     ///
-    /// `value` must be a live `Noesis::BaseComponent*` that outlives the call;
-    /// the setter takes its own reference.
+    /// `value` must be null or a live `Noesis::BaseComponent*`.
     pub unsafe fn add_setter_raw(&mut self, dp_name: &str, value: *mut c_void) -> bool {
         let Ok(c) = CString::new(dp_name) else {
             return false;
@@ -178,24 +173,23 @@ impl Style {
         unsafe { noesis_style_add_setter(self.ptr.as_ptr(), c.as_ptr(), value) }
     }
 
-    /// Set the `BasedOn` style this style inherits setters/triggers from
-    /// (`Style.BasedOn`). Noesis takes its own reference to `base`.
+    /// Set the `BasedOn` style this one inherits setters and triggers from.
+    /// Noesis takes its own reference to `base`.
     pub fn set_based_on(&mut self, base: &Style) {
         // SAFETY: both pointers are live Style*; Noesis AddRefs `base`.
         unsafe { noesis_style_set_based_on(self.ptr.as_ptr(), base.raw()) }
     }
 
-    /// Append `trigger` to this style's `Triggers` collection
-    /// (`Style::GetTriggers`). The collection takes its own reference, so the
-    /// trigger handle may be dropped afterwards. Like setters, triggers must be
-    /// added **before** the style is sealed (first applied). Returns `false`
-    /// only if the underlying handles are invalid.
+    /// Add `trigger` to this style's `Triggers`. The collection takes its own
+    /// reference, so you can drop the trigger handle afterwards. Add triggers
+    /// before the style is first applied. Returns `false` only on an invalid
+    /// handle.
     pub fn add_trigger<T: TriggerHandle>(&mut self, trigger: &T) -> bool {
         // SAFETY: both pointers are live; Noesis AddRefs the trigger.
         unsafe { noesis_templates_style_add_trigger(self.ptr.as_ptr(), trigger.trigger_ptr()) }
     }
 
-    /// Number of triggers in this style's `Triggers` collection.
+    /// Number of triggers in this style's `Triggers`.
     #[must_use]
     pub fn trigger_count(&self) -> u32 {
         // SAFETY: self.ptr is a live Style*.
@@ -203,10 +197,8 @@ impl Style {
         u32::try_from(n.max(0)).unwrap_or(0)
     }
 
-    /// Take the trigger at `index` back out of the live `Triggers` collection as
-    /// an owned [`TriggerReadback`] (`AddRef`'d). Its accessors re-read the
-    /// property / value / setter surface from the live Noesis object. `None` if
-    /// `index` is out of range.
+    /// A handle to the trigger at `index` in this style's `Triggers`, or `None`
+    /// if `index` is out of range.
     #[must_use]
     pub fn get_trigger(&self, index: u32) -> Option<TriggerReadback> {
         // SAFETY: self.ptr is a live Style*; the result is a +1-owned trigger.
@@ -214,19 +206,14 @@ impl Style {
         NonNull::new(p).map(|ptr| TriggerReadback { ptr })
     }
 
-    /// Start a [`StyleBuilder`] targeting `target_type` (e.g. `"TextBlock"`),
-    /// resolved through Noesis's reflection registry like
-    /// [`set_target_type`](Self::set_target_type). Chain
-    /// [`setter`](StyleBuilder::setter) / [`based_on`](StyleBuilder::based_on) /
-    /// [`trigger`](StyleBuilder::trigger), then [`build`](StyleBuilder::build).
+    /// Start a [`StyleBuilder`] for `target_type` (such as `"TextBlock"`),
+    /// resolved like [`set_target_type`](Self::set_target_type).
     ///
     /// # Panics
     ///
-    /// Panics if `target_type` is unknown to the reflection registry or contains
-    /// an interior NUL byte — otherwise the resulting builder would be inert
-    /// (every subsequent `setter` silently failing to resolve its DP). Use
-    /// [`Style::new`] + [`set_target_type`](Self::set_target_type) for the
-    /// fallible form.
+    /// Panics if `target_type` is not a registered type or contains a NUL
+    /// byte. Use [`Style::new`] and [`set_target_type`](Self::set_target_type)
+    /// to handle that case instead.
     pub fn builder(target_type: &str) -> StyleBuilder {
         let mut style = Style::new();
         assert!(
@@ -237,11 +224,8 @@ impl Style {
     }
 }
 
-/// Fluent builder for a [`Style`]: set its target type via
-/// [`Style::builder`], append setters / triggers and an optional based-on style,
-/// then [`build`](Self::build). The longhand
-/// [`Style::new`] + [`set_target_type`](Style::set_target_type) +
-/// [`add_setter`](Style::add_setter) form still works.
+/// Chained construction of a [`Style`]. Start with [`Style::builder`], add
+/// setters, triggers and a `BasedOn` style, then call [`build`](Self::build).
 ///
 /// ```no_run
 /// # use noesis_runtime::styles::Style;
@@ -256,9 +240,8 @@ pub struct StyleBuilder {
 }
 
 impl StyleBuilder {
-    /// Append a `Setter` for the dependency property `dp_name` (resolved on the
-    /// target type) with the boxed `value`. Like [`Style::add_setter`], a setter
-    /// that fails to resolve is silently dropped.
+    /// Add a setter, as [`Style::add_setter`]. A setter whose property can't be
+    /// resolved is skipped without an error.
     pub fn setter(mut self, dp_name: &str, value: &Boxed) -> Self {
         let _ = self.style.add_setter(dp_name, value);
         self
@@ -270,7 +253,7 @@ impl StyleBuilder {
         self
     }
 
-    /// Append a trigger to the style's `Triggers` collection.
+    /// Add a trigger, as [`Style::add_trigger`].
     pub fn trigger<T: TriggerHandle>(mut self, trigger: &T) -> Self {
         let _ = self.style.add_trigger(trigger);
         self
@@ -290,13 +273,13 @@ impl Drop for Style {
     }
 }
 
-/// A parsed `Noesis::ControlTemplate`. Owns a `+1` reference released on drop.
+/// A control template parsed from XAML. Released on drop.
 ///
-/// Assign it with
-/// [`FrameworkElement::set_control_template`](crate::view::FrameworkElement::set_control_template)
-/// (which targets `Control::SetTemplate`); Noesis takes its own reference, so
-/// the handle may be dropped afterwards. After the templated control has been
-/// laid out, name its parts with [`find_name`](Self::find_name) or via
+/// Apply it to a control with
+/// [`FrameworkElement::set_control_template`](crate::view::FrameworkElement::set_control_template);
+/// Noesis takes its own reference, so you can drop the handle afterwards.
+/// Once the control has been laid out, find the template's named parts with
+/// [`find_name`](Self::find_name) or
 /// [`FrameworkElement::template_child`](crate::view::FrameworkElement::template_child).
 pub struct ControlTemplate {
     ptr: NonNull<c_void>,
@@ -306,8 +289,8 @@ pub struct ControlTemplate {
 unsafe impl Send for ControlTemplate {}
 
 impl ControlTemplate {
-    /// Parse a bare `<ControlTemplate>` from an in-memory XAML string. Returns
-    /// `None` when the XAML is malformed or its root is not a `ControlTemplate`.
+    /// Parse a `<ControlTemplate>` from a XAML string. Returns `None` when the
+    /// XAML is malformed or its root is not a `ControlTemplate`.
     ///
     /// # Panics
     ///
@@ -320,7 +303,8 @@ impl ControlTemplate {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Wrap an already-owned (`+1`) `Noesis::ControlTemplate*`.
+    /// Wrap a `Noesis::ControlTemplate*` that carries a reference this handle
+    /// takes over.
     ///
     /// # Safety
     ///
@@ -331,18 +315,17 @@ impl ControlTemplate {
         Self { ptr }
     }
 
-    /// Raw `Noesis::ControlTemplate*` (a `BaseComponent*`). Borrowed for the
+    /// Raw `Noesis::ControlTemplate*` (a `BaseComponent*`), borrowed for the
     /// lifetime of `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Find a named element inside this template as applied to
-    /// `templated_parent` (`FrameworkTemplate::FindName`). Borrowed (no `+1`);
-    /// valid only while the template stays applied to that parent. Returns
-    /// `None` if the name isn't found (e.g. the template hasn't been applied /
-    /// laid out yet).
+    /// The element named `name` in this template's instance on
+    /// `templated_parent`, or `None` if not found, which includes before the
+    /// template has been applied and laid out. The pointer is borrowed and
+    /// valid only while the template stays applied to that parent.
     ///
     /// # Panics
     ///
@@ -374,12 +357,12 @@ impl Drop for ControlTemplate {
     }
 }
 
-/// A parsed `Noesis::DataTemplate`. Owns a `+1` reference released on drop.
+/// A data template parsed from XAML. Released on drop.
 ///
-/// Assign it through the existing component-DP path, e.g.
-/// `element.set_component("ContentTemplate", template.raw())` on a
-/// `ContentControl`, or `"ItemTemplate"` on an `ItemsControl`, which makes
-/// Noesis take its own reference.
+/// Set it on a `ContentControl`'s `ContentTemplate` or an `ItemsControl`'s
+/// `ItemTemplate` with
+/// [`FrameworkElement::set_component`](crate::view::FrameworkElement::set_component),
+/// passing [`raw`](Self::raw). Noesis takes its own reference.
 pub struct DataTemplate {
     ptr: NonNull<c_void>,
 }
@@ -388,8 +371,8 @@ pub struct DataTemplate {
 unsafe impl Send for DataTemplate {}
 
 impl DataTemplate {
-    /// Parse a bare `<DataTemplate>` from an in-memory XAML string. Returns
-    /// `None` when the XAML is malformed or its root is not a `DataTemplate`.
+    /// Parse a `<DataTemplate>` from a XAML string. Returns `None` when the
+    /// XAML is malformed or its root is not a `DataTemplate`.
     ///
     /// # Panics
     ///
@@ -402,18 +385,16 @@ impl DataTemplate {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Raw `Noesis::DataTemplate*` (a `BaseComponent*`), for handing to
-    /// [`FrameworkElement::set_component`](crate::view::FrameworkElement::set_component)
-    /// on a template DP (`ContentTemplate` / `ItemTemplate`). Borrowed for the
+    /// Raw `Noesis::DataTemplate*` (a `BaseComponent*`), borrowed for the
     /// lifetime of `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Find a named element inside this template as applied to
-    /// `templated_parent` (`FrameworkTemplate::FindName`). Borrowed (no `+1`).
-    /// Returns `None` if not found.
+    /// The element named `name` in this template's instance on
+    /// `templated_parent`, or `None` if not found. Borrowed, as in
+    /// [`ControlTemplate::find_name`].
     ///
     /// # Panics
     ///
@@ -445,9 +426,8 @@ impl Drop for DataTemplate {
     }
 }
 
-/// An owned (`+1`) boxed value handed back from a trigger / condition getter.
-/// Released on drop. The `as_*` accessors unbox the common primitive payloads
-/// (`bool`, `i32`, `String`).
+/// A boxed value read back from a trigger or condition. Released on drop.
+/// The `as_*` methods unbox `bool`, `i32` and string payloads.
 pub struct OwnedValue {
     ptr: NonNull<c_void>,
 }
@@ -456,7 +436,7 @@ pub struct OwnedValue {
 unsafe impl Send for OwnedValue {}
 
 impl OwnedValue {
-    /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::BaseComponent*`, borrowed for the lifetime of `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
@@ -480,8 +460,8 @@ impl OwnedValue {
         ok.then_some(out)
     }
 
-    /// Copy a boxed `String` payload out as an owned `String`, or `None` if the
-    /// value is not a boxed string.
+    /// Copy out a string payload, or `None` if the value is not a boxed
+    /// string.
     #[must_use]
     pub fn as_string(&self) -> Option<String> {
         // SAFETY: self.ptr is a live boxed BaseComponent*; the returned pointer
@@ -502,10 +482,10 @@ impl Drop for OwnedValue {
     }
 }
 
-/// Sealed marker for the four trigger wrappers, so [`Style::add_trigger`] can
-/// take any of them by reference.
+/// Implemented by every trigger type in this module, so
+/// [`Style::add_trigger`] accepts any of them. Sealed.
 pub trait TriggerHandle: private::Sealed {
-    /// Raw `Noesis::BaseTrigger*`. Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::BaseTrigger*`, borrowed for the lifetime of `self`.
     fn trigger_ptr(&self) -> *mut c_void;
 }
 
@@ -517,9 +497,8 @@ macro_rules! owned_trigger {
     ($name:ident, $create:ident, $doc:literal) => {
         #[doc = $doc]
         ///
-        /// Owns a `+1` reference released on drop. Add it to a [`Style`] with
-        /// [`Style::add_trigger`] (the `Triggers` collection takes its own
-        /// reference) before the style is sealed.
+        /// Released on drop. Add it to a [`Style`] with [`Style::add_trigger`]
+        /// before the style is first applied.
         pub struct $name {
             ptr: NonNull<c_void>,
         }
@@ -538,7 +517,7 @@ macro_rules! owned_trigger {
             ///
             /// # Panics
             ///
-            /// Panics if the Noesis allocation fails (returns null).
+            /// Panics if Noesis returns null.
             #[must_use]
             pub fn new() -> Self {
                 // SAFETY: no preconditions beyond a live Noesis runtime.
@@ -548,7 +527,7 @@ macro_rules! owned_trigger {
                 }
             }
 
-            /// Raw `Noesis::BaseTrigger*`. Borrowed for the lifetime of `self`.
+            /// Raw `Noesis::BaseTrigger*`, borrowed for the lifetime of `self`.
             #[must_use]
             pub fn raw(&self) -> *mut c_void {
                 self.ptr.as_ptr()
@@ -584,12 +563,12 @@ owned_trigger!(
 owned_trigger!(
     MultiTrigger,
     noesis_templates_multi_trigger_create,
-    "A `MultiTrigger`: applies its setters while **all** of its property\nconditions are met (`Noesis::MultiTrigger`)."
+    "A `MultiTrigger`: applies its setters while all of its property\nconditions are met (`Noesis::MultiTrigger`)."
 );
 owned_trigger!(
     MultiDataTrigger,
     noesis_templates_multi_data_trigger_create,
-    "A `MultiDataTrigger`: applies its setters while **all** of its\nbinding-value conditions are met (`Noesis::MultiDataTrigger`). The\nbinding-condition sibling of [`MultiTrigger`]."
+    "A `MultiDataTrigger`: applies its setters while all of its\nbinding conditions are met (`Noesis::MultiDataTrigger`)."
 );
 owned_trigger!(
     EventTrigger,
@@ -598,10 +577,9 @@ owned_trigger!(
 );
 
 impl Trigger {
-    /// Set the `Property` this trigger watches, resolved by `dp_name` on the
-    /// reflection-registered `type_name` (e.g. `("ToggleButton", "IsChecked")`).
-    /// Returns `false` if the type or DP name is unknown, or either string has
-    /// an interior NUL.
+    /// Set the dependency property this trigger watches, named by type and
+    /// property, such as `("ToggleButton", "IsChecked")`. Returns `false` if
+    /// either name is unknown or contains a NUL byte.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_property(&mut self, type_name: &str, dp_name: &str) -> bool {
         let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
@@ -611,29 +589,29 @@ impl Trigger {
         unsafe { noesis_templates_trigger_set_property(self.ptr.as_ptr(), t.as_ptr(), d.as_ptr()) }
     }
 
-    /// Name of the trigger's `Property`, read back from the live object, or
-    /// `None` if unset.
+    /// Name of the watched property, or `None` if unset.
     #[must_use]
     pub fn property_name(&self) -> Option<String> {
         read_name(unsafe { noesis_templates_trigger_get_property_name(self.ptr.as_ptr()) })
     }
 
-    /// Set the `Value` the property is compared against (Noesis stores its own
-    /// reference to the boxed value).
+    /// Set the `Value` the property is compared against. Noesis keeps its own
+    /// reference.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_value(&mut self, value: &Boxed) -> bool {
         // SAFETY: self.ptr live; value.raw() is a live boxed BaseComponent*.
         unsafe { noesis_templates_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
     }
 
-    /// The trigger's `Value`, `AddRef`'d back out of the live object.
+    /// The trigger's `Value`, or `None` if unset.
     #[must_use]
     pub fn value(&self) -> Option<OwnedValue> {
         owned_value(unsafe { noesis_templates_trigger_get_value(self.ptr.as_ptr()) })
     }
 
-    /// Append a setter (`dp_name` resolved on `type_name`) applied while the
-    /// trigger is active. Returns `false` on an unresolvable DP or null value.
+    /// Add a setter for property `dp_name` of `type_name`, applied while the
+    /// trigger is active. Returns `false` if either name is unknown or
+    /// contains a NUL byte.
     pub fn add_setter(&mut self, type_name: &str, dp_name: &str, value: &Boxed) -> bool {
         let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
             return false;
@@ -657,17 +635,16 @@ impl Trigger {
 }
 
 impl DataTrigger {
-    /// Set the `Binding` whose produced value is compared against the trigger
-    /// `Value`. Noesis stores its own reference. Returns `false` only on invalid
-    /// handles.
+    /// Set the `Binding` whose value is compared against the trigger `Value`.
+    /// Noesis keeps its own reference. Returns `false` only on an invalid
+    /// handle.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_binding(&mut self, binding: &Binding) -> bool {
         // SAFETY: self.ptr live; binding.raw() is a live BaseBinding*.
         unsafe { noesis_templates_data_trigger_set_binding(self.ptr.as_ptr(), binding.raw()) }
     }
 
-    /// Whether a `Binding` is set, observed by reading it back from the live
-    /// object (`AddRef`'d and immediately released).
+    /// Whether a `Binding` is set.
     #[must_use]
     pub fn has_binding(&self) -> bool {
         // SAFETY: self.ptr live; the +1 result is released here if present.
@@ -688,13 +665,15 @@ impl DataTrigger {
         unsafe { noesis_templates_data_trigger_set_value(self.ptr.as_ptr(), value.raw()) }
     }
 
-    /// The trigger's `Value`, `AddRef`'d back out of the live object.
+    /// The trigger's `Value`, or `None` if unset.
     #[must_use]
     pub fn value(&self) -> Option<OwnedValue> {
         owned_value(unsafe { noesis_templates_data_trigger_get_value(self.ptr.as_ptr()) })
     }
 
-    /// Append a setter (`dp_name` resolved on `type_name`).
+    /// Add a setter for property `dp_name` of `type_name`, applied while the
+    /// trigger is active. Returns `false` if either name is unknown or
+    /// contains a NUL byte.
     pub fn add_setter(&mut self, type_name: &str, dp_name: &str, value: &Boxed) -> bool {
         let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
             return false;
@@ -718,9 +697,8 @@ impl DataTrigger {
 }
 
 impl MultiTrigger {
-    /// Append a `Condition{ Property=dp_name@type_name, Value }`. The trigger
-    /// activates only when every condition is met. Returns `false` on an
-    /// unresolvable DP or null value.
+    /// Add a condition that property `dp_name` of `type_name` equals `value`.
+    /// Returns `false` if either name is unknown or contains a NUL byte.
     pub fn add_condition(&mut self, type_name: &str, dp_name: &str, value: &Boxed) -> bool {
         let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
             return false;
@@ -742,8 +720,7 @@ impl MultiTrigger {
         count(unsafe { noesis_templates_multi_trigger_condition_count(self.ptr.as_ptr()) })
     }
 
-    /// Property name of the condition at `index`, read back from the live
-    /// object.
+    /// Property name of the condition at `index`, or `None` if out of range.
     #[must_use]
     pub fn condition_property_name(&self, index: u32) -> Option<String> {
         read_name(unsafe {
@@ -751,8 +728,7 @@ impl MultiTrigger {
         })
     }
 
-    /// `Value` of the condition at `index`, `AddRef`'d back out of the live
-    /// object.
+    /// `Value` of the condition at `index`, or `None` if out of range.
     #[must_use]
     pub fn condition_value(&self, index: u32) -> Option<OwnedValue> {
         owned_value(unsafe {
@@ -760,7 +736,9 @@ impl MultiTrigger {
         })
     }
 
-    /// Append a setter (`dp_name` resolved on `type_name`).
+    /// Add a setter for property `dp_name` of `type_name`, applied while all
+    /// conditions are met. Returns `false` if either name is unknown or
+    /// contains a NUL byte.
     pub fn add_setter(&mut self, type_name: &str, dp_name: &str, value: &Boxed) -> bool {
         let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
             return false;
@@ -784,11 +762,9 @@ impl MultiTrigger {
 }
 
 impl MultiDataTrigger {
-    /// Append a `Condition{ Binding, Value }`. Each condition matches the value
-    /// produced by `binding` (against bound data, e.g. the `DataContext`)
-    /// against `value`; the trigger activates only when **every** condition is
-    /// met. Noesis stores its own references to the binding and value. Returns
-    /// `false` only on invalid handles.
+    /// Add a condition that the value produced by `binding` (typically from the
+    /// `DataContext`) equals `value`. Noesis keeps its own references to both.
+    /// Returns `false` only on an invalid handle.
     pub fn add_condition(&mut self, binding: &Binding, value: &Boxed) -> bool {
         // SAFETY: self.ptr live; binding.raw() is a live BaseBinding*; value.raw()
         // a live boxed BaseComponent*, both for the call.
@@ -807,9 +783,8 @@ impl MultiDataTrigger {
         count(unsafe { noesis_templates_multi_data_trigger_condition_count(self.ptr.as_ptr()) })
     }
 
-    /// Whether the condition at `index` has a `Binding` set, observed by reading
-    /// it back from the live object. `false` if `index` is out of range or no
-    /// binding is set.
+    /// Whether the condition at `index` has a `Binding`. `false` if `index` is
+    /// out of range.
     #[must_use]
     pub fn condition_has_binding(&self, index: u32) -> bool {
         // SAFETY: self.ptr live; returns -1 / 0 / 1.
@@ -819,8 +794,7 @@ impl MultiDataTrigger {
         has == 1
     }
 
-    /// `Value` of the condition at `index`, `AddRef`'d back out of the live
-    /// object.
+    /// `Value` of the condition at `index`, or `None` if out of range.
     #[must_use]
     pub fn condition_value(&self, index: u32) -> Option<OwnedValue> {
         owned_value(unsafe {
@@ -828,8 +802,9 @@ impl MultiDataTrigger {
         })
     }
 
-    /// Append a setter (`dp_name` resolved on `type_name`) applied while all
-    /// conditions are met.
+    /// Add a setter for property `dp_name` of `type_name`, applied while all
+    /// conditions are met. Returns `false` if either name is unknown or
+    /// contains a NUL byte.
     pub fn add_setter(&mut self, type_name: &str, dp_name: &str, value: &Boxed) -> bool {
         let (Ok(t), Ok(d)) = (CString::new(type_name), CString::new(dp_name)) else {
             return false;
@@ -853,9 +828,9 @@ impl MultiDataTrigger {
 }
 
 impl EventTrigger {
-    /// Set the `RoutedEvent` that fires this trigger, resolved by `event_name`
-    /// registered on `owner_type` (e.g. `("Button", "Click")`). Returns `false`
-    /// if the type or event name is unknown.
+    /// Set the routed event that fires this trigger, named by owner type and
+    /// event, such as `("Button", "Click")`. Returns `false` if either name is
+    /// unknown or contains a NUL byte.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_routed_event(&mut self, owner_type: &str, event_name: &str) -> bool {
         let (Ok(o), Ok(e)) = (CString::new(owner_type), CString::new(event_name)) else {
@@ -871,7 +846,7 @@ impl EventTrigger {
         }
     }
 
-    /// Name of the trigger's `RoutedEvent`, read back from the live object.
+    /// Name of the trigger's routed event, or `None` if unset.
     #[must_use]
     pub fn routed_event_name(&self) -> Option<String> {
         read_name(unsafe {
@@ -879,8 +854,8 @@ impl EventTrigger {
         })
     }
 
-    /// Set the `SourceName` (the named element whose event activates this
-    /// trigger).
+    /// Set `SourceName`, the name of the element whose event fires this
+    /// trigger. Returns `false` if `name` contains a NUL byte.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_source_name(&mut self, name: &str) -> bool {
         let Ok(n) = CString::new(name) else {
@@ -890,26 +865,23 @@ impl EventTrigger {
         unsafe { noesis_templates_event_trigger_set_source_name(self.ptr.as_ptr(), n.as_ptr()) }
     }
 
-    /// The trigger's `SourceName`, read back from the live object, or `None` if
-    /// unset (an empty name reads back as `None`).
+    /// The trigger's `SourceName`, or `None` if unset or empty.
     #[must_use]
     pub fn source_name(&self) -> Option<String> {
         read_name(unsafe { noesis_templates_event_trigger_get_source_name(self.ptr.as_ptr()) })
             .filter(|s| !s.is_empty())
     }
 
-    /// Number of `TriggerAction` objects in the trigger's `Actions` collection.
+    /// Number of actions in the trigger's `Actions`.
     #[must_use]
     pub fn action_count(&self) -> u32 {
         count(unsafe { noesis_templates_event_trigger_action_count(self.ptr.as_ptr()) })
     }
 
-    /// Append a [`BeginStoryboard`] action to this trigger's `Actions`
-    /// collection (the collection takes its own reference, so the action handle
-    /// may be dropped afterwards). When the trigger's `RoutedEvent` fires, each
-    /// action is invoked: a `BeginStoryboard` starts its [`Storyboard`]. Read
-    /// the count back with [`action_count`](Self::action_count). Returns `false`
-    /// only on invalid handles.
+    /// Add a [`BeginStoryboard`] action, which starts its [`Storyboard`] when
+    /// the routed event fires. The `Actions` collection takes its own
+    /// reference, so you can drop the action handle afterwards. Returns `false`
+    /// only on an invalid handle.
     ///
     /// [`Storyboard`]: crate::animation::Storyboard
     pub fn add_action(&mut self, action: &BeginStoryboard) -> bool {
@@ -919,10 +891,11 @@ impl EventTrigger {
     }
 }
 
-/// A trigger `AddRef`'d back out of a [`Style`]'s `Triggers` collection by
-/// [`Style::get_trigger`]. Its accessors re-read the *live* Noesis object. Each
-/// accessor targets one concrete trigger kind (via a `DynamicCast` on the C
-/// side) and returns `None` / `0` if this handle is a different kind.
+/// A trigger read back from a [`Style`] by [`Style::get_trigger`]. Released
+/// on drop.
+///
+/// Each accessor applies to one trigger kind and returns `None` or `0` when
+/// the trigger is a different kind.
 pub struct TriggerReadback {
     ptr: NonNull<c_void>,
 }
@@ -931,31 +904,31 @@ pub struct TriggerReadback {
 unsafe impl Send for TriggerReadback {}
 
 impl TriggerReadback {
-    /// Raw `Noesis::BaseTrigger*`. Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::BaseTrigger*`, borrowed for the lifetime of `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Property name (`Trigger` only).
+    /// Watched property name ([`Trigger`] only).
     #[must_use]
     pub fn property_name(&self) -> Option<String> {
         read_name(unsafe { noesis_templates_trigger_get_property_name(self.ptr.as_ptr()) })
     }
 
-    /// Compared `Value` (`Trigger` only).
+    /// Compared `Value` ([`Trigger`] only).
     #[must_use]
     pub fn value(&self) -> Option<OwnedValue> {
         owned_value(unsafe { noesis_templates_trigger_get_value(self.ptr.as_ptr()) })
     }
 
-    /// Setter count (`Trigger` only; use the kind-specific reads for others).
+    /// Setter count ([`Trigger`] only).
     #[must_use]
     pub fn setter_count(&self) -> u32 {
         count(unsafe { noesis_templates_trigger_setter_count(self.ptr.as_ptr()) })
     }
 
-    /// Routed-event name (`EventTrigger` only).
+    /// Routed-event name ([`EventTrigger`] only).
     #[must_use]
     pub fn routed_event_name(&self) -> Option<String> {
         read_name(unsafe {
@@ -963,7 +936,7 @@ impl TriggerReadback {
         })
     }
 
-    /// Condition count (`MultiTrigger` only).
+    /// Condition count ([`MultiTrigger`] only).
     #[must_use]
     pub fn condition_count(&self) -> u32 {
         count(unsafe { noesis_templates_multi_trigger_condition_count(self.ptr.as_ptr()) })
@@ -993,17 +966,19 @@ fn count(n: i32) -> u32 {
     u32::try_from(n.max(0)).unwrap_or(0)
 }
 
-/// User logic for a [`TemplateSelector`]: choose a [`DataTemplate`] for a data
-/// item. Return `None` to select no template.
+/// Your logic for a [`TemplateSelector`]: pick a [`DataTemplate`] for a data
+/// item. Implemented for closures with the same signature as
+/// [`select`](Self::select).
 pub trait SelectTemplate: Send + 'static {
-    /// `item` is the borrowed boxed data object (`BaseComponent*`, may be null);
-    /// `container` is the borrowed item container (`DependencyObject*`, may be
-    /// null). Return the chosen template (its reference is **borrowed**; the
-    /// selector keeps its candidate templates alive).
+    /// Return the raw `DataTemplate*` to use for `item`, or `None` for no
+    /// template. `item` is the data object (`BaseComponent*`) and `container`
+    /// the item's container (`DependencyObject*`); both are borrowed and may be
+    /// null.
     ///
-    /// Takes `&self` (re-entrant: selecting a template for an item that itself
-    /// hosts items routed through the same selector re-enters this box; use
-    /// interior mutability for handler state).
+    /// The returned pointer is borrowed, so keep the candidate templates alive
+    /// yourself, for example by owning the [`DataTemplate`]s in the selector.
+    /// Calls can re-enter when a selected template hosts items that use the
+    /// same selector, so keep mutable state behind interior mutability.
     fn select(&self, item: *mut c_void, container: *mut c_void) -> Option<*mut c_void>;
 }
 
@@ -1013,10 +988,12 @@ impl<F: Fn(*mut c_void, *mut c_void) -> Option<*mut c_void> + Send + 'static> Se
     }
 }
 
-/// A `Noesis::DataTemplateSelector` whose `SelectTemplate` dispatches into Rust.
-/// Owns a `+1` reference released on drop; assign its [`raw`](Self::raw) pointer
-/// to an `ItemsControl::ItemTemplateSelector` / `ContentControl` selector DP via
-/// the component path, or drive it directly with [`select`](Self::select).
+/// A `DataTemplateSelector` that chooses templates with your
+/// [`SelectTemplate`] logic. Released on drop.
+///
+/// Set it on `ItemTemplateSelector` or `ContentTemplateSelector` with
+/// [`FrameworkElement::set_component`](crate::view::FrameworkElement::set_component),
+/// passing [`raw`](Self::raw), or call [`select`](Self::select) directly.
 pub struct TemplateSelector {
     ptr: NonNull<c_void>,
 }
@@ -1025,12 +1002,13 @@ pub struct TemplateSelector {
 unsafe impl Send for TemplateSelector {}
 
 impl TemplateSelector {
-    /// Build a selector backed by `handler`. The handler box is owned by the
-    /// native object and dropped when its last reference is released.
+    /// Create a selector backed by `handler`. `handler` is dropped when Noesis
+    /// releases the selector's last reference, which may be after this handle
+    /// drops.
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis allocation fails (returns null).
+    /// Panics if Noesis returns null.
     #[must_use]
     pub fn new<H: SelectTemplate>(handler: H) -> Self {
         let boxed: Box<Box<dyn SelectTemplate>> = Box::new(Box::new(handler));
@@ -1054,21 +1032,20 @@ impl TemplateSelector {
         }
     }
 
-    /// Raw `Noesis::DataTemplateSelector*` (a `BaseComponent*`). Borrowed for the
-    /// lifetime of `self`.
+    /// Raw `Noesis::DataTemplateSelector*` (a `BaseComponent*`), borrowed for
+    /// the lifetime of `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Drive `SelectTemplate(item, container)` through the C++ virtual, returning
-    /// the borrowed `DataTemplate*` the handler chose (or `None`).
+    /// Run the selector for `item` and `container`, returning the borrowed
+    /// `DataTemplate*` it chose, or `None`.
     ///
     /// # Safety
     ///
-    /// `item` and `container` are passed straight to Noesis: each must be either
-    /// null or a live `BaseComponent*` / `DependencyObject*` that outlives the
-    /// call.
+    /// `item` must be null or a live `BaseComponent*`, and `container` null or
+    /// a live `DependencyObject*`.
     #[must_use]
     pub unsafe fn select(
         &self,

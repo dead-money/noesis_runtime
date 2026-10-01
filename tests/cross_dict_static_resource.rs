@@ -1,7 +1,7 @@
-//! Regression: `install_app_resources_chain` must make each sibling merged
-//! dictionary visible to subsequent siblings at parse time so that a
-//! `StaticResource` in `Brushes.xaml` resolving into `Colors.xaml` does not
-//! null-resolve and leave the brush color transparent.
+//! Regression: `install_app_resources_chain` makes each merged dictionary
+//! visible to later siblings at parse time, so a `StaticResource` in
+//! `Brushes.xaml` that refers into `Colors.xaml` resolves instead of leaving the
+//! brush transparent.
 
 use std::collections::HashMap;
 
@@ -85,7 +85,6 @@ fn cross_dict_static_resource_resolves_at_install_time() {
         let mut view = View::create(element);
         view.set_size(200, 200);
         view.activate();
-        // First update settles the visual tree and bindings; the second tick is a no-op.
         assert!(view.update(0.0));
         let _ = view.update(0.016);
 
@@ -99,7 +98,7 @@ fn cross_dict_static_resource_resolves_at_install_time() {
         let direct_color = direct_instance
             .get_color(direct_idx)
             .expect("get_color(Direct) returned None");
-        // Control case: a failure here indicates a problem outside the cross-dict path.
+        // Control: a failure here is outside the cross-dictionary path.
         assert_color_eq(direct_color, (1.0, 0.0, 0.0, 1.0), "DirectProbe.Direct");
 
         let indirect_probe = content
@@ -110,8 +109,6 @@ fn cross_dict_static_resource_resolves_at_install_time() {
         let indirect_color = indirect_instance
             .get_color(indirect_idx)
             .expect("get_color(Indirect) returned None");
-        // If the chain installer null-resolved the cross-sibling StaticResource,
-        // the brush color is transparent and this assertion fails.
         assert_color_eq(
             indirect_color,
             (1.0, 0.0, 0.0, 1.0),

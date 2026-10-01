@@ -1,9 +1,8 @@
-//! Inspector toggle and query smoke test: linkage / no-crash only.
+//! Inspector toggle and query smoke test: linkage and no-crash only.
 //!
-//! The shipped Release dylib has the Inspector compiled out, so
+//! The Release Noesis library has the Inspector compiled out, so
 //! `is_inspector_connected()` always returns `false` and `update_inspector()`
-//! is a no-op. The assertions pin the expected Release behaviour, not binding
-//! correctness.
+//! does nothing.
 
 #[test]
 fn inspector_toggles_and_queries() {

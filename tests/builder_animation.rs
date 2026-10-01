@@ -76,8 +76,7 @@ fn builder_animation_round_trip() {
         let i64a = Int64Animation::builder().from(5).to(50_000_000_000).build();
         assert_eq!((i64a.from(), i64a.to()), (Some(5), Some(50_000_000_000)));
 
-        // Double/Color/Thickness/Point have no from/to getters; prove the chain
-        // crossed the FFI via the Timeline duration knob.
+        // Double/Color/Thickness/Point have no from/to getters; check duration.
         let dbl = DoubleAnimation::builder()
             .from(0.0)
             .to(1.0)

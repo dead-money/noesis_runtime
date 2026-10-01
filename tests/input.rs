@@ -1,8 +1,6 @@
-//! FFI-level smoke test for View input methods (mouse, key, touch, scroll).
-//! Asserts `View::update` reports change after the first update; does not test rendering.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test input -- --nocapture`
+//! Smoke test for the View input methods (mouse, key, touch, scroll): each call
+//! crosses the FFI without crashing. Only the first `View::update` result is
+//! asserted.
 
 use std::collections::HashMap;
 
@@ -41,7 +39,7 @@ fn view_input_ffi_smoke() {
     noesis_runtime::init();
 
     {
-        // Every owning wrapper must drop before shutdown().
+        // Every owning wrapper drops before shutdown().
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), BUTTON_XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
@@ -53,8 +51,8 @@ fn view_input_ffi_smoke() {
         view.set_size(200, 200);
         view.activate();
 
-        // First Update builds the render tree: always reports change.
-        // Subsequent Updates depend on theme VisualStates (not guaranteed headless).
+        // The first update always reports a change; later ones depend on theme
+        // visual states, which headless runs don't guarantee.
         assert!(view.update(0.0), "first Update should report change");
 
         let _ = view.mouse_move(100, 100);

@@ -1,7 +1,8 @@
-//! Non-routed lifecycle events (`Event_` / `AddEventHandler` mechanism): fire and unsubscribe.
+//! Non-routed lifecycle events: `IsVisibleChanged` fires and stops after
+//! unsubscribe.
 //!
-//! `LayoutUpdated` and `Initialized` are render-/load-driven and do not re-fire
-//! in a headless harness; only their subscription wiring is asserted.
+//! `LayoutUpdated` and `Initialized` do not re-fire headless, so only their
+//! subscription is asserted.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -70,7 +71,6 @@ fn lifecycle_events_fire_and_unsubscribe() {
             "unknown lifecycle event name should return None"
         );
 
-        // Pump layout a few times so the tree goes live.
         assert!(view.update(0.0), "first Update should report change");
         let _ = view.update(0.016);
         let _ = view.update(0.032);
@@ -86,7 +86,6 @@ fn lifecycle_events_fire_and_unsubscribe() {
             "IsVisibleChanged should fire when toggling Visibility (before={before}, after={after})"
         );
 
-        // Drop mid-run: continued updates and visibility toggles must not crash.
         drop(visible_sub);
         let at_drop = visible.load(Ordering::SeqCst);
         child.set_visibility(false);

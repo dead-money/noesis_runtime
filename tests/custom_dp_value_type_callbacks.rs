@@ -1,9 +1,8 @@
 //! Property-change callback decoding for Point, Size, Vector, and Enum DP value types.
 //!
-//! Change callbacks only fire on a parsed/tree-attached instance, not on a
-//! code-created one, so the test loads a live View, settles the tree, then
-//! mutates each DP and verifies the handler decoded the matching `PropertyValue`
-//! variant.
+//! Change callbacks fire only on a parsed, tree-attached instance, not a
+//! code-created one, so the test loads a live View, then sets each DP and checks
+//! the handler decoded the matching `PropertyValue` variant.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

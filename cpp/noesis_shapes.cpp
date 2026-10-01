@@ -1,20 +1,9 @@
-// Code-built Shape elements: construct Rectangle / Ellipse / Line
-// from Rust and set their drawing properties without authoring XAML.
+// Code-built Rectangle / Ellipse / Line shapes and their drawing properties.
 //
-// These entrypoints construct shape elements and hand them out across the C ABI
-// with a single owned reference, mirroring cpp/noesis_brushes.cpp (handout() +
-// `*new T` adopt). The Rust side (src/shapes.rs) wraps each pointer in an
-// owning handle whose Drop calls noesis_base_component_release; assigning the
-// shape into an element tree (or assigning a brush into the shape) makes Noesis
-// take its own reference, so the Rust builder handle can be dropped afterwards.
-//
-// Fill/Stroke reuse the existing brush wrappers: the setters accept any Brush*
-// (a BaseComponent*) and the getters return the live Brush* (borrowed, no +1) so
-// a test can prove the brush crossed into the Noesis object by pointer identity.
-//
-// Read-back getters (GetRadiusX / GetStrokeThickness / GetX1 / ...) re-read from
-// the live Noesis object so tests prove a value actually crossed the FFI rather
-// than echoing a Rust-side cache: a stubbed setter fails the round-trip.
+// *_create hands out one owned reference (release with
+// noesis_base_component_release). Adding the shape to a tree, or a brush to the
+// shape, makes Noesis take its own reference. Fill / Stroke getters return a
+// borrowed Brush*.
 
 #include "noesis_shim.h"
 
@@ -31,9 +20,7 @@
 
 namespace {
 
-// Hand a freshly-created (refcount-1) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller. The local Ptr that produced the
-// object releases its own reference on scope exit, leaving the caller's +1.
+// Adds the caller's +1; the producing Ptr releases its own reference.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -47,8 +34,6 @@ T* cast(void* p) {
 }
 
 }  // namespace
-
-// ── Shape element constructors ───────────────────────────────────────────────
 
 extern "C" void* noesis_rectangle_create(void) {
     Noesis::Ptr<Noesis::Rectangle> r = *new Noesis::Rectangle();
@@ -65,8 +50,7 @@ extern "C" void* noesis_line_create(void) {
     return handout(l.GetPtr());
 }
 
-// ── FrameworkElement Width/Height (Shape derives from FrameworkElement; the
-// shape's own size comes from these inherited DPs, not from the Shape class) ──
+// A Shape's size lives on the inherited FrameworkElement Width/Height DPs.
 
 extern "C" bool noesis_shape_set_width(void* shape, float width) {
     auto* s = cast<Noesis::Shape>(shape);
@@ -96,12 +80,10 @@ extern "C" bool noesis_shape_get_height(void* shape, float* out) {
     return true;
 }
 
-// ── Shape::Fill / Shape::Stroke (reuse brush wrappers) ───────────────────────
-
 extern "C" bool noesis_shape_set_fill(void* shape, void* brush) {
     auto* s = cast<Noesis::Shape>(shape);
     if (!s) return false;
-    s->SetFill(cast<Noesis::Brush>(brush));  // null clears the fill
+    s->SetFill(cast<Noesis::Brush>(brush));  // null or a non-Brush clears the fill
     return true;
 }
 
@@ -114,7 +96,7 @@ extern "C" void* noesis_shape_get_fill(void* shape) {
 extern "C" bool noesis_shape_set_stroke(void* shape, void* brush) {
     auto* s = cast<Noesis::Shape>(shape);
     if (!s) return false;
-    s->SetStroke(cast<Noesis::Brush>(brush));  // null clears the stroke
+    s->SetStroke(cast<Noesis::Brush>(brush));  // null or a non-Brush clears the stroke
     return true;
 }
 
@@ -123,8 +105,6 @@ extern "C" void* noesis_shape_get_stroke(void* shape) {
     if (!s) return nullptr;
     return s->GetStroke();  // borrowed, no +1
 }
-
-// ── Shape stroke scalar properties ───────────────────────────────────────────
 
 extern "C" bool noesis_shape_set_stroke_thickness(void* shape, float value) {
     auto* s = cast<Noesis::Shape>(shape);
@@ -210,8 +190,6 @@ extern "C" bool noesis_shape_get_trim_offset(void* shape, float* out) {
     return true;
 }
 
-// ── Shape stroke enum properties (ordinals match the Noesis enums) ───────────
-
 extern "C" bool noesis_shape_set_stroke_dash_cap(void* shape, int32_t value) {
     auto* s = cast<Noesis::Shape>(shape);
     if (!s) return false;
@@ -277,8 +255,6 @@ extern "C" int32_t noesis_shape_get_stretch(void* shape) {
     return static_cast<int32_t>(s->GetStretch());
 }
 
-// ── Shape::StrokeDashArray (exposed by Noesis as a string) ───────────────────
-
 extern "C" bool noesis_shape_set_stroke_dash_array(void* shape, const char* dashes) {
     auto* s = cast<Noesis::Shape>(shape);
     if (!s) return false;
@@ -286,15 +262,12 @@ extern "C" bool noesis_shape_set_stroke_dash_array(void* shape, const char* dash
     return true;
 }
 
-// Returns a borrowed pointer owned by the Noesis Shape; valid until the shape is
-// mutated or released. The Rust side copies it immediately into an owned String.
+// Borrowed; valid until the shape is mutated or released.
 extern "C" const char* noesis_shape_get_stroke_dash_array(void* shape) {
     auto* s = cast<Noesis::Shape>(shape);
     if (!s) return nullptr;
     return s->GetStrokeDashArray();
 }
-
-// ── Rectangle::RadiusX / RadiusY ─────────────────────────────────────────────
 
 extern "C" bool noesis_rectangle_set_radius_x(void* shape, float value) {
     auto* r = cast<Noesis::Rectangle>(shape);
@@ -324,8 +297,6 @@ extern "C" bool noesis_rectangle_get_radius_y(void* shape, float* out) {
     return true;
 }
 
-// ── Line::X1/Y1/X2/Y2 (set/get all four at once) ─────────────────────────────
-
 extern "C" bool noesis_line_set(void* shape, float x1, float y1, float x2, float y2) {
     auto* l = cast<Noesis::Line>(shape);
     if (!l) return false;
@@ -336,7 +307,6 @@ extern "C" bool noesis_line_set(void* shape, float x1, float y1, float x2, float
     return true;
 }
 
-// out = {x1, y1, x2, y2}
 extern "C" bool noesis_line_get(void* shape, float out[4]) {
     auto* l = cast<Noesis::Line>(shape);
     if (!l || !out) return false;

@@ -59,7 +59,6 @@ fn easing_changes_interpolation_curve() {
         assert!(sb.begin(&content, false));
         view.update(0.0);
 
-        // Midpoint: eased (quadratic-in) lags linear.
         view.update(0.5);
         let lw = lin.get_f32("Width").expect("lin width");
         let ew = eased.get_f32("Width").expect("eased width");

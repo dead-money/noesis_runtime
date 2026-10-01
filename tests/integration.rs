@@ -1,7 +1,8 @@
-//! Round-trip proofs for the system-integration callbacks (`src/integration.rs`).
+//! System-integration callbacks (`noesis_runtime::integration`): open URL, play
+//! audio, culture, and cursor round-trips.
 //!
-//! The software-keyboard callback cannot be driven headlessly; only its
-//! register/unregister lifecycle is tested. See LIMITATIONS.md.
+//! The software-keyboard callback needs a platform virtual keyboard, so only its
+//! register/unregister lifecycle is tested.
 
 use std::sync::{Arc, Mutex};
 
@@ -11,8 +12,8 @@ use noesis_runtime::integration::{
 };
 use noesis_runtime::view::{FrameworkElement, View};
 
-/// Root sets a non-default `Cursor` so a mouse-move over it must drive the
-/// global cursor callback. `Background` makes the `Grid` hit-testable.
+/// A non-default `Cursor`, so a mouse move over it drives the cursor callback.
+/// `Background` makes the `Grid` hit-testable.
 const CURSOR_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -28,7 +29,7 @@ fn integration_callbacks_round_trip() {
     }
     noesis_runtime::init();
 
-    // No callback registered: the C++ trampoline guards against null, so these must be safe no-ops.
+    // With no callback registered these are no-ops.
     open_url("https://example.com/before-any-callback");
     play_audio("none.wav", 0.25);
 
@@ -38,7 +39,7 @@ fn integration_callbacks_round_trip() {
         let guard = set_open_url_callback(move |url| sink.lock().unwrap().push(url.to_string()));
 
         open_url("https://www.noesisengine.com/docs/");
-        open_url(""); // edge: empty string must cross cleanly
+        open_url("");
 
         let observed = seen.lock().unwrap().clone();
         assert_eq!(
@@ -89,7 +90,6 @@ fn integration_callbacks_round_trip() {
     }
 
     {
-        // Default before any set is "en-US" (CultureInfo's struct default).
         assert_eq!(get_culture(), "en-US", "default culture should be en-US");
 
         for name in ["fr-FR", "ja-JP", "de-DE", "en-US"] {
@@ -111,7 +111,6 @@ fn integration_callbacks_round_trip() {
         let mut view = View::create(root);
         view.set_size(200, 200);
         view.activate();
-        // Build the render tree before hit-testing the pointer.
         let _ = view.update(0.0);
         let _ = view.mouse_move(100, 100);
         let _ = view.update(0.016);
@@ -128,7 +127,6 @@ fn integration_callbacks_round_trip() {
         drop(cursor_guard);
     }
 
-    // The software-keyboard callback requires a real platform virtual keyboard; not driveable headlessly.
     {
         let kbd_hits: Arc<Mutex<Vec<bool>>> = Arc::default();
         let ksink = Arc::clone(&kbd_hits);
@@ -144,14 +142,14 @@ fn integration_callbacks_round_trip() {
     assert_eq!(CursorType::from_raw(2), CursorType::Arrow);
     assert_eq!(CursorType::from_raw(14), CursorType::Hand);
     assert_eq!(CursorType::from_raw(28), CursorType::Custom);
-    // Out-of-range / Count sentinel maps to None.
+    // Out-of-range values, including the Count sentinel, map to None.
     assert_eq!(CursorType::from_raw(29), CursorType::None);
     assert_eq!(CursorType::from_raw(-1), CursorType::None);
 
     noesis_runtime::shutdown();
 }
 
-/// Verifies the documented panic for an interior NUL byte; fires before the FFI so no Noesis init is needed.
+/// The interior-NUL panic fires before the FFI call, so no init is needed.
 #[test]
 #[should_panic(expected = "interior NUL")]
 fn open_url_interior_nul_panics() {

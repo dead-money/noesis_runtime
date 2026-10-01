@@ -1,15 +1,16 @@
 # Noesis SDK limitations
 
-A few things the Noesis 3.2.13 SDK can't do, or does differently from WPF. Each
-one notes what to do instead, so you don't have to find out the hard way.
+What the Noesis 3.2.13 SDK can't do, or does differently from WPF, and what to
+do instead.
 
 ## Your app has to handle these
 
 Noesis leaves these to the host platform, so there's no SDK call for them.
 
-- **Clipboard.** No clipboard API. Hook the copy and paste events to catch the
-  intent, then read or write the OS clipboard yourself (`arboard` works well on
-  desktop).
+- **Clipboard.** No clipboard API. Catch the intent with
+  `events::subscribe_data_object` (`DataObject.Copying` / `Pasting`) or a
+  command binding on `ApplicationCommand::Copy` / `Paste`, then read or write
+  the OS clipboard yourself (`arboard` works on desktop).
 - **Screenshots.** No built-in screenshot call. Render the view into a render
   target your device owns and read the pixels back from it.
 - **Listing installed fonts.** The SDK enumerates the faces inside a given font,
@@ -30,15 +31,15 @@ Noesis leaves these to the host platform, so there's no SDK call for them.
 
 ## Different from WPF
 
-These work, just not the way WPF does it.
+These work, but not the way WPF does them.
 
 - **Custom `TypeConverter`s.** You can't register one to turn a string into a
   custom type during XAML load. The `convert_from_string` path and binding-side
-  value converters do work.
+  value converters work.
 - **Some dependency-property helpers are value-types only.** Base-value
   read-back, read-only setters, and value coercion handle value, struct, and
   string properties, but not object or brush ones (and coercion only covers a
-  class's first 32 properties). Worth knowing if you write custom controls.
+  class's first 32 properties).
 - **`FormattedText` is set up at construction.** Font, size, width, alignment,
   trimming, and the rest are constructor arguments, not setters. Changing one
   means rebuilding the layout.
@@ -66,20 +67,18 @@ The SDK doesn't allow these at all.
 - **Custom `Brush`/`Geometry`/`Transform` subclasses.** These serialize into the
   GPU render tree, which a custom subclass can't drive. Custom `Freezable`
   subclasses (with their own dependency properties and freeze support) are fine.
-  Custom visual effects are a different story — see "Not wrapped yet" below;
-  they aren't impossible, just not exposed here yet.
+  Custom effects are supported by the SDK but not wrapped; see "Not wrapped
+  yet" below.
 - **Retained or recorded drawings.** There's no drawing object model and no
   drawing-as-a-brush. Immediate-mode drawing is reachable only by overriding a
   custom element's `OnRender`.
 - **UI Automation / accessibility.** The 3.2 native SDK has no automation
-  peers, no accessibility tree, and no screen-reader surface — this is a gap in
-  the SDK itself, not in the bindings, so there's nothing to wrap. If you need
-  accessibility you have to build it at the host level around the view.
+  peers, no accessibility tree, and no screen-reader surface, so there's
+  nothing to wrap. Build accessibility at the host level around the view.
 
 ## Not wrapped yet
 
-The SDK supports these; the bindings just don't expose them today. They're
-binding gaps, not hard limits.
+The SDK supports these, but the bindings don't expose them yet.
 
 - **Blend interactivity behaviors** (`http://schemas.microsoft.com/xaml/behaviors`).
   The SDK's App/Interactivity package isn't compiled into this build, so XAML
@@ -88,7 +87,7 @@ binding gaps, not hard limits.
   visual states with `go_to_state`.
 - **`MediaElement` video playback.** Part of the App-framework package, which
   isn't wrapped. There's no Rust-side path to play video through the view.
-- **Custom pixel-shader effects.** The SDK does support them via `ShaderEffect`
-  and `BrushShader` (`SetPixelShader`), and the render device already carries a
-  batch's custom shader pointer — but there's no Rust-side way to author a
-  custom `Effect` yet.
+- **Custom pixel-shader effects.** The SDK supports them via `ShaderEffect`
+  and `BrushShader` (`SetPixelShader`), and the render device receives a
+  batch's custom shader pointer, but there's no Rust-side way to author a
+  custom `Effect`.

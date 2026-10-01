@@ -25,8 +25,7 @@ impl XamlProvider for InMem {
     }
 }
 
-// The VM doesn't need to react to its own DP writes for this test, but a class
-// registration requires a handler; this one just records nothing.
+// Class registration requires a handler; this test needs none.
 struct NoopHandler;
 impl PropertyChangeHandler for NoopHandler {
     fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
@@ -52,7 +51,6 @@ fn rust_view_model_drives_binding() {
         let vm = registration
             .create_instance()
             .expect("create_instance returned None");
-        // Seed the bound value before the binding is wired up.
         vm.handle().set_string(title_idx, "Hello");
 
         let mut bytes = HashMap::new();
@@ -65,8 +63,6 @@ fn rust_view_model_drives_binding() {
         view.activate();
 
         let mut content = view.content().expect("View::content returned None");
-        // SAFETY: vm is alive for the rest of this scope; its raw() is a live
-        // BaseComponent*. Noesis stores its own reference.
         assert!(
             content.set_data_context(&vm),
             "set_data_context returned false (content not a FrameworkElement?)"
@@ -81,10 +77,7 @@ fn rust_view_model_drives_binding() {
             "binding did not deliver the initial VM value to the TextBlock"
         );
 
-        // Mutate the VM after the view is live; the binding must propagate the
-        // change to the TextBlock on the next update. This works only if the
-        // DependencyObject change notification reached the binding; a static
-        // one-shot read would leave the text at "Hello".
+        // Only a live change notification moves the text off "Hello".
         vm.handle().set_string(title_idx, "World");
         assert!(view.update(0.0));
         assert_eq!(
@@ -93,8 +86,8 @@ fn rust_view_model_drives_binding() {
             "binding did not propagate the post-load VM mutation"
         );
 
-        // Teardown: release element handles + view (which drops its DataContext
-        // ref on the VM) before the VM and the registration.
+        // Release the view (and its DataContext ref) before the VM and the
+        // registration.
         drop(label);
         drop(content);
         view.deactivate();

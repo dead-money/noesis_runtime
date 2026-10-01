@@ -1,27 +1,21 @@
-// Code-side element-tree construction: build and mutate panel trees,
-// Border/Decorator children, and Grid row/column definitions from Rust. The
-// relevant collections (Panel::Children, Grid::Row/ColumnDefinitions) and the
-// Decorator Child are NOT DependencyProperties, so they cannot be reached by the
-// generic by-name DP setters, so this unit wraps the typed C++ accessors instead.
+// Code-side element-tree construction: Panel children, Decorator (Border)
+// child, and Grid row/column definitions. These are not DependencyProperties,
+// so the by-name DP setters can't reach them; this file wraps the typed
+// accessors.
 //
-// Ownership mirrors cpp/noesis_text_inlines.cpp / cpp/noesis_collections.cpp:
+// Ownership:
 //
-//   * GetChildren / GetRowDefinitions / GetColumnDefinitions return the live
-//     collection owned by its host element; we hand it out at +1 (handout) so
-//     Rust holds an owning view that keeps it alive for the handle's lifetime,
-//     released via noesis_base_component_release.
+//   * The children / row / column collection getters return the live
+//     collection owned by its host, handed out at +1. Release with
+//     noesis_base_component_release.
 //
-//   * RowDefinition / ColumnDefinition _create hand out a freshly-`new`'d object
-//     at +1; adding it to a DefinitionCollection makes the collection take its
-//     own reference, so the Rust builder handle may be dropped afterwards.
+//   * Row/ColumnDefinition _create return a new object at +1. Adding it to a
+//     definition collection takes the collection's own reference, so the
+//     caller's handle may be released afterwards.
 //
-//   * Decorator::GetChild and the collection Get* accessors return BORROWED
-//     (no +1) pointers owned by the host; the address matches the BaseComponent
-//     subobject of the element set, so callers can compare it for identity.
-//
-// Read-back getters (Decorator child, collection counts/gets, Grid definition
-// lengths) re-read from the live Noesis object so a stubbed constructor/setter
-// fails the round-trip.
+//   * Decorator child and collection item getters return borrowed (no +1)
+//     pointers owned by the host. The address is the BaseComponent subobject of
+//     the element that was set, so it can be compared for identity.
 
 #include "noesis_shim.h"
 
@@ -40,16 +34,14 @@
 #include <NsGui/UIElement.h>
 #include <NsGui/UIElementCollection.h>
 
-// GridUnitType ordinals the Rust side mirrors (NsGui/GridLength.h). Note the
-// WPF-unusual order: Auto precedes Pixel.
+// GridUnitType ordinals the Rust side mirrors (NsGui/GridLength.h).
 static_assert(Noesis::GridUnitType_Auto == 0, "GridUnitType ordinal drift");
 static_assert(Noesis::GridUnitType_Pixel == 1, "GridUnitType ordinal drift");
 static_assert(Noesis::GridUnitType_Star == 2, "GridUnitType ordinal drift");
 
 namespace {
 
-// Hand a freshly-created (or borrowed) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller, balanced by
+// Adds one reference owned by the caller, balanced by
 // noesis_base_component_release.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
@@ -286,8 +278,6 @@ extern "C" int32_t noesis_definition_collection_count(void* coll) {
 extern "C" void* noesis_definition_collection_get(void* coll, uint32_t index) {
     Noesis::BaseCollection* c = as_defs(coll);
     if (!c || index >= (uint32_t)c->Count()) return nullptr;
-    // GetComponent hands back a +1 Ptr; the collection still owns its own
-    // reference, so the object outlives the temporary's release and the bare
-    // pointer is a valid borrow.
+    // the temporary Ptr releases, but the collection's reference keeps the borrow valid
     return c->GetComponent(index).GetPtr();
 }

@@ -1,5 +1,5 @@
-//! `MeshData` / `Mesh` + `DrawingContext::draw_mesh` / `draw_text`: headless
-//! buffer round-trips and a render-drive batch-count proof.
+//! `MeshData` and `Mesh` buffer round-trips, then `DrawingContext::draw_mesh` /
+//! `draw_text` in a render pass, checked against an empty baseline's batch count.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -55,10 +55,7 @@ impl RenderHandler for MeshRender {
         }
         let mut ok = true;
         ok &= ctx.draw_mesh(Some(&self.brush), &self.mesh);
-        // No font provider is wired here, so the text shapes zero glyphs; the
-        // call still reaches the live DrawingContext (returns true), which is
-        // what this asserts. Glyph rasterization is covered by the FormattedText
-        // metrics tests.
+        // No font provider, so no glyphs; only the call's success is checked.
         ok &= ctx.draw_text(&self.text, [0.0, 0.0, 100.0, 80.0]);
         self.signals.all_draws_ok.store(ok, Ordering::SeqCst);
     }

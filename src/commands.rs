@@ -1,41 +1,43 @@
-//! `ICommand` from Rust: let XAML `Command="{Binding ...}"` invoke Rust logic.
+//! Commands: `ICommand` implementations backed by Rust, routed commands, and
+//! command bindings.
 //!
-//! A [`Command`] wraps a `Noesis::BaseCommand` subclass whose `CanExecute` /
-//! `Execute` forward into a Rust [`CommandHandler`]. The command is a
-//! `BaseComponent`, so it crosses the FFI the same way every other Rust-owned
-//! Noesis value does, as an opaque pointer ([`Command::raw`]). To make it
-//! reachable from XAML:
+//! # Rust-backed commands
 //!
-//! 1. Register a Rust-backed view model with a `BaseComponent` dependency
-//!    property (see [`ClassBuilder`](crate::classes::ClassBuilder)).
-//! 2. Set that DP to the command (safe, no `unsafe`):
-//!    `instance.handle().set_command(idx, &command)` (see
-//!    [`Instance::set_command`](crate::classes::Instance::set_command)). The
-//!    raw [`Instance::set_component`](crate::classes::Instance::set_component)
-//!    path remains available for arbitrary `BaseComponent*` values.
-//! 3. Expose the instance as a `DataContext`
+//! A [`Command`] is an `ICommand` whose `CanExecute` / `Execute` call a Rust
+//! [`CommandHandler`]. To bind it from XAML:
+//!
+//! 1. Register a view-model class with a `BaseComponent` dependency property
+//!    (see [`ClassBuilder`](crate::classes::ClassBuilder)).
+//! 2. Set that property to the command with
+//!    [`Instance::set_command`](crate::classes::Instance::set_command).
+//! 3. Make the instance the `DataContext`
 //!    ([`FrameworkElement::set_data_context`](crate::view::FrameworkElement::set_data_context)).
-//! 4. Author `<Button Command="{Binding ThatProperty}"/>` in XAML.
+//! 4. Write `<Button Command="{Binding ThatProperty}"/>` in XAML.
 //!
-//! When the button is clicked, Noesis calls the command's `Execute`, which
-//! runs [`CommandHandler::execute`]. Noesis also queries `CanExecute` to drive
-//! the button's `IsEnabled`; call [`Command::raise_can_execute_changed`] after
-//! your enabled-state changes so bound controls re-query.
+//! Clicking the button runs [`CommandHandler::execute`]. The button also calls
+//! [`CommandHandler::can_execute`] to set its `IsEnabled`; call
+//! [`Command::raise_can_execute_changed`] when that answer changes so bound
+//! controls ask again.
+//!
+//! # Routed commands
+//!
+//! A [`RoutedCommand`] or [`RoutedUICommand`] carries no logic. Executing it on
+//! an element routes up the tree to the first [`CommandBinding`] for that
+//! command. The framework's built-in commands ([`ApplicationCommand`],
+//! [`ComponentCommand`]) are routed commands too, reached as a
+//! [`BorrowedCommand`].
 //!
 //! # Lifetime
 //!
-//! [`Command`] holds the caller's `+1` reference, released on drop. If a
-//! binding still references the command (the common case while a `Button` is
-//! bound to it), the underlying object (and the boxed handler) stay alive
-//! until that reference also drops. The handler is freed exactly once, by the
-//! C++ destructor, after the last reference goes away. So a `Command` may be
-//! dropped while still bound and live; `CanExecute` / `Execute` keep working.
+//! [`Command`] holds one reference, released on drop. A binding that uses the
+//! command holds its own, so the command and its handler stay alive, and keep
+//! working, until the last reference goes. The handler is freed exactly once,
+//! by the C++ destructor.
 //!
 //! # Threading
 //!
-//! `CanExecute` / `Execute` fire from inside Noesis's input pump on whatever
-//! thread drives the view. The handler is stored behind `Send`; keep the work
-//! small and route to a queue if you need anything heavy.
+//! Handlers run inside Noesis's input and binding processing, on the thread
+//! that drives the view. Keep them short; queue heavy work elsewhere.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -63,24 +65,20 @@ unsafe fn cstr_opt(p: *const c_char) -> Option<String> {
     }
 }
 
-/// A borrowed command parameter: Noesis's `CommandParameter` as an opaque,
-/// boxed `Noesis::BaseComponent*`. [`is_none`](Self::is_none) reports the
-/// no-parameter case (the bound control supplied none); the typed accessors
-/// decode the boxed value, each returning `None` when its runtime type doesn't
-/// match. The pointer is borrowed for the duration of the callback; copy /
-/// re-root (via Noesis accessors) if you need it past the call.
+/// A command's `CommandParameter`: a borrowed, boxed `Noesis::BaseComponent*`,
+/// or nothing. The typed accessors return `None` when the boxed type doesn't
+/// match. Inside a handler the pointer is valid only for the callback.
 pub struct CommandParameterValue(Option<NonNull<c_void>>);
 
 impl CommandParameterValue {
-    /// Wrap a raw `CommandParameter` pointer, mapping null to the no-parameter
-    /// case. Use this to supply a parameter when invoking a command yourself
-    /// (e.g. [`RoutedCommand::execute`]).
+    /// Wrap a raw `BaseComponent*` to pass when executing a command yourself
+    /// (e.g. [`RoutedCommand::execute`]). Null means no parameter.
     #[must_use]
     pub fn new(raw: *mut c_void) -> Self {
         Self(NonNull::new(raw))
     }
 
-    /// Whether the bound control supplied no parameter (a null pointer).
+    /// Whether there is no parameter (a null pointer).
     #[must_use]
     pub fn is_none(&self) -> bool {
         self.0.is_none()
@@ -93,8 +91,7 @@ impl CommandParameterValue {
         self.0
     }
 
-    /// Unbox a `bool` (a `BoxedValue<bool>`), or `None` on type mismatch / no
-    /// parameter.
+    /// Unbox a `bool`. `None` on a type mismatch or no parameter.
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
         let p = self.0?;
@@ -104,8 +101,7 @@ impl CommandParameterValue {
         ok.then_some(out)
     }
 
-    /// Unbox an `i32` (a `BoxedValue<int>`), or `None` on type mismatch / no
-    /// parameter.
+    /// Unbox an `i32`. `None` on a type mismatch or no parameter.
     #[must_use]
     pub fn as_i32(&self) -> Option<i32> {
         let p = self.0?;
@@ -115,8 +111,7 @@ impl CommandParameterValue {
         ok.then_some(out)
     }
 
-    /// Unbox an `f64` (a `BoxedValue<double>`), or `None` on type mismatch / no
-    /// parameter.
+    /// Unbox an `f64`. `None` on a type mismatch or no parameter.
     #[must_use]
     pub fn as_f64(&self) -> Option<f64> {
         let p = self.0?;
@@ -126,10 +121,9 @@ impl CommandParameterValue {
         ok.then_some(out)
     }
 
-    /// Borrowed view of a boxed string (a `BoxedValue<String>`), valid for the
-    /// callback. `None` on type mismatch / no parameter / non-UTF-8. Noesis
-    /// boxes a XAML `CommandParameter="..."` literal as a string, so this is the
-    /// usual decoder for a constant parameter.
+    /// Borrow a boxed string. `None` on a type mismatch, no parameter, or
+    /// invalid UTF-8. A literal `CommandParameter="..."` in XAML arrives as a
+    /// string, so this is the usual accessor for constant parameters.
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         let p = self.0?;
@@ -143,42 +137,37 @@ impl CommandParameterValue {
     }
 }
 
-/// Rust-side command logic. `execute` runs the action; `can_execute` gates it
-/// (and drives the bound control's `IsEnabled`).
+/// The logic behind a [`Command`].
 ///
-/// The `Send + 'static` bounds let the handler live inside a Bevy `Resource`
-/// or be moved onto the render thread.
+/// The handler is `Send` because [`Command`] is, and `'static` because the
+/// command can outlive its [`Command`] handle while a binding holds it.
 pub trait CommandHandler: Send + 'static {
-    /// Whether the command can run now. Default: always `true`. Noesis calls
-    /// this to decide a bound `Button`'s enabled state, and again before each
-    /// `Execute`. After the answer changes, call
-    /// [`Command::raise_can_execute_changed`] so bound controls re-query.
+    /// Whether the command can run now. Defaults to `true`. Bound controls use
+    /// it to set `IsEnabled`. Call [`Command::raise_can_execute_changed`] when
+    /// the answer changes.
     fn can_execute(&self, _param: CommandParameterValue) -> bool {
         true
     }
 
-    /// Invoke the command. Called when the bound control is activated (e.g. a
-    /// `Button` click), but only if [`Self::can_execute`] returned `true`.
+    /// Run the command, e.g. on a bound `Button` click. Controls check
+    /// [`Self::can_execute`] first; the command itself does not.
     ///
-    /// Takes `&self`: a single handler box backs the command, and `execute` may
-    /// re-enter the same box (it can trigger a synchronous `can_execute` requery,
-    /// or activate another control bound to the same command). Use interior
-    /// mutability for handler state.
+    /// Takes `&self` because calls can re-enter the same handler (`execute` may
+    /// trigger a `can_execute` query or activate another control bound to the
+    /// same command). Use interior mutability for state.
     fn execute(&self, param: CommandParameterValue);
 }
 
-/// Adapter so a bare `Fn` closure is a fire-always [`CommandHandler`]
-/// (`can_execute` is always `true`). Use [`Command::new`] with a struct
-/// implementing [`CommandHandler`] when you need a controllable
-/// `can_execute`.
+/// Any `Fn(CommandParameterValue)` closure is a handler whose `can_execute` is
+/// always `true`. Implement [`CommandHandler`] on a type when you need to
+/// control `can_execute`.
 impl<F: Fn(CommandParameterValue) + Send + 'static> CommandHandler for F {
     fn execute(&self, param: CommandParameterValue) {
         self(param);
     }
 }
 
-/// A single, shared vtable suffices for every command: the trampolines are
-/// generic-free (they recover the `Box<dyn CommandHandler>` from `userdata`).
+/// Shared by every command; the trampolines recover the handler from `userdata`.
 static COMMAND_VTABLE: CommandVTable = CommandVTable {
     can_execute: command_can_execute_trampoline,
     execute: command_execute_trampoline,
@@ -216,9 +205,9 @@ unsafe extern "C" fn command_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// A Rust-backed `ICommand`. Owns a `+1` reference released on drop. Hand
-/// [`Command::raw`] to XAML via a view-model `BaseComponent` property (see the
-/// module docs).
+/// An `ICommand` backed by a Rust [`CommandHandler`]. Bind it to a view-model
+/// property with [`Instance::set_command`](crate::classes::Instance::set_command);
+/// see the [module docs](self). Holds one reference, released on drop.
 pub struct Command {
     ptr: NonNull<c_void>,
 }
@@ -227,18 +216,15 @@ pub struct Command {
 unsafe impl Send for Command {}
 
 impl Command {
-    /// Build a command from a [`CommandHandler`]. A bare
-    /// `Fn(CommandParameterValue)` closure also works (fire-always: its
-    /// `can_execute` is always `true`).
+    /// Create a command from a [`CommandHandler`] or a
+    /// `Fn(CommandParameterValue)` closure.
     ///
     /// # Panics
     ///
-    /// Panics only on an impossible internal invariant (`Box::into_raw`
-    /// returning null / the C side returning null for a valid vtable, which it
-    /// never does).
+    /// Never in practice: the C side returns null only for a null vtable.
     #[must_use]
     pub fn new<H: CommandHandler>(handler: H) -> Self {
-        // Double-Box for a stable thin pointer across the C ABI.
+        // Double box: `Box<dyn _>` is a fat pointer; the C ABI needs a thin one.
         let boxed: Box<Box<dyn CommandHandler>> = Box::new(Box::new(handler));
         let userdata = Box::into_raw(boxed);
 
@@ -251,7 +237,6 @@ impl Command {
         match NonNull::new(ptr) {
             Some(ptr) => Command { ptr },
             None => {
-                // Reclaim the leaked box defensively rather than leak it.
                 // SAFETY: userdata came from Box::into_raw above; C++ never
                 // stored it (null return = nothing took ownership).
                 unsafe { drop(Box::from_raw(userdata)) };
@@ -260,20 +245,17 @@ impl Command {
         }
     }
 
-    /// Raw `Noesis::BaseComponent*` (an `ICommand`), for handing to a
-    /// view-model `BaseComponent` property
-    /// ([`Instance::set_component`](crate::classes::Instance::set_component))
-    /// or any API that takes a borrowed component. Borrowed for the lifetime of
-    /// `self`.
+    /// Raw `Noesis::BaseComponent*` (an `ICommand`) for APIs that take a
+    /// borrowed component, such as
+    /// [`Instance::set_component`](crate::classes::Instance::set_component).
+    /// Valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Fire `CanExecuteChanged` so any control bound to this command re-queries
-    /// [`CommandHandler::can_execute`], e.g. a bound `Button` re-evaluates its
-    /// `IsEnabled` on the next `View::update`. Call after your enabled-state
-    /// logic changes.
+    /// Raise `CanExecuteChanged` so bound controls call
+    /// [`CommandHandler::can_execute`] again and update `IsEnabled`.
     pub fn raise_can_execute_changed(&self) {
         // SAFETY: self.ptr is a live RustCommand* for the lifetime of self.
         unsafe { noesis_command_raise_can_execute_changed(self.ptr.as_ptr()) }
@@ -289,11 +271,11 @@ impl Drop for Command {
     }
 }
 
-/// Anything that can be referenced as a `Noesis::ICommand*`: a [`Command`],
-/// [`RoutedCommand`], [`RoutedUICommand`], or a built-in [`BorrowedCommand`].
-/// Lets a [`CommandBinding`] (and any `Command` DP) accept any of them.
+/// A command handle: [`Command`], [`RoutedCommand`], [`RoutedUICommand`], or
+/// [`BorrowedCommand`]. Accepted by [`CommandBinding::new`] and
+/// [`Instance::set_command`](crate::classes::Instance::set_command).
 pub trait AsCommand {
-    /// Borrowed `Noesis::ICommand*` (`BaseComponent*`), valid for `self`.
+    /// Borrowed `Noesis::ICommand*` (a `BaseComponent*`), valid while `self` is.
     fn command_ptr(&self) -> *mut c_void;
 }
 
@@ -303,11 +285,9 @@ impl AsCommand for Command {
     }
 }
 
-/// A `Noesis::RoutedCommand` built in code. Unlike [`Command`] (a Rust-backed
-/// `ICommand` whose logic lives in the handler), a routed command carries no
-/// logic itself. Invoking it routes `Execute` / `CanExecute` through the
-/// element tree to the first matching [`CommandBinding`]. Owns a `+1` reference
-/// released on drop.
+/// A `Noesis::RoutedCommand` created in code. It has no logic of its own:
+/// executing it on an element routes up the element tree to the first
+/// [`CommandBinding`] for this command. Holds one reference, released on drop.
 pub struct RoutedCommand {
     ptr: NonNull<c_void>,
 }
@@ -316,14 +296,14 @@ pub struct RoutedCommand {
 unsafe impl Send for RoutedCommand {}
 
 impl RoutedCommand {
-    /// Create a routed command named `name`, owned by the type `owner_type`
-    /// (resolved through the reflection registry, a built-in like `"UIElement"`
-    /// or a [`ClassBuilder`](crate::classes)-registered custom class). Returns
-    /// `None` if `owner_type` can't be resolved to a class.
+    /// Create a routed command named `name`, owned by the type named
+    /// `owner_type`: a built-in such as `"UIElement"` or a class registered with
+    /// [`ClassBuilder`](crate::classes::ClassBuilder). Returns `None` if no
+    /// class has that name.
     ///
     /// # Panics
     ///
-    /// Panics if `name` / `owner_type` contain an interior NUL byte.
+    /// Panics if `name` or `owner_type` contains an interior NUL byte.
     #[must_use]
     pub fn new(name: &str, owner_type: &str) -> Option<Self> {
         let cn = CString::new(name).expect("name contained interior NUL");
@@ -333,8 +313,9 @@ impl RoutedCommand {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Execute the command against `target` (a `UIElement`), routing to its
-    /// `CommandBinding`s. `param` is an optional borrowed command parameter.
+    /// Execute the command on `target`, routing up from it to the first
+    /// matching [`CommandBinding`]. Does nothing if no binding handles it. Use
+    /// `CommandParameterValue::new(ptr::null_mut())` for no parameter.
     pub fn execute(&self, param: CommandParameterValue, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedCommand*; target.raw() a live element.
         unsafe {
@@ -342,8 +323,8 @@ impl RoutedCommand {
         }
     }
 
-    /// Whether the command can currently execute against `target` (queries its
-    /// `CommandBinding`s' `CanExecute`). `false` if nothing handles it.
+    /// Whether the command can execute on `target`, as answered by the first
+    /// matching [`CommandBinding`] up the tree. `false` if nothing handles it.
     #[must_use]
     pub fn can_execute(&self, param: CommandParameterValue, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
@@ -352,7 +333,7 @@ impl RoutedCommand {
         }
     }
 
-    /// The command's registered name (`RoutedCommand::GetName`).
+    /// The name the command was created with.
     #[must_use]
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedCommand*; returns a borrowed interned
@@ -360,7 +341,7 @@ impl RoutedCommand {
         unsafe { cstr_opt(noesis_routed_command_get_name(self.ptr.as_ptr())) }
     }
 
-    /// Raw `Noesis::ICommand*`, borrowed for the lifetime of `self`.
+    /// Raw `Noesis::ICommand*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
@@ -380,8 +361,8 @@ impl Drop for RoutedCommand {
     }
 }
 
-/// A `Noesis::RoutedUICommand`: a [`RoutedCommand`] plus localizable display
-/// `Text` (e.g. for menu items). Owns a `+1` reference released on drop.
+/// A `Noesis::RoutedUICommand`: a [`RoutedCommand`] with display text, e.g.
+/// for menu items. Holds one reference, released on drop.
 pub struct RoutedUICommand {
     ptr: NonNull<c_void>,
 }
@@ -390,9 +371,9 @@ pub struct RoutedUICommand {
 unsafe impl Send for RoutedUICommand {}
 
 impl RoutedUICommand {
-    /// Create a routed UI command. `text` is the display label; see
-    /// [`RoutedCommand::new`] for `name` / `owner_type`. Returns `None` if the
-    /// owner type can't be resolved.
+    /// Create a routed UI command with display label `text`. `name` and
+    /// `owner_type` work as in [`RoutedCommand::new`]; returns `None` if no
+    /// class is named `owner_type`.
     ///
     /// # Panics
     ///
@@ -424,7 +405,7 @@ impl RoutedUICommand {
         }
     }
 
-    /// The display text (`RoutedUICommand::GetText`).
+    /// The display text.
     #[must_use]
     pub fn text(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedUICommand*; borrowed string copied.
@@ -442,14 +423,14 @@ impl RoutedUICommand {
         unsafe { noesis_routed_ui_command_set_text(self.ptr.as_ptr(), c.as_ptr()) };
     }
 
-    /// The command's registered name (`RoutedCommand::GetName`).
+    /// The name the command was created with.
     #[must_use]
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedCommand*; borrowed string copied.
         unsafe { cstr_opt(noesis_routed_command_get_name(self.ptr.as_ptr())) }
     }
 
-    /// Raw `Noesis::ICommand*`, borrowed for the lifetime of `self`.
+    /// Raw `Noesis::ICommand*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
@@ -469,17 +450,15 @@ impl Drop for RoutedUICommand {
     }
 }
 
-/// [`CommandParameterValue`] → raw pointer for the C ABI (NULL when no
-/// parameter). Used on the outbound path when we invoke a command ourselves.
 fn param_ptr(param: &CommandParameterValue) -> *mut c_void {
     param.raw().map_or(core::ptr::null_mut(), NonNull::as_ptr)
 }
 
-/// A borrowed reference to a framework-owned `RoutedUICommand` singleton (the
-/// built-in [`ApplicationCommand`] / [`ComponentCommand`] libraries). It holds
-/// no reference and runs no `Drop` (the framework owns these for the process
-/// lifetime), so it is `Copy`. Use it as a [`CommandBinding`] command or assign
-/// it to a control's `Command` property.
+/// One of the framework's built-in `RoutedUICommand`s, from
+/// [`ApplicationCommand::command`] or [`ComponentCommand::command`]. The
+/// framework owns these for the life of the runtime, so the handle holds no
+/// reference and is `Copy`. Use it with [`CommandBinding::new`] or
+/// [`Instance::set_command`](crate::classes::Instance::set_command).
 #[derive(Copy, Clone)]
 pub struct BorrowedCommand {
     ptr: NonNull<c_void>,
@@ -489,29 +468,27 @@ pub struct BorrowedCommand {
 unsafe impl Send for BorrowedCommand {}
 
 impl BorrowedCommand {
-    /// Raw `Noesis::ICommand*`, valid for the process lifetime.
+    /// Raw `Noesis::ICommand*`, valid until the runtime shuts down.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// The command's display text (these built-ins are `RoutedUICommand`s).
+    /// The command's display text.
     #[must_use]
     pub fn text(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedUICommand*; borrowed string copied.
         unsafe { cstr_opt(noesis_routed_ui_command_get_text(self.ptr.as_ptr())) }
     }
 
-    /// The command's registered name.
+    /// The command's name, e.g. `"Copy"`.
     #[must_use]
     pub fn name(&self) -> Option<String> {
         // SAFETY: self.ptr is a live RoutedCommand*; borrowed string copied.
         unsafe { cstr_opt(noesis_routed_command_get_name(self.ptr.as_ptr())) }
     }
 
-    /// Execute this command against `target` (a `UIElement`), routing to its
-    /// `CommandBinding`s. The built-ins are `RoutedCommand`s. See
-    /// [`RoutedCommand::execute`].
+    /// Execute on `target`. See [`RoutedCommand::execute`].
     pub fn execute(&self, param: CommandParameterValue, target: &FrameworkElement) {
         // SAFETY: self.ptr is a live RoutedCommand*; target.raw() a live element.
         unsafe {
@@ -519,8 +496,7 @@ impl BorrowedCommand {
         }
     }
 
-    /// Whether this command can currently execute against `target`. See
-    /// [`RoutedCommand::can_execute`].
+    /// See [`RoutedCommand::can_execute`].
     #[must_use]
     pub fn can_execute(&self, param: CommandParameterValue, target: &FrameworkElement) -> bool {
         // SAFETY: as above.
@@ -536,9 +512,8 @@ impl AsCommand for BorrowedCommand {
     }
 }
 
-/// The `ApplicationCommands` library: common application-level commands
-/// (clipboard, document, edit). [`Self::command`] returns the framework
-/// singleton.
+/// The built-in `ApplicationCommands`: clipboard, document, and edit commands.
+/// Get the command object with [`Self::command`].
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -568,12 +543,11 @@ pub enum ApplicationCommand {
 }
 
 impl ApplicationCommand {
-    /// The framework's `RoutedUICommand` singleton for this command.
+    /// The framework's command object.
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis runtime is not initialized (the singletons are set
-    /// up during [`crate::init`]).
+    /// Panics if the runtime is not initialized ([`crate::init`]).
     #[must_use]
     pub fn command(self) -> BorrowedCommand {
         // SAFETY: returns a borrowed framework singleton (valid after init()).
@@ -585,8 +559,9 @@ impl ApplicationCommand {
     }
 }
 
-/// The `ComponentCommands` library: control-internal navigation / selection /
-/// scrolling commands. [`Self::command`] returns the framework singleton.
+/// The built-in `ComponentCommands`: navigation, selection, and scrolling
+/// commands used inside controls. Get the command object with
+/// [`Self::command`].
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -621,11 +596,11 @@ pub enum ComponentCommand {
 }
 
 impl ComponentCommand {
-    /// The framework's `RoutedUICommand` singleton for this command.
+    /// The framework's command object.
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis runtime is not initialized.
+    /// Panics if the runtime is not initialized ([`crate::init`]).
     #[must_use]
     pub fn command(self) -> BorrowedCommand {
         // SAFETY: returns a borrowed framework singleton (valid after init()).
@@ -637,20 +612,18 @@ impl ComponentCommand {
     }
 }
 
-/// Rust handlers for a [`CommandBinding`]: `execute` runs the action when a
-/// bound command is invoked through the attached element; `can_execute` gates
-/// it (default always-`true`). A bare `Fn(CommandParameterValue)` closure works
-/// as a fire-always handler.
+/// The handlers behind a [`CommandBinding`]. Any `Fn(CommandParameterValue)`
+/// closure works as a handler whose `can_execute` is always `true`.
 pub trait CommandBindingHandler: Send + 'static {
-    /// Whether the command may run now. Default `true`.
+    /// Whether the command can run now. Defaults to `true`.
     fn can_execute(&self, _param: CommandParameterValue) -> bool {
         true
     }
 
     /// Run the command's action.
     ///
-    /// Takes `&self` (re-entrant per the same reasoning as
-    /// [`CommandHandler::execute`]; use interior mutability for handler state).
+    /// Takes `&self` because calls can re-enter, as with
+    /// [`CommandHandler::execute`]. Use interior mutability for state.
     fn execute(&self, param: CommandParameterValue);
 }
 
@@ -691,12 +664,16 @@ unsafe extern "C" fn cb_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// Binds a command to Rust handlers and (once [`attached`](Self::attach)) makes
-/// an element respond to that command when it's invoked and routes through the
-/// element. RAII: drop it to detach the handlers, remove the binding from the
-/// element it was attached to, and free them. Dropping it from inside its own
-/// `Executed` / `CanExecute` handler is safe (the C++ bridge owns the handler
-/// box and defers its own destruction until the callback frame unwinds).
+/// Handles a command for an element and its descendants.
+///
+/// Create it with [`Self::new`], then [`attach`](Self::attach) it to an
+/// element. When the command is executed on that element or anything below
+/// it, the handlers run and the routed event is marked handled, so it stops
+/// there.
+///
+/// Dropping the binding detaches the handlers and removes it from the element.
+/// Dropping it from inside its own handler is safe; teardown waits until the
+/// callback returns.
 pub struct CommandBinding {
     token: NonNull<c_void>,
 }
@@ -705,11 +682,9 @@ pub struct CommandBinding {
 unsafe impl Send for CommandBinding {}
 
 impl CommandBinding {
-    /// Build a binding for `command` (any [`AsCommand`]: a [`RoutedCommand`],
-    /// [`RoutedUICommand`], built-in [`BorrowedCommand`], or [`Command`]) with
-    /// the given [`CommandBindingHandler`]. Attach it to an element with
-    /// [`Self::attach`]. Returns `None` only if the C entrypoint fails (e.g. a
-    /// non-command pointer).
+    /// Create a binding that handles `command` with `handler`. Returns `None`
+    /// only if `command` does not point at an `ICommand`, which doesn't happen
+    /// with this crate's command types.
     #[must_use]
     pub fn new<C: AsCommand, H: CommandBindingHandler>(command: &C, handler: H) -> Option<Self> {
         let boxed: Box<Box<dyn CommandBindingHandler>> = Box::new(Box::new(handler));
@@ -738,13 +713,12 @@ impl CommandBinding {
         }
     }
 
-    /// Attach this binding to `element`'s `CommandBindings` so commands invoked
-    /// on (or routing through) the element reach these handlers. Returns `false`
-    /// if `element` is not a `UIElement`. Dropping the binding removes it from
-    /// the element's `CommandBindings` again, so it does not accumulate there.
-    /// The binding remembers the element it was attached to (holding a `+1`
-    /// ref); calling `attach` on more than one element only auto-detaches from
-    /// the most recent.
+    /// Add this binding to `element`'s `CommandBindings`. Returns `false` if
+    /// `element` is not a `UIElement`.
+    ///
+    /// The binding keeps a reference to the element so drop can remove it
+    /// again. Only the most recent element is remembered: if you attach to
+    /// several, drop removes the binding from the last one only.
     pub fn attach(&self, element: &FrameworkElement) -> bool {
         // SAFETY: token is a live bridge; element.raw() a live element.
         unsafe { noesis_command_binding_attach(self.token.as_ptr(), element.raw()) }

@@ -1,39 +1,27 @@
-//! Supply image pixels to Noesis from Rust. Implement [`TextureProvider`]
-//! to resolve `Image.Source` / `ImageBrush.ImageSource` URIs into RGBA8
-//! textures, then register it with [`set_texture_provider`] (or one of the
-//! scheme/assembly-scoped variants). Your boxed impl is handed to a C++
-//! `RustTextureProvider` subclass through a vtable of trampolines, and the
-//! returned [`Registered`] guard owns both the boxed impl and the C++ handle.
-//!
-//! This parallels [`crate::xaml_provider`] and [`crate::font_provider`] if you
-//! have already used those.
+//! Supply image pixels to Noesis from Rust. Implement [`TextureProvider`] to
+//! resolve `Image.Source` / `ImageBrush.ImageSource` URIs into RGBA8 images,
+//! then register it with [`set_texture_provider`] or one of the scoped
+//! variants ([`set_scheme_texture_provider`], [`set_assembly_texture_provider`],
+//! [`set_scheme_assembly_texture_provider`]). It works like
+//! [`crate::xaml_provider`] and [`crate::font_provider`].
 //!
 //! # How it works
 //!
-//! Noesis's [`TextureProvider`](https://www.noesisengine.com/docs/) base
-//! class has two virtuals we override:
-//!
-//! - `GetTextureInfo(uri)`: return width / height (and optional atlas
-//!   rect + dpi scale) for the image at `uri`. Lets Noesis size an
-//!   `Image` element before the pixels are decoded. Return `None` to
-//!   signal "not found"; Noesis then falls back to the load path.
-//!
-//! - `LoadTexture(uri, device)`: return the image as tightly-packed
-//!   RGBA8 bytes. The C++ shim immediately hands the bytes to
-//!   `device->CreateTexture(...)` on the same `RenderDevice` Noesis passed
-//!   in (our `RustRenderDevice`), so the resulting `Noesis::Texture` is
-//!   backed by a real wgpu texture and plugs into `Batch.pattern` /
-//!   `Batch.image` through the existing `*_handle()` path. The byte
-//!   buffer only needs to live for the duration of the `load` call.
+//! - [`TextureProvider::info`] reports an image's size (and optional atlas
+//!   offset and DPI scale) so Noesis can lay out an `Image` before any pixels
+//!   are decoded. Returning `None` reports the image as not found.
+//! - [`TextureProvider::load`] returns the image as tightly packed RGBA8 bytes.
+//!   They are passed straight to
+//!   [`RenderDevice::create_texture`](crate::render_device::RenderDevice::create_texture)
+//!   on the device rendering the view, which copies them right away, so you
+//!   can return a borrow into a buffer your provider owns.
 //!
 //! # Lifetime
 //!
 //! Keep the [`Registered`] guard alive as long as Noesis should resolve
-//! textures through your provider. Dropping it unregisters the provider from
-//! Noesis (clearing the slot this guard installed into, unless a newer
-//! registration for the same scope has replaced it), releases the C++ wrapper,
-//! and frees the boxed impl. There is no need to call [`crate::shutdown`]
-//! first.
+//! textures through your provider. Dropping it unregisters the provider
+//! (unless a newer registration for the same scope has replaced it) and frees
+//! your impl. You don't need to call [`crate::shutdown`] first.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -87,22 +75,27 @@ unsafe fn install(scope: &Scope, handle: *mut c_void) {
     }
 }
 
-/// Metadata a [`TextureProvider`] can report for a URI without decoding
-/// pixels. [`new`](Self::new) leaves `x` / `y` at `0` (set them only for atlas
-/// sub-rects) and `dpi_scale` at `1.0` (96dpi).
+/// Image metadata returned by [`TextureProvider::info`]. Start from
+/// [`TextureInfo::new`] and set `x` / `y` only when the image is a sub-rect of
+/// an atlas.
 #[derive(Copy, Clone, Debug)]
 pub struct TextureInfo {
+    /// Width in pixels.
     pub width: u32,
+    /// Height in pixels.
     pub height: u32,
+    /// Left edge of the image inside an atlas texture, in pixels.
     pub x: u32,
+    /// Top edge of the image inside an atlas texture, in pixels.
     pub y: u32,
+    /// Pixel density relative to 96 DPI. Must not be zero; Noesis divides by
+    /// it.
     pub dpi_scale: f32,
 }
 
 impl Default for TextureInfo {
-    /// `dpi_scale` defaults to `1.0`, not `0.0`: the C++ side divides by it, so
-    /// a zero from a `..Default::default()` splat would poison the size math.
-    /// Everything else is a zero-sized whole-image texture.
+    /// A zero-sized whole image with `dpi_scale` 1.0, so a
+    /// `..Default::default()` splat never leaves a zero divisor.
     fn default() -> Self {
         Self {
             width: 0,
@@ -115,7 +108,7 @@ impl Default for TextureInfo {
 }
 
 impl TextureInfo {
-    /// Metadata for a whole-image texture of the given size, at 96dpi
+    /// Metadata for a whole image of the given size in pixels, at 96 DPI
     /// (`dpi_scale` 1.0) with no atlas offset.
     #[must_use]
     pub fn new(width: u32, height: u32) -> Self {
@@ -129,36 +122,41 @@ impl TextureInfo {
     }
 }
 
-/// Decoded RGBA8 image payload returned by [`TextureProvider::load`].
-/// `bytes` must be exactly `width * height * 4` tightly-packed RGBA8.
+/// A decoded image returned by [`TextureProvider::load`].
 pub struct ImageData<'a> {
+    /// Width in pixels. Must be non-zero.
     pub width: u32,
+    /// Height in pixels. Must be non-zero.
     pub height: u32,
+    /// Tightly packed RGBA8 rows, exactly `width * height * 4` bytes. Any other
+    /// length makes the load fail.
     pub bytes: &'a [u8],
 }
 
-/// Resolves image URIs to pixels for Noesis. Implement [`info`](Self::info)
-/// to report a texture's size during layout and [`load`](Self::load) to hand
-/// back the decoded RGBA8 bytes. Both are keyed by the URI string Noesis takes
-/// verbatim from `ImageBrush.ImageSource` / `Image.Source`.
+/// Resolves image URIs to pixels for Noesis. Both methods get the URI string
+/// exactly as written in `Image.Source` / `ImageBrush.ImageSource`.
 ///
-/// The `Send + Sync` supertraits let the resulting [`Registered`] guard live in
-/// a Bevy `Resource`.
+/// The trait requires `Send + Sync` so the boxed impl can move between
+/// threads. The [`Registered`] guard itself is `Send` but not `Sync`; in Bevy,
+/// store it as a `NonSend` resource.
 pub trait TextureProvider: Send + Sync + 'static {
-    /// Downcast escape hatch used by [`Registered::provider_mut`].
+    /// Downcast hook behind [`Registered::provider_mut`]. Every impl is the
+    /// same one-liner:
+    ///
+    /// ```ignore
+    /// fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    /// ```
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 
-    /// Return metadata for `uri` without decoding pixels. Return `None`
-    /// when the URI is unknown. Called by Noesis during layout so it can
-    /// size an `Image` before deciding whether to render it.
+    /// Metadata for `uri`, without decoding pixels. Noesis calls this during
+    /// layout to size an `Image`. Return `None` if you don't know the URI;
+    /// Noesis receives an empty size, its "not found" signal.
     fn info(&mut self, uri: &str) -> Option<TextureInfo>;
 
-    /// Return the decoded RGBA8 bytes for `uri`. The returned slice must
-    /// stay valid for the duration of the call (the C++ shim copies into
-    /// the GPU texture synchronously, so returning a borrow into an
-    /// internally-owned `Vec<u8>` is fine).
-    ///
-    /// Return `None` to signal "not found".
+    /// The decoded image for `uri`, or `None` if not found. The bytes are
+    /// copied into a texture before this call's result is dropped, so
+    /// borrowing from a buffer you own is fine. An [`ImageData`] with a zero
+    /// dimension or the wrong byte length is treated as not found.
     fn load(&mut self, uri: &str) -> Option<ImageData<'_>>;
 }
 
@@ -212,13 +210,11 @@ unsafe extern "C" fn t_load_texture(
         let Some(img) = provider(userdata).load(&uri) else {
             return false;
         };
-        // Enforce `len == w * h * 4` here so the C++ shim can trust it at CreateTexture.
         let expected = img.width.saturating_mul(img.height).saturating_mul(4) as usize;
         if img.bytes.len() != expected {
             return false;
         }
-        // A >4 GiB buffer can't be represented to the shim, so treat it as a
-        // failure rather than panicking inside the trampoline.
+        // The ABI length is u32; a >4 GiB buffer fails instead of panicking
         let Ok(len) = u32::try_from(img.bytes.len()) else {
             return false;
         };
@@ -235,11 +231,9 @@ static VTABLE: TextureProviderVTable = TextureProviderVTable {
     load_texture: t_load_texture,
 };
 
-/// Owns a Rust [`TextureProvider`] impl together with its C++
-/// `RustTextureProvider` instance. Parallel to
-/// [`crate::xaml_provider::Registered`]: dropping unregisters the provider from
-/// Noesis (clearing this guard's slot unless a newer registration for the same
-/// scope has replaced it), releases the C++ wrapper, and frees the boxed impl.
+/// Keeps a registered [`TextureProvider`] installed. Dropping it unregisters
+/// the provider (unless a newer registration for the same scope has replaced
+/// it) and frees your impl.
 #[must_use = "dropping the guard unregisters the provider and frees it"]
 pub struct Registered {
     handle: NonNull<c_void>,
@@ -258,13 +252,12 @@ impl Registered {
         self.handle.as_ptr()
     }
 
-    /// Mutable access to the concrete [`TextureProvider`] impl behind
-    /// this guard, via `TypeId`-checked downcast.
+    /// Mutable access to the provider you registered, for example to add
+    /// images to its cache.
     ///
     /// # Panics
     ///
-    /// Panics if `P` is not the concrete type passed to
-    /// [`set_texture_provider`].
+    /// Panics if `P` is not the type that was registered.
     pub fn provider_mut<P: TextureProvider>(&mut self) -> &mut P {
         let boxed: &mut Box<dyn TextureProvider> = unsafe { self.userdata.as_mut() };
         (**boxed)
@@ -276,10 +269,8 @@ impl Registered {
 
 impl Drop for Registered {
     fn drop(&mut self) {
-        // Clear the Noesis slot only while we're still its active registration;
-        // a newer set_*_provider for the same scope must keep firing. Hold the
-        // lock across the check + uninstall so it stays atomic against a
-        // concurrent registration.
+        // Only clear the slot if no newer registration replaced us. The lock
+        // spans check + uninstall to stay atomic against a concurrent register.
         {
             let mut active = ACTIVE.lock().expect("texture provider registry poisoned");
             if let Some(pos) = active
@@ -303,9 +294,8 @@ impl Drop for Registered {
     }
 }
 
-/// Install `provider` as the global Noesis texture provider. Returns a
-/// [`Registered`] guard that owns the boxed trait object and the C++
-/// wrapper; drop it to unregister the provider and tear everything down.
+/// Install `provider` as the global texture provider, replacing any earlier
+/// global one. Drop the returned guard to unregister it.
 ///
 /// # Panics
 ///
@@ -326,10 +316,8 @@ fn register_with<P: TextureProvider>(provider: P, scope: Scope) -> Registered {
     let handle = NonNull::new(handle).expect("noesis_texture_provider_create returned null");
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     {
-        // Hold the registry lock across install + record so a concurrent Drop
-        // for the same scope can't observe a half-updated slot and uninstall a
-        // registration that just replaced it. Noesis retains its own +1; we
-        // keep ours until the Registered is dropped.
+        // Lock spans install + record so a concurrent Drop for the same scope
+        // can't uninstall the registration that just replaced it.
         let mut active = ACTIVE.lock().expect("texture provider registry poisoned");
         // SAFETY: handle is freshly created and live.
         unsafe { install(&scope, handle.as_ptr()) };
@@ -348,11 +336,8 @@ fn register_with<P: TextureProvider>(provider: P, scope: Scope) -> Registered {
     }
 }
 
-/// Install `provider` as the texture provider for the URI `scheme` (the part
-/// before `://`). Noesis consults the scheme-scoped provider for matching
-/// texture URIs in preference to the global one. Reuses
-/// [`set_texture_provider`]'s trampoline + [`Registered`] machinery; only the
-/// install call differs.
+/// Install `provider` for URIs with the given `scheme` (the part before
+/// `://`). Noesis prefers it over the global provider for matching URIs.
 ///
 /// # Panics
 ///
@@ -363,9 +348,8 @@ pub fn set_scheme_texture_provider<P: TextureProvider>(scheme: &str, provider: P
     register_with(provider, Scope::Scheme(scheme))
 }
 
-/// Install `provider` as the texture provider for `assembly` (the assembly name
-/// in a pack URI). Reuses [`set_texture_provider`]'s machinery; only the
-/// install call differs.
+/// Install `provider` for URIs that name `assembly` (the assembly in a pack
+/// URI).
 ///
 /// # Panics
 ///
@@ -379,9 +363,7 @@ pub fn set_assembly_texture_provider<P: TextureProvider>(
     register_with(provider, Scope::Assembly(assembly))
 }
 
-/// Install `provider` as the texture provider scoped to both a `scheme` and an
-/// `assembly`. Reuses [`set_texture_provider`]'s machinery; only the install
-/// call differs.
+/// Install `provider` for URIs that match both `scheme` and `assembly`.
 ///
 /// # Panics
 ///

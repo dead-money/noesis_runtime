@@ -8,9 +8,7 @@ use noesis_runtime::transforms::ScaleTransform;
 use noesis_runtime::view::{FrameworkElement, HitTestFilterBehavior, HitTestResultBehavior, View};
 use noesis_runtime::xaml_provider::XamlProvider;
 
-// Two concentric, both-hit-testable Borders so a point at the centre is hit by
-// BOTH (multi-hit), with distinct x:Names for identity. The inner Border is the
-// topmost (declared as the outer's child, drawn last over the same point).
+// Concentric Borders: the centre hits both, and Inner (the child) is topmost.
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid x:Name="Root"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -74,7 +72,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
             all_names.iter().any(|n| n == "Inner") && all_names.iter().any(|n| n == "Outer"),
             "hit_test_all should include Inner and Outer, got {all_names:?}"
         );
-        // Topmost-first: Inner (last-drawn) is reported before Outer.
         let inner_pos = all_names.iter().position(|n| n == "Inner");
         let outer_pos = all_names.iter().position(|n| n == "Outer");
         assert!(
@@ -82,7 +79,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "topmost (Inner) should be reported before Outer, got {all_names:?}"
         );
 
-        // filter=Stop immediately yields zero results; a no-op bridge would collect every hit instead.
         let mut stop_hits = 0usize;
         root.hit_test_filtered(
             100.0,
@@ -95,7 +91,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
         );
         assert_eq!(stop_hits, 0, "filter=Stop must prevent any result callback");
 
-        // result=Stop after the first hit yields exactly one: the topmost (Inner).
         let mut first: Vec<String> = Vec::new();
         root.hit_test_filtered(
             100.0,
@@ -114,7 +109,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "result=Stop after first hit"
         );
 
-        // Skipping the Inner subtree excludes Inner but keeps Outer: per-visual filter selectivity.
         let mut filtered: Vec<String> = Vec::new();
         root.hit_test_filtered(
             100.0,
@@ -178,13 +172,12 @@ fn filtered_hit_test_namescope_and_render_transform() {
         assert!(scope.find_name("alpha").is_none(), "unregistered name gone");
         assert!(scope.find_name("beta").is_some(), "beta still registered");
 
-        // A parsed XAML root already carries a namescope; set_on must REPLACE it.
+        // A parsed XAML root already carries a namescope; set_on replaces it.
         let mut host = FrameworkElement::parse(
             "<Border xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"/>",
         )
         .expect("parse host");
         let pre = NameScope::of(&host).map(|s| s.raw());
-        // Assert pre.is_some() so the replacement check below isn't a trivial Some != None.
         assert!(
             pre.is_some(),
             "a parsed XAML root should already carry a namescope"
@@ -205,14 +198,11 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "set_on should have replaced the pre-existing namescope"
         );
 
-        // RenderTransform defaults to the non-null Identity, so a fresh element returns Some.
-        // Pointer identity proves set_render_transform crossed the FFI.
         let mut t1 = FrameworkElement::parse(
             "<Border xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"/>",
         )
         .expect("parse t1");
         let identity = t1.render_transform().map(|t| t.raw());
-        // Default is non-null Identity (Some); assert it so the assert_ne! below isn't trivially Some != None.
         assert!(
             identity.is_some(),
             "default RenderTransform should be the non-null Identity"
@@ -250,7 +240,6 @@ fn filtered_hit_test_namescope_and_render_transform() {
             "t2 should report the same re-applied transform object"
         );
 
-        // Default origin (0,0) could pass a constant-zero stub; two distinct values confirm the getter reads real state.
         assert_eq!(
             t1.render_transform_origin(),
             (0.0, 0.0),

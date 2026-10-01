@@ -64,7 +64,6 @@ fn binding_expression_explicit_update_source() {
         view.activate();
 
         let mut content = view.content().expect("View::content returned None");
-        // SAFETY: vm outlives this scope; Noesis stores its own reference.
         assert!(
             content.set_data_context(&vm),
             "set_data_context returned false"
@@ -103,8 +102,8 @@ fn binding_expression_explicit_update_source() {
             "unknown DP name should have no BindingExpression"
         );
 
-        // Edit the target. With UpdateSourceTrigger=Explicit, the source must
-        // NOT change yet, so the OneWay Mirror still shows "init".
+        // Explicit trigger: the source must not change yet, so Mirror still
+        // shows "init".
         assert!(
             editor.set_string("Text", "changed"),
             "set Editor.Text failed"
