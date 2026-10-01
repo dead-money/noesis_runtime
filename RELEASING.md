@@ -8,6 +8,8 @@ the SDK (label `noesis-sdk`) can build it.
 - **`fmt`** and **`doc`** run on hosted runners for every push and PR,
   including forks. `doc` sets `DOCS_RS=1`, which makes `build.rs` skip the
   native build.
+- **`build • clippy (no shim)`** also runs on hosted runners. Without the
+  `shim` feature the crate needs no SDK.
 - **`build • clippy • test`** runs on the SDK runner for pushes to `main`,
   tags, and same-repo PRs. Fork PRs are skipped.
 

@@ -20,7 +20,7 @@ Apply your license with `noesis_runtime::set_license(name, key)` before `init()`
 
 ```toml
 [dependencies]
-noesis_runtime = "0.12"
+noesis_runtime = "0.13"
 ```
 
 The crate still links the Noesis SDK at build time, so `NOESIS_SDK_DIR` must be set for it to compile.
@@ -105,6 +105,17 @@ let _registration = MarkupExtensionRegistration::from_closure(
 
 // `{my:Loc menu.greeting}` in XAML now resolves to "Hello, world!".
 ```
+
+### Render device without the SDK
+
+The default `shim` feature compiles the C++ shim and links Noesis. Turn it off to get only the render-device types (`Batch`, `Tile`, `DeviceCaps`, the shader and state enums) and the `RenderDevice` trait:
+
+```toml
+[dependencies]
+noesis_runtime = { version = "0.13", default-features = false }
+```
+
+That build needs no `NOESIS_SDK_DIR`, compiles no C++, and links no Noesis library. It's for a render device driven by a host that loads Noesis some other way, such as the managed (C#) SDK. Such a host creates the textures, so it maps a batch's texture pointers to handles itself; `register` and the `Batch::*_handle` methods need the shim.
 
 ## How it works
 

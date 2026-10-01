@@ -46,6 +46,22 @@ jobs:
       - name: cargo doc
         run: cargo doc --no-deps --all-features
 
+  # Without the `shim` feature the crate is plain Rust: no SDK, no C++, no link.
+  no-shim:
+    name: build • clippy (no shim)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: cargo clippy
+        run: cargo clippy --no-default-features -- -D warnings
+
   # Needs the Noesis SDK, which only the self-hosted runner has. Fork PRs are
   # skipped so untrusted code never runs there.
   build-test:
