@@ -6,6 +6,8 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-01
+
 ### Added
 
 - A default `shim` feature. With `default-features = false` the crate builds
