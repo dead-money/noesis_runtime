@@ -389,7 +389,7 @@ fn frame_scenario_records_expected_op_sequence() {
         expected.len(),
         "op count mismatch\n  actual ({}): {:#?}\n  expected ({}): {:#?}",
         ops.len(),
-        &*ops,
+        *ops,
         expected.len(),
         expected,
     );
