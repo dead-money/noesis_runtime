@@ -279,7 +279,7 @@ fn frame_scenario_records_expected_op_sequence() {
     unsafe { noesis_test_run_frame_scenario(registered.raw()) };
 
     // Tear down the device. The scenario already dropped its Ptr<>s, so this
-    // just releases our +1 reference and finalises the C++ instance.
+    // releases our +1 reference and finalises the C++ instance.
     drop(registered);
 
     let ops = log.lock().expect("ops poisoned");

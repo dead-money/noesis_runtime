@@ -1,5 +1,5 @@
-//! Code-side element-tree construction: `StackPanel` children, `Grid` row/column
-//! definitions, and `Border` child, mutated from Rust and round-tripped by identity.
+//! Building element trees from Rust: `StackPanel` children, `Grid` row and
+//! column definitions, and a `Border` child, each checked by pointer identity.
 
 use noesis_runtime::element_tree::{
     ColumnDefinition, GridLength, GridUnitType, RowDefinition, column_definitions, panel_children,
@@ -81,7 +81,6 @@ fn element_tree_build_round_trip() {
         assert_eq!(cols.count(), 0, "fresh Grid has no column defs");
 
         let mut r0 = RowDefinition::new();
-        // Default height is 1* (per the SDK).
         assert_eq!(
             r0.length(),
             Some(GridLength::star(1.0)),

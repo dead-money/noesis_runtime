@@ -1,27 +1,48 @@
-//! Data-binding bridge: drive XAML from Rust-owned data.
+//! Data binding: drive XAML from Rust-owned data.
 //!
-//! Bindings are authored in XAML: `{Binding Path}` on a property,
-//! `ItemsSource="{Binding}"` on a list control. This module supplies the
-//! runtime data those bindings resolve against:
+//! Bindings are usually authored in XAML (`{Binding Path}` on a property,
+//! `ItemsSource="{Binding}"` on a list control). This module supplies the data
+//! they resolve against, and a way to build bindings in code:
 //!
-//! * [`ObservableCollection`]: a Rust handle to Noesis's
-//!   `ObservableCollection<BaseComponent>`. It implements
-//!   `INotifyCollectionChanged`, so once you bind it to an
-//!   `ItemsControl::ItemsSource`
-//!   ([`FrameworkElement::set_items_source`](crate::view::FrameworkElement::set_items_source)),
-//!   every [`push_string`](ObservableCollection::push_string) /
-//!   [`remove_at`](ObservableCollection::remove_at) / ... from Rust raises
-//!   `CollectionChanged` and the control regenerates its item containers on the
-//!   next `View::update`.
+//! - [`ObservableCollection`] backs a list. Bind it with
+//!   [`FrameworkElement::set_items_source`](crate::view::FrameworkElement::set_items_source);
+//!   every mutation from Rust ([`push_string`](ObservableCollection::push_string),
+//!   [`remove_at`](ObservableCollection::remove_at),
+//!   [`move_item`](ObservableCollection::move_item), ...) raises
+//!   `CollectionChanged`, and the control updates its item containers on the
+//!   next [`View::update`](crate::view::View::update).
+//! - [`box_string`], [`box_bool`], [`box_i32`], [`box_f64`] and [`box_f32`]
+//!   wrap plain values as Noesis objects ([`Boxed`]) for use as list items,
+//!   converter parameters, fallback values or resources.
+//! - [`Binding`] and [`set_binding`] are the code equivalent of
+//!   `Prop="{Binding ...}"`; [`clear_binding`] removes one.
+//! - [`add_resource`] puts a converter or value in an element's resources so
+//!   XAML can reach it with `{StaticResource key}`.
 //!
-//! * [`box_string`]: wrap a `&str` as a `BoxedValue<String>` so it can be a
-//!   collection item rendered by a `<DataTemplate>` with `{Binding}` (the whole
-//!   item).
-//!
-//! For *property* binding (as opposed to list binding), the source is a
-//! [`ClassInstance`](crate::classes::ClassInstance), a Rust-backed
+//! For property binding, the source is usually a
+//! [`ClassInstance`](crate::classes::ClassInstance): a Rust-backed
 //! `DependencyObject` view model. Set it as a `DataContext` and bind to its
-//! DPs; see [`ClassRegistration::create_instance`](crate::classes::ClassRegistration::create_instance).
+//! dependency properties; see
+//! [`ClassRegistration::create_instance`](crate::classes::ClassRegistration::create_instance).
+//!
+//! ```no_run
+//! use noesis_runtime::binding::ObservableCollection;
+//! use noesis_runtime::view::FrameworkElement;
+//!
+//! noesis_runtime::init();
+//! let mut list = FrameworkElement::parse(
+//!     r#"<ListBox xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"/>"#,
+//! )
+//! .unwrap();
+//!
+//! let mut items = ObservableCollection::new();
+//! items.push_string("Sword");
+//! items.push_string("Shield");
+//! assert!(list.set_items_source(&items));
+//!
+//! // The ListBox picks this up on the next View::update.
+//! items.remove_at(0);
+//! ```
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
@@ -44,9 +65,7 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// Box a UTF-8 string as a `Noesis::BoxedValue<String>`, returned as an owning
-/// [`Boxed`] handle. Noesis copies the bytes, so the input may go away after
-/// this call.
+/// Boxes a string as a `Noesis::BoxedValue<String>`. Noesis copies the bytes.
 ///
 /// # Panics
 ///
@@ -61,10 +80,12 @@ pub fn box_string(value: &str) -> Boxed {
     }
 }
 
-/// Owned handle to a boxed value (a `Noesis::BoxedValue*`). Holds a `+1`
-/// reference released on drop. Adding it to an [`ObservableCollection`] makes
-/// the collection take its own reference, so a [`Boxed`] may be dropped right
-/// after the `push` if you don't need it again.
+/// An owned `Noesis::BoxedValue`, made by [`box_string`], [`box_bool`],
+/// [`box_i32`], [`box_f64`] or [`box_f32`]. Releases its reference on drop.
+///
+/// Anything you hand it to (a collection, a [`Binding`], a resource
+/// dictionary) takes its own reference, so you can drop the `Boxed` right
+/// after.
 pub struct Boxed {
     ptr: NonNull<c_void>,
 }
@@ -73,7 +94,8 @@ pub struct Boxed {
 unsafe impl Send for Boxed {}
 
 impl Boxed {
-    /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::BaseComponent*`, valid while `self` lives. No reference is
+    /// added.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
@@ -82,14 +104,19 @@ impl Boxed {
 
 impl Drop for Boxed {
     fn drop(&mut self) {
-        // SAFETY: produced by noesis_box_string with +1 ref.
+        // SAFETY: every noesis_box_* constructor hands out a +1 ref we own.
         unsafe { noesis_base_component_release(self.ptr.as_ptr()) }
     }
 }
 
-/// A Rust handle to a `Noesis::ObservableCollection<BaseComponent>`. Owns a
-/// `+1` reference released on drop. Bind it to an `ItemsControl::ItemsSource`
-/// and mutate it from Rust to drive a data-bound list.
+/// A `Noesis::ObservableCollection<BaseComponent>` owned from Rust. Bind it to
+/// an `ItemsControl` with
+/// [`FrameworkElement::set_items_source`](crate::view::FrameworkElement::set_items_source),
+/// then mutate it to drive the list. Releases its reference on drop; a bound
+/// control keeps its own.
+///
+/// Indices are positions in the current collection. Out-of-range indices
+/// return `false` or `None`; they never panic.
 pub struct ObservableCollection {
     ptr: NonNull<c_void>,
 }
@@ -104,12 +131,12 @@ impl Default for ObservableCollection {
 }
 
 impl ObservableCollection {
-    /// Create an empty observable collection.
+    /// Creates an empty collection.
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis allocation fails (returns null). Not expected once
-    /// [`crate::init`] has run.
+    /// Panics if Noesis returns null, which is not expected after
+    /// [`crate::init`].
     #[must_use]
     pub fn new() -> Self {
         let ptr = unsafe { noesis_observable_collection_create() };
@@ -118,15 +145,16 @@ impl ObservableCollection {
         }
     }
 
-    /// Raw `Noesis::BaseComponent*` (the collection), for handing to
-    /// [`FrameworkElement::set_items_source`](crate::view::FrameworkElement::set_items_source).
-    /// Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::BaseComponent*` for the collection, valid while `self`
+    /// lives. No reference is added. Most code passes `&self` to
+    /// [`FrameworkElement::set_items_source`](crate::view::FrameworkElement::set_items_source)
+    /// instead.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Number of items currently in the collection.
+    /// Number of items in the collection.
     #[must_use]
     pub fn len(&self) -> usize {
         // SAFETY: self.ptr is a live ObservableCollection*.
@@ -134,15 +162,14 @@ impl ObservableCollection {
         n.max(0) as usize
     }
 
-    /// Whether the collection is empty.
+    /// Whether the collection has no items.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Append a boxed string item, returning its index (or `None` on failure).
-    /// The collection takes its own reference to the boxed value, so nothing
-    /// needs to be kept alive on the Rust side.
+    /// Appends `value` as a boxed string and returns its index, or `None` if
+    /// Noesis rejected the add.
     ///
     /// # Panics
     ///
@@ -154,9 +181,8 @@ impl ObservableCollection {
         unsafe { self.push_component(boxed.raw()) }
     }
 
-    /// Append a boxed `bool` item, returning its index (or `None` on failure).
-    /// The collection takes its own reference; nothing needs to be kept alive on
-    /// the Rust side.
+    /// Appends `value` as a boxed `bool` and returns its index, or `None` if
+    /// Noesis rejected the add.
     pub fn push_bool(&mut self, value: bool) -> Option<usize> {
         let boxed = box_bool(value);
         // SAFETY: `boxed` is a live BaseComponent* for the duration of the call;
@@ -164,9 +190,8 @@ impl ObservableCollection {
         unsafe { self.push_component(boxed.raw()) }
     }
 
-    /// Append a boxed `i32` item, returning its index (or `None` on failure).
-    /// The collection takes its own reference; nothing needs to be kept alive on
-    /// the Rust side.
+    /// Appends `value` as a boxed `i32` and returns its index, or `None` if
+    /// Noesis rejected the add.
     pub fn push_i32(&mut self, value: i32) -> Option<usize> {
         let boxed = box_i32(value);
         // SAFETY: `boxed` is a live BaseComponent* for the duration of the call;
@@ -174,9 +199,8 @@ impl ObservableCollection {
         unsafe { self.push_component(boxed.raw()) }
     }
 
-    /// Append a boxed `f64` item, returning its index (or `None` on failure).
-    /// The collection takes its own reference; nothing needs to be kept alive on
-    /// the Rust side.
+    /// Appends `value` as a boxed `f64` and returns its index, or `None` if
+    /// Noesis rejected the add.
     pub fn push_f64(&mut self, value: f64) -> Option<usize> {
         let boxed = box_f64(value);
         // SAFETY: `boxed` is a live BaseComponent* for the duration of the call;
@@ -184,23 +208,20 @@ impl ObservableCollection {
         unsafe { self.push_component(boxed.raw()) }
     }
 
-    /// Append a [`ClassInstance`](crate::classes::ClassInstance) view model as a
-    /// nested item, returning its index (or `None` on failure). The collection
-    /// takes its own reference; the caller retains ownership of `instance`. Bind a
-    /// `<DataTemplate>` against the instance's dependency properties to render it.
+    /// Appends a [`ClassInstance`](crate::classes::ClassInstance) view model
+    /// and returns its index, or `None` if Noesis rejected the add. The
+    /// collection takes its own reference. Render it with a `<DataTemplate>`
+    /// that binds to the instance's dependency properties.
     pub fn push_object(&mut self, instance: &crate::classes::ClassInstance) -> Option<usize> {
         // SAFETY: `instance.raw()` is a live BaseComponent* for the lifetime of
         // `instance`, which outlives this call; the collection takes its own ref.
         unsafe { self.push_component(instance.raw()) }
     }
 
-    /// Insert a [`ClassInstance`](crate::classes::ClassInstance) view model at
-    /// `index` (allows `index == len`), returning `true` on success. The
-    /// collection takes its own reference; the caller retains ownership of
-    /// `instance`. The safe, object-typed counterpart of
-    /// [`insert_component`](Self::insert_component): the entity-keyed list
-    /// reconciler inserts a freshly-realized row here (the Add op) without leaving
-    /// `unsafe` in the Bevy layer.
+    /// Inserts a [`ClassInstance`](crate::classes::ClassInstance) view model
+    /// at `index`. `index == len` appends. Returns `false` if `index > len`.
+    /// The collection takes its own reference. This is the safe form of
+    /// [`insert_component`](Self::insert_component).
     pub fn insert_object(
         &mut self,
         index: usize,
@@ -211,55 +232,52 @@ impl ObservableCollection {
         unsafe { self.insert_component(index, instance.raw()) }
     }
 
-    /// Append an arbitrary `BaseComponent*` item, returning its index (or `None`
-    /// if the underlying handle is not a collection). The collection takes its
-    /// own reference; the caller retains ownership of `item`.
+    /// Appends any Noesis object and returns its index, or `None` if Noesis
+    /// rejected the add. The collection takes its own reference; you keep
+    /// yours.
     ///
     /// # Safety
     ///
-    /// `item` must be a valid live `Noesis::BaseComponent*` (e.g. from
-    /// [`Boxed::raw`], [`crate::classes::ClassInstance::raw`], or another Noesis
-    /// accessor).
+    /// `item` must be a live `Noesis::BaseComponent*`, e.g. from
+    /// [`Boxed::raw`] or [`ClassInstance::raw`](crate::classes::ClassInstance::raw).
     pub unsafe fn push_component(&mut self, item: *mut c_void) -> Option<usize> {
         let idx = unsafe { noesis_observable_collection_add(self.ptr.as_ptr(), item) };
         (idx >= 0).then_some(idx as usize)
     }
 
-    /// Insert a `BaseComponent*` at `index` (allows `index == len`). Returns
-    /// `false` on an out-of-range index.
+    /// Inserts any Noesis object at `index`. `index == len` appends. Returns
+    /// `false` if `index > len`. The collection takes its own reference.
     ///
     /// # Safety
     ///
-    /// `item` must be a valid live `Noesis::BaseComponent*`.
+    /// `item` must be a live `Noesis::BaseComponent*`.
     pub unsafe fn insert_component(&mut self, index: usize, item: *mut c_void) -> bool {
         unsafe { noesis_observable_collection_insert(self.ptr.as_ptr(), index as u32, item) }
     }
 
-    /// Replace the item at `index`. Returns `false` if `index >= len`.
+    /// Replaces the item at `index`. Returns `false` if `index >= len`. The
+    /// collection takes its own reference to `item`.
     ///
     /// # Safety
     ///
-    /// `item` must be a valid live `Noesis::BaseComponent*`.
+    /// `item` must be a live `Noesis::BaseComponent*`.
     pub unsafe fn set_component(&mut self, index: usize, item: *mut c_void) -> bool {
         unsafe { noesis_observable_collection_set(self.ptr.as_ptr(), index as u32, item) }
     }
 
-    /// Remove the item at `index`. Returns `false` if `index >= len`.
+    /// Removes the item at `index`. Returns `false` if `index >= len`.
     pub fn remove_at(&mut self, index: usize) -> bool {
         // SAFETY: self.ptr is a live ObservableCollection*.
         unsafe { noesis_observable_collection_remove_at(self.ptr.as_ptr(), index as u32) }
     }
 
-    /// Move the item at `old_index` to `new_index`, keeping the same object in
-    /// the collection (no boxing / re-wrapping). This maps to Noesis's real
-    /// `BaseObservableCollection::Move`, which raises a single
-    /// `NotifyCollectionChangedAction.Move`: a bound `ItemsControl` relocates the
-    /// *existing* container, so its selection and scroll position survive the
-    /// reorder. Reconciling row order with `move_item` (rather than
-    /// remove-then-insert) is what lets `Selected` / currency outlast a sort.
+    /// Moves the item at `old_index` to `new_index`. Returns `false` if either
+    /// index is `>= len`.
     ///
-    /// Returns `false` if either index is out of range (`>= len`); both indices
-    /// address positions in the current collection.
+    /// This raises a single `Move` change rather than a remove and an add, so
+    /// a bound `ItemsControl` relocates the existing container and keeps its
+    /// selection and scroll position. Use it to reorder rows, e.g. after a
+    /// sort.
     pub fn move_item(&mut self, old_index: usize, new_index: usize) -> bool {
         // SAFETY: self.ptr is a live ObservableCollection*.
         unsafe {
@@ -267,15 +285,15 @@ impl ObservableCollection {
         }
     }
 
-    /// Remove every item.
+    /// Removes every item.
     pub fn clear(&mut self) {
         // SAFETY: self.ptr is a live ObservableCollection*.
         unsafe { noesis_observable_collection_clear(self.ptr.as_ptr()) }
     }
 
-    /// Borrowed (no `+1`) pointer to the item at `index`, or `None` if out of
-    /// range. The collection owns the reference; copy / re-root if you need it
-    /// past the next mutation.
+    /// The item at `index` as a borrowed `BaseComponent*`, or `None` if
+    /// `index >= len`. No reference is added, so the pointer can dangle once a
+    /// later mutation removes or replaces the item.
     #[must_use]
     pub fn get(&self, index: usize) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live ObservableCollection*.
@@ -291,8 +309,7 @@ impl Drop for ObservableCollection {
     }
 }
 
-/// Box a `bool` as a `Noesis::BoxedValue<bool>`. Like [`box_string`], returns an
-/// owning [`Boxed`] holding a `+1` reference.
+/// Boxes a `bool` as a `Noesis::BoxedValue<bool>`.
 #[must_use]
 pub fn box_bool(value: bool) -> Boxed {
     let ptr = unsafe { noesis_box_bool(value) };
@@ -301,7 +318,7 @@ pub fn box_bool(value: bool) -> Boxed {
     }
 }
 
-/// Box an `i32` as a `Noesis::BoxedValue<int>`.
+/// Boxes an `i32` as a `Noesis::BoxedValue<int>`.
 #[must_use]
 pub fn box_i32(value: i32) -> Boxed {
     let ptr = unsafe { noesis_box_int32(value) };
@@ -310,7 +327,8 @@ pub fn box_i32(value: i32) -> Boxed {
     }
 }
 
-/// Box an `f64` as a `Noesis::BoxedValue<double>`.
+/// Boxes an `f64` as a `Noesis::BoxedValue<double>`. For `float`-typed
+/// dependency properties use [`box_f32`] instead.
 #[must_use]
 pub fn box_f64(value: f64) -> Boxed {
     let ptr = unsafe { noesis_box_double(value) };
@@ -319,11 +337,12 @@ pub fn box_f64(value: f64) -> Boxed {
     }
 }
 
-/// Box an `f32` as a `Noesis::BoxedValue<float>`. Prefer this over [`box_f64`]
-/// for `float`-typed dependency properties (`FontSize`, `Opacity`, ...): a
-/// `BoxedValue<double>` does **not** apply to a `float` DP through a
-/// [`Style`](crate::styles::Style) setter or a resource entry (no implicit
-/// unbox-coercion), so the value would be silently ignored.
+/// Boxes an `f32` as a `Noesis::BoxedValue<float>`.
+///
+/// Use this, not [`box_f64`], for `float`-typed dependency properties
+/// (`FontSize`, `Opacity`, ...). Noesis does not coerce a boxed `double` to
+/// `float` through a [`Style`](crate::styles::Style) setter or a resource
+/// entry, so a `box_f64` value there is silently ignored.
 #[must_use]
 pub fn box_f32(value: f32) -> Boxed {
     // SAFETY: no preconditions; returns a +1-owned BoxedValue<float>.
@@ -333,8 +352,7 @@ pub fn box_f32(value: f32) -> Boxed {
     }
 }
 
-/// How a [`Binding`] propagates values between source and target. Mirrors
-/// `Noesis::BindingMode`.
+/// How a [`Binding`] moves values between source and target.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -351,8 +369,8 @@ pub enum BindingMode {
     OneWayToSource = 4,
 }
 
-/// When a `TwoWay` / `OneWayToSource` [`Binding`] pushes target changes back to
-/// the source. Mirrors `Noesis::UpdateSourceTrigger`.
+/// When a `TwoWay` or `OneWayToSource` [`Binding`] writes target changes back
+/// to the source.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -360,21 +378,30 @@ pub enum UpdateSourceTrigger {
     /// Use the target property's default trigger (`PropertyChanged` for most
     /// properties; `LostFocus` for `TextBox.Text`).
     Default = 0,
-    /// Update the source immediately on every target change.
+    /// On every target change.
     PropertyChanged = 1,
-    /// Update the source when the target element loses focus.
+    /// When the target element loses focus.
     LostFocus = 2,
-    /// Update the source only on an explicit `UpdateSource` call.
+    /// Only on an explicit `UpdateSource` call.
     Explicit = 3,
 }
 
-/// A code-built `Noesis::Binding`, the programmatic equivalent of authoring
-/// `{Binding ...}` in XAML. Build it with [`Binding::new`] (a property path) or
-/// [`Binding::whole`] (bind the whole `DataContext`), chain the knob setters,
-/// then wire it onto a target DP with [`set_binding`].
+/// A binding built in code, the equivalent of `{Binding ...}` in XAML.
 ///
-/// Owns a `+1` reference released on drop. [`set_binding`] makes Noesis take its
-/// own reference, so a [`Binding`] may be dropped right after wiring.
+/// Start with [`Binding::new`] (a property path) or [`Binding::whole`] (the
+/// whole `DataContext`), chain the setters, then attach it to a dependency
+/// property with [`set_binding`]. Noesis keeps its own reference, so the
+/// `Binding` can be dropped right after.
+///
+/// ```no_run
+/// use noesis_runtime::binding::{set_binding, Binding, BindingMode};
+/// # fn demo(element: &noesis_runtime::view::FrameworkElement) {
+/// let binding = Binding::new("Health")
+///     .mode(BindingMode::OneWay)
+///     .string_format("HP {0}");
+/// assert!(set_binding(element, "Text", &binding));
+/// # }
+/// ```
 pub struct Binding {
     ptr: NonNull<c_void>,
 }
@@ -383,8 +410,8 @@ pub struct Binding {
 unsafe impl Send for Binding {}
 
 impl Binding {
-    /// Create a binding with the given source property path (e.g. `"Title"`,
-    /// `"Item.Name"`).
+    /// Creates a binding to the source property path `path`, e.g. `"Title"`
+    /// or `"Item.Name"`.
     ///
     /// # Panics
     ///
@@ -399,8 +426,8 @@ impl Binding {
         }
     }
 
-    /// Create a binding with an empty path: binds to the whole `DataContext`
-    /// (or `Source`) object, like `{Binding}` in XAML.
+    /// Creates a binding with no path, so it binds to the whole source object
+    /// (the `DataContext` or [`source`](Self::source)), like `{Binding}`.
     ///
     /// # Panics
     ///
@@ -413,46 +440,44 @@ impl Binding {
         }
     }
 
-    /// Raw `Noesis::Binding*` (a `BaseComponent*`). Borrowed for the lifetime of
-    /// `self`.
+    /// Raw `Noesis::Binding*`, valid while `self` lives. No reference is
+    /// added.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Set the binding [`mode`](BindingMode). Chainable.
+    /// Sets the [`BindingMode`].
     #[must_use]
     pub fn mode(self, mode: BindingMode) -> Self {
         unsafe { noesis_binding_set_mode(self.ptr.as_ptr(), mode as i32) };
         self
     }
 
-    /// Set the [`UpdateSourceTrigger`]. Chainable.
+    /// Sets the [`UpdateSourceTrigger`].
     #[must_use]
     pub fn update_source_trigger(self, trigger: UpdateSourceTrigger) -> Self {
         unsafe { noesis_binding_set_update_source_trigger(self.ptr.as_ptr(), trigger as i32) };
         self
     }
 
-    /// Attach a Rust [`Converter`]. Chainable. The binding takes its own
-    /// reference, so the [`Converter`] handle may be dropped afterwards (the
-    /// converter stays alive while the binding references it).
+    /// Attaches a [`Converter`]. The binding keeps its own reference, so the
+    /// `Converter` handle can be dropped afterwards.
     #[must_use]
     pub fn converter(self, converter: &Converter) -> Self {
         unsafe { noesis_binding_set_converter(self.ptr.as_ptr(), converter.raw()) };
         self
     }
 
-    /// Set the converter parameter (a boxed value passed to the converter on
-    /// every call). The binding stores its own reference. Chainable.
+    /// Sets the value passed to the converter as its parameter on every call.
+    /// The binding keeps its own reference.
     #[must_use]
     pub fn converter_parameter(self, parameter: &Boxed) -> Self {
         unsafe { noesis_binding_set_converter_parameter(self.ptr.as_ptr(), parameter.raw()) };
         self
     }
 
-    /// Set a .NET-style composite `StringFormat` (e.g. `"F2"`, `"Value is
-    /// {0:F2}"`). Chainable.
+    /// Sets a .NET-style `StringFormat`, e.g. `"F2"` or `"Value is {0:F2}"`.
     ///
     /// # Panics
     ///
@@ -464,15 +489,15 @@ impl Binding {
         self
     }
 
-    /// Set the fallback value used when the binding can't produce one. The
-    /// binding stores its own reference. Chainable.
+    /// Sets the value used when the binding can't produce one. The binding
+    /// keeps its own reference.
     #[must_use]
     pub fn fallback_value(self, value: &Boxed) -> Self {
         unsafe { noesis_binding_set_fallback_value(self.ptr.as_ptr(), value.raw()) };
         self
     }
 
-    /// Bind against another element resolved by its `x:Name`. Chainable.
+    /// Uses the element named `name` (its `x:Name`) as the source.
     ///
     /// # Panics
     ///
@@ -484,38 +509,34 @@ impl Binding {
         self
     }
 
-    /// Bind relative to the target element itself (`RelativeSource Self`).
-    /// Chainable.
+    /// Uses the target element itself as the source (`RelativeSource Self`).
     #[must_use]
     pub fn relative_source_self(self) -> Self {
         unsafe { noesis_binding_set_relative_source_self(self.ptr.as_ptr()) };
         self
     }
 
-    /// Bind relative to an ancestor of the target: `RelativeSource
-    /// {RelativeSource Mode=FindAncestor, AncestorType=type_name,
-    /// AncestorLevel=level}`. `type_name` is resolved through Noesis's
-    /// reflection registry (use the registered class name, e.g. `"StackPanel"`,
-    /// `"Border"`); the type must already be registered, which referencing it
-    /// from loaded XAML guarantees. `level` is the 1-based ancestor index
-    /// (`1` = the nearest ancestor of that type; `0` is treated as `1`).
-    /// Chainable.
+    /// Uses an ancestor of the target as the source, like
+    /// `{RelativeSource FindAncestor, AncestorType=type_name, AncestorLevel=level}`.
     ///
-    /// If `type_name` is unknown / not yet registered (or contains an interior
-    /// NUL), the relative source is left unset; the binding falls back to its
-    /// other source configuration rather than panicking. Build with
+    /// `type_name` is a registered Noesis class name such as `"StackPanel"`.
+    /// Built-in types are registered once any loaded XAML has referenced them.
+    /// `level` is 1-based: `1` is the nearest ancestor of that type, and `0`
+    /// is treated as `1`.
+    ///
+    /// An unknown `type_name` (or one with an interior NUL) leaves the
+    /// relative source unset instead of panicking. Use
     /// [`try_relative_source_find_ancestor`](Self::try_relative_source_find_ancestor)
-    /// if you need to observe that failure.
+    /// to detect that.
     #[must_use]
     pub fn relative_source_find_ancestor(self, type_name: &str, level: u32) -> Self {
         let _ = self.set_relative_source_find_ancestor(type_name, level);
         self
     }
 
-    /// Like [`relative_source_find_ancestor`](Self::relative_source_find_ancestor)
-    /// but borrows and returns whether the ancestor type resolved (so a caller
-    /// can distinguish an unknown type name from a successful set). `false` also
-    /// covers a `type_name` with an interior NUL byte.
+    /// Like [`relative_source_find_ancestor`](Self::relative_source_find_ancestor),
+    /// but returns `false` when `type_name` is unknown or contains an interior
+    /// NUL, leaving the binding unchanged.
     pub fn try_relative_source_find_ancestor(&self, type_name: &str, level: u32) -> bool {
         self.set_relative_source_find_ancestor(type_name, level)
     }
@@ -531,8 +552,8 @@ impl Binding {
         }
     }
 
-    /// Bind to the previous data item in a data-bound collection
-    /// (`RelativeSource PreviousData`). Chainable.
+    /// Uses the previous item of the data-bound collection as the source
+    /// (`RelativeSource PreviousData`).
     #[must_use]
     pub fn relative_source_previous_data(self) -> Self {
         // SAFETY: self.ptr is a live Binding*.
@@ -540,8 +561,8 @@ impl Binding {
         self
     }
 
-    /// Bind to the control a `ControlTemplate` is applied to (`RelativeSource
-    /// TemplatedParent`). Chainable.
+    /// Uses the control a `ControlTemplate` is applied to as the source
+    /// (`RelativeSource TemplatedParent`).
     #[must_use]
     pub fn relative_source_templated_parent(self) -> Self {
         // SAFETY: self.ptr is a live Binding*.
@@ -549,14 +570,13 @@ impl Binding {
         self
     }
 
-    /// Set an explicit binding source object (overrides the inherited
-    /// `DataContext`). Chainable.
+    /// Sets an explicit source object, overriding the inherited `DataContext`.
+    /// Null clears it. The binding keeps its own reference.
     ///
     /// # Safety
     ///
-    /// `source` must be null or a live `Noesis::BaseComponent*` (e.g. a view
-    /// model from [`crate::classes::ClassInstance::raw`]). The binding stores
-    /// its own reference; the caller keeps ownership.
+    /// `source` must be null or a live `Noesis::BaseComponent*`, e.g. from
+    /// [`ClassInstance::raw`](crate::classes::ClassInstance::raw).
     #[must_use]
     pub unsafe fn source(self, source: *mut c_void) -> Self {
         unsafe { noesis_binding_set_source(self.ptr.as_ptr(), source) };
@@ -571,11 +591,9 @@ impl Drop for Binding {
     }
 }
 
-/// Wire `binding` onto `element`'s dependency property named `dp_name`, via
-/// `Noesis::BindingOperations::SetBinding`, the code-built equivalent of
-/// authoring `dp_name="{Binding ...}"` in XAML. Returns `false` if `element` is
-/// not a `DependencyObject` or `dp_name` doesn't resolve to one of its
-/// dependency properties.
+/// Binds `element`'s dependency property `dp_name` with `binding`, like
+/// writing `dp_name="{Binding ...}"` in XAML. Replaces any existing binding.
+/// Returns `false` if `dp_name` is not a dependency property of `element`.
 ///
 /// # Panics
 ///
@@ -588,13 +606,13 @@ pub fn set_binding(element: &FrameworkElement, dp_name: &str, binding: &Binding)
     unsafe { noesis_set_binding(element.raw(), c.as_ptr(), binding.raw()) }
 }
 
-/// Remove any binding on `element`'s dependency property named `dp_name`, the
-/// inverse of [`set_binding`] (`Noesis::BindingOperations::ClearBinding`). The
-/// property reverts to its default/local-value precedence; a value the binding
-/// last wrote is discarded with it. Returns `true` when no binding was present
-/// (the clear no-ops), so removal-driven callers don't need to track
-/// bound-ness; `false` only when `element` is not a `DependencyObject` or
-/// `dp_name` doesn't resolve to one of its dependency properties.
+/// Removes the binding on `element`'s dependency property `dp_name`, undoing
+/// [`set_binding`]. The property falls back to its local or default value,
+/// discarding the last value the binding wrote.
+///
+/// Returns `true` even if no binding was set, so you don't need to track which
+/// properties are bound. Returns `false` only if `dp_name` is not a dependency
+/// property of `element`.
 ///
 /// # Panics
 ///
@@ -606,12 +624,10 @@ pub fn clear_binding(element: &FrameworkElement, dp_name: &str) -> bool {
     unsafe { noesis_clear_binding(element.raw(), c.as_ptr()) }
 }
 
-/// Insert `object` (e.g. a [`Converter`] via [`Converter::raw`], or a [`Boxed`]
-/// value) into `element`'s `ResourceDictionary` under `key`, creating the
-/// dictionary if the element has none. Makes the object reachable from XAML via
-/// `{StaticResource key}`, e.g. `{Binding Path, Converter={StaticResource
-/// key}}`. The dictionary stores its own reference. Returns `false` if `element`
-/// is not a `FrameworkElement`.
+/// Adds `object` to `element`'s resources under `key`, creating the resource
+/// dictionary if needed. XAML under `element` can then reach it with
+/// `{StaticResource key}`, e.g. `{Binding Path, Converter={StaticResource key}}`.
+/// The dictionary keeps its own reference. Returns `false` if `object` is null.
 ///
 /// # Panics
 ///
@@ -619,8 +635,9 @@ pub fn clear_binding(element: &FrameworkElement, dp_name: &str) -> bool {
 ///
 /// # Safety
 ///
-/// `object` must be a live `Noesis::BaseComponent*` (e.g. [`Converter::raw`] /
-/// [`Boxed::raw`] / [`crate::classes::ClassInstance::raw`]).
+/// `object` must be null or a live `Noesis::BaseComponent*`, e.g. from
+/// [`Converter::raw`], [`Boxed::raw`] or
+/// [`ClassInstance::raw`](crate::classes::ClassInstance::raw).
 #[must_use]
 pub unsafe fn add_resource(element: &FrameworkElement, key: &str, object: *mut c_void) -> bool {
     let c = CString::new(key).expect("resource key contained interior NUL");

@@ -1,7 +1,6 @@
 //! `clear_binding` detaches a code-built binding: after the clear, source
-//! mutations stop propagating to the target DP. Guards the removal-teardown
-//! path (a consumer un-wiring a binding must actually stop the data flow, not
-//! just drop its Rust handle).
+//! mutations stop propagating to the target DP, and clearing an unbound DP
+//! still reports success.
 
 use std::collections::HashMap;
 

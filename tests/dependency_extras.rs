@@ -20,12 +20,8 @@ impl XamlProvider for InMem {
     }
 }
 
-// Root Grid declares three rows; `RowChild` sits in row 2 via the `Grid.Row`
-// attached property. The `Canvas` hosts a child positioned with `Canvas.Left` /
-// `Canvas.Top`. `ClearChild` carries a local `Width` and `Text` for the
-// clear / current / base sections. Because the XAML names `<Grid>` and
-// `<Canvas>`, those owner types are reflected and attached-property resolution
-// works.
+// Attached-property lookup needs the owner type reflected; naming `<Grid>` and
+// `<Canvas>` in the XAML guarantees that.
 const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -77,10 +73,6 @@ fn dependency_extras() {
         let mut canv_child = content.find_name("CanvChild").expect("CanvChild");
         let mut clear_child = content.find_name("ClearChild").expect("ClearChild");
 
-        // Grid.Row/Column are declared uint32_t in Noesis (not int32_t), so they
-        // are only reachable through the UInt32 tag; the Int32 tag must reject them.
-
-        // Panel.ZIndex is an Int32 attached property; XAML set it to 2.
         assert_eq!(
             row_child.get_attached_i32("Panel", "ZIndex"),
             Some(2),
@@ -96,7 +88,8 @@ fn dependency_extras() {
             "Panel.ZIndex should now be 1",
         );
 
-        // Grid.Row is uint32 → use the UInt32 tag.
+        // Grid.Row/Column are uint32_t in Noesis (not int32_t), so only the
+        // UInt32 tag reaches them.
         assert_eq!(
             row_child.get_attached_u32("Grid", "Row"),
             Some(2),
@@ -112,15 +105,12 @@ fn dependency_extras() {
             "Grid.Row should now be 1",
         );
 
-        // The Int32 tag genuinely mismatches the uint32 Grid.Row type and must
-        // reject it cleanly.
         assert_eq!(
             row_child.get_attached_i32("Grid", "Row"),
             None,
             "Grid.Row is uint32 in Noesis; the Int32 FFI tag must reject it",
         );
 
-        // Bool attached round-trip on Grid.IsSharedSizeScope (declared `bool`).
         assert_eq!(
             row_child.get_attached_bool("Grid", "IsSharedSizeScope"),
             Some(false),
@@ -156,7 +146,6 @@ fn dependency_extras() {
             "Canvas.Left should now be 88",
         );
 
-        // Negatives: unknown owner type, unknown property, and tag mismatch.
         assert!(
             !row_child.set_attached_i32("NotAType", "ZIndex", 0),
             "unknown owner type should fail",
@@ -175,8 +164,6 @@ fn dependency_extras() {
             None,
             "unknown attached property get should be None",
         );
-        // Tag mismatch: the property resolves but the type is wrong; only the
-        // tag is rejected, not the lookup.
         assert!(
             !row_child.set_attached_f32("Panel", "ZIndex", 1.0),
             "tag mismatch (Panel.ZIndex is Int32, not Float) should fail",
@@ -190,9 +177,7 @@ fn dependency_extras() {
         assert!(clear_child.set_f32("Width", 250.0), "set Width=250");
         assert_eq!(clear_child.get_f32("Width"), Some(250.0), "Width is 250");
 
-        // clear_value reverts Width to its default. In Noesis (as in WPF) the
-        // FrameworkElement.Width default is NaN ("Auto"), so the post-clear
-        // read is Some(NaN) rather than a finite number; assert that shape.
+        // FrameworkElement.Width defaults to NaN ("Auto"), as in WPF.
         assert!(clear_child.clear_value("Width"), "clear_value(Width) ok");
         let after = clear_child.get_f32("Width");
         assert!(
@@ -209,8 +194,6 @@ fn dependency_extras() {
             "clear_value on unknown property should fail",
         );
 
-        // set_current overrides the effective value; Noesis keeps the local
-        // (set_f32) value as the base.
         assert!(clear_child.set_f32("Width", 200.0), "set base Width=200");
         assert!(
             clear_child.set_current_f32("Width", 123.0),
@@ -252,12 +235,7 @@ fn dependency_extras() {
             "base Text unaffected by SetCurrentValue",
         );
 
-        // There is no get_base_component: BaseComponent tags are not supported
-        // by the base-value FFI, so that path is unreachable from Rust by
-        // construction.
-
-        // Width is `float` in Noesis (NOT WPF's double), so its reflected type
-        // is PropType::Float.
+        // Width is `float` in Noesis, not WPF's `double`.
         assert_eq!(
             clear_child.property_tag("Width"),
             Some(PropType::Float),
@@ -284,7 +262,6 @@ fn dependency_extras() {
             "unknown property has no tag",
         );
 
-        // Width is currently 123 (the SetCurrentValue effective value above).
         match clear_child.get_dynamic("Width") {
             Some(DynValue::F32(v)) => {
                 assert_eq!(v, 123.0, "dynamic Width value");

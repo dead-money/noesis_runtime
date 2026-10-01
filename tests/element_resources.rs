@@ -1,5 +1,5 @@
-//! Per-element `Resources` dictionary: set, look up (including logical-chain
-//! inheritance by children), and clear; missing keys return `None` without throwing.
+//! Per-element `Resources` dictionary: set, look up (children resolve through
+//! the logical chain), and read back. Missing keys return `None`.
 
 use std::ffi::CStr;
 

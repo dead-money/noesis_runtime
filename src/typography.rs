@@ -1,29 +1,28 @@
-//! Typography & text properties: the [`FontFamily`] wrapper, the
-//! `TextElement` attached font properties (size / family / foreground / weight /
-//! style / stretch), a representative subset of the OpenType `Typography`
-//! attached properties, and the IME [`CompositionUnderline`] list on a `TextBox`.
+//! Font and text properties on elements:
 //!
-//! # Ownership
+//! - [`FontFamily`], and the inherited `TextElement` font properties:
+//!   [`set_font_size`], [`set_font_family`], [`set_foreground`],
+//!   [`set_font_weight`], [`set_font_style`], [`set_font_stretch`].
+//! - A subset of the OpenType `Typography` properties: [`set_capitals`],
+//!   [`set_numeral_style`], [`set_fraction`], [`set_variants`],
+//!   [`set_standard_ligatures`], [`set_kerning`].
+//! - IME composition underlines on a `TextBox`: [`add_composition_underline`]
+//!   and friends.
 //!
-//! [`FontFamily`] is an owning handle over a freshly-created Noesis `FontFamily`
-//! holding a single `+1` reference, released on [`Drop`], the same idiom as the
-//! brush/transform handles in [`crate::brushes`]. Assigning it to an element's
-//! `TextElement.FontFamily` makes Noesis take its own reference, so the handle
-//! may be dropped right after assignment.
+//! Every setter has a getter that reads the effective value from the live
+//! Noesis object, so an unset property reads back its inherited or default
+//! value.
 //!
-//! The `TextElement` / `Typography` accessors and the `CompositionUnderline`
-//! list operate on a borrowed [`FrameworkElement`]
-//! (any element, or specifically a `TextBox` for the IME underlines). Every
-//! setter has a matching getter that re-reads the value from the *live* Noesis
-//! object.
+//! [`FontFamily`] owns one reference to its Noesis object and releases it on
+//! [`Drop`]. Assigning it to an element makes Noesis take its own reference, so
+//! the handle may be dropped right after.
 //!
-//! # Font family enumeration
+//! # Listing fonts
 //!
-//! 3.2.13 exposes per-family enumeration only ([`FontFamily::num_fonts`] /
-//! [`FontFamily::font_name`], which resolve through the registered font
-//! provider). There is no SDK API to enumerate the set of *available family
-//! names* from the font system; the host font provider is the authority on which
-//! families it serves. See `LIMITATIONS.md` "Known SDK limitations".
+//! The SDK can list the fonts a family resolves to ([`FontFamily::num_fonts`],
+//! [`FontFamily::font_name`]) but not the families installed on the system.
+//! Your [font provider](crate::font_provider) decides which families exist, so
+//! ask it. See "Listing installed fonts" in `LIMITATIONS.md`.
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -52,10 +51,10 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-// ── Enums (ordinals mirror the Noesis headers exactly) ───────────────────────
+// Enum ordinals cross the FFI as i32 and must match the Noesis headers.
 
-/// `Noesis::FontWeight`. The numeric value *is* the weight
-/// (e.g. `Normal` = 400, `Bold` = 700), matching the OpenType `usWeightClass`.
+/// Font weight. The discriminant is the OpenType `usWeightClass` value
+/// (`Normal` = 400, `Bold` = 700).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -103,7 +102,7 @@ impl FontWeight {
     }
 }
 
-/// `Noesis::FontStyle`.
+/// Font slant.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -127,7 +126,7 @@ impl FontStyle {
     }
 }
 
-/// `Noesis::FontStretch`.
+/// Font width, from most condensed to most expanded.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -169,7 +168,7 @@ impl FontStretch {
     }
 }
 
-/// `Noesis::FontCapitals`.
+/// OpenType capital-letter forms (`Typography.Capitals`).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -205,7 +204,7 @@ impl FontCapitals {
     }
 }
 
-/// `Noesis::FontNumeralStyle`.
+/// OpenType numeral style (`Typography.NumeralStyle`).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -229,7 +228,7 @@ impl FontNumeralStyle {
     }
 }
 
-/// `Noesis::FontFraction`.
+/// OpenType fraction style (`Typography.Fraction`).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -253,7 +252,8 @@ impl FontFraction {
     }
 }
 
-/// `Noesis::FontVariants`.
+/// OpenType glyph variants such as superscript and subscript
+/// (`Typography.Variants`).
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -286,8 +286,7 @@ impl FontVariants {
     }
 }
 
-/// `Noesis::CompositionLineStyle`: the line style of an IME composition
-/// underline.
+/// The line style of an IME [`CompositionUnderline`].
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -317,14 +316,11 @@ impl CompositionLineStyle {
     }
 }
 
-// ── FontFamily ───────────────────────────────────────────────────────────────
-
-/// An owning handle to a Noesis `FontFamily`, created from a *source* string
-/// (e.g. `"Arial"`, `"#PT Root UI"`, or a comma-separated fallback list).
+/// An owning handle to a Noesis `FontFamily`, created from a source string
+/// such as `"Arial"`, `"#PT Root UI"`, or a comma-separated fallback list.
 ///
-/// Holds one `+1` reference released on [`Drop`]. Assign it to an element with
-/// [`set_font_family`] (which `AddRef`s on the Noesis side), after which the
-/// handle may be dropped.
+/// Assign it with [`set_font_family`]; the element takes its own reference, so
+/// the handle may be dropped afterwards.
 pub struct FontFamily {
     ptr: NonNull<c_void>,
 }
@@ -357,23 +353,22 @@ impl FontFamily {
         self.ptr.as_ptr()
     }
 
-    /// The source string used to construct this family, re-read from the live
-    /// Noesis object.
+    /// The source string this family was created from.
     #[must_use]
     pub fn source(&self) -> Option<String> {
         read_source(self.ptr.as_ptr())
     }
 
-    /// Number of concrete fonts the family resolved to via the registered font
-    /// provider (`0` with no provider). This is the only per-family enumeration
-    /// 3.2.13 offers. See the module docs.
+    /// Number of fonts the family resolved to through the registered font
+    /// provider. `0` with no provider or no match.
     #[must_use]
     pub fn num_fonts(&self) -> u32 {
         // SAFETY: self.ptr is a live FontFamily*.
         unsafe { noesis_typography_font_family_get_num_fonts(self.ptr.as_ptr()) }
     }
 
-    /// Name of the resolved font at `index`, or `None` if out of range.
+    /// Name of the resolved font at `index`, or `None` if `index` is not below
+    /// [`num_fonts`](Self::num_fonts).
     #[must_use]
     pub fn font_name(&self, index: u32) -> Option<String> {
         // SAFETY: self.ptr is a live FontFamily*; the returned pointer is a
@@ -394,23 +389,22 @@ impl Drop for FontFamily {
     }
 }
 
-/// A *borrowed* `FontFamily` read back from an element's `TextElement.FontFamily`
-/// (see [`get_font_family`]). Does not own a reference; its lifetime is tied to
-/// the borrow of the element it was read from, so it cannot outlive it.
+/// A borrowed `FontFamily` returned by [`get_font_family`]. It holds no
+/// reference of its own and cannot outlive the element borrow it came from.
 pub struct FontFamilyRef<'a> {
     ptr: NonNull<c_void>,
     _marker: PhantomData<&'a ()>,
 }
 
 impl FontFamilyRef<'_> {
-    /// Raw `Noesis::FontFamily*`. Use it to assert pointer identity against the
-    /// [`FontFamily`] handle that was assigned.
+    /// Raw `Noesis::FontFamily*`. Compare it with [`FontFamily::raw`] to check
+    /// which family is assigned.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// The source string of the assigned family, re-read from the live object.
+    /// The source string of the assigned family.
     #[must_use]
     pub fn source(&self) -> Option<String> {
         read_source(self.ptr.as_ptr())
@@ -428,17 +422,19 @@ fn read_source(ptr: *mut c_void) -> Option<String> {
     }
 }
 
-// ── TextElement attached font properties ─────────────────────────────────────
-
-/// Set `TextElement.FontSize` (device-independent pixels) on `element`. Returns
-/// `false` if `element` is not a `DependencyObject`.
+/// Set `TextElement.FontSize` on `element`, in device-independent pixels. It
+/// inherits down the element tree.
+///
+/// This and the other setters here return `false` only if Noesis rejects the
+/// element as not a `DependencyObject`, which doesn't happen for a
+/// [`FrameworkElement`].
 #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_font_size(element: &FrameworkElement, size: f32) -> bool {
     // SAFETY: element.raw() is a live FrameworkElement* (a DependencyObject*).
     unsafe { noesis_typography_text_element_set_font_size(element.raw(), size) }
 }
 
-/// Read `TextElement.FontSize` back from the live object.
+/// The effective `TextElement.FontSize` of `element`.
 #[must_use]
 pub fn font_size(element: &FrameworkElement) -> Option<f32> {
     let mut out = 0.0_f32;
@@ -450,15 +446,16 @@ pub fn font_size(element: &FrameworkElement) -> Option<f32> {
     }
 }
 
-/// Set `TextElement.FontFamily` on `element` (Noesis `AddRef`s the family).
+/// Set `TextElement.FontFamily` on `element`. The element takes its own
+/// reference to `family`.
 #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_font_family(element: &FrameworkElement, family: &FontFamily) -> bool {
     // SAFETY: both pointers are live for the call.
     unsafe { noesis_typography_text_element_set_font_family(element.raw(), family.raw()) }
 }
 
-/// Read the borrowed `TextElement.FontFamily` currently set on `element`, or
-/// `None` if unset / type mismatch.
+/// The effective `TextElement.FontFamily` of `element`, or `None` if there is
+/// none.
 #[must_use]
 pub fn get_font_family(element: &FrameworkElement) -> Option<FontFamilyRef<'_>> {
     // SAFETY: element.raw() is live; the returned pointer is a borrowed
@@ -470,16 +467,17 @@ pub fn get_font_family(element: &FrameworkElement) -> Option<FontFamilyRef<'_>> 
     })
 }
 
-/// Set `TextElement.Foreground` on `element` to any [`Brush`] from
-/// [`crate::brushes`] (Noesis `AddRef`s it).
+/// Set `TextElement.Foreground` (the text color) on `element` to any [`Brush`]
+/// from [`crate::brushes`]. The element takes its own reference.
 #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
 pub fn set_foreground(element: &FrameworkElement, brush: &impl Brush) -> bool {
     // SAFETY: both pointers are live for the call.
     unsafe { noesis_typography_text_element_set_foreground(element.raw(), brush.brush_raw()) }
 }
 
-/// Raw borrowed `TextElement.Foreground` `Brush*` (no `+1`), or `None`. Use it to
-/// assert pointer identity against the assigned brush.
+/// Borrowed `Brush*` of the effective `TextElement.Foreground`, or `None`. It
+/// holds no reference; compare it with a brush's raw pointer to check which
+/// brush is assigned.
 #[must_use]
 pub fn get_foreground(element: &FrameworkElement) -> Option<NonNull<c_void>> {
     // SAFETY: element.raw() is live; returns a borrowed Brush* or null.
@@ -494,8 +492,8 @@ pub fn set_font_weight(element: &FrameworkElement, weight: FontWeight) -> bool {
     unsafe { noesis_typography_text_element_set_font_weight(element.raw(), weight as i32) }
 }
 
-/// Read `TextElement.FontWeight` back as the typed [`FontWeight`], re-read from
-/// the live object. `None` if unset or the value is not a recognised weight.
+/// The effective `TextElement.FontWeight` of `element`. `None` if the value is
+/// not one of the named [`FontWeight`] variants.
 #[must_use]
 pub fn font_weight(element: &FrameworkElement) -> Option<FontWeight> {
     read_i32(element, noesis_typography_text_element_get_font_weight).and_then(FontWeight::from_raw)
@@ -508,8 +506,8 @@ pub fn set_font_style(element: &FrameworkElement, style: FontStyle) -> bool {
     unsafe { noesis_typography_text_element_set_font_style(element.raw(), style as i32) }
 }
 
-/// Read `TextElement.FontStyle` back as the typed [`FontStyle`], re-read from
-/// the live object. `None` if unset or the ordinal is unrecognised.
+/// The effective `TextElement.FontStyle` of `element`. `None` if the value is
+/// not a known [`FontStyle`].
 #[must_use]
 pub fn font_style(element: &FrameworkElement) -> Option<FontStyle> {
     read_i32(element, noesis_typography_text_element_get_font_style).and_then(FontStyle::from_raw)
@@ -522,15 +520,13 @@ pub fn set_font_stretch(element: &FrameworkElement, stretch: FontStretch) -> boo
     unsafe { noesis_typography_text_element_set_font_stretch(element.raw(), stretch as i32) }
 }
 
-/// Read `TextElement.FontStretch` back as the typed [`FontStretch`], re-read
-/// from the live object. `None` if unset or the ordinal is unrecognised.
+/// The effective `TextElement.FontStretch` of `element`. `None` if the value is
+/// not a known [`FontStretch`].
 #[must_use]
 pub fn font_stretch(element: &FrameworkElement) -> Option<FontStretch> {
     read_i32(element, noesis_typography_text_element_get_font_stretch)
         .and_then(FontStretch::from_raw)
 }
-
-// ── Typography attached DPs (representative subset) ───────────────────────────
 
 /// Set `Typography.Capitals` on `element`.
 #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
@@ -539,8 +535,8 @@ pub fn set_capitals(element: &FrameworkElement, value: FontCapitals) -> bool {
     unsafe { noesis_typography_set_capitals(element.raw(), value as i32) }
 }
 
-/// Read `Typography.Capitals` back as the typed [`FontCapitals`], re-read from
-/// the live object. `None` if unset or the ordinal is unrecognised.
+/// The effective `Typography.Capitals` of `element`. `None` if the value is not
+/// a known [`FontCapitals`].
 #[must_use]
 pub fn capitals(element: &FrameworkElement) -> Option<FontCapitals> {
     read_i32(element, noesis_typography_get_capitals).and_then(FontCapitals::from_raw)
@@ -553,8 +549,8 @@ pub fn set_numeral_style(element: &FrameworkElement, value: FontNumeralStyle) ->
     unsafe { noesis_typography_set_numeral_style(element.raw(), value as i32) }
 }
 
-/// Read `Typography.NumeralStyle` back as the typed [`FontNumeralStyle`],
-/// re-read from the live object. `None` if unset or the ordinal is unrecognised.
+/// The effective `Typography.NumeralStyle` of `element`. `None` if the value is
+/// not a known [`FontNumeralStyle`].
 #[must_use]
 pub fn numeral_style(element: &FrameworkElement) -> Option<FontNumeralStyle> {
     read_i32(element, noesis_typography_get_numeral_style).and_then(FontNumeralStyle::from_raw)
@@ -567,8 +563,8 @@ pub fn set_fraction(element: &FrameworkElement, value: FontFraction) -> bool {
     unsafe { noesis_typography_set_fraction(element.raw(), value as i32) }
 }
 
-/// Read `Typography.Fraction` back as the typed [`FontFraction`], re-read from
-/// the live object. `None` if unset or the ordinal is unrecognised.
+/// The effective `Typography.Fraction` of `element`. `None` if the value is not
+/// a known [`FontFraction`].
 #[must_use]
 pub fn fraction(element: &FrameworkElement) -> Option<FontFraction> {
     read_i32(element, noesis_typography_get_fraction).and_then(FontFraction::from_raw)
@@ -581,8 +577,8 @@ pub fn set_variants(element: &FrameworkElement, value: FontVariants) -> bool {
     unsafe { noesis_typography_set_variants(element.raw(), value as i32) }
 }
 
-/// Read `Typography.Variants` back as the typed [`FontVariants`], re-read from
-/// the live object. `None` if unset or the ordinal is unrecognised.
+/// The effective `Typography.Variants` of `element`. `None` if the value is not
+/// a known [`FontVariants`].
 #[must_use]
 pub fn variants(element: &FrameworkElement) -> Option<FontVariants> {
     read_i32(element, noesis_typography_get_variants).and_then(FontVariants::from_raw)
@@ -595,7 +591,7 @@ pub fn set_standard_ligatures(element: &FrameworkElement, value: bool) -> bool {
     unsafe { noesis_typography_set_standard_ligatures(element.raw(), value) }
 }
 
-/// Read `Typography.StandardLigatures` back.
+/// The effective `Typography.StandardLigatures` of `element`.
 #[must_use]
 pub fn standard_ligatures(element: &FrameworkElement) -> Option<bool> {
     read_bool(element, noesis_typography_get_standard_ligatures)
@@ -608,26 +604,23 @@ pub fn set_kerning(element: &FrameworkElement, value: bool) -> bool {
     unsafe { noesis_typography_set_kerning(element.raw(), value) }
 }
 
-/// Read `Typography.Kerning` back.
+/// The effective `Typography.Kerning` of `element`.
 #[must_use]
 pub fn kerning(element: &FrameworkElement) -> Option<bool> {
     read_bool(element, noesis_typography_get_kerning)
 }
 
-// ── CompositionUnderline (IME) ───────────────────────────────────────────────
-
-/// An IME composition underline range over a `TextBox`'s text (start/end are
-/// character offsets), with its line [`style`](CompositionUnderline::style) and
-/// bold flag. Mirrors `Noesis::CompositionUnderline`.
+/// An underlined range of IME composition text in a `TextBox`. `start` and
+/// `end` are character offsets into the text.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct CompositionUnderline {
-    /// Inclusive start character offset.
+    /// Start character offset.
     pub start: u32,
-    /// Exclusive end character offset.
+    /// End character offset.
     pub end: u32,
     /// Line style.
     pub style: CompositionLineStyle,
-    /// Whether the underline is bold.
+    /// Whether the underline is drawn bold.
     pub bold: bool,
 }
 
@@ -658,9 +651,9 @@ pub fn num_composition_underlines(element: &FrameworkElement) -> Option<u32> {
     if n < 0 { None } else { Some(n as u32) }
 }
 
-/// Read the IME composition underline at `index` back from the live `TextBox`,
-/// or `None` if `index` is out of range, `element` is not a `TextBox`, or the
-/// line style ordinal is unrecognised.
+/// The IME composition underline at `index`. `None` if `index` is out of range,
+/// `element` is not a `TextBox`, or the line style is not a known
+/// [`CompositionLineStyle`].
 #[must_use]
 pub fn composition_underline(
     element: &FrameworkElement,
@@ -699,8 +692,6 @@ pub fn clear_composition_underlines(element: &FrameworkElement) -> bool {
     // SAFETY: element.raw() is live.
     unsafe { noesis_typography_text_box_clear_composition_underlines(element.raw()) }
 }
-
-// ── shared read-back helpers ─────────────────────────────────────────────────
 
 fn read_i32(
     element: &FrameworkElement,

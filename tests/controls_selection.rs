@@ -51,8 +51,6 @@ fn selector_and_items_mutation() {
         }
         assert_eq!(lb.items_count(), Some(3), "ListBox sees 3 source items");
 
-        // Selecting by item must move SelectedIndex/SelectedItem to that element,
-        // read back through Noesis. A no-op setter would leave the index at -1.
         let item0 = coll.get(0).expect("source item 0");
         // SAFETY: coll outlives lb; item0 is a live element of the bound source.
         assert!(unsafe { lb.set_selected_item(item0.as_ptr()) });
@@ -88,7 +86,6 @@ fn selector_and_items_mutation() {
             "selected_item must be the third source element (identity through Noesis)"
         );
 
-        // Clearing the selection.
         assert!(lb.set_selected_index(-1));
         assert_eq!(lb.selected_index(), Some(-1));
         assert!(lb.selected_item().is_none(), "no selected item after clear");
@@ -104,8 +101,7 @@ fn selector_and_items_mutation() {
         assert_eq!(ic.items_add_string("X"), Some(0));
         assert_eq!(ic.items_add_string("Y"), Some(1));
         assert_eq!(ic.items_count(), Some(2), "two items in the collection");
-        // The non-virtualizing ItemsControl realizes all items after a layout
-        // pass: a genuine signal that change-notification reached the control.
+        // The non-virtualizing ItemsControl realizes every item after layout.
         for i in 10..=16 {
             view.update(f64::from(i) * 0.016);
         }
@@ -122,8 +118,7 @@ fn selector_and_items_mutation() {
         assert!(ic.items_clear());
         assert_eq!(ic.items_count(), Some(0), "empty after clear");
 
-        // Direct-items ListBox: selection identity proves insert is position-accurate
-        // (a non-Selector ItemsControl can't prove WHERE the item landed).
+        // A ListBox, so selection by index can show where an insert landed.
         assert_eq!(lbd.items_add_string("X"), Some(0));
         assert_eq!(lbd.items_add_string("Y"), Some(1));
         let z = noesis_runtime::binding::box_string("Z");
@@ -146,9 +141,7 @@ fn selector_and_items_mutation() {
             "rejected insert leaves the count unchanged"
         );
         drop(w);
-        // Order must now be [X, Z, Y]; selecting index 1 yields exactly the Z we
-        // inserted (pointer-identical through Noesis). A no-op, append-to-end, or
-        // insert-at-0 would select Y or X here and fail this assertion.
+        // Order is now [X, Z, Y]; index 1 must be the inserted Z.
         for i in 17..=22 {
             view.update(f64::from(i) * 0.016);
         }
@@ -161,7 +154,7 @@ fn selector_and_items_mutation() {
         );
         drop(z);
 
-        // -- Negatives: wrong control type degrades to None --
+        // Wrong control type returns None.
         assert_eq!(ic.selected_index(), None, "ItemsControl is not a Selector");
         assert_eq!(
             content.items_count(),

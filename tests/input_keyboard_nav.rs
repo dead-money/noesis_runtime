@@ -1,4 +1,4 @@
-//! Keyboard state, modifier keys, and `KeyboardNavigation` attached properties across the FFI, end-to-end.
+//! Keyboard state, modifier keys, and `KeyboardNavigation` attached properties.
 
 use std::collections::HashMap;
 
@@ -27,7 +27,7 @@ impl XamlProvider for InMem {
     }
 }
 
-// One test per file: Noesis initialises once per process; both behaviours run sequentially.
+// One test per file: Noesis initializes once per process.
 #[test]
 fn keyboard_state_modifiers_and_navigation() {
     if let (Ok(name), Ok(key)) = (
@@ -51,8 +51,7 @@ fn keyboard_state_modifiers_and_navigation() {
         view.activate();
         assert!(view.update(0.0), "first update builds tree");
 
-        // Focus the TextBox so key events route to it and the Keyboard's
-        // focused-element wiring is live.
+        // Key events route to the focused element.
         assert!(edit.focus(), "TextBox accepts focus");
         let _ = view.update(0.016);
         assert!(edit.is_keyboard_focused(), "TextBox keyboard-focused");

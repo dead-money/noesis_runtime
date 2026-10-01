@@ -1,4 +1,5 @@
-//! Mouse capture, focus state, and focus traversal across the FFI, end-to-end.
+//! Mouse and touch capture, keyboard and logical focus, focus scopes, and focus
+//! traversal on a live View.
 
 use std::collections::HashMap;
 
@@ -45,8 +46,6 @@ fn capture_focus_roundtrip() {
         let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let root = FrameworkElement::load("scene.xaml").expect("load scene");
-        // Grab the buttons before handing the root to the View (find_name works
-        // on the loaded tree's namescope).
         let mut one = root.find_name("One").expect("find One");
         let mut two = root.find_name("Two").expect("find Two");
 
@@ -72,7 +71,6 @@ fn capture_focus_roundtrip() {
             one.raw(),
             "Mouse::GetCaptured points at the capturing element"
         );
-        // And the OTHER button is not the captured one.
         assert_ne!(captured.as_ptr(), two.raw());
 
         one.release_mouse_capture();
@@ -95,7 +93,6 @@ fn capture_focus_roundtrip() {
             "captured element is two"
         );
         assert!(two.capture_mouse_mode(CaptureMode::None) || !two.is_mouse_captured());
-        // Belt-and-suspenders explicit release.
         two.release_mouse_capture();
         let _ = view.update(0.08);
 
@@ -168,14 +165,12 @@ fn capture_focus_roundtrip() {
         assert!(one.is_keyboard_focused());
         let moved = one.move_focus(FocusNavigationDirection::Next, true);
         let _ = view.update(0.144);
-        // MoveFocus returns whether focus moved; with two tab stops it should.
         assert!(moved, "MoveFocus(Next) reports it moved focus");
         assert!(
             !one.is_keyboard_focused(),
             "focus left `one` after MoveFocus(Next)"
         );
 
-        // focus_engage(false) is the 1-arg Focus(bool) knob; focuses `one`.
         assert!(one.focus_engage(false), "focus_engage focuses the element");
         let _ = view.update(0.16);
         assert!(one.is_keyboard_focused(), "engage path focused `one`");
@@ -184,19 +179,15 @@ fn capture_focus_roundtrip() {
             !one.capture_touch(99),
             "no active touch device #99 to capture"
         );
-        // Bring a touch device live over `one`, then capture it. touch_down's
-        // own bool is just whether an element handled the press (no Click
-        // handler ⇒ false); the device is registered regardless, so the capture
-        // must now succeed.
+        // touch_down's return only says whether the press was handled; the
+        // device is registered either way, so capture now succeeds.
         let _ = view.touch_down(60, 100, 7);
         let _ = view.update(0.176);
         assert!(
             one.capture_touch(7),
             "CaptureTouch(7) succeeds once the touch device is active"
         );
-        // Headless note: touch capture is tracked per-TouchDevice, distinct from
-        // Mouse capture, so it does NOT surface through GetIsMouseCaptured /
-        // Mouse::GetCaptured; those stay clear (the observable, asserted fact).
+        // Touch capture is tracked per TouchDevice, separate from mouse capture.
         let _ = view.update(0.184);
         assert!(
             !one.is_mouse_captured(),
@@ -205,7 +196,7 @@ fn capture_focus_roundtrip() {
         let _ = view.touch_up(60, 100, 7);
         let _ = view.update(0.192);
 
-        // PredictFocus only supports spatial directions; tab-order directions
+        // PredictFocus supports only spatial directions; tab-order ones
         // (Next/Previous/First/Last) return None.
         assert!(one.focus());
         let _ = view.update(0.2);
@@ -221,7 +212,6 @@ fn capture_focus_roundtrip() {
             one.predict_focus(FocusNavigationDirection::Next).is_none(),
             "PredictFocus does not support tab-order Next"
         );
-        // predict_focus_name names the same target the pointer points at.
         assert_eq!(
             one.predict_focus_name(FocusNavigationDirection::Down)
                 .as_deref(),

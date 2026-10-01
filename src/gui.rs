@@ -1,5 +1,5 @@
-//! Thin wrappers around the top-level `Noesis::GUI::*` helpers that don't
-//! fit into the provider / view / render-device modules.
+//! Process-global `Noesis::GUI` helpers: application-wide resource
+//! dictionaries and loading XAML into an existing object.
 
 use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
@@ -9,14 +9,13 @@ use crate::ffi::{
     noesis_gui_load_component,
 };
 
-/// Load a [`ResourceDictionary`] XAML via the installed XAML provider and
-/// install it as the process-global application resources. Every
-/// [`crate::view::View`] created afterwards inherits these styles and
-/// brushes. Replaces any previously-installed dictionary.
+/// Loads a [`ResourceDictionary`] XAML through the installed XAML provider
+/// and installs it as the process-global application resources, replacing any
+/// previous dictionary. Every [`View`](crate::view::View) created afterwards
+/// inherits its styles and brushes.
 ///
-/// Returns `true` when the URI resolved to a valid
-/// `ResourceDictionary`; `false` when the provider didn't serve bytes or
-/// when the XAML parsed to a different root element.
+/// Returns `false` if the provider served nothing for `uri` or the XAML root
+/// is not a `ResourceDictionary`.
 ///
 /// [`ResourceDictionary`]: https://docs.noesisengine.com/gui/ResourceDictionary.html
 ///
@@ -30,37 +29,29 @@ pub fn load_application_resources(uri: &str) -> bool {
     unsafe { noesis_gui_load_application_resources(c.as_ptr()) }
 }
 
-/// Install application resources by building the merged-dictionary
-/// chain manually, leaf by leaf. `uris` are the leaf
-/// `ResourceDictionary` URIs in dependency order; earlier entries
-/// must be loadable without referencing later entries.
+/// Installs application resources as a chain of leaf dictionaries, loaded one
+/// at a time in the order given. Use this instead of
+/// [`load_application_resources`] when leaves reference each other's keys.
 ///
-/// Sidesteps a Noesis behaviour where a top-level `LoadXaml` of a
-/// parent dictionary parses its `MergedDictionaries` children in
-/// isolation, leaving cross-sibling `{StaticResource SiblingKey}`
-/// references inside child bodies null-resolved at parse time.
+/// `uris` are leaf `ResourceDictionary` URIs in dependency order: a leaf may
+/// use `{StaticResource}` keys from earlier leaves, not later ones. A fresh,
+/// empty parent dictionary is installed as the application resources first,
+/// replacing any previous one. Each leaf is then added to the parent's
+/// `MergedDictionaries` before its `Source` is set, so it parses with every
+/// earlier sibling already in scope. Loading a single parent dictionary with
+/// [`load_application_resources`] instead parses each merged child in
+/// isolation, and cross-sibling `{StaticResource}` references resolve to null.
 ///
-/// Each leaf is created empty, added to the parent's
-/// `MergedDictionaries` collection (so the parent scope is wired in
-/// before parsing starts), then loaded by assigning its `Source`
-/// property, at which point the parent already contains every
-/// previously-loaded sibling.
+/// Returns `false` only when `uris` is empty. A leaf that fails to load is not
+/// reported.
 ///
-/// # Relative URIs in installed leaves
+/// # Relative URIs inside a leaf
 ///
-/// Each leaf is loaded via `ResourceDictionary::SetSource(Uri)`,
-/// which means relative URIs *inside* a leaf (most notably
-/// `<FontFamily>Folder/#Family</FontFamily>` resources) resolve
-/// against the leaf's own location. A `Theme/Fonts.xaml` leaf
-/// declaring `<FontFamily>Fonts/#X</FontFamily>` will look for
-/// family `X` in folder `Theme/Fonts/`, not the project-root
-/// `Fonts/`. If your font provider's `register_font` calls register
-/// under `Fonts/`, the corresponding leaf needs to use a relative-up
-/// URI (`../Fonts/#X`), or the leaf needs to live at the same
-/// directory level as the assets it references. Absolute URIs
-/// (`/Assets/Fonts/#X`) sidestep leaf-relative resolution entirely;
-/// the relative-up form is the alternative when assets live above the
-/// leaf.
+/// Relative URIs inside a leaf resolve against the leaf's own location. A
+/// `Theme/Fonts.xaml` leaf declaring `<FontFamily>Fonts/#X</FontFamily>` looks
+/// for family `X` in `Theme/Fonts/`, not the root `Fonts/`. Use a relative-up
+/// URI (`../Fonts/#X`) or an absolute one (`/Assets/Fonts/#X`), or keep the leaf
+/// at the same directory level as the assets it references.
 ///
 /// # Panics
 ///
@@ -81,38 +72,27 @@ pub fn install_app_resources_chain<S: AsRef<str>>(uris: &[S]) -> bool {
     unsafe { noesis_gui_install_app_resources_chain(ptrs.as_ptr(), ptrs.len() as u32) }
 }
 
-/// Load the XAML at `uri` into an existing component instance: the
-/// code-behind / `x:Class` pattern, where the root object already exists and
-/// `GUI::LoadComponent` populates its children and named fields in place
-/// (instead of constructing a fresh tree the way [`crate::view::FrameworkElement::load`]
-/// does).
+/// Loads the XAML at `uri` into an existing object (the code-behind /
+/// `x:Class` pattern). Noesis populates the instance's children and named
+/// fields in place instead of building a new tree the way
+/// [`FrameworkElement::load`](crate::view::FrameworkElement::load) does.
 ///
-/// Returns `false` when `component` is null or `uri` is empty/unresolvable.
-/// A `true` return means the call linked and ran; it does **not** by itself
-/// guarantee the tree was populated.
+/// The instance's reflected type must match the XAML root's `x:Class`. On a
+/// mismatch Noesis logs a type error and leaves the instance untouched. To get
+/// a matching type, register a class with [`crate::classes`] (say
+/// `"Nz.LoadTarget"`), instantiate it, and load XAML whose root declares
+/// `x:Class="Nz.LoadTarget"`. Keeping the two names in agreement is up to you.
 ///
-/// # Reflection requirement / limitation
-///
-/// For `LoadComponent` to actually graft the parsed tree onto `component`, the
-/// instance's reflected type must match the XAML root's `x:Class`. Noesis maps
-/// the root element back onto the supplied instance by type identity; a
-/// mismatch leaves the instance untouched (and Noesis logs a type error).
-/// The custom-class registration surface ([`crate::classes`]) supplies exactly
-/// such a type: register a class as `"Nz.LoadTarget"`, instantiate it, and load
-/// XAML whose root carries `x:Class="Nz.LoadTarget"`; the parsed children and
-/// named fields are grafted onto that instance (verified by `tests/parse_xaml`,
-/// which asserts a named child becomes resolvable through the instance only
-/// after this call). The caller is responsible for ensuring the registered type
-/// name and the XAML `x:Class` agree; this entry point does not synthesize that
-/// pairing on its own.
+/// Returns `false` if `component` is null. `true` means the load ran, not that
+/// the tree was populated: an unresolvable `uri` or a type mismatch still
+/// returns `true`.
 ///
 /// # Safety
 ///
-/// `component` must be a live `Noesis::BaseComponent*` (for example a
-/// [`crate::classes::ClassInstance::raw`] value) that outlives the call, or
-/// null. The pointer is borrowed; ownership is not taken and the caller's
-/// reference is unaffected. Runs on the view-driving thread; no `VerifyAccess`
-/// is performed.
+/// `component` must be null or a live `Noesis::BaseComponent*` (for example
+/// [`ClassInstance::raw`](crate::classes::ClassInstance::raw)) that outlives the
+/// call. It is borrowed; no reference is taken or released. Call this on the
+/// thread driving the views; no thread check is performed.
 ///
 /// # Panics
 ///

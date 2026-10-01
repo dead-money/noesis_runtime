@@ -1,21 +1,21 @@
-// Programmatic control access.
+// Typed accessors for the standard Noesis controls.
 //
-// Typed sugar + genuinely-new entrypoints over the standard Noesis controls,
-// each guarded by a DynamicCast to the right control type so a type mismatch
-// degrades gracefully (false / null / a sentinel) rather than crashing across
-// the C ABI, mirroring the text_get/set + visual_state guards elsewhere.
+// Each entry point DynamicCasts to the expected control type, so a type
+// mismatch returns false / null / a sentinel instead of crashing across the
+// C ABI.
 //
-// Covered families:
-//   * Selector: SelectedIndex / SelectedItem (ListBox/ComboBox/TabControl/...)
-//   * ItemsControl.Items: direct collection mutation (Add/Insert/RemoveAt/Clear)
-//   * RangeBase: Value/Minimum/Maximum (Slider/ProgressBar/ScrollBar)
-//   * ToggleButton: IsChecked as a tri-state Nullable<bool> (CheckBox/RadioButton)
-//   * Popup.IsOpen / Expander.IsExpanded
-//   * ScrollViewer: read offsets/extents + ScrollTo* methods
-//   * BaseTextBox/TextBox: selection + caret; PasswordBox password
+// Covered:
+//   * Selector: SelectedIndex, SelectedItem, SelectedValue, SelectedValuePath
+//   * ItemsControl.Items mutation and ItemContainerGenerator mapping
+//   * RangeBase: Value / Minimum / Maximum (Slider, ProgressBar, ScrollBar)
+//   * ToggleButton.IsChecked as tri-state (CheckBox, RadioButton)
+//   * Popup.IsOpen, Expander.IsExpanded, TreeView / TreeViewItem selection
+//   * ScrollViewer metrics and scrolling
+//   * TextBox selection and caret, PasswordBox password
+//   * GridView columns, ToolTip, ContextMenu, Image.Source
 //
-// No VerifyAccess(): these must never throw across the C ABI. Single-thread
-// (View) affinity is the caller's responsibility, like the other accessors.
+// No VerifyAccess(): these must never throw across the C ABI. The caller owns
+// single-thread (View) affinity.
 
 #include "noesis_shim.h"
 
@@ -281,8 +281,8 @@ extern "C" bool noesis_scrollviewer_scroll_to_vertical(void* element, float offs
     return true;
 }
 
-// ScrollToHome scrolls to the top-left origin; ScrollToEnd scrolls to the
-// bottom. Both are axis-agnostic ScrollViewer helpers.
+// ScrollToHome goes to the top-left of the content, ScrollToEnd to the
+// bottom-left.
 extern "C" bool noesis_scrollviewer_scroll_to_home(void* element) {
     if (!element) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);
@@ -346,8 +346,8 @@ extern "C" bool noesis_textbox_select_all(void* element) {
     return true;
 }
 
-// Borrowed (no copy on our side) pointer to the currently-selected text, or
-// null if `element` is not a TextBox. Copy immediately on the Rust side.
+// Borrowed pointer to the selected text, or null if `element` is not a
+// TextBox. Copy immediately on the Rust side.
 extern "C" const char* noesis_textbox_get_selected_text(void* element) {
     if (!element) return nullptr;
     auto* tb = as<Noesis::TextBox>(element);
@@ -371,12 +371,6 @@ extern "C" bool noesis_passwordbox_set_password(void* element, const char* passw
     pb->SetPassword(password ? password : "");
     return true;
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// Additional controls (prefix noesis_controls_): SelectedValue/Path, TreeView
-// selection, ItemContainerGenerator mapping, GridView columns, ToolTip /
-// ContextMenu, line/page scrolling + IScrollInfo, Image source.
-// ════════════════════════════════════════════════════════════════════════════
 
 // ── Selector.SelectedValue / SelectedValuePath ──────────────────────────────
 //
@@ -701,12 +695,12 @@ extern "C" bool noesis_controls_contextmenu_set_is_open(void* element, bool open
     return true;
 }
 
-// ── ScrollViewer line / page / edge scrolling + IScrollInfo ─────────────────
+// ── ScrollViewer line / page / edge scrolling ───────────────────────────────
 //
 // `which` for line: 0=LineUp 1=LineDown 2=LineLeft 3=LineRight
 //        for page: 0=PageUp 1=PageDown 2=PageLeft 3=PageRight
 //        for edge: 0=Top 1=Bottom 2=LeftEnd 3=RightEnd
-// All are deferred by Noesis to the next layout pass (like ScrollToOffset).
+// Noesis applies these on the next layout pass.
 
 extern "C" bool noesis_controls_scrollviewer_line(void* element, int32_t which) {
     if (!element) return false;
@@ -747,11 +741,9 @@ extern "C" bool noesis_controls_scrollviewer_edge(void* element, int32_t which) 
     }
 }
 
-// Extra ScrollViewer width metrics (the existing noesis_scrollviewer_get
-// exposes 0..5; 6=ExtentWidth, 7=ViewportWidth). Noesis 3.2.13 keeps
-// ScrollViewer::GetScrollInfo() protected, so the raw IScrollInfo backend is
-// not publicly reachable; the public line/page/edge methods above are the
-// IScrollInfo surface as exposed by ScrollViewer.
+// `which`: 6 = ExtentWidth, 7 = ViewportWidth, continuing the numbering of
+// noesis_scrollviewer_get. ScrollViewer::GetScrollInfo() is protected in Noesis
+// 3.2.13, so IScrollInfo is reachable only through the line/page/edge calls.
 extern "C" bool noesis_controls_scrollviewer_metric(void* element, int32_t which, float* out) {
     if (!element || !out) return false;
     auto* sv = as<Noesis::ScrollViewer>(element);

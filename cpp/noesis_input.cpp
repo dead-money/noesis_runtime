@@ -1,18 +1,13 @@
-// Input: finer control.
+// Element-level input: mouse and touch capture, keyboard state, focus state,
+// focus movement (MoveFocus / PredictFocus), FocusManager and
+// KeyboardNavigation attached properties, and input gestures and bindings
+// (KeyGesture, MouseGesture, KeyBinding, MouseBinding, InputBinding) over any
+// ICommand.
 //
-// Element-level mouse/touch capture, keyboard-state queries, focus-state DPs,
-// focus engagement + traversal (MoveFocus / PredictFocus), the FocusManager and
-// KeyboardNavigation static/attached-property surfaces, and input gestures +
-// bindings (KeyGesture / MouseGesture / KeyBinding / MouseBinding /
-// InputBinding) wired to the existing RustCommand ICommand bridge.
-//
-// Everything here narrows an opaque `Noesis::BaseComponent*` to the concrete
-// type it needs via DynamicCast and null-checks first, returning false / null /
-// a no-op on a type mismatch, never dereferencing blind. Borrowed pointers
-// (GetCaptured, GetFocused, GetFocusedElement, GetFocusScope, PredictFocus) are
-// returned WITHOUT an extra reference; the create entrypoints (gestures /
-// bindings) return a fresh object at +1 that Rust releases on drop, mirroring
-// the `new Noesis::RoutedCommand(...)` idiom in noesis_commands.cpp.
+// Each entry point DynamicCasts its argument and returns false / null / a no-op
+// on a type mismatch. Element pointers from the getters (captured, focused,
+// focus scope, predicted focus) are borrowed. Gesture and binding creates
+// return a new object at +1 that Rust releases on drop.
 
 #include "noesis_shim.h"
 
@@ -36,8 +31,7 @@
 #include <NsGui/UICollection.h>
 #include <NsGui/UIElement.h>
 
-// Lock the FFI enum ordinals against the Noesis headers at compile time, the
-// same way noesis_view.cpp pins MouseButton / Key.
+// FFI enum ordinals the Rust side mirrors.
 static_assert((int32_t)Noesis::ModifierKeys_None == 0, "ModifierKeys::None");
 static_assert((int32_t)Noesis::ModifierKeys_Alt == 1, "ModifierKeys::Alt");
 static_assert((int32_t)Noesis::ModifierKeys_Control == 2, "ModifierKeys::Control");
@@ -262,7 +256,6 @@ extern "C" void* noesis_focus_manager_get_focused_element(void* scope) {
 extern "C" bool noesis_focus_manager_set_focused_element(void* scope, void* element) {
     Noesis::DependencyObject* d = as_do(scope);
     if (!d) return false;
-    // `element` may be null (clear). A non-null value must be a UIElement.
     Noesis::UIElement* ui = element ? as_ui(element) : nullptr;
     if (element && !ui) return false;
     Noesis::FocusManager::SetFocusedElement(d, ui);
@@ -381,10 +374,9 @@ extern "C" bool noesis_keyboard_navigation_set_accepts_return(void* element, boo
 
 // ── Input gestures + bindings ────────────────────────────────────────────────
 //
-// Each create returns a fresh object at +1 (Noesis `new` yields refcount 1,
-// like `new RoutedCommand` in noesis_commands.cpp); Rust releases it on drop.
-// `add_input_binding` hands the binding to the element's InputBindingCollection,
-// which adds its own reference.
+// Each create returns a new object at +1 (a Noesis `new` starts at refcount
+// 1); Rust releases it on drop. add_input_binding gives the element's
+// InputBindingCollection its own reference.
 
 extern "C" void* noesis_key_gesture_create(int32_t key, int32_t modifiers) {
     auto* g = new Noesis::KeyGesture(static_cast<Noesis::Key>(key),

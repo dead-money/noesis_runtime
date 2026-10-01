@@ -1,19 +1,11 @@
-// Typography & text properties: FontFamily, the TextElement attached
-// font properties, a representative subset of the OpenType Typography attached
-// DPs, and the IME CompositionUnderline list on a TextBox.
+// FontFamily, the TextElement attached font properties, a subset of the
+// OpenType Typography attached properties, and IME CompositionUnderlines on a
+// TextBox.
 //
-// Ownership: noesis_typography_font_family_create hands a FontFamily out
-// across the C ABI with a single owned +1 reference (the handout() idiom shared
-// with cpp/noesis_brushes.cpp). The Rust handle's Drop releases it via
-// noesis_base_component_release. Assigning a FontFamily to an element (the
-// attached TextElement.FontFamily DP) makes Noesis take its own reference.
-//
-// The TextElement and Typography accessors operate on a borrowed DependencyObject
-// (any element). TextElement exposes static attached getters/setters directly;
-// the Typography DPs are plain attached DependencyProperties, so we drive them
-// through DependencyObject::SetValue/GetValue with the static DP pointers, the
-// same path cpp/noesis_classes.cpp uses for code-set properties. Every setter has
-// a getter that re-reads from the live object so a stubbed impl fails the tests.
+// noesis_typography_font_family_create returns a FontFamily at +1, released by
+// the Rust handle's Drop via noesis_base_component_release. Setting it on an
+// element makes Noesis take its own reference. The other accessors take a
+// borrowed DependencyObject.
 
 #include "noesis_shim.h"
 
@@ -164,13 +156,10 @@ extern "C" bool noesis_typography_text_element_get_font_stretch(void* element, i
     return true;
 }
 
-// ── Typography attached DPs (representative subset) ───────────────────────────
-//
-// These are plain attached DependencyProperties whose static DP pointers live on
-// Noesis::Typography. We set/read them through DependencyObject::SetValue/GetValue
-// with the right value type (enum or bool). The remaining ~30 Typography DPs
-// (CapitalSpacing, ContextualAlternates, the 20 StylisticSet* flags, swash/
-// alternate indices, ...) follow this identical pattern.
+// ── Typography attached DPs ──────────────────────────────────────────────────
+// Plain attached DPs, so driven through SetValue/GetValue with the DP's value
+// type. The remaining Typography DPs (StylisticSet*, CapitalSpacing, ...) are
+// not bound.
 
 extern "C" bool noesis_typography_set_capitals(void* element, int32_t value) {
     auto* d = cast<Noesis::DependencyObject>(element);

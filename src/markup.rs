@@ -1,26 +1,30 @@
-//! Register Rust-backed XAML `MarkupExtension`s: Rust callbacks XAML can
-//! invoke as `{myns:Foo positional_arg}`.
+//! Custom XAML markup extensions backed by Rust callbacks.
 //!
-//! Reach for this when you want XAML markup to resolve a value through your
-//! own code at parse time. The motivating example is localization:
-//! `{aor:Localize menu.main_menu.new_game}` resolves the key through a
-//! locale table and substitutes the result.
+//! A registered extension lets XAML resolve a value through your code while it
+//! parses, written as `{prefix:Name argument}`. Localization is the typical use:
 //!
-//! # v1 scope
+//! ```no_run
+//! use noesis_runtime::markup::MarkupExtensionRegistration;
 //!
-//! * Single positional `Key` argument (the bit between `{name ` and `}`).
-//! * Callback returns either a `&str` (most common) or a borrowed
-//!   `BaseComponent*`.
-//! * No reactive bindings: the callback runs at XAML parse time and the
-//!   returned value is substituted statically. Locale switching requires
-//!   re-loading the XAML.
+//! // XAML: xmlns:l="clr-namespace:MyGame"  ...  Text="{l:Localize menu.new_game}"
+//! let _localize = MarkupExtensionRegistration::from_closure("MyGame.Localize", |key| {
+//!     Some(format!("[{key}]"))
+//! })
+//! .expect("name not yet registered");
+//! ```
+//!
+//! # Limitations
+//!
+//! * One positional string argument, the text between the extension name and
+//!   the closing `}`.
+//! * The callback returns a string or an existing Noesis object.
+//! * The value is resolved once, at parse time. Nothing updates afterwards; to
+//!   switch locale, reload the XAML.
 //!
 //! # Threading
 //!
-//! Callbacks fire from inside Noesis's XAML parser, on whichever thread
-//! triggered the load. In a Bevy app that's the render thread (which
-//! drives the View). The handler is `Send`; mutations to Bevy ECS state
-//! should be queued and processed on the main thread.
+//! Callbacks run inside the XAML parser, on whichever thread started the load.
+//! The handler must be `Send`.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -31,41 +35,37 @@ use std::sync::Mutex;
 
 use crate::ffi::{noesis_markup_extension_register, noesis_markup_extension_unregister};
 
-/// Value returned from a [`MarkupExtensionHandler::provide_value`] callback.
-/// `String` is the common case; `Component` covers handlers that resolve
-/// to an existing Noesis object (e.g. a resource from the application
-/// resource dictionary).
+/// The value a [`MarkupExtensionHandler`] provides for one use of the
+/// extension.
 pub enum MarkupValue<'a> {
+    /// A string. Noesis copies it, so it only has to live until
+    /// `provide_value` returns. A string with an interior NUL byte is treated as
+    /// [`Unset`](Self::Unset).
     String(&'a str),
-    /// Borrowed `Noesis::BaseComponent*`. Caller does not consume a ref;
-    /// the C++ trampoline adds one when constructing the returned `Ptr`.
+    /// A borrowed `Noesis::BaseComponent*`, such as an existing resource.
+    /// Noesis takes its own reference; yours is not consumed.
     Component(NonNull<c_void>),
-    /// Signals "no value": Noesis substitutes `BaseComponent::GetUnsetValue()`
-    /// (which the parser interprets as "leave the property at its default").
+    /// No value; the target property keeps its default.
     Unset,
 }
 
-/// Per-extension callback. Receives the positional `key` argument the XAML
-/// parser populated and returns a [`MarkupValue`] for Noesis to substitute.
+/// The logic behind a markup extension. For a closure, use
+/// [`MarkupExtensionRegistration::from_closure`] instead.
 ///
 /// # Re-entrancy
 ///
-/// `provide_value` takes `&mut self` because its return value borrows
-/// handler-owned scratch storage (the [`MarkupValue::String`] case). Unlike the
-/// other callback traits in this crate it is therefore **not** re-entrant-safe:
-/// do not drive a nested XAML parse that resolves this same extension from
-/// inside `provide_value` (e.g. calling [`crate::xaml::load_xaml_component`]
-/// on markup that uses this extension). Doing so would
-/// alias the handler box. The parser itself never re-enters `provide_value`
-/// (multiple `{Ext ...}` usages in one document are resolved sequentially, not
-/// nested), so ordinary usage is sound.
+/// `provide_value` takes `&mut self` so a returned string can borrow from the
+/// handler. Do not start a nested XAML load that uses this same extension from
+/// inside `provide_value` (for example through
+/// [`crate::xaml::load_xaml_component`]); that would alias the handler. Several
+/// uses in one document are resolved one after another, which is fine.
 pub trait MarkupExtensionHandler: Send + 'static {
+    /// Returns the value for one use of the extension. `key` is the positional
+    /// argument, or `""` if it was absent or not valid UTF-8.
     fn provide_value(&mut self, key: &str) -> MarkupValue<'_>;
 }
 
-/// Convenience: closures that return `String` work as handlers. The
-/// returned `String` is held by a per-handler scratch slot for the
-/// duration of the callback (Noesis copies the bytes immediately).
+/// `None` from the closure becomes [`MarkupValue::Unset`].
 impl<F> MarkupExtensionHandler for ClosureHandler<F>
 where
     F: FnMut(&str) -> Option<String> + Send + 'static,
@@ -81,19 +81,17 @@ where
     }
 }
 
-/// Adapter newtype so `FnMut(&str) -> Option<String>` can satisfy the
-/// trait without colliding with future blanket impls. Construct via
+/// A closure adapted to [`MarkupExtensionHandler`]. Created by
 /// [`MarkupExtensionRegistration::from_closure`].
 pub struct ClosureHandler<F: FnMut(&str) -> Option<String> + Send + 'static> {
     f: F,
     scratch: String,
 }
 
-/// RAII handle for a registered `MarkupExtension`. Drop unregisters from
-/// the Factory + Reflection registries (preventing new instances from
-/// being parsed), but the underlying `MarkupClassData` and the boxed
-/// handler survive as long as live extension instances remain. Same
-/// intrusive-refcount contract as [`crate::classes::ClassRegistration`].
+/// Keeps a markup extension registered. Dropping it stops XAML parsed
+/// afterwards from using the extension; the handler is freed once no extension
+/// instance remains alive. The type name stays registered with Noesis
+/// reflection, so the same name cannot be registered again in this process.
 #[must_use = "dropping the guard immediately clears the registration"]
 pub struct MarkupExtensionRegistration {
     token: NonNull<c_void>,
@@ -103,12 +101,11 @@ pub struct MarkupExtensionRegistration {
 unsafe impl Send for MarkupExtensionRegistration {}
 
 impl MarkupExtensionRegistration {
-    /// Register a Rust-backed `MarkupExtension`. `name` is the XAML-visible
-    /// type (e.g. `"AOR.Localize"`); the namespace mapping
-    /// (`xmlns:aor="clr-namespace:AOR"`) lives in the XAML.
+    /// Registers `handler` as the extension type `name`, such as
+    /// `"MyGame.Localize"`. XAML reaches it through a namespace mapping like
+    /// `xmlns:l="clr-namespace:MyGame"`.
     ///
-    /// Returns `None` when the C++ side rejects (most commonly: name
-    /// already registered).
+    /// Returns `None` if a type named `name` is already registered.
     ///
     /// # Panics
     ///
@@ -136,9 +133,9 @@ impl MarkupExtensionRegistration {
         Some(Self { token })
     }
 
-    /// Convenience: register an extension whose body is a single closure
-    /// returning the localized / resolved string for a key.
-    /// Returning `None` from the closure produces a `MarkupValue::Unset`.
+    /// Registers a closure that maps the positional argument to a string.
+    /// Returning `None` leaves the target property at its default. Fails and
+    /// panics under the same conditions as [`Self::new`].
     pub fn from_closure<F>(name: &str, f: F) -> Option<Self>
     where
         F: FnMut(&str) -> Option<String> + Send + 'static,
@@ -150,7 +147,7 @@ impl MarkupExtensionRegistration {
         Self::new(name, handler)
     }
 
-    /// Opaque registry handle (a `void*` to the C++-side `MarkupClassData`).
+    /// Opaque registration token used by the C shim.
     pub fn token(&self) -> NonNull<c_void> {
         self.token
     }
@@ -158,11 +155,8 @@ impl MarkupExtensionRegistration {
 
 impl Drop for MarkupExtensionRegistration {
     fn drop(&mut self) {
-        // The C++ side owns the boxed handler. `noesis_markup_extension_unregister`
-        // releases the Rust caller's MarkupClassData ref: if no extension
-        // instances are alive, ClassData self-destructs immediately and
-        // `markup_handler_free_trampoline` runs to drop the handler box;
-        // otherwise the deferred free runs when the last instance dies.
+        // Releases only this guard's ref; live extension instances keep the
+        // handler box alive until the last one dies.
         //
         // SAFETY: `self.token` was produced by `new` and is freed exactly
         // once here.
@@ -170,9 +164,8 @@ impl Drop for MarkupExtensionRegistration {
     }
 }
 
-/// Free trampoline matching [`crate::ffi::MarkupFreeFn`]. Drops the
-/// `Box<Box<dyn MarkupExtensionHandler>>` whose ownership was transferred
-/// to C++ at register time, plus the per-handler scratch slot.
+/// Drops the handler box handed to C++ at registration, and its string
+/// scratch slot.
 unsafe extern "C" fn markup_handler_free_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
         if userdata.is_null() {
@@ -211,11 +204,8 @@ unsafe extern "C" fn provide_trampoline(
                 true
             }
             MarkupValue::String(s) => {
-                // Noesis copies the bytes synchronously; stash a NUL-terminated
-                // CString in a per-handler slot to give the pointer a stable
-                // lifetime across this call. An interior NUL can't be handed to
-                // C as a string, so report "no value" rather than silently
-                // truncating to the bytes before it.
+                // Noesis copies the string after this returns, so park it in a
+                // per-handler slot; an interior NUL reports no value rather than truncating.
                 let Ok(cstring) = CString::new(s.as_bytes()) else {
                     return false;
                 };
@@ -240,8 +230,7 @@ unsafe extern "C" fn provide_trampoline(
     })
 }
 
-// Stable NUL-terminated slot for the bytes Noesis sees, keyed by handler
-// userdata pointer (unique per registration); cleaned up when the registration drops.
+// Keyed by handler userdata pointer; entries are removed when the handler is freed.
 static STRING_SCRATCH: Mutex<Vec<(usize, CString)>> = Mutex::new(Vec::new());
 
 fn forget_string_scratch(userdata: *mut c_void) {

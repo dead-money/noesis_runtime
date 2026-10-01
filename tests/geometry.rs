@@ -1,8 +1,5 @@
-//! Code-built Geometry object model: headless construction + read-back.
-//! Bounds, figure/segment counts, enum round-trips, and Path.Data assignment.
-//!
-//! Run with `NOESIS_SDK_DIR` set (trial mode is fine):
-//!   `cargo test -p noesis_runtime --test geometry -- --nocapture`
+//! Geometry built from code and read back headless: bounds, figure and segment
+//! counts, enum round-trips, and `Path.Data` assignment.
 
 use noesis_runtime::geometry::{
     ArcSegment, BezierSegment, CombinedGeometry, EllipseGeometry, FillRule, Geometry,
@@ -33,7 +30,6 @@ fn geometry_object_model_round_trip() {
         let ellipse = EllipseGeometry::new(50.0, 60.0, 40.0, 30.0);
         assert_eq!(ellipse.get(), [50.0, 60.0, 40.0, 30.0], "ellipse fields");
         let eb = ellipse.bounds();
-        // x∈[10,90], y∈[30,90] for center (50,60) radii (40,30)
         assert!(
             approx(eb.x, 10.0) && approx(eb.y, 30.0),
             "ellipse bounds origin"
@@ -43,7 +39,6 @@ fn geometry_object_model_round_trip() {
             "ellipse bounds size"
         );
         assert!(!ellipse.is_empty(), "ellipse non-empty");
-        // GetRenderBounds with a null pen equals fill bounds
         let erb = ellipse.render_bounds();
         assert!(
             approx(erb.x, 10.0)
@@ -73,8 +68,7 @@ fn geometry_object_model_round_trip() {
             "line bounds"
         );
 
-        // GetBounds in 3.2.13 reports untransformed geometry; prove assignment
-        // via pointer identity, not a bounds shift.
+        // GetBounds in 3.2.13 ignores the transform, so check pointer identity.
         let mut ellipse2 = EllipseGeometry::new(0.0, 0.0, 10.0, 10.0);
         let shift = TranslateTransform::new(100.0, 0.0);
         assert!(ellipse2.set_transform(&shift), "set geometry transform");
@@ -93,7 +87,7 @@ fn geometry_object_model_round_trip() {
             ctx.line_to(100.0, 0.0);
             ctx.line_to(100.0, 50.0);
             ctx.line_to(0.0, 50.0);
-            ctx.close(); // flush into the geometry
+            ctx.close();
         }
         let sb = stream.bounds();
         assert!(
@@ -102,20 +96,19 @@ fn geometry_object_model_round_trip() {
         );
         assert!(!stream.is_empty(), "stream geometry non-empty after close");
 
-        // A context dropped WITHOUT close() must leave the geometry unaltered.
+        // A context dropped without close() leaves the geometry unchanged.
         let untouched = StreamGeometry::new();
         {
             let ctx = untouched.open();
             ctx.begin_figure(0.0, 0.0, true);
             ctx.line_to(999.0, 999.0);
-            // ctx dropped here without close()
         }
         assert!(
             untouched.is_empty(),
             "dropped (unclosed) context leaves geometry empty"
         );
 
-        // no getter on context; bounds are the only observable
+        // The context has no getters; bounds are the only observable.
         let quad = StreamGeometry::new();
         {
             let ctx = quad.open();
@@ -146,7 +139,6 @@ fn geometry_object_model_round_trip() {
         {
             let ctx = arc.open();
             ctx.begin_figure(0.0, 0.0, false);
-            // A semicircular arc (chord 100, radii 50) bulges to y≈50.
             ctx.arc_to(
                 100.0,
                 0.0,
@@ -164,8 +156,7 @@ fn geometry_object_model_round_trip() {
             "arc_to curve reaches the end point and bulges into a real box: {ab:?}"
         );
 
-        // GetBounds is identical for open vs closed (3.2.13); proof of crossing
-        // is that flush still produces a correctly-bounded geometry.
+        // GetBounds ignores open vs closed (3.2.13), so only the bounds are checked.
         let closed = StreamGeometry::new();
         {
             let ctx = closed.open();
@@ -189,7 +180,6 @@ fn geometry_object_model_round_trip() {
         stream.set_fill_rule(FillRule::Nonzero);
         assert_eq!(stream.fill_rule(), FillRule::Nonzero, "stream fill rule");
 
-        // set_data() rebuilds in place; bounds must follow the new path-data
         let mut reshaped = StreamGeometry::from_data("M 0,0 L 10,0 10,10 Z");
         let r0 = reshaped.bounds();
         assert!(
@@ -303,7 +293,7 @@ fn geometry_object_model_round_trip() {
         path.set_fill_rule(FillRule::Nonzero);
         assert_eq!(path.fill_rule(), FillRule::Nonzero, "path fill rule");
         assert!(!path.is_empty(), "path geometry non-empty");
-        // Segments/figure dropped after add: Noesis holds its own references.
+        // Noesis holds its own references to the figure and segments.
         drop(figure);
         drop(lseg);
         drop(qseg);
@@ -326,7 +316,6 @@ fn geometry_object_model_round_trip() {
             Some(GeometryCombineMode::Union),
             "combine mode"
         );
-        // Union bounds span both rectangles: x∈[0,75], y∈[0,75].
         let cb = combined.bounds();
         assert!(
             approx(cb.width, 75.0) && approx(cb.height, 75.0),
@@ -349,7 +338,6 @@ fn geometry_object_model_round_trip() {
             Some(GeometryCombineMode::Intersect),
             "combine mode updated"
         );
-        // Intersection bounds: x∈[25,50], y∈[25,50] => 25x25.
         let ib = combined.bounds();
         assert!(
             approx(ib.width, 25.0) && approx(ib.height, 25.0),
@@ -394,7 +382,7 @@ fn geometry_object_model_round_trip() {
         );
         group.set_fill_rule(FillRule::Nonzero);
         assert_eq!(group.fill_rule(), FillRule::Nonzero, "group fill rule");
-        // GetBounds is lazy in 3.2.13 (empty until rendered); child_count is the proof
+        // GeometryGroup bounds are empty until rendered (3.2.13); check child_count.
         drop(g1);
         drop(g2);
         assert_eq!(
@@ -419,7 +407,6 @@ fn geometry_object_model_round_trip() {
         let read = path_el
             .get_component("Data")
             .expect("Path Data set after assignment");
-        // Noesis stores the *same* object (AddRef, not clone): pointer identity.
         assert_eq!(
             read.as_ptr(),
             data.geometry_raw(),

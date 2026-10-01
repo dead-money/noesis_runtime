@@ -1,11 +1,7 @@
-//! Spike-Move: does a `ListBox`'s selection ride a *reordered object row* to
-//! its new slot?
-//!
-//! This is the low-level gate for the ECS-UI list contract ("selection survives
-//! a Move; Reset is the enemy"). Unlike `observable_collection_move` (string
-//! items), the rows here are real `ClassInstance` objects with a bound `Name`
-//! DP (exactly the shape a per-`Entity` row object takes), so we can capture
-//! the *selected item's `ClassInstance` pointer* and prove currency follows the
+//! A `ListBox`'s selection follows a reordered object row to its new slot.
+//! Unlike `observable_collection_move` (string items), the rows here are
+//! `ClassInstance` objects with a bound `Name` DP, so the test can capture the
+//! selected item's `ClassInstance` pointer and check that currency follows
 //! object identity, not the slot index.
 //!
 //! 5 rows, select index 2, capture the selected pointer, `Move(2 -> 0)`, pump.
@@ -102,7 +98,7 @@ fn spike_move_selection_survives_object_reorder() {
         // The collection order really changed (R2 is now slot 0).
         assert_eq!(coll.get(0), Some(r2_ptr), "R2 slid to the front");
 
-        // The DECISIVE checks: currency rode the moved object.
+        // Currency must ride the moved object.
         let still_same_object = lb.selected_item() == Some(captured);
         let index_followed = lb.selected_index() == Some(0);
         let move_selection_survives = still_same_object && index_followed;

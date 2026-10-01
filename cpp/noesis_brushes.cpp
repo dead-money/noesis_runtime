@@ -1,11 +1,9 @@
 // Code-built brushes, transforms, effects, and RenderOptions.
 //
-// These entrypoints construct presentation objects from Rust and hand them out
-// across the C ABI with a single owned reference. The Rust side (src/brushes.rs
-// / src/transforms.rs) wraps each pointer in an owning handle whose Drop calls
-// noesis_base_component_release; assigning the object to an element (via the
-// generic FrameworkElement::set_component) makes Noesis take its own reference,
-// so the Rust builder handle can be dropped afterwards.
+// Constructors return a +1 the caller releases with
+// noesis_base_component_release. Assigning an object to an element takes
+// Noesis's own reference, so the Rust handle can drop afterwards. Object
+// getters return borrowed pointers. Enum arguments are Noesis enum ordinals.
 
 #include "noesis_shim.h"
 
@@ -49,9 +47,8 @@
 
 namespace {
 
-// Hand a freshly-created (refcount-1) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller. The local Ptr that produced the
-// object releases its own reference on scope exit, leaving the caller's +1.
+// Returns `c` with a +1 owned by the caller. The producing local Ptr releases
+// its own reference.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -161,8 +158,7 @@ extern "C" bool noesis_radial_gradient_brush_get_radius(void* brush, float* rx, 
     return true;
 }
 
-// Add a gradient stop (offset in 0..=1, color rgba) to any GradientBrush. The
-// brush owns a GradientStopCollection by default; we create one if it is null.
+// `offset` in 0..=1, `color` RGBA. Creates the stop collection if absent.
 // Returns the new stop's index, or -1 on failure.
 extern "C" int32_t noesis_gradient_brush_add_stop(void* brush, float offset,
                                                      const float color[4]) {
@@ -209,9 +205,7 @@ extern "C" bool noesis_gradient_brush_get_stop(void* brush, uint32_t index, floa
     return true;
 }
 
-// GradientBrush SpreadMethod / MappingMode (works on any LinearGradientBrush /
-// RadialGradientBrush). Ordinals match Noesis::GradientSpreadMethod and
-// Noesis::BrushMappingMode; getters return -1 on a non-GradientBrush pointer.
+// Getters return -1 when `brush` is not a GradientBrush.
 static_assert(Noesis::GradientSpreadMethod_Pad == 0, "GradientSpreadMethod ordinal drift");
 static_assert(Noesis::GradientSpreadMethod_Reflect == 1, "GradientSpreadMethod ordinal drift");
 static_assert(Noesis::GradientSpreadMethod_Repeat == 2, "GradientSpreadMethod ordinal drift");
@@ -246,9 +240,7 @@ extern "C" int32_t noesis_gradient_brush_get_mapping_mode(void* brush) {
 
 // ── ImageBrush ───────────────────────────────────────────────────────────────
 
-// Create an ImageBrush, optionally pointing at a borrowed ImageSource (e.g. a
-// pointer from FrameworkElement::get_component on a loaded image, or null to
-// wire the source later). Noesis takes its own reference to the source.
+// `image_source` is borrowed and may be null.
 extern "C" void* noesis_image_brush_create(void* image_source) {
     auto* src = cast<Noesis::ImageSource>(image_source);
     Noesis::Ptr<Noesis::ImageBrush> brush =
@@ -263,7 +255,6 @@ extern "C" bool noesis_image_brush_set_image_source(void* brush, void* image_sou
     return true;
 }
 
-// Borrowed (no +1) ImageSource currently set on the brush, or null.
 extern "C" void* noesis_image_brush_get_image_source(void* brush) {
     auto* b = cast<Noesis::ImageBrush>(brush);
     if (!b) return nullptr;
@@ -272,10 +263,8 @@ extern "C" void* noesis_image_brush_get_image_source(void* brush) {
 
 // ── VisualBrush ──────────────────────────────────────────────────────────────
 
-// Create a VisualBrush, optionally pointing at a borrowed Visual (any element is
-// a Visual; pass null to wire the source later). Noesis takes its own reference
-// to the visual. NOTE: VisualBrush only renders when the visual is part of the
-// logical tree, but the property assignment is still observable via GetVisual.
+// `visual` is borrowed and may be null. The brush renders only while the
+// visual is in the logical tree.
 extern "C" void* noesis_visual_brush_create(void* visual) {
     Noesis::Ptr<Noesis::VisualBrush> brush = *new Noesis::VisualBrush();
     if (visual) {
@@ -291,19 +280,16 @@ extern "C" bool noesis_visual_brush_set_visual(void* brush, void* visual) {
     return true;
 }
 
-// Borrowed (no +1) Visual currently set on the brush, or null.
 extern "C" void* noesis_visual_brush_get_visual(void* brush) {
     auto* b = cast<Noesis::VisualBrush>(brush);
     if (!b) return nullptr;
     return b->GetVisual();
 }
 
-// ── TileBrush tiling knobs (base of ImageBrush AND VisualBrush) ───────────────
+// ── TileBrush (ImageBrush and VisualBrush) ───────────────────────────────────
 //
-// AlignmentX/Y, Stretch, TileMode and the Viewport/Viewbox *Units use the
-// integer enum ordinals from NsGui/Enums.h. The getters return the ordinal or
-// -1 if `brush` is not a TileBrush (every enum's minimum ordinal is 0).
-// Viewport/Viewbox are Rects passed as {x, y, width, height}.
+// Getters return -1 if `brush` is not a TileBrush. Viewport/Viewbox rects are
+// {x, y, width, height}.
 
 extern "C" bool noesis_tile_brush_set_alignment_x(void* brush, int32_t value) {
     auto* b = cast<Noesis::TileBrush>(brush);
@@ -549,7 +535,6 @@ extern "C" bool noesis_matrix_transform_get(void* transform, float out[6]) {
 
 extern "C" void* noesis_transform_group_create() {
     Noesis::Ptr<Noesis::TransformGroup> g = *new Noesis::TransformGroup();
-    // Ensure a children collection exists so add_child never has to create one.
     if (!g->GetChildren()) {
         Noesis::Ptr<Noesis::TransformCollection> children = *new Noesis::TransformCollection();
         g->SetChildren(children.GetPtr());
@@ -557,9 +542,8 @@ extern "C" void* noesis_transform_group_create() {
     return handout(g.GetPtr());
 }
 
-// Append a child transform to a TransformGroup. The group's collection takes its
-// own reference; the caller keeps ownership of `child`. Returns false if `group`
-// is not a TransformGroup or `child` is not a Transform.
+// The group takes its own reference; the caller keeps its `child`. False if
+// `group` is not a TransformGroup or `child` is not a Transform.
 extern "C" bool noesis_transform_group_add_child(void* group, void* child) {
     auto* g = cast<Noesis::TransformGroup>(group);
     auto* c = cast<Noesis::Transform>(child);
@@ -615,9 +599,8 @@ extern "C" bool noesis_composite_transform_get(void* transform, float out[9]) {
 
 // ── 3D transforms ──────────────────────────────────────────────────────────
 //
-// Transform3D objects are assigned to an element via UIElement::SetTransform3D
-// (the Transform3DProperty), NOT via RenderTransform. See the element accessors
-// noesis_element_set_transform3d / _get_transform3d below.
+// Transform3D goes on UIElement::Transform3D, not RenderTransform; see
+// noesis_element_set_transform3d.
 
 // fields = {centerX, centerY, centerZ, rotationX, rotationY, rotationZ,
 //           scaleX, scaleY, scaleZ, translateX, translateY, translateZ}
@@ -699,10 +682,8 @@ extern "C" bool noesis_matrix_transform3d_get(void* transform, float out[12]) {
     return true;
 }
 
-// Assign a Transform3D to an element (UIElement::SetTransform3D). `transform` is
-// a borrowed Transform3D* (or null to clear); Noesis takes its own reference.
-// Returns false if `element` is not a UIElement or `transform` is non-null but
-// not a Transform3D.
+// `transform` is borrowed; null clears. False if `element` is not a UIElement
+// or a non-null `transform` is not a Transform3D.
 extern "C" bool noesis_element_set_transform3d(void* element, void* transform) {
     auto* e = cast<Noesis::UIElement>(element);
     if (!e) return false;
@@ -716,7 +697,6 @@ extern "C" bool noesis_element_set_transform3d(void* element, void* transform) {
     return true;
 }
 
-// Borrowed (no +1) Transform3D currently set on the element, or null.
 extern "C" void* noesis_element_get_transform3d(void* element) {
     auto* e = cast<Noesis::UIElement>(element);
     if (!e) return nullptr;
@@ -814,10 +794,8 @@ extern "C" bool noesis_drop_shadow_effect_set_opacity(void* effect, float opacit
 
 // ── RenderOptions (attached property) ────────────────────────────────────────
 //
-// RenderOptions.BitmapScalingMode is an attached DP whose value type is the enum
-// BitmapScalingMode, so it can't go through the generic Int32 attached-property
-// path (whose type check demands TypeOf<int32_t>). These wrap the static
-// accessors directly. `mode` ordinals match Noesis::BitmapScalingMode.
+// BitmapScalingMode is enum-typed, so the generic Int32 attached-property path
+// (which checks TypeOf<int32_t>) rejects it.
 
 extern "C" bool noesis_render_options_set_bitmap_scaling_mode(void* obj, int32_t mode) {
     auto* d = cast<Noesis::DependencyObject>(obj);

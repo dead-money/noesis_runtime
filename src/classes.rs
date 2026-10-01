@@ -1,41 +1,58 @@
-//! Register Rust-backed XAML classes.
+//! Custom XAML classes implemented in Rust.
 //!
-//! This is the Rust analogue of what the Noesis C# / Unity binding does for
-//! managed code: it lets you declare new `<myns:Foo>` types whose dependency
-//! properties + property-change logic live entirely in Rust. The C++ side
-//! synthesizes a `Noesis::TypeClassBuilder` per consumer-named class and
-//! installs a Factory creator that returns a per-base trampoline subclass
-//! (`ClassBase::ContentControl` is the v1 base; sibling bases plug in
-//! incrementally).
+//! Register a new type that XAML can instantiate by name (`<game:Badge/>`),
+//! with dependency properties (DPs) whose changes call back into Rust. The
+//! class derives from one of the [`ClassBase`] Noesis types and can also take
+//! over coercion ([`CoerceHandler`]), layout ([`LayoutHandler`]) and rendering
+//! ([`RenderHandler`]).
 //!
 //! # Lifecycle
 //!
-//! 1. Call [`init`](crate::init) so Noesis's reflection registry is alive.
-//! 2. Build a class with [`ClassBuilder::new`], add DPs with
-//!    [`ClassBuilder::add_property`], and finalize with
-//!    [`ClassBuilder::register`] → [`ClassRegistration`].
-//! 3. Load XAML that references the class by name. Property writes from
-//!    XAML / bindings / runtime fire your [`PropertyChangeHandler::on_changed`]
-//!    on the main thread.
-//! 4. From Rust, mutate the instance via [`Instance::set_int32`] /
-//!    [`Instance::set_thickness`] / etc., useful for "computed" properties
-//!    (`NineSlicer`'s `TopLeftViewbox` family is the motivating example).
-//! 5. Drop the [`ClassRegistration`] AFTER all live instances are released
-//!    (typically at process shutdown). RAII + the `Send`/`Sync` bounds are
-//!    deliberately conservative; registrations are cheap and rare.
+//! 1. Call [`init`](crate::init).
+//! 2. Create a [`ClassBuilder`], add properties with
+//!    [`add_property`](ClassBuilder::add_property) and friends, and call
+//!    [`register`](ClassBuilder::register) to get a [`ClassRegistration`].
+//! 3. Load XAML that uses the class, or create instances directly with
+//!    [`ClassRegistration::create_instance`]. Every property change, from
+//!    XAML, a binding or Rust, calls [`PropertyChangeHandler::on_changed`].
+//! 4. Read and write properties through an [`Instance`], using the index
+//!    returned when the property was added.
+//! 5. Drop the [`ClassRegistration`] to stop new instances being created.
+//!    Existing instances keep working; the handlers are freed when the last
+//!    one goes away.
 //!
-//! # Threading
+//! ```no_run
+//! use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
+//! use noesis_runtime::ffi::{ClassBase, PropType};
 //!
-//! Property-changed callbacks fire on whatever thread drives the View, in
-//! practice the main thread. The handler is stored behind a `Send` trait
-//! bound; if you need cross-thread fan-out (e.g. Bevy ECS), keep the handler
-//! body small and route to a channel / queue.
+//! struct Badge;
 //!
-//! # Re-entrancy
+//! impl PropertyChangeHandler for Badge {
+//!     fn on_changed(&self, _instance: Instance, _prop_index: u32, value: PropertyValue<'_>) {
+//!         if let PropertyValue::Int32(count) = value {
+//!             println!("count is now {count}");
+//!         }
+//!     }
+//! }
 //!
-//! [`Instance`] `set_*` calls fire the property-changed callback synchronously
-//! if the new value differs. Guard against re-entrancy in the handler if you
-//! plan to write back to the same property.
+//! noesis_runtime::init();
+//! let mut builder = ClassBuilder::new("Game.Badge", ClassBase::ContentControl, Badge);
+//! let count = builder.add_property("Count", PropType::Int32);
+//! let registration = builder.register().expect("name already registered");
+//!
+//! let badge = registration.create_instance().expect("instance");
+//! badge.handle().set_int32(count, 5); // prints "count is now 5"
+//! ```
+//!
+//! # Threading and re-entrancy
+//!
+//! Callbacks run on the thread that drives the view. Keep handlers short and
+//! send work elsewhere through a channel if needed.
+//!
+//! Writing a property from Rust calls the change handler synchronously before
+//! the setter returns, including from inside a handler. All handler methods
+//! take `&self` for that reason; keep mutable state in a `Cell`, `RefCell`,
+//! `Mutex` or atomic.
 
 #![allow(unsafe_op_in_unsafe_fn)] // thin FFI surface; explicit blocks add noise
 
@@ -56,13 +73,8 @@ use crate::ffi::{
     noesis_visual_children_count,
 };
 
-/// Free trampoline matching [`crate::ffi::ClassFreeFn`]. The C++ side holds a
-/// pointer to this function and invokes it exactly once when the underlying
-/// `ClassData` is finally freed (immediately at unregister if no instances
-/// exist, or deferred to the last live instance's destruction). Drops the
-/// double-boxed `Box<dyn PropertyChangeHandler>` whose ownership was
-/// transferred to C++ at registration time, and clears the prop-types
-/// scratch slot keyed on the same userdata pointer.
+/// Called exactly once by C++ when the class data is freed: at unregister if
+/// no instances exist, otherwise when the last instance dies.
 unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
         if userdata.is_null() {
@@ -80,19 +92,16 @@ unsafe extern "C" fn class_handler_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// Read width / height of an `ImageSource` value (or any `BaseComponent*`
-/// whose runtime type is an `ImageSource` subclass). Returns `None` when
-/// the pointer is null or doesn't downcast.
-///
-/// Useful when a custom-control [`PropertyChangeHandler`] needs the source
-/// dimensions to compute derived properties. `NineSlicer` / `ThreeSlicer`'s
-/// `OnSlicesChanged` is the motivating example.
+/// The `(width, height)` of an image source, or `None` if `image_source` is
+/// not an `ImageSource`. Handy in a [`PropertyChangeHandler`] that derives
+/// other properties from an image's size; [`Instance::get_image_source_size`]
+/// is the safe form for a property you registered.
 ///
 /// # Safety
 ///
-/// `image_source` must be a pointer obtained from a [`PropertyValue`]
-/// (`ImageSource` or `BaseComponent` variant) or from another live Noesis
-/// `BaseComponent`. Caller does not own a ref.
+/// `image_source` must point to a live Noesis `BaseComponent`, such as the
+/// pointer in a [`PropertyValue::ImageSource`] during its callback. No
+/// reference is taken or released.
 #[must_use]
 pub unsafe fn image_source_size(image_source: NonNull<c_void>) -> Option<(f32, f32)> {
     let mut w: f32 = 0.0;
@@ -101,37 +110,29 @@ pub unsafe fn image_source_size(image_source: NonNull<c_void>) -> Option<(f32, f
     ok.then_some((w, h))
 }
 
-/// Per-instance Rust callback. Implementations receive a stable instance
-/// pointer (see [`Instance`]) and the index of the changed property. The index
-/// matches the order in which DPs were added to the class.
+/// Receives property changes for every instance of a class.
 ///
-/// # Re-entrancy
-///
-/// `on_changed` takes `&self`, not `&mut self`, because it is *re-entrant*: a
-/// single handler box is shared by every instance of the class, and the
-/// documented "computed property" pattern has a handler write *another* DP from
-/// inside `on_changed` (e.g. `SliceThickness` changes → recompute viewboxes →
-/// `instance.set_rect(...)`). That synchronous write re-enters Noesis, which
-/// re-invokes this same handler before the outer call has returned. Holding a
-/// `&mut self` across the user callback would alias on re-entry: undefined
-/// behaviour. Handlers that need mutable state must use interior mutability
-/// (`Cell` / `RefCell` / `Mutex` / atomics); re-entering a `RefCell` borrow is a
-/// controlled panic, never UB.
+/// One handler serves all instances of the class. It takes `&self` because it
+/// is re-entrant: a handler that writes another property of the instance (a
+/// computed property) is called again for that write before the outer call
+/// returns. Keep mutable state in a `Cell`, `RefCell`, `Mutex` or atomic.
 pub trait PropertyChangeHandler: Send + 'static {
+    /// Called after property `prop_index` of `instance` changed to `value`.
+    /// `prop_index` is the index returned when the property was added.
     fn on_changed(&self, instance: Instance, prop_index: u32, value: PropertyValue<'_>);
 }
 
-/// Property value as observed by the change callback. Variant matches the
-/// [`PropType`] declared at registration time.
+/// A property value passed to [`PropertyChangeHandler`] and [`CoerceHandler`].
+/// The variant matches the property's registered [`PropType`]. Colors are
+/// floats in `0..=1`; lengths are device-independent pixels.
 ///
-/// Borrowed variants (`String`, `ImageSource`, `BaseComponent`) reference
-/// Noesis-owned storage that may be invalidated by the next layout pass.
-/// Copy if you need to keep the value past the callback.
+/// `String`, `ImageSource` and `BaseComponent` borrow Noesis-owned data that is
+/// valid only during the callback. Copy the string out if you need it later.
+/// `String` is `None` for a null or non-UTF-8 value.
 #[derive(Debug)]
 pub enum PropertyValue<'a> {
     Int32(i32),
     UInt32(u32),
-    /// A `uint64` DP value (e.g. a packed row identity).
     UInt64(u64),
     Float(f32),
     Double(f64),
@@ -155,42 +156,38 @@ pub enum PropertyValue<'a> {
         width: f32,
         height: f32,
     },
-    /// `Noesis::Point` (x, y).
     Point {
         x: f32,
         y: f32,
     },
-    /// `Noesis::Size` (width, height).
     Size {
         width: f32,
         height: f32,
     },
-    /// `Noesis::Vector2` (x, y).
+    /// A `Noesis::Vector2`.
     Vector {
         x: f32,
         y: f32,
     },
-    /// Runtime-enum-typed DP value (the underlying `int32` member value).
+    /// The integer value of a runtime enum member (see
+    /// [`ClassBuilder::add_enum_property`]).
     Enum(i32),
-    /// Borrowed `Noesis::ImageSource*` (or null). Treat as opaque.
+    /// Borrowed `Noesis::ImageSource*`, or `None` when unset.
     ImageSource(Option<NonNull<c_void>>),
-    /// Borrowed `Noesis::BaseComponent*` (or null). Treat as opaque.
+    /// Borrowed `Noesis::BaseComponent*`, or `None` when unset.
     BaseComponent(Option<NonNull<c_void>>),
 }
 
-/// One registered dependency property + its metadata options.
 struct PropSpec {
     name: CString,
     kind: PropType,
     default: OwnedDefault,
     options: PropertyOptions,
-    /// For [`PropType::Enum`] DPs: the reflected name of the runtime enum
-    /// (registered via [`crate::reflection::register_enum`]). `None` for all
-    /// other property types.
     enum_type: Option<CString>,
 }
 
-/// Builder for a single class registration.
+/// Defines one custom class. Add properties and optional handlers, then call
+/// [`register`](Self::register).
 pub struct ClassBuilder<H: PropertyChangeHandler> {
     name: CString,
     base: ClassBase,
@@ -219,23 +216,20 @@ enum OwnedDefault {
     Enum(i32),
 }
 
-/// Owned storage for a `NOESIS_PROP_STRING` default. The FFI expects a
-/// `const char* const*` (a pointer *to* a c-string pointer), so we keep both
-/// the NUL-terminated bytes (`_bytes`) and a stable slot (`ptr`) holding the
-/// pointer into them. `ptr` is computed from the heap-allocated `CString`
-/// buffer, which is move-stable, so `&self.ptr` stays valid for the synchronous
-/// registration call regardless of where the enclosing `PropSpec` lives.
+/// A string default for the FFI, which takes `const char* const*`. `ptr`
+/// points into `_bytes`' heap buffer, so it stays valid when this moves.
 struct StringDefault {
-    /// Owns the bytes that `ptr` points into; never read directly.
     _bytes: CString,
-    /// `_bytes.as_ptr()`, stored so its address can be handed to the FFI.
     ptr: *const c_char,
 }
 
 impl<H: PropertyChangeHandler> ClassBuilder<H> {
-    /// Begin a new class registration. `name` is the XAML-visible type name
-    /// (e.g. `"AOR.NineSlicer"`); the XAML namespace mapping
-    /// (`xmlns:aor="clr-namespace:AOR"`) lives in the XAML itself.
+    /// Starts a class named `name`, derived from `base`, whose property
+    /// changes go to `handler`.
+    ///
+    /// `name` is the full type name XAML resolves, such as `"Game.Badge"`,
+    /// which XAML reaches with `xmlns:game="clr-namespace:Game"` and
+    /// `<game:Badge/>`.
     ///
     /// # Panics
     ///
@@ -252,17 +246,28 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         }
     }
 
-    /// Append a dependency property initialized to its type's default value.
-    /// The returned `u32` is the dense index the change callback receives for
-    /// this property; indices grow in addition order starting at 0. Use
-    /// [`Self::add_property_with`] to supply an explicit default.
+    /// Adds a property with its type's zero default and returns its index.
+    /// Indices count up from 0 in the order properties are added, across all
+    /// `add_*` methods. Use the index with [`Instance`] and to recognise the
+    /// property in your handlers.
+    ///
+    /// For an enum-typed property use [`add_enum_property`](Self::add_enum_property)
+    /// instead of [`PropType::Enum`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL.
     pub fn add_property(&mut self, name: &str, kind: PropType) -> u32 {
         self.add_property_with(name, kind, PropertyDefault::None)
     }
 
-    /// Same as [`Self::add_property`] but with an explicit default value.
-    /// `ImageSource` and `BaseComponent` properties have no default variant and
-    /// always start null.
+    /// Like [`add_property`](Self::add_property), with a starting value.
+    /// `default` must match `kind`. `ImageSource` and `BaseComponent`
+    /// properties have no default variant and start null.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `name` contains an interior NUL.
     pub fn add_property_with(
         &mut self,
         name: &str,
@@ -272,13 +277,15 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         self.add_property_ex(name, kind, default, PropertyOptions::default())
     }
 
-    /// Append a dependency property with richer metadata
-    /// ([`PropertyOptions`]): `FrameworkPropertyMetadataOptions` (e.g.
-    /// [`fpm_options::AFFECTS_MEASURE`]), a read-only access flag, and/or
-    /// opt-in coercion. Coercion requires a handler installed via
-    /// [`Self::set_coerce`] and only applies to scalar / `Thickness` / `Color`
-    /// / `Rect` / `Point` / `Size` / `Vector` properties (the first 32
-    /// properties of a class; enum / object / string tags are not coercible).
+    /// Like [`add_property_with`](Self::add_property_with), with
+    /// [`PropertyOptions`]: layout and render invalidation flags
+    /// ([`fpm_options`]), read-only access, and coercion.
+    ///
+    /// Coercion needs a handler from [`set_coerce`](Self::set_coerce). It is
+    /// ignored for `UInt64`, `String`, `ImageSource` and `BaseComponent`
+    /// properties. Only the first 32 properties of a class can be coerced: a
+    /// coerced property at index 32 or above makes
+    /// [`register`](Self::register) fail.
     ///
     /// # Panics
     ///
@@ -301,15 +308,14 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         self.props.len() as u32 - 1
     }
 
-    /// Append a dependency property whose value type is a runtime enum
-    /// (registered with [`crate::reflection::register_enum`]). The DP stores an
-    /// `int32` but reports the enum as its reflected type, so XAML enum-string
-    /// parsing, the `EnumConverter`, and `Style` setters resolve it. `default`
-    /// is the initial member value. Coercion is not offered for enum DPs.
+    /// Adds a property typed as the runtime enum `enum_type_name` (see
+    /// [`crate::reflection::register_enum`]) and returns its index. XAML and
+    /// styles can then set it by member name. Values are the members' `i32`s;
+    /// `default` is the starting value. Enum properties cannot be coerced, and
+    /// `options.coerce` is ignored.
     ///
-    /// Returns the dense property index. The enum type must already be
-    /// registered when the class is [`Self::register`]ed, or registration of
-    /// this property fails (and [`Self::register`] returns `None`).
+    /// The enum must be registered before [`register`](Self::register) runs,
+    /// or `register` returns `None`.
     ///
     /// # Panics
     ///
@@ -333,35 +339,33 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         self.props.len() as u32 - 1
     }
 
-    /// Install a class-level coerce handler. Individual properties opt in by
-    /// passing [`PropertyOptions::coerce`] `= true` to [`Self::add_property_ex`].
-    /// The handler's [`CoerceHandler::coerce`] runs inside Noesis's value
-    /// pipeline whenever a coerced property's effective value is computed, and
-    /// returns the clamped / transformed result (or [`Coerced::Unchanged`] to
-    /// pass the value through).
+    /// Sets the class's [`CoerceHandler`]. It applies only to properties added
+    /// with [`PropertyOptions::coerce`] set. Calling this again replaces the
+    /// previous handler.
     pub fn set_coerce(&mut self, handler: impl CoerceHandler) {
         self.coerce = Some(Box::new(handler));
     }
 
-    /// Install a layout handler so the class participates in the layout system
-    /// via `MeasureOverride` / `ArrangeOverride`. Without a handler the base
-    /// class's default layout runs. See [`LayoutHandler`].
+    /// Sets a [`LayoutHandler`] that replaces the class's measure and arrange
+    /// passes. Without one the base class lays out as usual. Has no effect on
+    /// a [`ClassBase::Freezable`] class.
     pub fn set_layout(&mut self, handler: impl LayoutHandler) {
         self.layout = Some(Box::new(handler));
     }
 
-    /// Install a render handler so the class draws immediate-mode content via
-    /// `OnRender`. Without a handler the base class renders normally. The
-    /// handler's [`RenderHandler::render`] receives a borrowed
-    /// [`DrawingContext`] for the duration of the call; issue draw / push / pop
-    /// commands through it. See [`RenderHandler`].
+    /// Sets a [`RenderHandler`] that draws extra content on top of what the
+    /// base class renders. Has no effect on a [`ClassBase::Freezable`] class.
     pub fn set_render(&mut self, handler: impl RenderHandler) {
         self.render = Some(Box::new(handler));
     }
 
-    /// Finalize the registration. Returns `None` if the C++ side rejected
-    /// the registration (most commonly: name already registered, or a
-    /// property had a type the v1 FFI doesn't yet support).
+    /// Registers the class with Noesis.
+    ///
+    /// Returns `None` if the name is already a registered type or a property
+    /// fails to register (for example an unknown enum type, or a coerced
+    /// property past index 31). A class name stays taken until
+    /// [`shutdown`](crate::shutdown), even after its [`ClassRegistration`] is
+    /// dropped, so registering the same name twice fails.
     pub fn register(self) -> Option<ClassRegistration> {
         let ClassBuilder {
             name,
@@ -374,14 +378,11 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
         } = self;
         let prop_types: Vec<PropType> = props.iter().map(|p| p.kind).collect();
 
-        // Box twice so we have a stable thin pointer for the C ABI userdata,
-        // matching the pattern in `events::subscribe_click`.
+        // outer Box: thin pointer for the C ABI userdata
         let boxed: Box<Box<dyn PropertyChangeHandler>> = Box::new(Box::new(handler));
         let userdata = Box::into_raw(boxed);
 
-        // Record the prop type list BEFORE the FFI call so the trampoline
-        // can decode `value_ptr` if the C++ side fires a callback during
-        // registration (e.g. on a default-value initialization).
+        // before the FFI call: C++ may fire a callback during registration
         record_prop_types(userdata.cast(), prop_types.clone());
 
         let token = unsafe {
@@ -394,9 +395,7 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             )
         };
         let Some(token) = NonNull::new(token) else {
-            // Registration failed before C++ took ownership of the userdata
-            // box (the C side returns NULL before storing the pointer on
-            // ClassData). Drop locally.
+            // C side returns NULL before taking ownership of the box
             forget_prop_types(userdata.cast());
             unsafe { drop(Box::from_raw(userdata)) };
             return None;
@@ -404,8 +403,6 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
 
         for spec in &props {
             let idx = if let Some(enum_type) = &spec.enum_type {
-                // Enum DPs need the runtime TypeEnum bound at registration; they
-                // go through the dedicated entry point (coercion not offered).
                 let default = match spec.default {
                     OwnedDefault::Enum(v) => v,
                     _ => 0,
@@ -435,9 +432,8 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
                 }
             };
             if idx == u32::MAX {
-                // C++ owns the property-handler box now; unregister triggers
-                // its free trampoline (no instances exist yet). The coerce /
-                // layout boxes were never donated, so drop them here.
+                // unregister frees the donated handler box (no instances yet);
+                // coerce / layout / render were never donated
                 unsafe { noesis_class_unregister(token.as_ptr()) };
                 drop(coerce);
                 drop(layout);
@@ -446,13 +442,11 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
             }
         }
 
-        // Donate the coerce handler (if any). Ownership transfers to the C++
-        // ClassData, freed via `coerce_handler_free_trampoline` at teardown.
+        // coerce / layout / render boxes cross the C ABI; C++ frees each via
+        // its free trampoline when the ClassData dies
         if let Some(handler) = coerce {
             let boxed: Box<Box<dyn CoerceHandler>> = Box::new(handler);
             let coerce_ud = Box::into_raw(boxed);
-            // The coerce trampoline decodes `value_ptr` via the same side
-            // table; key it on the coerce userdata pointer.
             record_prop_types(coerce_ud.cast(), prop_types);
             unsafe {
                 noesis_class_set_coerce(
@@ -502,7 +496,9 @@ impl<H: PropertyChangeHandler> ClassBuilder<H> {
     }
 }
 
-/// Default value supplied to [`ClassBuilder::add_property_with`].
+/// Starting value for [`ClassBuilder::add_property_with`]. The variant must
+/// match the property's [`PropType`]; [`None`](Self::None) uses the type's
+/// zero value.
 #[derive(Debug, Clone, Copy)]
 pub enum PropertyDefault<'a> {
     None,
@@ -512,6 +508,7 @@ pub enum PropertyDefault<'a> {
     Float(f32),
     Double(f64),
     Bool(bool),
+    /// A string containing NUL falls back to `""`.
     String(&'a str),
     Thickness {
         left: f32,
@@ -543,8 +540,8 @@ pub enum PropertyDefault<'a> {
         x: f32,
         y: f32,
     },
-    /// Default member value for a runtime-enum-typed DP (set the enum int
-    /// directly, e.g. via [`crate::reflection::EnumType::value_from_name`]).
+    /// A runtime enum member's value, for example from
+    /// [`EnumType::value_from_name`](crate::reflection::EnumType::value_from_name).
     Enum(i32),
 }
 
@@ -587,7 +584,7 @@ impl PropertyDefault<'_> {
 }
 
 impl OwnedDefault {
-    /// Pointer to the value in the FFI layout, or null for "use type default".
+    /// Null means "use the type's default".
     fn as_ffi_ptr(&self) -> *const c_void {
         match self {
             OwnedDefault::None => ptr::null(),
@@ -598,13 +595,9 @@ impl OwnedDefault {
             OwnedDefault::Double(v) => (v as *const f64).cast(),
             OwnedDefault::Bool(v) => (v as *const bool).cast(),
             OwnedDefault::String(slot) => match slot {
-                // FFI expects `const char* const*`, a pointer to a c-string
-                // pointer. `slot.ptr` is that c-string pointer, held in stable
-                // storage owned by this `OwnedDefault`; we hand the FFI the
-                // address of that slot. It is dereferenced synchronously by the
-                // C++ side during the registration call, while `self` is alive.
+                // `const char* const*`, read only during the registration call
                 Some(slot) => (&slot.ptr as *const *const c_char).cast(),
-                // Interior NUL (or no default): fall back to the C++ "" default.
+                // interior NUL: C++ uses ""
                 None => ptr::null(),
             },
             OwnedDefault::Thickness(arr) | OwnedDefault::Color(arr) | OwnedDefault::Rect(arr) => {
@@ -618,11 +611,10 @@ impl OwnedDefault {
     }
 }
 
-/// RAII handle for a registered class. Drop unregisters the class
-/// (preventing new instances from being created), but the underlying
-/// `ClassData` (and the boxed handler) survive as long as instances remain
-/// alive. The intrusive refcount on the C++ side guarantees the handler
-/// outlives any property-change callback fired during instance destruction.
+/// A registered class. Dropping it stops new instances from being created;
+/// instances that already exist keep working, and the handlers are freed when
+/// the last of them is destroyed. The class name stays reserved until
+/// [`shutdown`](crate::shutdown).
 #[must_use = "dropping the guard immediately clears the registration"]
 pub struct ClassRegistration {
     token: NonNull<c_void>,
@@ -634,33 +626,26 @@ pub struct ClassRegistration {
 unsafe impl Send for ClassRegistration {}
 
 impl ClassRegistration {
-    /// Number of dependency properties registered against this class.
+    /// Number of properties on the class.
     #[must_use]
     pub fn num_properties(&self) -> u32 {
         self.num_props
     }
 
-    /// Internal token (a `void*` to the C++-side `ClassData`). Used by
-    /// `noesis_bevy` when collecting registrations into the render-app sync.
+    /// Opaque pointer identifying the class on the C side, valid while `self`
+    /// is alive. Only useful for passing to other FFI code.
     pub fn token(&self) -> NonNull<c_void> {
         self.token
     }
 
-    /// Instantiate this class directly from Rust, without a XAML reference.
-    /// Returns `None` only if the C++ side rejected the token (it never should
-    /// for a live registration).
+    /// Creates an instance from Rust, without XAML. Returns `None` only if
+    /// Noesis returns null.
     ///
-    /// The instance is a `DependencyObject` carrying this class's registered
-    /// DPs, which makes it a ready-made data-binding source: set it as an
-    /// element's `DataContext`
-    /// ([`FrameworkElement::set_data_context`](crate::view::FrameworkElement::set_data_context))
-    /// and author `{Binding SomeDP}` in XAML. Writing a DP from Rust via the
-    /// returned [`ClassInstance`]'s [`Instance`] handle raises the change
-    /// notification the binding engine observes, so the bound element updates
-    /// on the next `View::update`.
-    ///
-    /// The registration must outlive every [`ClassInstance`] it produces (the
-    /// same rule the C++ refcount enforces for XAML-created instances).
+    /// An instance works as a view model: pass it to
+    /// [`FrameworkElement::set_data_context`](crate::view::FrameworkElement::set_data_context),
+    /// bind to its properties with `{Binding Count}` in XAML, and write them
+    /// through [`ClassInstance::handle`]. Bound elements pick up the change on
+    /// the next view update.
     #[must_use]
     pub fn create_instance(&self) -> Option<ClassInstance> {
         // SAFETY: `self.token` is a live ClassData* for the lifetime of `self`.
@@ -669,10 +654,8 @@ impl ClassRegistration {
     }
 }
 
-/// An owned instance of a Rust-backed class created via
-/// [`ClassRegistration::create_instance`]. Holds a `+1` reference on the
-/// underlying object and releases it on drop. Most useful as a binding-source
-/// view model (set it as a `DataContext`).
+/// An instance created by [`ClassRegistration::create_instance`]. Owns one
+/// Noesis reference, released on drop; it may outlive the registration.
 pub struct ClassInstance {
     ptr: NonNull<c_void>,
 }
@@ -681,40 +664,39 @@ pub struct ClassInstance {
 unsafe impl Send for ClassInstance {}
 
 impl ClassInstance {
-    /// A non-owning [`Instance`] handle for driving the DPs (`set_*` / `get_*`).
-    /// The returned handle borrows this object; keep `self` alive while using it.
+    /// An [`Instance`] for reading and writing properties. It does not keep
+    /// the object alive.
     #[must_use]
     pub fn handle(&self) -> Instance {
         // SAFETY: self.ptr is a live instance pointer for the lifetime of self.
         unsafe { Instance::from_raw(self.ptr) }
     }
 
-    /// Raw `Noesis::BaseComponent*`, for handing to APIs that take one (e.g.
-    /// `set_data_context`). Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::BaseComponent*`, borrowed for the lifetime of `self`. Pass
+    /// it to APIs that take one, such as [`Instance::set_component`].
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Freeze this instance, if it is a [`ClassBase::Freezable`]-based class
-    /// (`Noesis::Freezable::Freeze`). After freezing, the object is immutable
-    /// and [`Self::is_frozen`] reads back `true`. Returns `false` if the object
-    /// is not a `Freezable` or cannot currently be frozen.
+    /// Makes a [`ClassBase::Freezable`] instance immutable. Returns `false` if
+    /// the class is not `Freezable` or [`can_freeze`](Self::can_freeze) is
+    /// `false`.
     pub fn freeze(&self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
         unsafe { noesis_freezable_freeze(self.ptr.as_ptr()) }
     }
 
-    /// Whether this instance is currently frozen (`Noesis::Freezable::IsFrozen`).
-    /// Always `false` for non-`Freezable` classes.
+    /// Whether the instance is frozen. Always `false` for non-`Freezable`
+    /// classes.
     #[must_use]
     pub fn is_frozen(&self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
         unsafe { noesis_freezable_is_frozen(self.ptr.as_ptr()) }
     }
 
-    /// Whether this instance can be frozen (`Noesis::Freezable::CanFreeze`).
-    /// Always `false` for non-`Freezable` classes.
+    /// Whether [`freeze`](Self::freeze) would succeed. Always `false` for
+    /// non-`Freezable` classes.
     #[must_use]
     pub fn can_freeze(&self) -> bool {
         // SAFETY: self.ptr is a live BaseComponent* for the lifetime of self.
@@ -731,46 +713,50 @@ impl Drop for ClassInstance {
 
 impl Drop for ClassRegistration {
     fn drop(&mut self) {
-        // The C++ side owns the boxed handler (transferred at register
-        // time) and is responsible for calling `class_handler_free_trampoline`
-        // exactly once when the underlying ClassData is finally freed.
-        // That happens *here* if no instances are alive, or deferred to
-        // the last instance's destruction otherwise, which is the whole
-        // point of the refcount: instances may legally outlive the Rust
-        // `ClassRegistration` (e.g. when Bevy drops the registry resource
-        // before the View tearing down).
-        //
-        // SAFETY: `self.token` was produced by `ClassBuilder::register`
-        // and is freed exactly once here.
+        // Instances may outlive this; C++ frees the handler boxes when the
+        // last one dies.
+        // SAFETY: `self.token` came from `ClassBuilder::register`; unregistered
+        // exactly once here.
         unsafe { noesis_class_unregister(self.token.as_ptr()) };
     }
 }
 
-/// Stable pointer to a Rust-backed instance, as observed by the
-/// [`PropertyChangeHandler`] callback. Use it to drive the
-/// [`Instance`] `set_*` / `get_*` methods without holding a Noesis ref:
-/// the instance is owned by the visual tree.
+/// A non-owning handle to an instance of a custom class, for reading and
+/// writing its properties. Handlers receive one; [`ClassInstance::handle`]
+/// gives one for instances you created.
+///
+/// It holds no reference, so use it only while the object is alive: inside a
+/// handler call, or while you hold the [`ClassInstance`].
+///
+/// # Property access
+///
+/// `prop_index` is the index returned when the property was added. Each
+/// `set_*` / `get_*` must match the property's registered [`PropType`]: the
+/// type is not checked, and a mismatch reads or writes the wrong number of
+/// bytes. An out-of-range index is ignored (`None` from getters).
+///
+/// Setters do nothing on a read-only property; use the `set_readonly_*`
+/// methods. A setter that changes the value calls the class's
+/// [`PropertyChangeHandler`] before returning.
 #[derive(Copy, Clone, Debug)]
 pub struct Instance(NonNull<c_void>);
 
 impl Instance {
-    /// Construct from a raw pointer received via the FFI callback.
+    /// Wraps a raw instance pointer.
     ///
     /// # Safety
     ///
-    /// `ptr` must be a non-null pointer obtained from the FFI's
-    /// property-change callback or from another [`Instance`]. It is treated
-    /// as opaque and stays valid for the instance's lifetime.
+    /// `ptr` must come from [`Instance::as_ptr`] or [`ClassInstance::raw`].
     pub unsafe fn from_raw(ptr: NonNull<c_void>) -> Self {
         Self(ptr)
     }
 
-    /// Raw opaque instance pointer, for FFI calls not yet wrapped here.
+    /// The raw instance pointer (a `Noesis::BaseComponent*`).
     pub fn as_ptr(self) -> *mut c_void {
         self.0.as_ptr()
     }
 
-    /// Set an `Int32` DP. Triggers the change callback if the value differs.
+    /// Sets an `Int32` property.
     pub fn set_int32(self, prop_index: u32, value: i32) {
         unsafe {
             noesis_instance_set_property(
@@ -780,11 +766,9 @@ impl Instance {
             );
         }
     }
-    /// Set a `UInt64` DP. Triggers the change callback if the value differs.
-    /// Register the DP with [`PropType::UInt64`]. The motivating use is stashing
-    /// a stable row identity (e.g. a Bevy `Entity`'s 64-bit bits) on a bound row
-    /// view model, so a per-row event handler can recover it off the event
-    /// source's `DataContext`.
+    /// Sets a `UInt64` property. Useful for tagging a row view model with an
+    /// ID (such as an ECS entity) that an event handler can read back from the
+    /// sender's `DataContext`.
     pub fn set_u64(self, prop_index: u32, value: u64) {
         unsafe {
             noesis_instance_set_property(
@@ -794,7 +778,7 @@ impl Instance {
             );
         }
     }
-    /// Set a `Float` DP. Triggers the change callback if the value differs.
+    /// Sets a `Float` property.
     pub fn set_float(self, prop_index: u32, value: f32) {
         unsafe {
             noesis_instance_set_property(
@@ -804,7 +788,7 @@ impl Instance {
             );
         }
     }
-    /// Set a `Double` DP. Triggers the change callback if the value differs.
+    /// Sets a `Double` property.
     pub fn set_double(self, prop_index: u32, value: f64) {
         unsafe {
             noesis_instance_set_property(
@@ -814,7 +798,7 @@ impl Instance {
             );
         }
     }
-    /// Set a `Bool` DP. Triggers the change callback if the value differs.
+    /// Sets a `Bool` property.
     pub fn set_bool(self, prop_index: u32, value: bool) {
         unsafe {
             noesis_instance_set_property(
@@ -824,7 +808,7 @@ impl Instance {
             );
         }
     }
-    /// Set a `String` DP. Triggers the change callback if the value differs.
+    /// Sets a `String` property.
     ///
     /// # Panics
     ///
@@ -840,51 +824,51 @@ impl Instance {
             );
         }
     }
-    /// Set a `Thickness` DP from its four edge widths, in device-independent
-    /// pixels.
+    /// Sets a `Thickness` property from its four edge widths, in
+    /// device-independent pixels.
     pub fn set_thickness(self, prop_index: u32, left: f32, top: f32, right: f32, bottom: f32) {
         let arr = [left, top, right, bottom];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
-    /// Set a `Color` DP from RGBA components in 0..=1.
+    /// Sets a `Color` property from components in `0..=1`.
     pub fn set_color(self, prop_index: u32, r: f32, g: f32, b: f32, a: f32) {
         let arr = [r, g, b, a];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
-    /// Set a `Rect` DP from its origin and extent.
+    /// Sets a `Rect` property.
     pub fn set_rect(self, prop_index: u32, x: f32, y: f32, width: f32, height: f32) {
         let arr = [x, y, width, height];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
-    /// Set a `Point` DP (`Noesis::Point`).
+    /// Sets a `Point` property.
     pub fn set_point(self, prop_index: u32, x: f32, y: f32) {
         let arr = [x, y];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
-    /// Set a `Size` DP (`Noesis::Size`).
+    /// Sets a `Size` property.
     pub fn set_size(self, prop_index: u32, width: f32, height: f32) {
         let arr = [width, height];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
-    /// Set a `Vector` DP (`Noesis::Vector2`).
+    /// Sets a `Vector` property.
     pub fn set_vector(self, prop_index: u32, x: f32, y: f32) {
         let arr = [x, y];
         unsafe {
             noesis_instance_set_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast());
         }
     }
-    /// Set an enum DP (the underlying `int32` member value). Register the DP
-    /// with [`ClassBuilder::add_enum_property`].
+    /// Sets an enum property (from
+    /// [`ClassBuilder::add_enum_property`]) to a member's integer value.
     pub fn set_enum(self, prop_index: u32, value: i32) {
         unsafe {
             noesis_instance_set_property(
@@ -894,18 +878,16 @@ impl Instance {
             );
         }
     }
-    /// Set an `ImageSource` / `BaseComponent` DP to a borrowed
-    /// `Noesis::BaseComponent*`. The C++ side stores its own reference, so the
-    /// caller keeps ownership of `component` (pass `null` to clear). The
-    /// motivating use is binding a control to a Rust-backed
-    /// [`crate::commands::Command`]: register a `BaseComponent` DP on the view
-    /// model, point it at `command.raw()`, then bind `Command="{Binding ...}"`.
+    /// Sets an `ImageSource` or `BaseComponent` property to `component`, or
+    /// clears it with null. The property takes its own reference; yours is
+    /// not consumed. For commands, [`set_command`](Self::set_command) is the
+    /// safe form.
     ///
     /// # Safety
     ///
-    /// `component` must be null or a live `Noesis::BaseComponent*` (e.g. from
-    /// [`crate::commands::Command::raw`] or [`ClassInstance::raw`]). The
-    /// caller's reference is not consumed.
+    /// `component` must be null or a live `Noesis::BaseComponent*`, such as
+    /// [`ClassInstance::raw`]. For an `ImageSource` property it must be an
+    /// `ImageSource`.
     pub unsafe fn set_component(self, prop_index: u32, component: *mut c_void) {
         unsafe {
             noesis_instance_set_property(
@@ -916,22 +898,10 @@ impl Instance {
         }
     }
 
-    /// Assign a command (any [`AsCommand`](crate::commands::AsCommand): a
-    /// [`Command`](crate::commands::Command),
-    /// [`RoutedCommand`](crate::commands::RoutedCommand),
-    /// [`RoutedUICommand`](crate::commands::RoutedUICommand), or built-in
-    /// [`BorrowedCommand`](crate::commands::BorrowedCommand)) to a
-    /// `BaseComponent` DP (register it with
-    /// [`ClassBuilder::add_property`](crate::classes::ClassBuilder::add_property)
-    /// and [`PropType::BaseComponent`]).
-    /// The C++ side stores its own reference, so the caller keeps ownership of
-    /// `command`.
-    ///
-    /// This is the safe, `unsafe`-free counterpart of
-    /// [`set_component`](Self::set_component) for the command case: the
-    /// `&impl AsCommand` borrow encodes the live-`BaseComponent` invariant. Set
-    /// the instance as a `DataContext` and bind `Command="{Binding ThatProperty}"`
-    /// in XAML. See the [`crate::commands`] module docs.
+    /// Sets a [`PropType::BaseComponent`] property to `command`, which can be
+    /// any [`AsCommand`](crate::commands::AsCommand) type. The property takes
+    /// its own reference. With the instance as a `DataContext`, XAML binds to
+    /// it with `Command="{Binding PropertyName}"`. See [`crate::commands`].
     pub fn set_command(self, prop_index: u32, command: &impl crate::commands::AsCommand) {
         // SAFETY: `command.command_ptr()` is a live ICommand* (a BaseComponent*
         // at runtime) borrowed for the duration of this synchronous call; the
@@ -939,8 +909,7 @@ impl Instance {
         unsafe { self.set_component(prop_index, command.command_ptr()) }
     }
 
-    /// Read back an `Int32` DP. Returns `None` on bad input
-    /// (instance pointer / index mismatch).
+    /// Reads an `Int32` property.
     pub fn get_int32(self, prop_index: u32) -> Option<i32> {
         let mut out: i32 = 0;
         let ok = unsafe {
@@ -948,8 +917,7 @@ impl Instance {
         };
         ok.then_some(out)
     }
-    /// Read back a `UInt64` DP. Returns `None` on bad input
-    /// (instance pointer / index mismatch).
+    /// Reads a `UInt64` property.
     pub fn get_u64(self, prop_index: u32) -> Option<u64> {
         let mut out: u64 = 0;
         let ok = unsafe {
@@ -957,8 +925,7 @@ impl Instance {
         };
         ok.then_some(out)
     }
-    /// Read back a `Float` DP. Returns `None` on bad input
-    /// (instance pointer / index mismatch).
+    /// Reads a `Float` property.
     pub fn get_float(self, prop_index: u32) -> Option<f32> {
         let mut out: f32 = 0.0;
         let ok = unsafe {
@@ -966,8 +933,7 @@ impl Instance {
         };
         ok.then_some(out)
     }
-    /// Read back a `String` DP. Returns `None` on bad input (instance pointer /
-    /// index mismatch / type mismatch) or a null string pointer.
+    /// Reads a `String` property. Invalid UTF-8 is replaced with `U+FFFD`.
     pub fn get_string(self, prop_index: u32) -> Option<String> {
         let mut p: *const c_char = ptr::null();
         let ok = unsafe {
@@ -980,12 +946,11 @@ impl Instance {
         if !ok || p.is_null() {
             return None;
         }
-        // SAFETY: p is a live NUL-terminated UTF-8 string borrowed from
-        // Noesis-owned storage while we hold our instance reference; copy out
-        // before yielding control.
+        // SAFETY: p is a NUL-terminated string in Noesis-owned storage, copied
+        // out before returning.
         Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
     }
-    /// Read back a `Thickness` DP as `(left, top, right, bottom)`.
+    /// Reads a `Thickness` property as `(left, top, right, bottom)`.
     pub fn get_thickness(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
@@ -993,7 +958,7 @@ impl Instance {
         };
         ok.then_some((out[0], out[1], out[2], out[3]))
     }
-    /// Read back a `Rect` DP as `(x, y, width, height)`.
+    /// Reads a `Rect` property as `(x, y, width, height)`.
     pub fn get_rect(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
@@ -1001,7 +966,7 @@ impl Instance {
         };
         ok.then_some((out[0], out[1], out[2], out[3]))
     }
-    /// Read back a `Point` DP as `(x, y)`.
+    /// Reads a `Point` property as `(x, y)`.
     pub fn get_point(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut out = [0.0f32; 2];
         let ok = unsafe {
@@ -1009,7 +974,7 @@ impl Instance {
         };
         ok.then_some((out[0], out[1]))
     }
-    /// Read back a `Size` DP as `(width, height)`.
+    /// Reads a `Size` property as `(width, height)`.
     pub fn get_size(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut out = [0.0f32; 2];
         let ok = unsafe {
@@ -1017,7 +982,7 @@ impl Instance {
         };
         ok.then_some((out[0], out[1]))
     }
-    /// Read back a `Vector` DP as `(x, y)`.
+    /// Reads a `Vector` property as `(x, y)`.
     pub fn get_vector(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut out = [0.0f32; 2];
         let ok = unsafe {
@@ -1025,7 +990,7 @@ impl Instance {
         };
         ok.then_some((out[0], out[1]))
     }
-    /// Read back an enum DP as its underlying `int32` member value.
+    /// Reads an enum property as its member's integer value.
     pub fn get_enum(self, prop_index: u32) -> Option<i32> {
         let mut out: i32 = 0;
         let ok = unsafe {
@@ -1033,9 +998,7 @@ impl Instance {
         };
         ok.then_some(out)
     }
-    /// Read back a `Color` DP as `(r, g, b, a)` floats in 0..=1. Returns
-    /// `None` on bad input (instance pointer / index mismatch / type
-    /// mismatch).
+    /// Reads a `Color` property as `(r, g, b, a)`, each in `0..=1`.
     pub fn get_color(self, prop_index: u32) -> Option<(f32, f32, f32, f32)> {
         let mut out = [0.0f32; 4];
         let ok = unsafe {
@@ -1044,12 +1007,9 @@ impl Instance {
         ok.then_some((out[0], out[1], out[2], out[3]))
     }
 
-    /// Read the intrinsic size of an `ImageSource`-typed property's current
-    /// value. Returns `None` when the source is null, not an
-    /// `ImageSource` subclass, or the property index doesn't match an
-    /// `ImageSource` property. Safe wrapper over [`image_source_size`] for
-    /// custom-control handlers (`NineSlicer` / `ThreeSlicer`) that
-    /// need source dimensions without dropping into `unsafe`.
+    /// The `(width, height)` of the image in an `ImageSource` or
+    /// `BaseComponent` property. `None` if the property is unset or does not
+    /// hold an `ImageSource`.
     #[must_use]
     pub fn get_image_source_size(self, prop_index: u32) -> Option<(f32, f32)> {
         let mut raw_ptr: *mut c_void = ptr::null_mut();
@@ -1067,8 +1027,6 @@ impl Instance {
 // SAFETY: Send-only (NOT Sync); see the crate-level "Thread affinity" docs.
 unsafe impl Send for Instance {}
 
-// ── Trampoline ─────────────────────────────────────────────────────────────
-
 unsafe extern "C" fn prop_changed_trampoline(
     userdata: *mut c_void,
     instance: *mut c_void,
@@ -1076,30 +1034,20 @@ unsafe extern "C" fn prop_changed_trampoline(
     value_ptr: *const c_void,
 ) {
     crate::panic_guard::guard(|| {
-        // Shared `&`, never `&mut`: the handler is re-entrant (a `set_*` inside
-        // `on_changed` re-invokes this trampoline with the same `userdata`
-        // box). See `PropertyChangeHandler` docs.
+        // shared `&`, never `&mut`: re-entered by a `set_*` inside `on_changed`
         let handler = &*userdata.cast::<Box<dyn PropertyChangeHandler>>();
         let Some(instance) = NonNull::new(instance) else {
             return;
         };
 
-        // We need the prop type to decode the value. The C++ side knows the type
-        // tag for the prop but doesn't pass it across the FFI on the changed
-        // callback (to keep the surface narrow). We recover it via a side table
-        // populated at registration: see `with_class_props`.
+        // the callback carries no type tag; CLASS_PROP_TYPES supplies it
         let value = decode_value(userdata, prop_index, value_ptr);
         handler.on_changed(Instance(instance), prop_index, value);
     })
 }
 
-// Side table from (handler userdata pointer) → property type list, populated
-// during ClassBuilder::register. We use the userdata pointer as the key
-// because it's stable per-class and unique (one Box per registration).
-//
-// This avoids broadening the FFI callback signature: the C++ side already
-// knows the prop type internally; the Rust side mirrors the list so it can
-// decode `value_ptr` at the boundary.
+// Property types per class, keyed by handler userdata pointer (unique per
+// registration), so trampolines can decode `value_ptr`.
 static CLASS_PROP_TYPES: Mutex<Vec<(usize, Vec<PropType>)>> = Mutex::new(Vec::new());
 
 fn record_prop_types(userdata: *mut c_void, types: Vec<PropType>) {
@@ -1251,10 +1199,9 @@ unsafe fn decode_value<'a>(
     }
 }
 
-/// `FrameworkPropertyMetadataOptions` bit flags (mirror of the Noesis enum in
-/// `NsGui/FrameworkPropertyMetadata.h`). OR these together into
-/// [`PropertyOptions::fpm_options`] so changing the property invalidates the
-/// matching layout / render pass.
+/// Flags for [`PropertyOptions::fpm_options`] that make a property change
+/// invalidate layout or rendering, or inherit down the tree. OR them together.
+/// Values match Noesis's `FrameworkPropertyMetadataOptions`.
 pub mod fpm_options {
     /// No framework options.
     pub const NONE: u32 = 0x000;
@@ -1272,29 +1219,26 @@ pub mod fpm_options {
     pub const INHERITS: u32 = 0x020;
 }
 
-/// Metadata options for [`ClassBuilder::add_property_ex`].
+/// Options for [`ClassBuilder::add_property_ex`]. The default is a plain
+/// writable property.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PropertyOptions {
-    /// Bitmask of [`fpm_options`] flags. Non-zero promotes the DP's metadata
-    /// to a `FrameworkPropertyMetadata`.
+    /// [`fpm_options`] flags, combined with `|`.
     pub fpm_options: u32,
-    /// Register the DP read-only: the ordinary setter paths (XAML, bindings,
-    /// [`Instance::set_int32`] & friends) reject writes; only
-    /// [`Instance::set_readonly_int32`] & friends can mutate it.
+    /// Reject writes from XAML, bindings and the [`Instance`] `set_*` methods.
+    /// Only the `set_readonly_*` methods, such as
+    /// [`Instance::set_readonly_int32`], can change it.
     pub read_only: bool,
-    /// Route this DP through the class coerce handler ([`ClassBuilder::set_coerce`]).
-    /// Only honored for scalar / `Thickness` / `Color` / `Rect` / `Point` /
-    /// `Size` / `Vector` properties.
+    /// Pass values through the class's [`CoerceHandler`]. See
+    /// [`ClassBuilder::add_property_ex`] for which properties support it.
     pub coerce: bool,
 }
 
-/// A coerced value returned by [`CoerceHandler::coerce`]. The variant MUST
-/// match the property's registered [`PropType`]; a mismatch is ignored (the
-/// pre-coercion value passes through). Use [`Coerced::Unchanged`] to accept the
-/// input as-is.
+/// Result of [`CoerceHandler::coerce`]. The variant must match the
+/// property's [`PropType`]; a mismatched variant keeps the input value.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Coerced {
-    /// Leave the value unchanged.
+    /// Keep the input value.
     Unchanged,
     Int32(i32),
     UInt32(u32),
@@ -1333,21 +1277,25 @@ pub enum Coerced {
     },
 }
 
-/// Per-class coercion logic. Installed via [`ClassBuilder::set_coerce`]; runs
-/// inside Noesis's value pipeline whenever a coerced property's effective value
-/// is computed (e.g. on every `SetValue`). Return a clamped / transformed
-/// value, or [`Coerced::Unchanged`] to pass it through. A no-op coerce yields
-/// the input verbatim, so a clamp to `[0, 100]` that returns `100` for an input
-/// of `999` is observable through a read-back.
+/// Adjusts values of coerced properties before they take effect, for example
+/// to clamp a number to a range. Set with [`ClassBuilder::set_coerce`]; a
+/// property opts in through [`PropertyOptions::coerce`].
 ///
-/// Takes `&self` (re-entrant: coercion runs inside the value pipeline and a
-/// handler that reads or writes other coerced DPs can re-enter this same
-/// per-class handler box; use interior mutability for handler state).
+/// Noesis calls it whenever a coerced property's effective value is computed.
+/// Getters then return the coerced value, while the value that was set is kept
+/// and coerced again on the next recompute.
+///
+/// Takes `&self` because it is re-entrant: reading or writing another coerced
+/// property from inside `coerce` calls it again. Keep mutable state in a
+/// `Cell`, `RefCell`, `Mutex` or atomic.
 pub trait CoerceHandler: Send + 'static {
+    /// Returns the value property `prop_index` should take given the incoming
+    /// `value`, or [`Coerced::Unchanged`].
     fn coerce(&self, instance: Instance, prop_index: u32, value: PropertyValue<'_>) -> Coerced;
 }
 
-/// A width/height pair in DIPs, used by [`LayoutHandler`].
+/// A width and height in device-independent pixels, used by
+/// [`LayoutHandler`]. Available sizes may be `f32::INFINITY`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Size {
     pub width: f32,
@@ -1367,57 +1315,60 @@ impl Size {
     }
 }
 
-/// Custom layout participation, installed via [`ClassBuilder::set_layout`].
-/// The trampoline subclass's `MeasureOverride` / `ArrangeOverride` forward
-/// here. A handler that returns a fixed size makes a self-sizing element; to
-/// lay out children, enumerate them with [`Instance::layout_child_count`] /
-/// [`Instance::layout_child`] and call [`LayoutChild::measure`] /
-/// [`LayoutChild::arrange`].
+/// Custom measure and arrange for a class, set with
+/// [`ClassBuilder::set_layout`]. It replaces the base class's
+/// `MeasureOverride` and `ArrangeOverride`.
 ///
-/// Default impls make the element take zero space (measure) and accept the
-/// final size (arrange); override the half you need.
+/// Return a fixed size from [`measure`](Self::measure) for a self-sized
+/// element. To lay out children, walk them with
+/// [`Instance::layout_child_count`] and [`Instance::layout_child`], and call
+/// [`LayoutChild::measure`] and [`LayoutChild::arrange`] on each.
 ///
-/// Methods take `&self` (re-entrant: a single handler box is shared by every
-/// instance of the class, so a panel that lays out children of its own type
-/// re-enters `measure`/`arrange` on the same box synchronously; use interior
-/// mutability for handler state).
+/// The default `measure` asks for zero space and the default `arrange` accepts
+/// the final size, so you can override just one.
+///
+/// Methods take `&self` because they are re-entrant: one handler serves every
+/// instance, and a panel containing children of its own class lays them out
+/// from inside its own call. Keep mutable state in a `Cell`, `RefCell`,
+/// `Mutex` or atomic.
 pub trait LayoutHandler: Send + 'static {
-    /// Return the element's desired size given the available size.
+    /// Returns the size the element wants, given `available` space. Measure
+    /// any children here.
     fn measure(&self, instance: Instance, available: Size) -> Size {
         let _ = (instance, available);
         Size::ZERO
     }
 
-    /// Position children within `final_size` and return the size actually used.
+    /// Positions children within `final_size` and returns the size used.
     fn arrange(&self, instance: Instance, final_size: Size) -> Size {
         let _ = instance;
         final_size
     }
 }
 
-/// A borrowed child element handed to a [`LayoutHandler`] for measuring /
-/// arranging. Valid only for the duration of the layout callback (it borrows a
-/// Noesis-owned `UIElement*`; do not store it).
+/// A child element, from [`Instance::layout_child`]. Use it only inside the
+/// [`LayoutHandler`] call that produced it; it holds no reference.
 pub struct LayoutChild {
     ptr: NonNull<c_void>,
 }
 
 impl LayoutChild {
-    /// Run the child's measure pass with the given available size. Returns
-    /// `false` if the child is not a `UIElement`.
+    /// Measures the child against `available`. Returns `false` if the child is
+    /// not a `UIElement`.
     pub fn measure(&self, available: Size) -> bool {
         // SAFETY: ptr is a live UIElement* borrowed for the callback.
         unsafe { noesis_uielement_measure(self.ptr.as_ptr(), available.width, available.height) }
     }
 
-    /// Run the child's arrange pass at `(x, y)` with size `(w, h)` in this
-    /// element's coordinate space. Returns `false` if not a `UIElement`.
+    /// Places the child at `(x, y)` with size `(w, h)`, in the parent's
+    /// coordinates. Returns `false` if the child is not a `UIElement`.
     pub fn arrange(&self, x: f32, y: f32, w: f32, h: f32) -> bool {
         // SAFETY: ptr is a live UIElement* borrowed for the callback.
         unsafe { noesis_uielement_arrange(self.ptr.as_ptr(), x, y, w, h) }
     }
 
-    /// Read the child's `DesiredSize` (valid after [`Self::measure`]).
+    /// The child's desired size from its last [`measure`](Self::measure), or
+    /// `None` if it is not a `UIElement`.
     #[must_use]
     pub fn desired_size(&self) -> Option<Size> {
         let mut w = 0.0f32;
@@ -1427,7 +1378,7 @@ impl LayoutChild {
         ok.then_some(Size::new(w, h))
     }
 
-    /// Raw borrowed `Noesis::UIElement*`.
+    /// The borrowed `Noesis::UIElement*`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
@@ -1435,14 +1386,15 @@ impl LayoutChild {
 }
 
 impl Instance {
-    /// Number of visual children (for a custom [`LayoutHandler`]).
+    /// Number of visual children. Call only from a [`LayoutHandler`].
     #[must_use]
     pub fn layout_child_count(self) -> u32 {
         // SAFETY: self.0 is a live element pointer.
         unsafe { noesis_visual_children_count(self.0.as_ptr()) }
     }
 
-    /// Borrow the `index`-th visual child for layout. `None` if out of range.
+    /// The visual child at `index`, or `None` if out of range. Call only from a
+    /// [`LayoutHandler`].
     #[must_use]
     pub fn layout_child(self, index: u32) -> Option<LayoutChild> {
         // SAFETY: self.0 is a live element pointer.
@@ -1450,9 +1402,10 @@ impl Instance {
         NonNull::new(p).map(|ptr| LayoutChild { ptr })
     }
 
-    /// Set a read-only `Int32` DP via the privileged path (the analogue of a
-    /// WPF `DependencyPropertyKey`). Ordinary [`Self::set_int32`] is a no-op on
-    /// a read-only DP. Returns `false` on a bad instance / index.
+    /// Sets an `Int32` property registered with [`PropertyOptions::read_only`],
+    /// which the ordinary setters cannot change. Works on writable properties
+    /// too. Returns `false` for a destroyed instance or an out-of-range index.
+    /// The type rules in [Property access](Self#property-access) apply.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_int32(self, prop_index: u32, value: i32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
@@ -1464,7 +1417,7 @@ impl Instance {
             )
         }
     }
-    /// Read-only setter for a `UInt32` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `UInt32` property. See [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_uint32(self, prop_index: u32, value: u32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
@@ -1476,7 +1429,7 @@ impl Instance {
             )
         }
     }
-    /// Read-only setter for a `Float` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `Float` property. See [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_float(self, prop_index: u32, value: f32) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
@@ -1488,7 +1441,7 @@ impl Instance {
             )
         }
     }
-    /// Read-only setter for a `Double` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `Double` property. See [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_double(self, prop_index: u32, value: f64) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
@@ -1500,7 +1453,7 @@ impl Instance {
             )
         }
     }
-    /// Read-only setter for a `Bool` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `Bool` property. See [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_bool(self, prop_index: u32, value: bool) -> bool {
         // SAFETY: self.0 is a live instance pointer; value outlives the call.
@@ -1512,7 +1465,7 @@ impl Instance {
             )
         }
     }
-    /// Read-only setter for a `String` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `String` property. See [`Self::set_readonly_int32`].
     ///
     /// # Panics
     ///
@@ -1530,7 +1483,7 @@ impl Instance {
             )
         }
     }
-    /// Read-only setter for a `Point` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `Point` property. See [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_point(self, prop_index: u32, x: f32, y: f32) -> bool {
         let arr = [x, y];
@@ -1539,7 +1492,7 @@ impl Instance {
             noesis_instance_set_readonly_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast())
         }
     }
-    /// Read-only setter for a `Size` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `Size` property. See [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_size(self, prop_index: u32, width: f32, height: f32) -> bool {
         let arr = [width, height];
@@ -1548,7 +1501,7 @@ impl Instance {
             noesis_instance_set_readonly_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast())
         }
     }
-    /// Read-only setter for a `Vector` DP. See [`Self::set_readonly_int32`].
+    /// Sets a read-only `Vector` property. See [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_vector(self, prop_index: u32, x: f32, y: f32) -> bool {
         let arr = [x, y];
@@ -1557,7 +1510,7 @@ impl Instance {
             noesis_instance_set_readonly_property(self.0.as_ptr(), prop_index, arr.as_ptr().cast())
         }
     }
-    /// Read-only setter for an enum DP (underlying `int32` member value). See
+    /// Sets a read-only enum property to a member's integer value. See
     /// [`Self::set_readonly_int32`].
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_readonly_enum(self, prop_index: u32, value: i32) -> bool {
@@ -1583,7 +1536,6 @@ unsafe extern "C" fn coerce_trampoline(
         if userdata.is_null() {
             return;
         }
-        // Shared `&`: re-entrant per-class handler box (see `CoerceHandler`).
         let handler = &*userdata.cast::<Box<dyn CoerceHandler>>();
         let Some(inst) = NonNull::new(instance) else {
             return;
@@ -1594,8 +1546,6 @@ unsafe extern "C" fn coerce_trampoline(
     })
 }
 
-/// Free trampoline for the donated coerce handler box. Mirrors
-/// [`class_handler_free_trampoline`].
 unsafe extern "C" fn coerce_handler_free_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
         if userdata.is_null() {
@@ -1615,8 +1565,7 @@ unsafe fn encode_coerced(
     if out_value.is_null() {
         return;
     }
-    // Validate the returned variant against the registered type; a mismatch is
-    // ignored so the pre-coercion copy in `out_value` survives.
+    // C++ pre-fills `out_value` with the input, so a mismatch passes it through
     let kind = lookup_prop_type(userdata, prop_index);
     match (kind, coerced) {
         (_, Coerced::Unchanged) => {}
@@ -1677,7 +1626,6 @@ unsafe fn encode_coerced(
             *f = x;
             *f.add(1) = y;
         }
-        // Variant / type mismatch: leave the passthrough copy in place.
         _ => {}
     }
 }
@@ -1694,7 +1642,6 @@ unsafe extern "C" fn layout_measure_trampoline(
         if userdata.is_null() {
             return;
         }
-        // Shared `&`: re-entrant per-class handler box (see `LayoutHandler`).
         let handler = &*userdata.cast::<Box<dyn LayoutHandler>>();
         let size = match NonNull::new(instance) {
             Some(inst) => handler.measure(Instance(inst), Size::new(avail_w, avail_h)),
@@ -1721,7 +1668,6 @@ unsafe extern "C" fn layout_arrange_trampoline(
         if userdata.is_null() {
             return;
         }
-        // Shared `&`: re-entrant per-class handler box (see `LayoutHandler`).
         let handler = &*userdata.cast::<Box<dyn LayoutHandler>>();
         let size = match NonNull::new(instance) {
             Some(inst) => handler.arrange(Instance(inst), Size::new(final_w, final_h)),
@@ -1736,8 +1682,6 @@ unsafe extern "C" fn layout_arrange_trampoline(
     })
 }
 
-/// Free trampoline for the donated layout handler box. Mirrors
-/// [`class_handler_free_trampoline`].
 unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
         if userdata.is_null() {
@@ -1747,24 +1691,23 @@ unsafe extern "C" fn layout_handler_free_trampoline(userdata: *mut c_void) {
     })
 }
 
-/// Custom immediate-mode rendering, installed via [`ClassBuilder::set_render`].
-/// The trampoline subclass's `OnRender` forwards here after the base
-/// `OnRender` runs. Issue draw / push / pop commands through the borrowed
-/// [`DrawingContext`]; it is valid only for the duration of the call.
+/// Immediate-mode drawing for a class, set with [`ClassBuilder::set_render`].
+/// It runs from the element's `OnRender`, after the base class has drawn.
 ///
-/// `OnRender` fires during the renderer's render-tree update (drive it with a
-/// [`View`](crate::view::View) + [`Renderer`](crate::view::Renderer) bound to a
-/// [`RenderDevice`](crate::render_device::RenderDevice); see `tests/drawing.rs`).
-/// Like the layout callbacks it runs on the view-driving thread; keep work small.
+/// Noesis calls it when the element's render content is rebuilt, which needs a
+/// [`View`](crate::view::View) with a [`Renderer`](crate::view::Renderer) on a
+/// [`RenderDevice`](crate::render_device::RenderDevice). The drawing is
+/// retained and redrawn only when the element's render is invalidated, for
+/// example by a property flagged [`fpm_options::AFFECTS_RENDER`].
 ///
-/// Takes `&self` (re-entrant: one handler box is shared by every instance of
-/// the class, so rendering a nested element of the same type re-enters `render`
-/// on the same box; use interior mutability for handler state).
+/// Takes `&self` because it is re-entrant: one handler serves every instance,
+/// including nested instances of the same class. Keep mutable state in a
+/// `Cell`, `RefCell`, `Mutex` or atomic.
 pub trait RenderHandler: Send + 'static {
-    /// Record this element's visual content into `ctx`. The element's render
-    /// size is available via [`Instance::layout_child`] / the element's own
-    /// `ActualWidth`/`ActualHeight` (read through a
-    /// [`FrameworkElement`](crate::view::FrameworkElement)).
+    /// Draws the element's content into `ctx`, in the element's local
+    /// coordinates. `ctx` is valid only for this call. No size is passed; a
+    /// class that needs it can record the arranged size from its
+    /// [`LayoutHandler`].
     fn render(&self, instance: Instance, ctx: DrawingContext<'_>);
 }
 
@@ -1777,7 +1720,6 @@ unsafe extern "C" fn render_trampoline(
         if userdata.is_null() {
             return;
         }
-        // Shared `&`: re-entrant per-class handler box (see `RenderHandler`).
         let handler = &*userdata.cast::<Box<dyn RenderHandler>>();
         let (Some(inst), Some(ctx)) = (NonNull::new(instance), NonNull::new(context)) else {
             return;
@@ -1789,8 +1731,6 @@ unsafe extern "C" fn render_trampoline(
     })
 }
 
-/// Free trampoline for the donated render handler box. Mirrors
-/// [`class_handler_free_trampoline`].
 unsafe extern "C" fn render_handler_free_trampoline(userdata: *mut c_void) {
     crate::panic_guard::guard(|| {
         if userdata.is_null() {

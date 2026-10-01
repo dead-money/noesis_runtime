@@ -1,29 +1,27 @@
-//! `ResourceDictionary` access + application resources.
+//! Build resource dictionaries in code and install application resources.
 //!
-//! XAML authors put brushes, colours, styles and templates in a
-//! `<ResourceDictionary>`: either inline on an element's `Resources`, merged
-//! from sibling files, or installed process-wide as the application resources.
-//! This module supplies the code-built equivalents:
+//! In XAML, brushes, colors, styles and templates live in a
+//! `<ResourceDictionary>`: on an element's `Resources`, merged in from other
+//! files, or installed process-wide as the application resources. This module
+//! is the code-side equivalent:
 //!
-//! * [`ResourceDictionary`]: a Rust-owned `Noesis::ResourceDictionary`. Build
-//!   one, add `key → BaseComponent*` entries ([`add`](ResourceDictionary::add)
-//!   / [`add_string`](ResourceDictionary::add_string)), look entries up
-//!   ([`find`](ResourceDictionary::find) / [`contains`](ResourceDictionary::contains)),
-//!   wire merged dictionaries ([`add_merged`](ResourceDictionary::add_merged)),
-//!   or [`parse`](ResourceDictionary::parse) a `<ResourceDictionary>` from an
-//!   in-memory XAML string.
+//! - [`ResourceDictionary`] owns a dictionary. Create one empty or
+//!   [`parse`](ResourceDictionary::parse) it from XAML, add entries
+//!   ([`add_brush`](ResourceDictionary::add_brush),
+//!   [`add_string`](ResourceDictionary::add_string),
+//!   [`add_boxed`](ResourceDictionary::add_boxed)), look them up
+//!   ([`find`](ResourceDictionary::find),
+//!   [`contains`](ResourceDictionary::contains)) and merge other dictionaries
+//!   in ([`add_merged`](ResourceDictionary::add_merged)).
+//! - [`set_application_resources`] installs a dictionary that every
+//!   [`View`](crate::view::View) created afterwards inherits;
+//!   [`application_resources_present`] and [`application_resources_contains`]
+//!   inspect it.
+//! - [`register_default_styles`] adds a dictionary to the default theme.
 //!
-//! * [`set_application_resources`] / [`application_resources_present`] /
-//!   [`application_resources_contains`]: install and inspect the process-global
-//!   `GUI::SetApplicationResources` dictionary every [`crate::view::View`]
-//!   created afterwards inherits.
-//!
-//! * [`register_default_styles`]: register a dictionary into the internal
-//!   theme (`GUI::RegisterDefaultStyles`).
-//!
-//! Per-element resources and `FindResource` live on
-//! [`FrameworkElement`](crate::view::FrameworkElement) (the
-//! `resources` / `set_resources` / `find_resource` methods).
+//! Per-element resources are on
+//! [`FrameworkElement`](crate::view::FrameworkElement): `resources`,
+//! `set_resources` and `find_resource`.
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
@@ -38,13 +36,12 @@ use crate::ffi::{
     noesis_resource_dictionary_parse, noesis_resource_dictionary_set_source,
 };
 
-/// A Rust handle to a `Noesis::ResourceDictionary`. Owns a `+1` reference
-/// released on drop.
+/// An owned `Noesis::ResourceDictionary`, released on drop.
 ///
 /// Installing it ([`set_application_resources`]) or assigning it to an element
 /// ([`FrameworkElement::set_resources`](crate::view::FrameworkElement::set_resources))
-/// makes Noesis take its own reference, so the handle may be dropped afterwards.
-/// Keeping it lets you keep mutating the live dictionary.
+/// gives Noesis its own reference, so you can drop the handle afterwards, or
+/// keep it to go on editing the live dictionary.
 pub struct ResourceDictionary {
     ptr: NonNull<c_void>,
 }
@@ -63,7 +60,7 @@ impl ResourceDictionary {
     ///
     /// # Panics
     ///
-    /// Panics if the Noesis allocation fails (returns null). Not expected once
+    /// Panics if Noesis returns null, which is not expected once
     /// [`crate::init`] has run.
     #[must_use]
     pub fn new() -> Self {
@@ -74,9 +71,8 @@ impl ResourceDictionary {
         }
     }
 
-    /// Parse a bare `<ResourceDictionary>` from an in-memory XAML string (via
-    /// `GUI::ParseXaml`). Returns `None` when the XAML is malformed or its root
-    /// is not a `ResourceDictionary`.
+    /// Parse a `<ResourceDictionary>` from a XAML string. Returns `None` when
+    /// the XAML is malformed or its root is not a `ResourceDictionary`.
     ///
     /// # Panics
     ///
@@ -90,8 +86,8 @@ impl ResourceDictionary {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Wrap an already-owned (`+1`) `Noesis::ResourceDictionary*`, e.g. the
-    /// result of a `get_*` accessor that `AddRef`'d before handing out.
+    /// Wrap a `Noesis::ResourceDictionary*` that carries a reference this
+    /// handle takes over.
     ///
     /// # Safety
     ///
@@ -102,29 +98,31 @@ impl ResourceDictionary {
         Self { ptr }
     }
 
-    /// Raw `Noesis::ResourceDictionary*` (a `BaseComponent*`). Borrowed for the
+    /// Raw `Noesis::ResourceDictionary*` (a `BaseComponent*`), borrowed for the
     /// lifetime of `self`.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Number of entries in the base dictionary (excludes merged dictionaries).
+    /// Number of entries in this dictionary, not counting merged dictionaries.
     #[must_use]
     pub fn len(&self) -> usize {
         // SAFETY: self.ptr is a live ResourceDictionary*.
         unsafe { noesis_resource_dictionary_count(self.ptr.as_ptr()) as usize }
     }
 
-    /// Whether the base dictionary is empty (ignores merged dictionaries).
+    /// Whether this dictionary has no entries of its own; merged dictionaries
+    /// are ignored.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Add a `BaseComponent*` under `key`; the dictionary takes its own
-    /// reference, so the caller retains ownership of `value`. Returns `false`
-    /// only if `value` is null.
+    /// Add any Noesis component under `key`. The dictionary takes its own
+    /// reference; you keep yours. Returns `false` if `value` is null. Prefer
+    /// the typed [`add_brush`](Self::add_brush),
+    /// [`add_boxed`](Self::add_boxed) or [`add_string`](Self::add_string).
     ///
     /// # Safety
     ///
@@ -141,8 +139,7 @@ impl ResourceDictionary {
         unsafe { noesis_resource_dictionary_add(self.ptr.as_ptr(), c.as_ptr(), value) }
     }
 
-    /// Convenience: box `value` as a `BoxedValue<String>` and add it under
-    /// `key`. The dictionary takes its own reference to the boxed value.
+    /// Add a string value under `key`.
     ///
     /// # Panics
     ///
@@ -154,8 +151,8 @@ impl ResourceDictionary {
         unsafe { self.add(key, boxed.raw()) }
     }
 
-    /// Add a boxed value under `key`. Thin sugar over [`add`](Self::add) that
-    /// keeps the [`Boxed`] borrow contract explicit.
+    /// Add a [`Boxed`] value under `key`. The dictionary takes its own
+    /// reference.
     ///
     /// # Panics
     ///
@@ -165,12 +162,10 @@ impl ResourceDictionary {
         unsafe { self.add(key, value.raw()) }
     }
 
-    /// Add a [`Brush`](crate::brushes::Brush) under `key`; the dictionary takes
-    /// its own reference, so the caller retains ownership of `brush`. The safe,
-    /// typed counterpart to [`add`](Self::add) for the common "register a
-    /// code-built brush as a `{StaticResource}`" case (e.g. a
-    /// [`SolidColorBrush`](crate::brushes::SolidColorBrush) or a
-    /// [`LinearGradientBrush`](crate::brushes::LinearGradientBrush)).
+    /// Add a [`Brush`](crate::brushes::Brush) under `key`, for example a
+    /// [`SolidColorBrush`](crate::brushes::SolidColorBrush) that XAML then
+    /// references as `{StaticResource key}`. The dictionary takes its own
+    /// reference; you keep yours.
     ///
     /// # Panics
     ///
@@ -181,7 +176,7 @@ impl ResourceDictionary {
         unsafe { self.add(key, brush.brush_raw()) }
     }
 
-    /// Whether the dictionary (or one of its merged dictionaries) contains
+    /// Whether this dictionary or one of its merged dictionaries contains
     /// `key`.
     ///
     /// # Panics
@@ -194,10 +189,9 @@ impl ResourceDictionary {
         unsafe { noesis_resource_dictionary_contains(self.ptr.as_ptr(), c.as_ptr()) }
     }
 
-    /// Borrowed (no `+1`) pointer to the value stored under `key`, or `None` if
-    /// absent. The dictionary owns the reference; copy / re-root it if you need
-    /// it past the next mutation. Uses the non-throwing `Find`, so a miss is a
-    /// clean `None`.
+    /// The value stored under `key`, or `None` if absent. The pointer is
+    /// borrowed from the dictionary and may dangle after the entry is replaced
+    /// or removed; take your own reference to keep it longer.
     ///
     /// # Panics
     ///
@@ -211,27 +205,28 @@ impl ResourceDictionary {
         NonNull::new(p)
     }
 
-    /// Add `other` to this dictionary's `MergedDictionaries` collection. Its
-    /// entries become resolvable through this dictionary (WPF/Noesis merge
-    /// semantics). The collection takes its own reference to `other`. Returns
-    /// `false` if the merged-dictionaries collection is unavailable.
+    /// Add `other` to this dictionary's `MergedDictionaries`, so its entries
+    /// resolve through this dictionary. Noesis takes its own reference to
+    /// `other`. Returns `false` if the merged-dictionaries collection is
+    /// unavailable.
     pub fn add_merged(&mut self, other: &ResourceDictionary) -> bool {
         // SAFETY: both pointers are live ResourceDictionary*; the collection
         // AddRefs `other`.
         unsafe { noesis_resource_dictionary_add_merged(self.ptr.as_ptr(), other.raw()) }
     }
 
-    /// Assign this dictionary's `Source` URI, loading and parsing that XAML
-    /// into it through the active provider chain. `{StaticResource}` lookups
-    /// during the parse resolve against every scope already reachable from
-    /// this dictionary, so adding it to an installed parent's merged
-    /// dictionaries ([`Self::add_merged`]) *before* calling `set_source` lets
-    /// a later leaf reference an earlier sibling's keys. That is the composable
-    /// form of [`crate::gui::install_app_resources_chain`], for callers that
-    /// also need to layer code-built entries into the same parent.
+    /// Set this dictionary's `Source` URI, loading that XAML into it through
+    /// the registered XAML provider.
     ///
-    /// Load/parse errors report through the Noesis error handler, not the
-    /// return value; `false` means the URI could not be passed at all.
+    /// `{StaticResource}` references in the loaded XAML resolve against every
+    /// scope already reachable from this dictionary. Merge it into an installed
+    /// parent ([`Self::add_merged`]) before calling `set_source`, and it can
+    /// reference keys from the parent's earlier merged dictionaries. This is
+    /// the building block behind [`crate::gui::install_app_resources_chain`],
+    /// for when you also want code-built entries in the same parent.
+    ///
+    /// Load and parse errors go to the Noesis error handler, not the return
+    /// value; `false` means the call was rejected outright.
     ///
     /// # Panics
     ///
@@ -250,30 +245,27 @@ impl Drop for ResourceDictionary {
     }
 }
 
-/// Install `dict` as the process-global application resources
-/// (`GUI::SetApplicationResources`). Every [`crate::view::View`] created
-/// afterwards inherits these styles, brushes and templates. Noesis takes its
-/// own reference, so `dict` may be dropped afterwards (the resources stay
-/// installed). Replaces any previously-installed dictionary.
+/// Install `dict` as the process-wide application resources, replacing any
+/// previous ones. Every [`View`](crate::view::View) created afterwards inherits
+/// its styles, brushes and templates. Noesis takes its own reference, so you
+/// can drop `dict` afterwards.
 ///
-/// This is the code-built counterpart to
-/// [`crate::gui::load_application_resources`] (which loads a dictionary by URI
-/// through the XAML provider).
+/// To load the dictionary from a XAML file instead, use
+/// [`crate::gui::load_application_resources`].
 pub fn set_application_resources(dict: &ResourceDictionary) {
     // SAFETY: dict.raw() is a live ResourceDictionary*; Noesis AddRefs it.
     unsafe { noesis_gui_set_application_resources(dict.raw()) }
 }
 
-/// Whether any application resources dictionary is currently installed
-/// (`GUI::GetApplicationResources() != null`).
+/// Whether application resources are currently installed.
 #[must_use]
 pub fn application_resources_present() -> bool {
     // SAFETY: borrowed getter; the pointer is only compared against null.
     !unsafe { noesis_gui_get_application_resources() }.is_null()
 }
 
-/// Whether the installed application resources contain `key` (including its
-/// merged dictionaries). `false` if no application resources are installed.
+/// Whether the installed application resources, or their merged
+/// dictionaries, contain `key`. `false` if none are installed.
 ///
 /// # Panics
 ///
@@ -291,10 +283,10 @@ pub fn application_resources_contains(key: &str) -> bool {
     unsafe { noesis_resource_dictionary_contains(app, c.as_ptr()) }
 }
 
-/// Register `uri`'s `ResourceDictionary` into the internal theme
-/// (`GUI::RegisterDefaultStyles`). Useful for setting default styles that
-/// implicit-keyed `Style`s (those without an `x:Key`) resolve against. Requires
-/// a XAML provider that can serve `uri`. Returns `false` on an empty `uri`.
+/// Add the `ResourceDictionary` at `uri` to Noesis's default theme, the
+/// styles controls fall back to when no implicit (`x:Key`-less) `Style`
+/// applies. The registered XAML provider must be able to serve `uri`. Returns
+/// `false` if `uri` is empty.
 ///
 /// # Panics
 ///

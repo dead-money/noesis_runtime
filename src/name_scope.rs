@@ -1,10 +1,9 @@
-//! Standalone `NameScope`: the freestanding XAML namescope object,
-//! distinct from the per-`FrameworkElement` `RegisterName`/`UnregisterName`
-//! path (which routes through whatever scope already hosts the element).
+//! XAML namescopes: the tables that map `x:Name` values to objects.
 //!
-//! A [`NameScope`] owns a `+1` reference on the underlying `Noesis::NameScope`.
-//! Attach one to an element with [`NameScope::set_on`], read it back with
-//! [`NameScope::of`], and register / look up names against it directly.
+//! Use [`NameScope`] to work with a scope object directly: create one and
+//! attach it to an element with [`NameScope::set_on`], fetch an element's scope
+//! with [`NameScope::of`], then register and look up names. For the common case
+//! of finding a named element, [`FrameworkElement::find_name`] is simpler.
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString};
@@ -18,8 +17,7 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// An owning handle to a `Noesis::NameScope`. Holds a `+1` reference, released
-/// on drop.
+/// A `Noesis::NameScope`. The handle holds one reference, released on drop.
 pub struct NameScope {
     ptr: NonNull<c_void>,
 }
@@ -28,7 +26,7 @@ pub struct NameScope {
 unsafe impl Send for NameScope {}
 
 impl NameScope {
-    /// Create a new, empty namescope.
+    /// Creates an empty namescope.
     ///
     /// # Panics
     ///
@@ -42,9 +40,8 @@ impl NameScope {
         }
     }
 
-    /// The namescope attached to `element` (`NameScope::GetNameScope`), or
-    /// `None` if it carries none / is not a `DependencyObject`. The returned
-    /// handle owns its own `+1` reference.
+    /// The namescope attached directly to `element`, or `None`. Does not search
+    /// ancestors.
     #[must_use]
     pub fn of(element: &FrameworkElement) -> Option<Self> {
         // SAFETY: element.raw() is a live BaseComponent*; the C side AddRef's
@@ -53,9 +50,8 @@ impl NameScope {
         NonNull::new(ptr).map(|ptr| Self { ptr })
     }
 
-    /// Attach `scope` to `element` as its namescope (`NameScope::SetNameScope`),
-    /// or pass `None` to clear it. Returns `false` if `element` is not a
-    /// `DependencyObject`.
+    /// Attaches `scope` to `element`, or clears it with `None`. Noesis holds its
+    /// own reference to the scope. Returns `false` if the scope was not set.
     #[must_use = "a false return means the scope was not set (element is not a DependencyObject)"]
     pub fn set_on(element: &mut FrameworkElement, scope: Option<&NameScope>) -> bool {
         let scope_ptr = scope.map_or(core::ptr::null_mut(), NameScope::raw);
@@ -64,15 +60,11 @@ impl NameScope {
         unsafe { noesis_name_scope_set(element.raw(), scope_ptr) }
     }
 
-    /// Look up the object registered under `name` (`INameScope::FindName`), or
-    /// `None`. The returned element owns its own `+1` reference.
+    /// The object registered under `name`, or `None`.
     ///
-    /// A name scope can hold any registered `BaseComponent` (a parsed scope may
-    /// contain `Storyboard`s or other `Freezable`s), so the returned handle is
-    /// not guaranteed to be a real `FrameworkElement`. It's typed as one for
-    /// convenience; the shims `DynamicCast` on each call, so calling element
-    /// methods on a non-element handle degrades to a no-op / `None` rather than
-    /// undefined behavior.
+    /// A scope can hold any object, such as a `Storyboard`, so the result is
+    /// not necessarily an element. Element methods called on a non-element
+    /// handle do nothing or return `None`.
     ///
     /// # Panics
     ///
@@ -87,9 +79,9 @@ impl NameScope {
         NonNull::new(ptr).map(|ptr| unsafe { FrameworkElement::from_owned(ptr) })
     }
 
-    /// Register `obj` under `name` (`INameScope::RegisterName`). The scope takes
-    /// its own reference. Registering an existing name is undefined per Noesis;
-    /// use [`Self::update_name`] to replace.
+    /// Registers `obj` under `name`. The scope holds its own reference. Do not
+    /// register a name twice; Noesis leaves that undefined. Use
+    /// [`Self::update_name`] to replace an entry.
     ///
     /// # Panics
     ///
@@ -100,7 +92,7 @@ impl NameScope {
         unsafe { noesis_name_scope_register_name(self.ptr.as_ptr(), c.as_ptr(), obj.raw()) };
     }
 
-    /// Remove `name` from this scope (`INameScope::UnregisterName`).
+    /// Removes `name` from this scope.
     ///
     /// # Panics
     ///
@@ -111,9 +103,7 @@ impl NameScope {
         unsafe { noesis_name_scope_unregister_name(self.ptr.as_ptr(), c.as_ptr()) };
     }
 
-    /// Replace the object registered under `name` with `obj`
-    /// (`INameScope::UpdateName`). Used to refresh bindings when freezables are
-    /// cloned during animations.
+    /// Replaces the object registered under `name` with `obj`.
     ///
     /// # Panics
     ///
@@ -124,8 +114,7 @@ impl NameScope {
         unsafe { noesis_name_scope_update_name(self.ptr.as_ptr(), c.as_ptr(), obj.raw()) };
     }
 
-    /// Reverse lookup: the name `obj` is registered under in this scope
-    /// (`NameScope::FindObject`), or `None`.
+    /// The name `obj` is registered under in this scope, or `None`.
     #[must_use]
     pub fn find_object(&self, obj: &FrameworkElement) -> Option<String> {
         // SAFETY: both pointers are live; the returned C string is owned by the
@@ -139,10 +128,10 @@ impl NameScope {
         Some(s.to_string_lossy().into_owned())
     }
 
-    /// Call `f` for each `(name, object)` pair registered in this scope
-    /// (`NameScope::EnumNamedObjects`). The element passed to `f` is **borrowed**
-    /// and valid only for that call. Use
-    /// [`clone_ref`](FrameworkElement::clone_ref) to keep it.
+    /// Calls `f` with each name and object in this scope. The object is
+    /// borrowed for that call only; use
+    /// [`clone_ref`](FrameworkElement::clone_ref) to keep it. Entries whose name
+    /// is not valid UTF-8 are skipped.
     pub fn for_each<F: FnMut(&str, &FrameworkElement)>(&self, mut f: F) {
         let mut callback: &mut dyn FnMut(&str, &FrameworkElement) = &mut f;
 
@@ -176,8 +165,7 @@ impl NameScope {
         }
     }
 
-    /// Raw `Noesis::NameScope*` (a `BaseComponent*`). Borrowed for the lifetime
-    /// of `self`.
+    /// The underlying `Noesis::NameScope*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()

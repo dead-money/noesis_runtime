@@ -1,16 +1,13 @@
-// Code-built MeshData + Mesh element (immediate-mode drawing).
+// Code-built MeshData and the Mesh element.
 //
-// MeshData (NsGui/MeshData.h) is an Animatable holding CPU-side vertex / UV /
-// index buffers plus an explicit bounding box. It is the low-level geometry
-// payload consumed by DrawingContext::DrawMesh (cpp/noesis_drawing.cpp) and by
-// the Mesh FrameworkElement (NsGui/Mesh.h). The buffers and bounds round-trip
-// entirely on the CPU, so a headless test can prove values crossed the FFI by
-// writing them through the setters and reading them back through GetVertices /
-// GetUVs / GetIndices / GetBounds. There is no GetNum* getter in 3.2.13, so a
-// count is proven by the buffer data that round-trips at that length.
+// MeshData holds CPU-side vertex, UV and 16-bit index buffers plus an explicit
+// bounding box. DrawingContext::DrawMesh (cpp/noesis_drawing.cpp) and the Mesh
+// element draw it.
 //
-// Both objects are handed out with a single owned +1 reference (handout() idiom
-// shared with cpp/noesis_brushes.cpp); the Rust handle's Drop releases it.
+// MeshData has no GetNum* getters in 3.2.13, so the buffer getters can't
+// bounds-check: `count` must not exceed the count last set.
+//
+// Both creates hand out one reference owned by the caller.
 
 #include "noesis_shim.h"
 
@@ -61,8 +58,8 @@ extern "C" bool noesis_mesh_data_set_vertices(void* mesh, const float* xy, uint3
     return true;
 }
 
-// Read `count` (x, y) pairs back from the vertex buffer into `out_xy`
-// (2*count floats). The caller must pass the same count it set.
+// Reads `count` (x, y) pairs into `out_xy` (2*count floats). `count` must not
+// exceed the vertex count last set.
 extern "C" bool noesis_mesh_data_get_vertices(void* mesh, float* out_xy, uint32_t count) {
     auto* md = cast<Noesis::MeshData>(mesh);
     if (!md || (count != 0 && !out_xy)) return false;

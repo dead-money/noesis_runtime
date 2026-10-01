@@ -1,6 +1,4 @@
-//! Smoke test: links libNoesis, runs init / version / shutdown.
-//!
-//! The build script bakes an rpath on Linux; `LD_LIBRARY_PATH` is not needed.
+//! Smoke test: links the Noesis library and runs init, version, and shutdown.
 
 #[test]
 fn init_version_shutdown() {

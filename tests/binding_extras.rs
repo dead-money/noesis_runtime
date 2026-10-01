@@ -39,9 +39,8 @@ impl PropertyChangeHandler for NoopHandler {
     fn on_changed(&self, _i: Instance, _idx: u32, _v: PropertyValue<'_>) {}
 }
 
-// i32 -> "EVEN"/"ODD". A deliberately non-identity mapping: if the binding
-// delivered the raw source instead of the converted value, the TextBlock would
-// read "4"/"5", not the word.
+// i32 -> "EVEN"/"ODD", so a binding that skipped the converter would show the
+// raw number.
 struct Parity;
 impl ValueConverter for Parity {
     fn convert(&self, value: &ConvertArg, _p: &ConvertArg) -> Option<Converted> {
@@ -128,7 +127,6 @@ fn code_built_bindings_and_converters() {
         view.activate();
 
         let mut content = view.content().expect("View::content returned None");
-        // SAFETY: vm is alive for the rest of this scope; Noesis stores its own ref.
         assert!(
             content.set_data_context(&vm),
             "set_data_context returned false"

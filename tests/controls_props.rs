@@ -6,9 +6,8 @@ use noesis_runtime::view::{FrameworkElement, View};
 
 const NS: &str = r#"xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation""#;
 
-// The text-editing model (caret/selection) lives in the TextView created by the
-// templated `PART_ContentHost`. Without a theme there is no default template, so
-// we supply a minimal one with the required content-host part so `Select` works.
+// Caret and selection live in the TextView under `PART_ContentHost`. Without a
+// theme there is no default template, so this supplies a minimal one.
 const TEXT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -59,8 +58,7 @@ fn control_property_round_trips() {
         );
         assert!(slider.set_range_value(-5.0));
         assert_eq!(slider.range_value(), Some(0.0), "value coerced to Minimum");
-        // Narrow the range, then set a value beyond the new Maximum: the clamp
-        // tracks the live bounds (proves SetMaximum took effect + coercion runs).
+        // The clamp tracks the new Maximum.
         assert!(slider.set_range_maximum(40.0));
         assert_eq!(slider.range_maximum(), Some(40.0));
         assert!(slider.set_range_value(80.0));
@@ -69,9 +67,7 @@ fn control_property_round_trips() {
             Some(40.0),
             "value clamped to the lowered Maximum"
         );
-        // set_range_minimum round-trips (symmetric setter coverage). Raising the
-        // floor to 5 (below the current value 40) leaves the value untouched; a
-        // no-op setter would leave Minimum at 0 and fail the read-back.
+        // Raising Minimum below the current value leaves the value untouched.
         assert!(slider.set_range_minimum(5.0));
         assert_eq!(slider.range_minimum(), Some(5.0));
         assert_eq!(
@@ -110,8 +106,8 @@ fn control_property_round_trips() {
         assert!(pop.set_is_open(false));
         assert_eq!(pop.is_open(), Some(false));
 
-        // -- TextBox / PasswordBox -- hosted in a live View so the text model is
-        // built (selection/caret are no-ops on a never-laid-out TextBox).
+        // TextBox / PasswordBox need a live View: selection and caret are no-ops
+        // until the text model is laid out.
         let root = FrameworkElement::parse(TEXT_XAML).expect("parse text XAML");
         let mut view = View::create(root);
         view.set_size(300, 200);
@@ -141,10 +137,7 @@ fn control_property_round_trips() {
             Some(11),
             "select_all spans the whole text"
         );
-        // Symmetric selection setters round-trip (set_selection_start / _length).
-        // From the full selection, move the anchor to 2 then shrink to 4 chars:
-        // [2, 6) of "Hello World" == "llo ". A no-op setter would report the old
-        // start/length and fail.
+        // [2, 6) of "Hello World" is "llo ".
         assert!(tb.set_selection_start(2));
         assert_eq!(tb.selection_start(), Some(2));
         assert!(tb.set_selection_length(4));
@@ -159,7 +152,7 @@ fn control_property_round_trips() {
         assert!(pb.set_password("s3cr3t!"));
         assert_eq!(pb.password().as_deref(), Some("s3cr3t!"));
 
-        // -- Negatives: wrong control type --
+        // Wrong control type.
         assert_eq!(cb.range_value(), None, "CheckBox is not a RangeBase");
         assert_eq!(slider.is_checked(), None, "Slider is not a ToggleButton");
         assert_eq!(slider.is_expanded(), None, "Slider is not an Expander");

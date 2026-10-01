@@ -1,19 +1,12 @@
-//! XAML loading variants.
+//! XAML loading beyond [`FrameworkElement::load`](crate::view::FrameworkElement::load).
 //!
-//! Two surfaces that complement the [`crate::view::FrameworkElement`] load /
-//! parse path:
-//!
-//! - [`get_xaml_dependencies`]: statically walk an in-memory XAML buffer's
-//!   referenced resources (other XAMLs / textures / audio, fonts, prefixed
-//!   `UserControl` nodes, and the root node's type) *without* instantiating
-//!   the object tree. Backs `Noesis::GUI::GetXamlDependencies`. Use it for
-//!   asset preloading and dependency analysis.
-//!
-//! - [`load_xaml_component`] / [`LoadedComponent`]: load a XAML root that is
-//!   *not* a `FrameworkElement` (e.g. a bare `ResourceDictionary`), reporting
-//!   success plus the reflected class-type name. The
-//!   [`crate::view::FrameworkElement::load`] path returns `None` for such
-//!   roots; this keeps them.
+//! - [`get_xaml_dependencies`] lists the resources a XAML buffer references
+//!   (other XAMLs, textures, audio, fonts, `UserControl` nodes, the root type)
+//!   without building the object tree. Use it for asset preloading and
+//!   dependency analysis.
+//! - [`load_xaml_component`] loads a XAML root of any type, including ones that
+//!   are not a `FrameworkElement` such as a bare `ResourceDictionary`, and
+//!   returns it as a [`LoadedComponent`].
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString, c_void};
@@ -50,19 +43,18 @@ impl XamlDependencyKind {
     }
 }
 
-/// A single dependency found inside a XAML buffer: the referenced `uri` (or
-/// type name, for [`XamlDependencyKind::Root`] / [`XamlDependencyKind::UserControl`])
-/// together with its [`XamlDependencyKind`].
+/// One dependency reported by [`get_xaml_dependencies`].
+///
+/// `uri` is the referenced URI, or a type name for
+/// [`XamlDependencyKind::Root`] and [`XamlDependencyKind::UserControl`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct XamlDependency {
     pub uri: String,
     pub kind: XamlDependencyKind,
 }
 
-/// Trampoline target for the C callback. `user` points at the `Vec` being
-/// filled. SAFETY: invoked synchronously from inside
-/// `noesis_get_xaml_dependencies`, once per dependency; `user` is the
-/// `&mut Vec<XamlDependency>` we passed in, valid for that whole call.
+// SAFETY: called synchronously from `noesis_get_xaml_dependencies`, once per
+// dependency; `user` is the `&mut Vec<XamlDependency>` passed to that call.
 unsafe extern "C" fn collect(user: *mut c_void, uri: *const c_char, kind: i32) {
     crate::panic_guard::guard(|| {
         // SAFETY: `user` is the &mut Vec we handed to the FFI; the borrow is scoped
@@ -71,7 +63,6 @@ unsafe extern "C" fn collect(user: *mut c_void, uri: *const c_char, kind: i32) {
         let Some(kind) = XamlDependencyKind::from_raw(kind) else {
             return;
         };
-        // Borrowed string from Noesis; copy into an owned String immediately.
         let uri = if uri.is_null() {
             String::new()
         } else {
@@ -84,14 +75,14 @@ unsafe extern "C" fn collect(user: *mut c_void, uri: *const c_char, kind: i32) {
     })
 }
 
-/// Walk `xaml`'s referenced resources without instantiating the object tree,
-/// returning every dependency in document order. `base_uri` is the URI the
-/// XAML is treated as living at (used to resolve relative dependency paths);
-/// pass `""` if there is no meaningful base.
+/// Lists the resources `xaml` references, without instantiating its object
+/// tree.
 ///
-/// Requires [`crate::init`] to have run. The returned `Vec` is empty when the
-/// XAML is malformed (Noesis routes the parse error through the log handler
-/// and reports no dependencies) or genuinely references nothing.
+/// `base_uri` is the URI the XAML is treated as living at, used to resolve
+/// relative references; pass `""` if there is none. Requires [`crate::init`].
+///
+/// Returns an empty `Vec` when the XAML references nothing or is malformed
+/// (the parse error goes to the log handler).
 ///
 /// # Panics
 ///
@@ -117,11 +108,9 @@ pub fn get_xaml_dependencies(xaml: &[u8], base_uri: &str) -> Vec<XamlDependency>
     out
 }
 
-/// An owning handle to a XAML root loaded via [`load_xaml_component`], whatever
-/// its concrete type. Holds a `+1` reference released on [`Drop`]. Unlike
-/// [`crate::view::FrameworkElement`], the root need not be a `FrameworkElement`.
-/// This is how a bare `ResourceDictionary` (or any other `BaseComponent`
-/// root) is loaded and inspected.
+/// A XAML root of any type, returned by [`load_xaml_component`].
+///
+/// Holds a reference to the Noesis object, released on drop.
 pub struct LoadedComponent {
     ptr: NonNull<c_void>,
 }
@@ -130,17 +119,15 @@ pub struct LoadedComponent {
 unsafe impl Send for LoadedComponent {}
 
 impl LoadedComponent {
-    /// Raw `Noesis::BaseComponent*`, borrowed for the lifetime of `self`. Hand
-    /// to other Noesis APIs that take a `BaseComponent*`.
+    /// Raw `Noesis::BaseComponent*`, valid while `self` is alive. No reference
+    /// is added.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// The reflected class-type name of the loaded root (e.g.
-    /// `"ResourceDictionary"`), via `BaseObject::GetClassType()->GetName()`.
-    /// Returns an empty string only if Noesis reports no class type (not
-    /// expected for a successfully-loaded root).
+    /// Reflected class name of the root, such as `"ResourceDictionary"` or
+    /// `"Grid"`. Empty if Noesis reports no class type.
     #[must_use]
     pub fn type_name(&self) -> String {
         // SAFETY: `self.ptr` is a live BaseComponent* for the lifetime of self.
@@ -148,7 +135,6 @@ impl LoadedComponent {
         if name.is_null() {
             String::new()
         } else {
-            // Interned, process-stable string; copy it immediately anyway.
             // SAFETY: non-null NUL-terminated string owned by Noesis.
             unsafe { CStr::from_ptr(name) }
                 .to_string_lossy()
@@ -165,14 +151,14 @@ impl Drop for LoadedComponent {
     }
 }
 
-/// Load XAML by `uri` through the installed [`crate::xaml_provider`], keeping
-/// the root whatever its type. Returns `None` when the URI is unknown to the
-/// provider or the XAML is malformed.
+/// Loads XAML by `uri` through the installed [`crate::xaml_provider`],
+/// whatever the root's type.
 ///
-/// This is the typed sibling of [`crate::view::FrameworkElement::load`], which
-/// narrows the root to `FrameworkElement` and so returns `None` for roots like
-/// `ResourceDictionary`. Inspect the loaded type via
-/// [`LoadedComponent::type_name`].
+/// [`FrameworkElement::load`](crate::view::FrameworkElement::load) returns
+/// `None` for roots that are not a `FrameworkElement`; this keeps them. Use
+/// [`LoadedComponent::type_name`] to see what was loaded.
+///
+/// Returns `None` when no provider knows the URI or the XAML is malformed.
 ///
 /// # Panics
 ///

@@ -1,11 +1,11 @@
 //! Error, assert, and per-thread error handler round-trips.
 //!
-//! All invokes use `fatal = false`; a fatal error or real assert can abort
-//! the process.
+//! All invokes use `fatal = false`; a fatal error or real assert can abort the
+//! process.
 //!
-//! The assert round-trip cannot be observed on a Release Noesis build because
-//! the assert subsystem is compiled out (`SetAssertHandler`/`InvokeAssertHandler`
-//! are aliased to a no-op stub).
+//! A Release Noesis build compiles the assert subsystem out
+//! (`SetAssertHandler`/`InvokeAssertHandler` are a no-op stub), so the assert
+//! handler never runs there; the test accepts either build.
 
 use std::sync::{Arc, Mutex};
 
@@ -70,15 +70,10 @@ fn error_assert_thread_handlers() {
                     1,
                     "outer handler must NOT see the inner invoke while shadowed"
                 );
-                // _gb was the active registration, so its drop restores
-                // Noesis's default handler — NOT the shadowed outer one. Handlers
-                // are last-registration-wins (single slot), not stacked: once the
-                // inner handler replaced the outer, the outer is gone for good.
+                // Single slot, last registration wins: dropping `_gb` restores
+                // Noesis's default, not the replaced outer handler.
             }
 
-            // The outer guard is still alive but was overwritten, so it is
-            // logically dead: the slot now points at Noesis's default and this
-            // invoke never reaches the outer closure.
             diag::invoke_error("outer.cpp", 9, false, "outer again");
             assert_eq!(
                 a.lock().unwrap().len(),
@@ -90,11 +85,8 @@ fn error_assert_thread_handlers() {
                 1,
                 "dropped inner handler must NOT receive later invokes"
             );
-            // _ga drops here → already logically dead; it just frees its box.
         }
 
-        // With no custom handler, the invoke hits the Noesis default (a log) and
-        // must NOT reach either dropped closure.
         diag::invoke_error("after.cpp", 1, false, "to the default");
         assert_eq!(
             a.lock().unwrap().len(),
@@ -139,18 +131,14 @@ fn error_assert_thread_handlers() {
                 );
             }
 
-            // No-context invoke on the same thread handler → context is None.
             diag::invoke_error("parser.cpp", 56, false, "no ctx here");
             {
                 let got = t.lock().unwrap();
                 assert_eq!(got.len(), 2);
                 assert_eq!(got[1].4, None, "absent context must surface as None");
             }
-            // _gt drops here → per-thread handler removed.
         }
 
-        // After the guard dropped, invokes fall through to the default and must
-        // not reach the dropped closure.
         diag::invoke_error_with_context("parser.cpp", 99, false, "x.xaml", 1, 1, "post-drop");
         assert_eq!(
             t.lock().unwrap().len(),
@@ -169,18 +157,13 @@ fn error_assert_thread_handlers() {
             let recorded = s.lock().unwrap().clone();
 
             if recorded.is_empty() {
-                // Release SDK (this build): the assert subsystem is compiled out;
-                // SetAssertHandler/InvokeAssertHandler are a shared no-op stub,
-                // so the handler never runs and the invoker returns false. Assert
-                // exactly that contract so a regression that wires asserts wrong
-                // (e.g. spuriously invoking) is still caught.
+                // Release SDK: the stubbed invoker returns false.
                 assert!(
                     !ret,
                     "stubbed InvokeAssertHandler must return false on a Release SDK"
                 );
             } else {
-                // Debug SDK: the handler ran. Assert the full round-trip and
-                // that our `true` return propagated out of InvokeAssertHandler.
+                // Debug SDK: the handler ran and its `true` propagates.
                 assert_eq!(recorded.len(), 1, "assert handler fired exactly once");
                 assert_eq!(
                     recorded[0],
@@ -192,7 +175,6 @@ fn error_assert_thread_handlers() {
                     "closure returned true → InvokeAssertHandler must return true"
                 );
             }
-            // _gs drops here.
         }
     }
 

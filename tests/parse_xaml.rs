@@ -36,11 +36,9 @@ const DICT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 // than crash.
 const BROKEN_XAML: &str = "this is definitely not xaml @@@ <<< >>>";
 
-// XAML served by URI for the LoadComponent test. The `x:Class` names the
-// Rust-registered class (`Nz.LoadTarget`, a ContentControl) so Noesis maps the
-// root onto the supplied instance by type identity and grafts the parsed body
-// (here a single named Button) onto it. We then assert that named child is
-// reachable from the instance, which is the observable proof LoadComponent ran.
+// `x:Class` names the Rust-registered `Nz.LoadTarget` (a ContentControl), so
+// LoadComponent grafts the body onto the supplied instance. The named Button
+// being reachable from the instance is the proof it ran.
 const COMPONENT_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
 <ContentControl x:Class="Nz.LoadTarget"
                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -63,10 +61,8 @@ impl PropertyChangeHandler for NoopHandler {
     fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
 }
 
-/// Resolve an `x:Name` directly against a borrowed `BaseComponent*` (a live
-/// class instance) without taking ownership of it. Returns whether the name
-/// resolves to a `FrameworkElement`, releasing the `+1` ref the lookup hands
-/// out. Used to observe `LoadComponent`'s grafting effect on the instance.
+/// Returns whether `name` resolves to a `FrameworkElement` from the borrowed
+/// `BaseComponent*` `raw`. Releases the `+1` ref the lookup hands out.
 fn instance_has_named_child(raw: *mut c_void, name: &str) -> bool {
     let c = CString::new(name).expect("name contained NUL");
     // SAFETY: `raw` is a live BaseComponent* (a FrameworkElement subclass) for

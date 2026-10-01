@@ -1,8 +1,5 @@
-//! Input gestures + bindings end-to-end: gesture → binding → Rust command
-//! across the FFI. Covers `KeyBinding` (Ctrl+Enter) and `InputBinding`/`KeyGesture` (F5).
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test input_bindings -- --nocapture`
+//! Key gestures fire bound Rust commands: a `KeyBinding` (Ctrl+Enter) and an
+//! `InputBinding` wrapping a `KeyGesture` (F5).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -44,7 +41,7 @@ fn input_bindings_fire_bound_commands() {
     }
     noesis_runtime::init();
 
-    // ── Case 1: Ctrl+Enter KeyBinding ───────────────────────────────────────
+    // Ctrl+Enter KeyBinding.
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
@@ -72,7 +69,6 @@ fn input_bindings_fire_bound_commands() {
         let _ = view.update(0.016);
         assert!(target.is_keyboard_focused(), "target focused");
 
-        // Sanity: a bare Enter (no Ctrl) must NOT match the Ctrl+Enter gesture.
         let _ = view.key_down(Key::Return);
         let _ = view.update(0.024);
         let _ = view.key_up(Key::Return);
@@ -97,7 +93,6 @@ fn input_bindings_fire_bound_commands() {
             "Ctrl+Enter must fire the bound command exactly once"
         );
 
-        // Tearing the binding down must stop the chord from firing it again.
         assert!(
             binding.remove_from(&target),
             "remove binding from InputBindings"
@@ -122,7 +117,7 @@ fn input_bindings_fire_bound_commands() {
         drop(command);
     }
 
-    // ── Case 2: explicit KeyGesture wrapped in a generic InputBinding ────────
+    // KeyGesture wrapped in a generic InputBinding.
     {
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), SCENE.as_bytes().to_vec());
@@ -137,7 +132,7 @@ fn input_bindings_fire_bound_commands() {
             c2.fetch_add(1, Ordering::SeqCst);
         });
 
-        // gesture can be dropped once the binding takes its own reference
+        // The binding holds its own reference to the gesture.
         let binding = {
             let gesture = KeyGesture::new(Key::F5, ModifierKeys::NONE);
             InputBinding::with_gesture(&command, &gesture).expect("input binding")

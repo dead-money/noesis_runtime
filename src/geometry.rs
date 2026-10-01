@@ -1,14 +1,11 @@
-//! Code-built geometry object model. Construct `Geometry` objects from Rust
-//! without authoring XAML: `StreamGeometry`, `PathGeometry` (figures +
-//! segments), the primitive `Ellipse`/`Rectangle`/`Line` geometries,
-//! `CombinedGeometry`, and `GeometryGroup`.
+//! Build geometries from code: [`StreamGeometry`], [`PathGeometry`] (made of
+//! [`PathFigure`]s and segments), [`EllipseGeometry`], [`RectangleGeometry`],
+//! [`LineGeometry`], [`CombinedGeometry`] and [`GeometryGroup`]. All of them
+//! implement the [`Geometry`] trait.
 //!
-//! Every type here is an owning handle over a freshly-created Noesis object
-//! holding a single `+1` reference, released on [`Drop`], the same pattern as
-//! [`crate::brushes`] / [`crate::transforms`]. Assigning a finished geometry to
-//! a `Path`'s `Data` (or any `Geometry`-typed property) makes Noesis take its
-//! own reference, so the Rust handle may be dropped right after assignment. Use
-//! the generic component DP path, e.g.:
+//! Each type owns one Noesis reference and releases it on drop. Assigning a
+//! geometry to a `Path`'s `Data`, or any other `Geometry`-typed property, makes
+//! Noesis take its own reference, so you can drop the Rust handle right after:
 //!
 //! ```no_run
 //! # use noesis_runtime::geometry::{EllipseGeometry, Geometry};
@@ -19,10 +16,8 @@
 //! unsafe { path.set_component("Data", ellipse.geometry_raw()) };
 //! ```
 //!
-//! Getters such as [`Geometry::bounds`] / [`Geometry::render_bounds`] and the
-//! figure / segment / child counts re-read from the live Noesis object rather
-//! than from cached Rust state, so they reflect whatever the geometry currently
-//! holds (a freshly created, unpopulated geometry reports empty bounds).
+//! Getters read from the live Noesis object, so they reflect the geometry's
+//! current state. A new, unpopulated geometry reports empty bounds.
 
 use core::ptr::NonNull;
 use std::ffi::{CString, c_void};
@@ -61,8 +56,8 @@ use crate::ffi::{
 };
 use crate::transforms::Transform;
 
-/// An axis-aligned rectangle (`{x, y, width, height}`), as returned by
-/// [`Geometry::bounds`] / [`Geometry::render_bounds`].
+/// An axis-aligned rectangle, as returned by [`Geometry::bounds`] and
+/// [`Geometry::render_bounds`].
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Rect {
     /// Left edge.
@@ -86,7 +81,7 @@ impl Rect {
     }
 }
 
-/// How the intersecting areas inside a geometry are combined (Noesis `FillRule`).
+/// How overlapping areas inside a geometry decide what is filled.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum FillRule {
@@ -112,8 +107,7 @@ impl FillRule {
     }
 }
 
-/// How the two operands of a [`CombinedGeometry`] are combined (Noesis
-/// `GeometryCombineMode`).
+/// How the two operands of a [`CombinedGeometry`] are combined.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum GeometryCombineMode {
@@ -148,7 +142,8 @@ impl GeometryCombineMode {
     }
 }
 
-/// Direction an [`ArcSegment`] / `ArcTo` sweeps (Noesis `SweepDirection`).
+/// Direction an arc sweeps, for [`ArcSegment`] and
+/// [`StreamGeometryContext::arc_to`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SweepDirection {
@@ -174,16 +169,16 @@ impl SweepDirection {
     }
 }
 
-/// A handle to a Noesis `Geometry`. Implemented by every geometry type in this
-/// module so generic code (and the `Data` assignment sugar) can accept any of
-/// them while keeping non-geometry objects out. The base getters re-read from
-/// the live Noesis object.
+/// Any Noesis `Geometry`. Implemented by every geometry type in this module,
+/// and accepted by [`CombinedGeometry`], [`GeometryGroup`] and, as
+/// `&dyn Geometry`, by [`DrawingContext`](crate::drawing::DrawingContext).
 pub trait Geometry {
     /// Borrowed `Noesis::Geometry*` (a `BaseComponent*`), valid for `self`'s
-    /// lifetime. Used by assignment / combination; not normally called directly.
+    /// lifetime. Pass it to a raw property setter such as
+    /// [`FrameworkElement::set_component`](crate::view::FrameworkElement::set_component).
     fn geometry_raw(&self) -> *mut c_void;
 
-    /// The geometry's fill bounds (`GetBounds`), read from the live object.
+    /// The bounds of the filled area.
     #[must_use]
     fn bounds(&self) -> Rect {
         let mut out = [0.0f32; 4];
@@ -192,7 +187,7 @@ pub trait Geometry {
         Rect::from_array(out)
     }
 
-    /// The geometry's render bounds with a null `Pen` (`GetRenderBounds`).
+    /// The render bounds with no pen, so stroke width is not included.
     #[must_use]
     fn render_bounds(&self) -> Rect {
         let mut out = [0.0f32; 4];
@@ -201,29 +196,25 @@ pub trait Geometry {
         Rect::from_array(out)
     }
 
-    /// Whether the geometry is empty (`IsEmpty`).
+    /// Whether the geometry describes no area or path.
     #[must_use]
     fn is_empty(&self) -> bool {
         // SAFETY: geometry_raw() is a live Geometry*.
         unsafe { noesis_geometry_is_empty(self.geometry_raw()) == 1 }
     }
 
-    /// Apply a `Transform` to the geometry. Noesis takes its own reference, so
-    /// `transform` may be dropped afterwards. Returns `false` only on an
-    /// internal type mismatch.
-    ///
-    /// Takes `&dyn Transform` (rather than a generic) so this trait stays
-    /// object-safe. `&dyn Geometry` is the shape argument of
-    /// [`DrawingContext::draw_geometry`](crate::drawing::DrawingContext::draw_geometry)
-    /// / [`push_clip`](crate::drawing::DrawingContext::push_clip).
+    /// Applies a [`Transform`] to the geometry. Noesis takes its own reference,
+    /// so `transform` may be dropped afterwards. Returns `false` only if the
+    /// handle is not a Noesis `Geometry`, which can't happen for the types in
+    /// this module.
     fn set_transform(&mut self, transform: &dyn Transform) -> bool {
         // SAFETY: geometry_raw() is a live Geometry*; transform_raw() is a live
         // Transform* borrowed for the duration of the call.
         unsafe { noesis_geometry_set_transform(self.geometry_raw(), transform.transform_raw()) }
     }
 
-    /// Borrowed `Noesis::Transform*` currently applied to the geometry (no `+1`),
-    /// or null.
+    /// Borrowed `Noesis::Transform*` currently applied, or null. No reference
+    /// is added; don't release it.
     #[must_use]
     fn transform_raw(&self) -> *mut c_void {
         // SAFETY: geometry_raw() is a live Geometry*.
@@ -231,7 +222,7 @@ pub trait Geometry {
     }
 }
 
-/// A handle to a Noesis `PathSegment`. Implemented by every segment type so
+/// Any Noesis `PathSegment`. Implemented by every segment type so
 /// [`PathFigure::add_segment`] accepts any of them.
 pub trait PathSegment {
     /// Borrowed `Noesis::PathSegment*`, valid for `self`'s lifetime.
@@ -261,7 +252,6 @@ macro_rules! base_component_handle {
     };
 }
 
-/// Implements [`Geometry`] (and the boilerplate) for an owning geometry handle.
 macro_rules! geometry_handle {
     ($name:ident) => {
         base_component_handle!($name);
@@ -274,7 +264,6 @@ macro_rules! geometry_handle {
     };
 }
 
-/// Implements [`PathSegment`] (and the boilerplate) for an owning segment handle.
 macro_rules! segment_handle {
     ($name:ident) => {
         base_component_handle!($name);
@@ -287,8 +276,9 @@ macro_rules! segment_handle {
     };
 }
 
-/// A `StreamGeometry`: a lightweight geometry described by drawing commands
-/// (via [`StreamGeometry::open`]) or an SVG path-data string.
+/// A lightweight geometry described by drawing commands (via
+/// [`StreamGeometry::open`]) or a path-markup string. Cheaper than
+/// [`PathGeometry`], but its figures can't be read back.
 pub struct StreamGeometry {
     ptr: NonNull<c_void>,
 }
@@ -315,11 +305,11 @@ impl StreamGeometry {
         }
     }
 
-    /// Create a stream geometry from an SVG path-data string
-    /// (e.g. `"M 0,0 L 10,0 10,10 Z"`).
+    /// Creates a stream geometry from a path-markup string such as
+    /// `"M 0,0 L 10,0 10,10 Z"`.
     ///
-    /// Unparseable path data isn't an error: Noesis logs a warning and yields
-    /// an empty geometry.
+    /// Unparseable data is not an error: Noesis logs a warning and the geometry
+    /// is empty.
     ///
     /// # Panics
     ///
@@ -335,7 +325,7 @@ impl StreamGeometry {
         }
     }
 
-    /// Rebuild the geometry from an SVG path-data string.
+    /// Replaces the geometry with the figures in a path-markup string.
     ///
     /// # Panics
     ///
@@ -359,10 +349,10 @@ impl StreamGeometry {
         FillRule::from_ordinal(unsafe { noesis_stream_geometry_get_fill_rule(self.ptr.as_ptr()) })
     }
 
-    /// Open a [`StreamGeometryContext`] for defining the geometry with drawing
-    /// commands. Call [`StreamGeometryContext::close`] to flush the figures into
-    /// this geometry; dropping the context without closing leaves the geometry
-    /// unaltered.
+    /// Opens a [`StreamGeometryContext`] for describing the geometry with
+    /// drawing commands. Call [`StreamGeometryContext::close`] to write the
+    /// figures into this geometry; dropping the context without closing leaves
+    /// the geometry unchanged.
     ///
     /// # Panics
     ///
@@ -378,10 +368,21 @@ impl StreamGeometry {
     }
 }
 
-/// A drawing context for a [`StreamGeometry`]. Build figures with
-/// [`begin_figure`](Self::begin_figure) + the `*_to` commands, then
-/// [`close`](Self::close) to flush them into the geometry. Dropping without
-/// closing frees the context and leaves the geometry unaltered.
+/// Records figures for a [`StreamGeometry`]. Start each figure with
+/// [`begin_figure`](Self::begin_figure), add the `*_to` commands, then call
+/// [`close`](Self::close) to write everything into the geometry. Dropping
+/// without closing discards the commands.
+///
+/// ```no_run
+/// use noesis_runtime::geometry::StreamGeometry;
+///
+/// let geometry = StreamGeometry::new();
+/// let ctx = geometry.open();
+/// ctx.begin_figure(0.0, 0.0, true);
+/// ctx.line_to(100.0, 0.0);
+/// ctx.line_to(50.0, 80.0);
+/// ctx.close();
+/// ```
 pub struct StreamGeometryContext {
     ctx: NonNull<c_void>,
 }
@@ -390,8 +391,8 @@ pub struct StreamGeometryContext {
 unsafe impl Send for StreamGeometryContext {}
 
 impl StreamGeometryContext {
-    /// Start a new figure at `(x, y)`. `is_closed` joins the first and last
-    /// segments.
+    /// Starts a new figure at `(x, y)`. `is_closed` joins its last point back
+    /// to the start.
     pub fn begin_figure(&self, x: f32, y: f32, is_closed: bool) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
         unsafe { noesis_stream_geometry_context_begin_figure(self.ctx.as_ptr(), x, y, is_closed) };
@@ -427,7 +428,9 @@ impl StreamGeometryContext {
         };
     }
 
-    /// Draw an elliptical arc to `(x, y)` with radii `(width, height)`.
+    /// Draws an elliptical arc to `(x, y)` with radii `(width, height)`, the
+    /// ellipse rotated by `rotation_deg` degrees. `is_large_arc` picks the arc
+    /// longer than 180 degrees.
     pub fn arc_to(
         &self,
         x: f32,
@@ -453,30 +456,30 @@ impl StreamGeometryContext {
         };
     }
 
-    /// Override the `is_closed` flag of the current figure.
+    /// Overrides the `is_closed` flag of the current figure.
     pub fn set_is_closed(&self, is_closed: bool) {
         // SAFETY: self.ctx is a live StreamGeometryContext*.
         unsafe { noesis_stream_geometry_context_set_is_closed(self.ctx.as_ptr(), is_closed) };
     }
 
-    /// Flush the recorded figures into the geometry and free the context.
+    /// Writes the recorded figures into the geometry.
     pub fn close(self) {
         // SAFETY: self.ctx is a live StreamGeometryContext*; freed by close().
         unsafe { noesis_stream_geometry_context_close(self.ctx.as_ptr()) };
-        // Skip Drop so the context is not freed a second time.
+        // close() already freed the context.
         core::mem::forget(self);
     }
 }
 
 impl Drop for StreamGeometryContext {
     fn drop(&mut self) {
-        // SAFETY: not closed, so free the heap context without flushing. close()
-        // forgets self, so this never double-frees.
+        // SAFETY: only reached when not closed; close() forgets self.
         unsafe { noesis_stream_geometry_context_destroy(self.ctx.as_ptr()) };
     }
 }
 
-/// A `PathGeometry`: a collection of [`PathFigure`]s describing the path.
+/// A geometry made of [`PathFigure`]s, each a start point plus segments.
+/// Unlike [`StreamGeometry`], its figures and segments stay inspectable.
 pub struct PathGeometry {
     ptr: NonNull<c_void>,
 }
@@ -503,8 +506,8 @@ impl PathGeometry {
         }
     }
 
-    /// Append a figure. The geometry takes its own reference, so `figure` may be
-    /// dropped afterwards. Returns the new figure index.
+    /// Appends a figure and returns its index. The geometry takes its own
+    /// reference, so `figure` may be dropped afterwards.
     pub fn add_figure(&mut self, figure: &PathFigure) -> i32 {
         // SAFETY: self.ptr is a live PathGeometry*; figure.raw() is a live
         // PathFigure* borrowed for the call.
@@ -532,7 +535,8 @@ impl PathGeometry {
     }
 }
 
-/// A `PathFigure`: a connected sequence of [`PathSegment`]s with a start point.
+/// A start point followed by connected [`PathSegment`]s. Add it to a
+/// [`PathGeometry`] with [`PathGeometry::add_figure`].
 pub struct PathFigure {
     ptr: NonNull<c_void>,
 }
@@ -600,8 +604,8 @@ impl PathFigure {
         unsafe { noesis_path_figure_get_is_filled(self.ptr.as_ptr()) == 1 }
     }
 
-    /// Append a segment. The figure takes its own reference, so `segment` may be
-    /// dropped afterwards. Returns the new segment index.
+    /// Appends a segment and returns its index. The figure takes its own
+    /// reference, so `segment` may be dropped afterwards.
     pub fn add_segment<S: PathSegment>(&mut self, segment: &S) -> i32 {
         // SAFETY: self.ptr is a live PathFigure*; segment_raw() is a live
         // PathSegment* borrowed for the call.
@@ -616,7 +620,7 @@ impl PathFigure {
     }
 }
 
-/// A straight `LineSegment` to a point.
+/// A straight line from the previous point to an end point.
 pub struct LineSegment {
     ptr: NonNull<c_void>,
 }
@@ -647,7 +651,7 @@ impl LineSegment {
     }
 }
 
-/// A cubic `BezierSegment` with two control points and an end point.
+/// A cubic Bézier curve with two control points and an end point.
 pub struct BezierSegment {
     ptr: NonNull<c_void>,
 }
@@ -678,7 +682,7 @@ impl BezierSegment {
     }
 }
 
-/// A `QuadraticBezierSegment` with one control point and an end point.
+/// A quadratic Bézier curve with one control point and an end point.
 pub struct QuadraticBezierSegment {
     ptr: NonNull<c_void>,
 }
@@ -709,30 +713,31 @@ impl QuadraticBezierSegment {
     }
 }
 
-/// An elliptical `ArcSegment`.
+/// An elliptical arc from the previous point to an end point.
 pub struct ArcSegment {
     ptr: NonNull<c_void>,
 }
 
 segment_handle!(ArcSegment);
 
-/// The read-back fields of an [`ArcSegment`].
+/// The parameters of an [`ArcSegment`], for [`ArcSegment::from_fields`] and
+/// [`ArcSegment::get`].
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ArcFields {
     /// End point `(x, y)`.
     pub point: (f32, f32),
     /// Radii `(width, height)`.
     pub size: (f32, f32),
-    /// Rotation of the ellipse about the x-axis (degrees).
+    /// Rotation of the ellipse relative to the x-axis, in degrees.
     pub rotation_deg: f32,
-    /// Whether the arc spans more than 180°.
+    /// Whether to take the arc longer than 180 degrees.
     pub is_large_arc: bool,
-    /// Sweep direction.
     pub sweep: SweepDirection,
 }
 
 impl ArcSegment {
-    /// Create an elliptical arc to `(x, y)` with radii `(width, height)`.
+    /// Creates an elliptical arc to `(x, y)` with radii `(width, height)`. The
+    /// other arguments match the [`ArcFields`] fields.
     ///
     /// # Panics
     ///
@@ -763,9 +768,7 @@ impl ArcSegment {
         }
     }
 
-    /// Create an elliptical arc from an [`ArcFields`] struct (the ergonomic
-    /// alternative to the 7-positional-argument [`new`](Self::new); round-trips
-    /// with [`get`](Self::get)).
+    /// Creates an elliptical arc from named fields. Same as [`new`](Self::new).
     ///
     /// # Panics
     ///
@@ -844,7 +847,7 @@ macro_rules! poly_segment {
                 unsafe { noesis_poly_segment_point_count(self.ptr.as_ptr()) }.max(0) as usize
             }
 
-            /// Read the point at `index` back from the live object, or `None`.
+            /// The point at `index`, or `None` if out of range.
             #[must_use]
             pub fn point(&self, index: usize) -> Option<(f32, f32)> {
                 let mut out = [0.0f32; 2];
@@ -861,20 +864,20 @@ macro_rules! poly_segment {
 poly_segment!(
     PolyLineSegment,
     noesis_poly_line_segment_create,
-    "A `PolyLineSegment`: a run of straight lines through a point list."
+    "A run of straight lines through a list of points."
 );
 poly_segment!(
     PolyBezierSegment,
     noesis_poly_bezier_segment_create,
-    "A `PolyBezierSegment`: a run of cubic Béziers (points in groups of three)."
+    "A run of cubic Bézier curves. Points come in groups of three: two control points, then an end point."
 );
 poly_segment!(
     PolyQuadraticBezierSegment,
     noesis_poly_quadratic_bezier_segment_create,
-    "A `PolyQuadraticBezierSegment`: a run of quadratic Béziers (points in pairs)."
+    "A run of quadratic Bézier curves. Points come in pairs: a control point, then an end point."
 );
 
-/// An `EllipseGeometry` defined by a center and radii.
+/// An ellipse defined by a center and radii.
 pub struct EllipseGeometry {
     ptr: NonNull<c_void>,
 }
@@ -905,7 +908,7 @@ impl EllipseGeometry {
     }
 }
 
-/// A `RectangleGeometry`, optionally with rounded corners.
+/// A rectangle, optionally with rounded corners.
 pub struct RectangleGeometry {
     ptr: NonNull<c_void>,
 }
@@ -913,7 +916,8 @@ pub struct RectangleGeometry {
 geometry_handle!(RectangleGeometry);
 
 impl RectangleGeometry {
-    /// Create a rectangle `(x, y, width, height)` with corner radii `(rx, ry)`.
+    /// Creates a rectangle `(x, y, width, height)` with corner radii
+    /// `(rx, ry)`. Pass zero radii for square corners.
     ///
     /// # Panics
     ///
@@ -926,9 +930,8 @@ impl RectangleGeometry {
         }
     }
 
-    /// Create a rectangle from a [`Rect`] and corner radii `(rx, ry)`. The
-    /// ergonomic alternative to the 6-positional-argument [`new`](Self::new).
-    /// Round-trips with [`rect`](Self::rect) / [`radii`](Self::radii).
+    /// Creates a rectangle from a [`Rect`] and corner radii `(rx, ry)`. Same
+    /// as [`new`](Self::new).
     ///
     /// # Panics
     ///
@@ -969,7 +972,7 @@ impl RectangleGeometry {
     }
 }
 
-/// A `LineGeometry` between two points.
+/// A straight line between two points.
 pub struct LineGeometry {
     ptr: NonNull<c_void>,
 }
@@ -1000,8 +1003,8 @@ impl LineGeometry {
     }
 }
 
-/// A `CombinedGeometry` of two operand geometries combined by a
-/// [`GeometryCombineMode`].
+/// Two geometries combined by a [`GeometryCombineMode`] (union,
+/// intersection, xor or exclusion).
 pub struct CombinedGeometry {
     ptr: NonNull<c_void>,
 }
@@ -1050,14 +1053,16 @@ impl CombinedGeometry {
         };
     }
 
-    /// Borrowed `Noesis::Geometry*` of the first operand (no `+1`), or null.
+    /// Borrowed `Noesis::Geometry*` of the first operand, or null. No
+    /// reference is added.
     #[must_use]
     pub fn geometry1_raw(&self) -> *mut c_void {
         // SAFETY: self.ptr is a live CombinedGeometry*.
         unsafe { noesis_combined_geometry_get_geometry1(self.ptr.as_ptr()) }
     }
 
-    /// Borrowed `Noesis::Geometry*` of the second operand (no `+1`), or null.
+    /// Borrowed `Noesis::Geometry*` of the second operand, or null. No
+    /// reference is added.
     #[must_use]
     pub fn geometry2_raw(&self) -> *mut c_void {
         // SAFETY: self.ptr is a live CombinedGeometry*.
@@ -1070,8 +1075,8 @@ impl CombinedGeometry {
         unsafe { noesis_combined_geometry_set_mode(self.ptr.as_ptr(), mode.to_ordinal()) };
     }
 
-    /// Read the combine mode back from the live object, or `None` if Noesis
-    /// reports an unrecognized mode.
+    /// The combine mode, or `None` if Noesis reports one this crate doesn't
+    /// know.
     #[must_use]
     pub fn mode(&self) -> Option<GeometryCombineMode> {
         // SAFETY: self.ptr is a live CombinedGeometry*.
@@ -1081,7 +1086,8 @@ impl CombinedGeometry {
     }
 }
 
-/// A `GeometryGroup`: several child geometries combined by a [`FillRule`].
+/// Several child geometries drawn as one, with overlaps resolved by a
+/// [`FillRule`].
 pub struct GeometryGroup {
     ptr: NonNull<c_void>,
 }
@@ -1108,8 +1114,8 @@ impl GeometryGroup {
         }
     }
 
-    /// Append a child geometry. The group takes its own reference, so `child`
-    /// may be dropped afterwards. Returns the new child index.
+    /// Appends a child geometry and returns its index. The group takes its own
+    /// reference, so `child` may be dropped afterwards.
     pub fn add_child<G: Geometry>(&mut self, child: &G) -> i32 {
         // SAFETY: self.ptr is a live GeometryGroup*; geometry_raw() is a live
         // Geometry* borrowed for the call.

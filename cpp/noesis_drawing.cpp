@@ -1,25 +1,15 @@
-// Immediate-mode drawing: Pen + DrawingContext.
+// Immediate-mode drawing: Pen and DrawingContext.
 //
-// Two surfaces live here:
+//   * `Pen`: created here and handed out with one reference owned by the
+//     caller, like the brushes in cpp/noesis_brushes.cpp.
 //
-//   1. A code-built `Pen` (NsGui/Pen.h), constructed from Rust and handed out
-//      with a single owned reference, exactly like the brushes / transforms in
-//      cpp/noesis_brushes.cpp (handout() + `*new T` adopt). Several
-//      DrawingContext draw calls need a Pen, and Noesis's Pen has read-back
-//      getters (GetThickness / GetBrush / GetStartLineCap / ...) so a test can
-//      prove a value crossed into the live object rather than being cached.
+//   * `DrawingContext` draw / push / pop commands. DrawingContext has a private
+//     constructor in 3.2.13 and is delivered only to UIElement::OnRender, so
+//     these take the borrowed context pointer that the class render trampoline
+//     (cpp/noesis_classes.cpp) hands out. They have no read-back.
 //
-//   2. The `DrawingContext` draw / push / pop commands. A DrawingContext has a
-//      PRIVATE constructor in 3.2.13 (friend UIElement) and is delivered ONLY
-//      to UIElement::OnRender, so these entrypoints take the BORROWED context
-//      pointer the class render trampoline (cpp/noesis_classes.cpp) hands out,
-//      DynamicCast it to a Noesis::DrawingContext*, and forward the call. They
-//      are immediate-mode (no read-back): the test proves they reached Noesis
-//      by driving a real render pass and observing the produced geometry.
-//
-// A minimal RectangleGeometry create is also exposed so the DrawGeometry /
-// PushClip context entrypoints are reachable (a Geometry argument is otherwise
-// unconstructable from this crate).
+// noesis_drawing_rect_geometry_create builds a RectangleGeometry for
+// DrawGeometry / PushClip.
 
 #include "noesis_shim.h"
 
@@ -47,8 +37,7 @@
 
 namespace {
 
-// Hand a freshly-created (refcount-1) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller (mirrors cpp/noesis_brushes.cpp).
+// Adds the caller's reference; the creating Ptr releases its own at scope exit.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -141,11 +130,10 @@ extern "C" bool noesis_pen_get_line_join(void* pen, int32_t* out_join, float* ou
 
 // ── Pen dash style (immediate-mode dashed strokes) ───────────────────────────
 //
-// Build a `DashStyle` from a typed dash array and assign it to the Pen. Noesis
-// exposes DashStyle.Dashes as a space-separated string (the same converter the
-// shape StrokeDashArray uses), so the typed `dashes` array is formatted here.
-// `count == 0` clears the dash style (a solid stroke). The dash lengths are in
-// multiples of the pen thickness, matching WPF/Noesis semantics.
+// Builds a DashStyle from `dashes` and assigns it to the Pen. Noesis takes
+// DashStyle.Dashes as a space-separated string, so the array is formatted here.
+// `count == 0` clears the dash style (solid stroke). Dash lengths are multiples
+// of the pen thickness.
 
 extern "C" bool noesis_pen_set_dash_style(
     void* pen, const float* dashes, uint32_t count, float offset) {
@@ -159,10 +147,7 @@ extern "C" bool noesis_pen_set_dash_style(
     Noesis::Ptr<Noesis::DashStyle> style = *new Noesis::DashStyle();
     std::string text;
     char buf[32];
-    // %g honors LC_NUMERIC, which under locales like de_DE emits a comma decimal
-    // separator ("1,5") that Noesis's dash parser rejects. Normalize the locale
-    // separator back to '.' so the string parses regardless of process locale;
-    // in the default "C" locale the separator is already '.' and this is a no-op.
+    // %g honors LC_NUMERIC; a de_DE-style "1,5" is rejected by Noesis's parser.
     const char sep = std::localeconv()->decimal_point[0];
     for (uint32_t i = 0; i < count; ++i) {
         if (i != 0) text.push_back(' ');
@@ -268,10 +253,9 @@ extern "C" bool noesis_drawing_draw_geometry(void* context, void* brush, void* p
     return true;
 }
 
-// Draw a FormattedText (NsGui/FormattedText.h, fully wrapped in
-// cpp/noesis_formatted_text.cpp) into the bounds rect {x, y, w, h}. The text's
-// foreground/brush is baked into the FormattedText itself, so DrawText takes no
-// brush argument (see NsGui/DrawingContext.h: DrawText(FormattedText*, Rect)).
+// Draws a FormattedText (cpp/noesis_formatted_text.cpp) into the bounds
+// {x, y, w, h}. No brush argument: the foreground is baked into the
+// FormattedText.
 extern "C" bool noesis_drawing_draw_text(void* context, void* formatted_text, float x, float y,
                                             float w, float h) {
     auto* dc = cast<Noesis::DrawingContext>(context);
@@ -281,9 +265,8 @@ extern "C" bool noesis_drawing_draw_text(void* context, void* formatted_text, fl
     return true;
 }
 
-// Fill a MeshData (NsGui/MeshData.h, built via noesis_mesh_data_* in
-// cpp/noesis_mesh.cpp) with `brush`. A null mesh is rejected; a null brush
-// paints nothing (matching the other fill calls).
+// Fills a MeshData (cpp/noesis_mesh.cpp) with `brush`. A null mesh is
+// rejected; a null brush paints nothing.
 extern "C" bool noesis_drawing_draw_mesh(void* context, void* brush, void* mesh) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* md = cast<Noesis::MeshData>(mesh);
@@ -296,8 +279,7 @@ extern "C" bool noesis_drawing_draw_image(void* context, void* image_source, flo
                                              float w, float h) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* img = cast<Noesis::ImageSource>(image_source);
-    // DrawImage requires a real source; reject null rather than asserting inside
-    // Noesis.
+    // null source asserts inside Noesis
     if (!dc || !img) return false;
     dc->DrawImage(img, rect_xywh(x, y, w, h));
     return true;

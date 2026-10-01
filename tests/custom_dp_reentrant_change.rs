@@ -1,7 +1,7 @@
 //! Re-entrant property-change handler: `on_changed` for `In` writes `Out`
-//! synchronously, re-invoking the same handler box before the outer call
+//! synchronously, which re-invokes the same handler before the outer call
 //! returns. The trampoline must not hold `&mut` to the handler across the
-//! callback. That would be aliasing UB on re-entry.
+//! callback, or re-entry is aliasing UB.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -29,8 +29,7 @@ impl XamlProvider for InMem {
     }
 }
 
-/// Handler uses interior mutability (`&self` callback) and writes the `Out` DP
-/// from inside the `In` DP's change notification: the re-entrant path.
+/// Writes the `Out` DP from inside the `In` DP's change notification.
 struct Computed {
     in_idx: u32,
     out_idx: u32,
@@ -42,9 +41,8 @@ impl PropertyChangeHandler for Computed {
         if let PropertyValue::Float(f) = value {
             self.log.lock().unwrap().push((prop_index, f));
             if prop_index == self.in_idx {
-                // Synchronous DP write → re-enters this same handler box for
-                // `out_idx`. The `out_idx` branch does nothing, so no infinite
-                // loop. Under `&mut` this would be aliasing UB.
+                // Re-enters this handler for `out_idx`, which does nothing, so
+                // there is no loop.
                 instance.set_float(self.out_idx, f * 2.0);
             }
         }
@@ -101,9 +99,7 @@ fn custom_dp_reentrant_change() {
             "re-entrant callback did not write the output DP"
         );
 
-        // The log proves the re-entrant callback actually executed: we observed
-        // a change for `In` (21.0) and, nested inside it, a change for `Out`
-        // (42.0).
+        // Both changes logged: the nested `Out` callback actually ran.
         let recorded = log.lock().unwrap().clone();
         assert!(
             recorded.contains(&(in_idx, 21.0)),

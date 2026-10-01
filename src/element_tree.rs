@@ -1,33 +1,21 @@
-//! Code-side element-tree construction: build and mutate panel trees and
-//! `Grid` row/column definitions from Rust.
+//! Build and change element trees from code: panel children and `Grid` rows and
+//! columns.
 //!
-//! The built-in element types are created via XAML parse and driven by name, but
-//! the collections that hold a tree's structure (`Panel::Children`,
-//! `Grid::RowDefinitions` / `ColumnDefinitions`) and the `Decorator::Child`
-//! slot are **not** `DependencyProperty`s, so the by-name DP setters cannot
-//! reach them. This module wraps the typed C++ accessors instead:
+//! A panel's `Children` and a grid's `RowDefinitions` / `ColumnDefinitions`
+//! are collections, not dependency properties, so the by-name property setters
+//! can't reach them. This module wraps them directly:
 //!
-//! * [`panel_children`] hands out a [`PanelChildren`] view over a parsed
-//!   `Panel`'s (`StackPanel` / `Grid` / `Canvas` / ...) live
-//!   `UIElementCollection`, with add / insert / remove / clear / count / get.
-//! * [`row_definitions`] / [`column_definitions`] hand out a
-//!   [`DefinitionCollection`] over a `Grid`'s definitions; build
-//!   [`RowDefinition`] / [`ColumnDefinition`] from code, set their
-//!   [`GridLength`], add them, and read the lengths back.
-//! * The `Decorator` / `Border` `Child` slot is on
-//!   [`FrameworkElement`] itself
-//!   ([`set_decorator_child`](crate::view::FrameworkElement::set_decorator_child)
-//!   / [`decorator_child`](crate::view::FrameworkElement::decorator_child)).
+//! * [`FrameworkElement::add_child`] appends to a panel. For insert, remove,
+//!   and lookup, get a [`PanelChildren`] from [`panel_children`].
+//! * [`row_definitions`] and [`column_definitions`] return a grid's
+//!   [`DefinitionCollection`]. Create [`RowDefinition`]s and
+//!   [`ColumnDefinition`]s, size them with a [`GridLength`], and add them.
+//! * A `Decorator` or `Border` has a single child, set with
+//!   [`FrameworkElement::set_decorator_child`].
 //!
-//! Each collection handle holds a `+1` reference to the live Noesis collection
-//! (which is also owned by its host element) and releases it on [`Drop`], the
-//! same ownership idiom as [`crate::text_inlines::InlineCollection`]. The
-//! definition builders are owning handles over freshly-created Noesis objects;
-//! adding one to a collection makes the collection take its own reference, so
-//! the builder handle may be dropped afterwards.
-//!
-//! Read-back getters re-read from the live Noesis object, so they prove a value
-//! crossed the FFI rather than echoing a Rust-side cache.
+//! Collection handles keep the collection alive while held; the host element
+//! owns it too. Adding a child or definition gives the collection its own
+//! reference, so you can drop your handle afterwards.
 
 use core::ptr::NonNull;
 use std::ffi::c_void;
@@ -47,19 +35,19 @@ use crate::ffi::{
 };
 use crate::view::FrameworkElement;
 
-/// The kind of value a [`GridLength`] holds, mirroring `Noesis::GridUnitType`.
+/// How a [`GridLength`] is measured.
 ///
-/// The ordinal order is WPF-unusual (`Auto` precedes `Pixel`) to match the SDK's
-/// `NsGui/GridLength.h`, so the value round-trips across the FFI by ordinal.
+/// The ordinals match Noesis's `NsGui/GridLength.h`; values cross the FFI by
+/// ordinal.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(i32)]
 #[non_exhaustive]
 pub enum GridUnitType {
-    /// Size determined by the content (the `value` is ignored).
+    /// Sized to content; `value` is ignored.
     Auto = 0,
-    /// Size expressed as an absolute number of device-independent pixels.
+    /// A fixed size in DIPs.
     Pixel = 1,
-    /// Size expressed as a weighted proportion of the remaining space (`*`).
+    /// A weighted share of the remaining space (`*` in XAML).
     Star = 2,
 }
 
@@ -74,19 +62,17 @@ impl GridUnitType {
     }
 }
 
-/// A marshalled `Noesis::GridLength`: a `value` paired with its
-/// [`GridUnitType`]. Used to size a [`RowDefinition`] / [`ColumnDefinition`].
+/// The height of a [`RowDefinition`] or width of a [`ColumnDefinition`].
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct GridLength {
-    /// The magnitude. Ignored for [`GridUnitType::Auto`]; a pixel count for
-    /// [`GridUnitType::Pixel`]; a star weight for [`GridUnitType::Star`].
+    /// DIPs for [`GridUnitType::Pixel`], a weight for [`GridUnitType::Star`],
+    /// ignored for [`GridUnitType::Auto`].
     pub value: f32,
-    /// How `value` is interpreted.
     pub unit: GridUnitType,
 }
 
 impl GridLength {
-    /// An absolute pixel length.
+    /// A fixed length in DIPs.
     #[must_use]
     pub const fn pixels(value: f32) -> Self {
         Self {
@@ -95,7 +81,7 @@ impl GridLength {
         }
     }
 
-    /// An auto-sized length (sizes to content).
+    /// Size to content.
     #[must_use]
     pub const fn auto() -> Self {
         Self {
@@ -104,7 +90,7 @@ impl GridLength {
         }
     }
 
-    /// A star (proportional) length with the given weight.
+    /// A share of the remaining space; `star(2.0)` is `2*` in XAML.
     #[must_use]
     pub const fn star(weight: f32) -> Self {
         Self {
@@ -114,13 +100,10 @@ impl GridLength {
     }
 }
 
-/// A `Noesis::BaseDefinition` builder ([`RowDefinition`] / [`ColumnDefinition`]).
-/// Implemented by both so [`DefinitionCollection::add`] / `insert` accept either
-/// while keeping non-definition objects out.
+/// A [`RowDefinition`] or [`ColumnDefinition`], as accepted by
+/// [`DefinitionCollection::add`] and [`DefinitionCollection::insert`].
 pub trait GridDefinition {
-    /// Borrowed `Noesis::BaseDefinition*` (a `BaseComponent*`), valid for
-    /// `self`'s lifetime. Used by the collection sugar; not normally called
-    /// directly.
+    /// Borrowed `Noesis::BaseDefinition*`, valid while `self` is alive.
     fn definition_raw(&self) -> *mut c_void;
 }
 
@@ -135,7 +118,7 @@ macro_rules! definition_handle {
         unsafe impl Send for $name {}
 
         impl $name {
-            /// Construct a definition with a default `1*` length.
+            /// Create a definition with the default length, `1*`.
             ///
             /// # Panics
             ///
@@ -152,16 +135,16 @@ macro_rules! definition_handle {
 
             #[doc = $lendoc]
             ///
-            /// Returns `false` only if the underlying object is somehow not the
-            /// expected definition type (not expected for a live handle).
+            /// Returns `false` only if the handle fails its type check, which
+            /// doesn't happen for a live handle.
             #[must_use = "a false return means the length was not set"]
             pub fn set_length(&mut self, length: GridLength) -> bool {
                 // SAFETY: self.ptr is a live definition*.
                 unsafe { $set(self.ptr.as_ptr(), length.value, length.unit as i32) }
             }
 
-            /// Read the length back from the live Noesis object. `None` if the
-            /// unit ordinal is unknown (not expected for a live definition).
+            /// The current length. `None` only if Noesis reports an unknown
+            /// unit.
             #[must_use]
             pub fn length(&self) -> Option<GridLength> {
                 let mut value = 0.0_f32;
@@ -175,7 +158,7 @@ macro_rules! definition_handle {
                 GridUnitType::from_raw(unit).map(|unit| GridLength { value, unit })
             }
 
-            /// Raw `Noesis::BaseComponent*`. Borrowed for the lifetime of `self`.
+            /// Raw `Noesis::BaseComponent*`, valid while `self` is alive.
             #[must_use]
             pub fn raw(&self) -> *mut c_void {
                 self.ptr.as_ptr()
@@ -205,7 +188,8 @@ macro_rules! definition_handle {
 }
 
 definition_handle!(
-    /// A `Grid` `RowDefinition`. Its [`GridLength`] sizes the row's height.
+    /// A `Grid` row. Its [`GridLength`] is the row's height. Holds one
+    /// reference, released on drop.
     RowDefinition,
     noesis_grid_row_definition_create,
     noesis_grid_row_definition_set_height,
@@ -213,7 +197,8 @@ definition_handle!(
     "Set the row's `Height`."
 );
 definition_handle!(
-    /// A `Grid` `ColumnDefinition`. Its [`GridLength`] sizes the column's width.
+    /// A `Grid` column. Its [`GridLength`] is the column's width. Holds one
+    /// reference, released on drop.
     ColumnDefinition,
     noesis_grid_column_definition_create,
     noesis_grid_column_definition_set_width,
@@ -221,10 +206,8 @@ definition_handle!(
     "Set the column's `Width`."
 );
 
-/// An owning handle over a live `Noesis::UIElementCollection`: a parsed
-/// `Panel`'s `Children`. Holds a `+1` reference released on [`Drop`]; the
-/// collection is also owned by the host `Panel`, so this is a non-exclusive view
-/// that keeps it alive while held.
+/// A panel's live `Children` collection, from [`panel_children`]. Changes
+/// apply to the panel immediately. Holds one reference, released on drop.
 pub struct PanelChildren {
     ptr: NonNull<c_void>,
 }
@@ -233,9 +216,8 @@ pub struct PanelChildren {
 unsafe impl Send for PanelChildren {}
 
 impl PanelChildren {
-    /// Append `child` to the panel (the collection takes its own reference, so
-    /// `child` may be dropped afterwards). Returns the insertion index, or
-    /// `None` if `child` is not a `UIElement`.
+    /// Append `child` and return its index. The panel keeps its own reference,
+    /// so you can drop `child`. Returns `None` if `child` is not a `UIElement`.
     pub fn add(&mut self, child: &FrameworkElement) -> Option<usize> {
         // SAFETY: self.ptr is a live UIElementCollection*; child.raw() is a live
         // UIElement* for the call.
@@ -243,8 +225,8 @@ impl PanelChildren {
         (idx >= 0).then_some(idx as usize)
     }
 
-    /// Insert `child` at `index` (allows `index == count`). Returns `false` if
-    /// `child` is not a `UIElement` or `index` is out of range.
+    /// Insert `child` at `index`; `index == count()` appends. Returns `false`
+    /// if `child` is not a `UIElement` or `index` is out of range.
     #[must_use = "a false return means the child was not inserted"]
     pub fn insert(&mut self, index: usize, child: &FrameworkElement) -> bool {
         // SAFETY: self.ptr is a live UIElementCollection*; child.raw() is live.
@@ -265,7 +247,7 @@ impl PanelChildren {
         unsafe { noesis_panel_children_clear(self.ptr.as_ptr()) }
     }
 
-    /// Number of children currently in the collection.
+    /// Number of children.
     #[must_use]
     pub fn count(&self) -> usize {
         // SAFETY: self.ptr is a live UIElementCollection*.
@@ -273,21 +255,19 @@ impl PanelChildren {
         n.max(0) as usize
     }
 
-    /// The child at `index` as an owning [`FrameworkElement`] (an independent
-    /// `+1`, so dropping it does not affect the panel), or `None` if out of
-    /// range.
+    /// The child at `index`, or `None` if out of range. The returned handle
+    /// holds its own reference; dropping it doesn't remove the child.
     #[must_use]
     pub fn get(&self, index: usize) -> Option<FrameworkElement> {
         let borrowed = NonNull::new(self.get_raw(index))?;
-        // AddRef so the returned handle owns its reference, released on drop.
         // SAFETY: `borrowed` is a live UIElement* (BaseComponent*).
         let owned = unsafe { noesis_base_component_add_reference(borrowed.as_ptr()) };
         NonNull::new(owned).map(|ptr| unsafe { FrameworkElement::from_owned(ptr) })
     }
 
-    /// Borrowed raw `UIElement*` at `index`, or null if out of range. Useful for
-    /// proving structure via pointer identity against a child that was added
-    /// (compare against [`FrameworkElement::raw`]).
+    /// The borrowed `UIElement*` at `index`, or null if out of range. Compare
+    /// with [`FrameworkElement::raw`] to identify a child without taking a
+    /// reference.
     #[must_use]
     pub fn get_raw(&self, index: usize) -> *mut c_void {
         // SAFETY: self.ptr is a live UIElementCollection*; bounds checked C-side.
@@ -303,9 +283,9 @@ impl Drop for PanelChildren {
     }
 }
 
-/// An owning handle over a live `Grid` `RowDefinitionCollection` or
-/// `ColumnDefinitionCollection`. Holds a `+1` reference released on [`Drop`];
-/// the collection is also owned by the host `Grid`.
+/// A grid's live `RowDefinitions` or `ColumnDefinitions`, from
+/// [`row_definitions`] or [`column_definitions`]. Changes apply to the grid
+/// immediately. Holds one reference, released on drop.
 pub struct DefinitionCollection {
     ptr: NonNull<c_void>,
 }
@@ -314,10 +294,9 @@ pub struct DefinitionCollection {
 unsafe impl Send for DefinitionCollection {}
 
 impl DefinitionCollection {
-    /// Append `definition` (the collection takes its own reference, so the
-    /// builder handle may be dropped afterwards). Returns the insertion index,
-    /// or `None` if `definition` is the wrong definition type for this
-    /// collection.
+    /// Append `definition` and return its index. The grid keeps its own
+    /// reference, so you can drop `definition`. Returns `None` if it is the
+    /// wrong kind, e.g. a [`ColumnDefinition`] added to row definitions.
     pub fn add<D: GridDefinition>(&mut self, definition: &D) -> Option<usize> {
         // SAFETY: self.ptr is a live definition collection*; definition_raw() is
         // a live BaseDefinition* for the call.
@@ -327,8 +306,9 @@ impl DefinitionCollection {
         (idx >= 0).then_some(idx as usize)
     }
 
-    /// Insert `definition` at `index` (allows `index == count`). Returns `false`
-    /// on a type mismatch or out-of-range `index`.
+    /// Insert `definition` at `index`; `index == count()` appends. Returns
+    /// `false` if `index` is out of range. A definition of the wrong kind is
+    /// not detected here, so insert only the kind this collection holds.
     #[must_use = "a false return means the definition was not inserted"]
     pub fn insert<D: GridDefinition>(&mut self, index: usize, definition: &D) -> bool {
         // SAFETY: self.ptr is a live definition collection*; definition_raw() is
@@ -357,7 +337,7 @@ impl DefinitionCollection {
         unsafe { noesis_definition_collection_clear(self.ptr.as_ptr()) }
     }
 
-    /// Number of definitions currently in the collection.
+    /// Number of definitions.
     #[must_use]
     pub fn count(&self) -> usize {
         // SAFETY: self.ptr is a live definition collection*.
@@ -365,10 +345,9 @@ impl DefinitionCollection {
         n.max(0) as usize
     }
 
-    /// Borrowed raw `BaseDefinition*` at `index`, or null if out of range.
-    /// Useful for proving structure via pointer identity against a definition
-    /// that was added (compare against [`RowDefinition::raw`] /
-    /// [`ColumnDefinition::raw`]).
+    /// The borrowed `BaseDefinition*` at `index`, or null if out of range.
+    /// Compare with [`RowDefinition::raw`] or [`ColumnDefinition::raw`] to
+    /// identify a definition.
     #[must_use]
     pub fn get_raw(&self, index: usize) -> *mut c_void {
         // SAFETY: self.ptr is a live definition collection*; bounds checked
@@ -386,15 +365,13 @@ impl Drop for DefinitionCollection {
 }
 
 impl FrameworkElement {
-    /// Append `child` to this `Panel`'s `Children` (`StackPanel` / `Grid` /
-    /// `Canvas` / ...). The typed convenience for the common tree-building case.
-    /// The panel takes its own reference, so `child` may be dropped afterwards.
-    /// Returns `false` if this element is not a `Panel` or `child` is not a
-    /// `UIElement`.
+    /// Append `child` to this panel's `Children` (`StackPanel`, `Grid`,
+    /// `Canvas`, ...). The panel keeps its own reference, so you can drop
+    /// `child`. Returns `false` if this element is not a `Panel` or `child` is
+    /// not a `UIElement`.
     ///
-    /// Thin sugar over [`panel_children`] + [`PanelChildren::add`]; reach for
-    /// those directly when you need the insertion index, insert-at, or removal.
-    /// For a single-child `Decorator` / `Border` use
+    /// For the index, insertion, or removal, use [`panel_children`]. For a
+    /// `Decorator` or `Border` use
     /// [`set_decorator_child`](FrameworkElement::set_decorator_child); for a
     /// `ContentControl` use [`set_content`](FrameworkElement::set_content).
     #[must_use = "a false return means the child was not added (not a Panel / not a UIElement)"]
@@ -403,8 +380,8 @@ impl FrameworkElement {
     }
 }
 
-/// The live [`PanelChildren`] of a `Panel` (`StackPanel` / `Grid` / `Canvas` /
-/// ...). `None` if `element` is not a `Panel`.
+/// The [`PanelChildren`] of a panel (`StackPanel`, `Grid`, `Canvas`, ...).
+/// `None` if `element` is not a `Panel`.
 #[must_use]
 pub fn panel_children(element: &FrameworkElement) -> Option<PanelChildren> {
     // SAFETY: element.raw() is a live FrameworkElement*; the C side DynamicCasts
@@ -413,8 +390,7 @@ pub fn panel_children(element: &FrameworkElement) -> Option<PanelChildren> {
     NonNull::new(ptr).map(|ptr| PanelChildren { ptr })
 }
 
-/// The live [`DefinitionCollection`] of a `Grid`'s `RowDefinitions`. `None` if
-/// `element` is not a `Grid`.
+/// A grid's `RowDefinitions`. `None` if `element` is not a `Grid`.
 #[must_use]
 pub fn row_definitions(element: &FrameworkElement) -> Option<DefinitionCollection> {
     // SAFETY: element.raw() is a live FrameworkElement*; +1 collection or null.
@@ -422,8 +398,7 @@ pub fn row_definitions(element: &FrameworkElement) -> Option<DefinitionCollectio
     NonNull::new(ptr).map(|ptr| DefinitionCollection { ptr })
 }
 
-/// The live [`DefinitionCollection`] of a `Grid`'s `ColumnDefinitions`. `None`
-/// if `element` is not a `Grid`.
+/// A grid's `ColumnDefinitions`. `None` if `element` is not a `Grid`.
 #[must_use]
 pub fn column_definitions(element: &FrameworkElement) -> Option<DefinitionCollection> {
     // SAFETY: element.raw() is a live FrameworkElement*; +1 collection or null.

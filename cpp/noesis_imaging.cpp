@@ -1,20 +1,13 @@
-// Code-built ImageSource / BitmapSource family.
+// Code-built image sources: CroppedBitmap, TextureSource, BitmapImage,
+// DynamicTextureSource.
 //
-// Construct CroppedBitmap / TextureSource / BitmapImage / DynamicTextureSource
-// objects from Rust and hand them out across the C ABI with a single owned
-// reference, mirroring the handout() idiom in cpp/noesis_brushes.cpp. The Rust
-// side (src/imaging.rs) wraps each pointer in an owning handle whose Drop calls
-// noesis_base_component_release; assigning the object to an element (e.g. as
-// an Image.Source or ImageBrush.ImageSource) makes Noesis take its own
-// reference, so the Rust builder handle can be dropped afterwards.
+// Each create hands out one reference owned by the caller (src/imaging.rs
+// releases it with noesis_base_component_release). Assigning the object to an
+// Image.Source or ImageBrush.ImageSource takes Noesis's own reference.
 //
-// Read-back getters re-read from the LIVE Noesis object so tests prove a value
-// actually crossed the FFI: a stubbed constructor/setter fails the round-trip.
-//
-// GPU notes: TextureSource::GetTexture and the BitmapSource pixel-size / dpi
-// getters resolve only once a real Texture / texture-provider has run on a
-// RenderDevice render pass. Headless they read back null / 0, which is the
-// correct outcome. See "Known SDK limitations" in LIMITATIONS.md.
+// TextureSource::GetTexture and the BitmapSource pixel-size / DPI getters
+// resolve only after a real texture or texture provider has run in a
+// RenderDevice render pass. Without one they read null / 0.
 
 #include "noesis_shim.h"
 
@@ -34,9 +27,7 @@
 
 namespace {
 
-// Hand a freshly-created (refcount-1) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller. The local Ptr that produced the
-// object releases its own reference on scope exit, leaving the caller's +1.
+// Adds the caller's reference; the creating Ptr releases its own at scope exit.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -49,8 +40,7 @@ T* cast(void* p) {
     return Noesis::DynamicCast<T*>(static_cast<Noesis::BaseComponent*>(p));
 }
 
-// Borrowed (no +1) BaseComponent* canonical pointer for a BitmapSource subobject
-// so it compares equal in Rust to the pointer originally produced by handout().
+// Canonical BaseComponent* so it compares equal to the pointer handout() gave.
 void* borrow(Noesis::BitmapSource* s) {
     if (!s) return nullptr;
     return static_cast<Noesis::BaseComponent*>(s);
@@ -175,9 +165,10 @@ extern "C" bool noesis_bitmap_source_get_dpi(void* source, float* dpi_x, float* 
 
 // ── DynamicTextureSource ─────────────────────────────────────────────────────
 
-// `callback` matches Noesis::DynamicTextureSource::TextureRenderCallback by
-// pointer ABI (Texture* (*)(RenderDevice*, void*)); it is always invoked from
-// the render thread, so it only fires under a live RenderDevice render pass.
+// `callback` has the ABI of DynamicTextureSource::TextureRenderCallback
+// (Texture* (*)(RenderDevice*, void*)). Noesis calls it on the render thread,
+// so it fires only during a RenderDevice render pass. Returns null if
+// `callback` is null.
 extern "C" void* noesis_dynamic_texture_source_create(
     uint32_t width, uint32_t height, noesis_texture_render_callback callback, void* user) {
     if (!callback) return nullptr;

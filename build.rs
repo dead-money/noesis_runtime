@@ -3,13 +3,10 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=NOESIS_SDK_DIR");
+    println!("cargo:rerun-if-env-changed=DOCS_RS");
 
-    // Single source of truth for the shim translation units: every cpp/*.cpp,
-    // sorted so the build is deterministic. Both the rerun-if-changed list and
-    // the cc invocation below are driven from this, so a newly added .cpp
-    // compiles with nothing to keep in sync by hand. Watch the header and the
-    // cpp/ directory too, so an edited header or an added/removed source
-    // triggers a rebuild.
+    // Every cpp/*.cpp is a shim source, sorted for a deterministic build.
+    // Watching the directory catches added or removed sources.
     println!("cargo:rerun-if-changed=cpp/noesis_shim.h");
     println!("cargo:rerun-if-changed=cpp");
     let mut sources: Vec<PathBuf> = std::fs::read_dir("cpp")
@@ -22,9 +19,8 @@ fn main() {
         println!("cargo:rerun-if-changed={}", src.display());
     }
 
-    // docs.rs has no SDK to link against; the FFI surface type-checks without
-    // linking, so skip the native compile and let rustdoc build. Set DOCS_RS
-    // locally to preview that build.
+    // docs.rs has no SDK; rustdoc needs no native objects. Set DOCS_RS locally
+    // to preview that build.
     if env::var_os("DOCS_RS").is_some() {
         return;
     }
@@ -62,10 +58,9 @@ fn main() {
         bin.display()
     );
 
-    // What the linker resolves `Noesis` against. On Linux and Android the shared
-    // object in Bin/ is linked directly. The Windows package splits the two:
-    // Bin/<subdir>/Noesis.dll is the runtime library with no import lib beside
-    // it, and the matching Noesis.lib ships under Lib/<subdir>.
+    // On Linux the shared object in Bin/ is linked directly. The Windows SDK
+    // ships Noesis.dll in Bin/<subdir> and its import lib Noesis.lib in
+    // Lib/<subdir>.
     let link_dir = if target_os == "windows" {
         let lib = sdk.join("Lib").join(bin_subdir);
         assert!(
@@ -82,30 +77,25 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", link_dir.display());
     println!("cargo:rustc-link-lib=dylib=Noesis");
 
-    // Via cargo's `links = "Noesis"` metadata, this surfaces to downstream crates
-    // as DEP_NOESIS_LIB_DIR. It points at Bin/, where the runtime library (.so /
-    // .dll) lives, so a consumer can stage it for packaging regardless of where
-    // the import lib was.
+    // Surfaces to dependents as DEP_NOESIS_LIB_DIR (via `links = "Noesis"`).
+    // Points at Bin/, where the runtime .so / .dll lives, so a consumer can
+    // stage it for packaging.
     println!("cargo:lib_dir={}", bin.display());
 
     if target_os == "linux" {
-        // Bake the SDK Bin/ path into rpath so integration tests find
-        // libNoesis.so without LD_LIBRARY_PATH.
+        // Tests and examples find libNoesis.so without LD_LIBRARY_PATH.
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", bin.display());
     } else if target_os == "windows" {
-        // Windows has no rpath: the loader finds Noesis.dll next to the .exe or
-        // on PATH. Copy it beside the test and example binaries so they run
-        // straight from `cargo test` / `cargo run`, the parity of the rpath
-        // above. OUT_DIR is <target>/<profile>/build/<pkg>-<hash>/out; the
-        // profile dir three levels up holds the binaries and their deps/.
+        // No rpath on Windows: copy Noesis.dll beside the test and example
+        // binaries so `cargo test` / `cargo run` work without PATH changes.
+        // OUT_DIR is <target>/<profile>/build/<pkg>-<hash>/out.
         let dll = bin.join("Noesis.dll");
         let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
         if let Some(profile_dir) = out_dir.ancestors().nth(3) {
             for sub in ["", "deps", "examples"] {
                 let dest = profile_dir.join(sub);
                 if dest.is_dir() {
-                    // Best effort: a stale copy or a missing dir is not fatal,
-                    // PATH still works as a fallback (see README).
+                    // Best effort; PATH still works as a fallback.
                     let _ = std::fs::copy(&dll, dest.join("Noesis.dll"));
                 }
             }
@@ -120,8 +110,7 @@ fn main() {
         .include(&include)
         .flag_if_supported("-Wno-unused-parameter");
 
-    // Gates the noesis_test_* C entrypoints behind #ifdef NOESIS_TEST_UTILS
-    // (e.g. in noesis_render_device.cpp and noesis_events.cpp).
+    // Compiles the noesis_test_* entry points guarded by #ifdef NOESIS_TEST_UTILS.
     if env::var_os("CARGO_FEATURE_TEST_UTILS").is_some() {
         build.define("NOESIS_TEST_UTILS", None);
     }

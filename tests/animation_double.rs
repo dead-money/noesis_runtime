@@ -26,7 +26,6 @@ fn double_animation_drives_opacity() {
         let mut view = View::create(element);
         view.set_size(200, 200);
         view.activate();
-        // Establish the layout + the time-manager baseline at t=0.
         view.update(0.0);
 
         let content = view.content().expect("content");
@@ -48,19 +47,15 @@ fn double_animation_drives_opacity() {
         let mut sb = Storyboard::new();
         assert!(sb.add_child(&anim));
         assert_eq!(sb.child_count(), Some(1));
-        // The builder handles may be dropped after wiring; Noesis holds its own
-        // references through the storyboard's children collection.
+        // The storyboard's children collection holds its own reference.
         drop(anim);
 
         assert!(sb.begin(&content, false), "begin failed");
 
-        // Tick the clock to its anchor; value should still be ~From (0).
         view.update(0.0);
         let start = box_el.get_f32("Opacity").expect("opacity");
         assert!(start < 0.05, "opacity near start should be ~0, got {start}");
 
-        // Midway through the 0.5s span, the value should be partway (linear
-        // ~0.5, but we only require strictly between the endpoints).
         view.update(0.25);
         let mid = box_el.get_f32("Opacity").expect("opacity");
         assert!(

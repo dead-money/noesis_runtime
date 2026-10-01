@@ -15,16 +15,13 @@ links = "Noesis"
 # Dev-only files that consumers of the published crate don't need.
 exclude = [".github/", ".claude/", "scripts/", "CLAUDE.md", "RELEASING.md", "release.toml"]
 
-# docs.rs has no Noesis SDK, so the native compile/link can't run there.
-# build.rs short-circuits on the DOCS_RS env var and rustdoc builds the API
-# without linking. all-features so the full surface is documented.
+# docs.rs has no Noesis SDK; build.rs skips the native build when DOCS_RS is set.
 [package.metadata.docs.rs]
 all-features = true
 
 [features]
 default = []
-# Enables the noesis_test_* C entrypoints used by tests/render_device.rs.
-# Off by default so production builds don't carry the test helpers.
+# Compiles the shim's noesis_test_* entry points and the tests that use them.
 test-utils = []
 
 [dependencies]
@@ -32,21 +29,17 @@ test-utils = []
 [build-dependencies]
 cc = "1"
 
-# Curated lint set. We opt into specific lints rather than a blanket
-# `pedantic = warn`, which keeps the signal-to-noise ratio high and makes intent
-# obvious. A blanket `unsafe_code = "forbid"` is deliberately not adopted: this
-# is an FFI crate built entirely on `unsafe`.
+# Opt-in lints instead of a blanket `pedantic = warn`. No `unsafe_code = "forbid"`:
+# this is an FFI crate.
 [lints.clippy]
 type_complexity = "allow"
 too_many_arguments = "allow"
 indexing_slicing = "allow"
 many_single_char_names = "allow"
 
-# FFI-specific allowances. `mem_forget` is how we hand ownership across the C
-# ABI (`FrameworkElement::into_raw`) and intentionally leak test guards; `panic`
-# covers the build script's config-error exits and unreachable enum guards on
-# values the C side promises; `float_cmp` is exact round-trip comparison of
-# values marshalled through the FFI in tests.
+# `mem_forget` hands ownership across the C ABI (`FrameworkElement::into_raw`)
+# and leaks test guards; `panic` covers build-script config errors and enum
+# values the C side promises; `float_cmp` is exact FFI round-trips in tests.
 mem_forget = "allow"
 panic = "allow"
 float_cmp = "allow"

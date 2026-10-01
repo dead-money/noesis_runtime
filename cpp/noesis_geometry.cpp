@@ -1,19 +1,12 @@
-// Code-built Geometry object model.
+// Code-built geometry: StreamGeometry, PathGeometry with figures and segments,
+// ellipse / rectangle / line, CombinedGeometry and GeometryGroup.
 //
-// These entrypoints construct Geometry objects (and their PathFigure / PathSegment
-// building blocks) from Rust and hand them out across the C ABI with a single
-// owned reference, mirroring the ownership idioms already used by
-// cpp/noesis_brushes.cpp (handout() + `*new T` adopt) and cpp/noesis_collections.cpp.
-// The Rust side (src/geometry.rs) wraps each pointer in an owning handle whose
-// Drop calls noesis_base_component_release; assigning a finished geometry to a
-// Path's Data (via the generic FrameworkElement::set_component path) makes Noesis
-// take its own reference, so the Rust builder handle can be dropped afterwards.
+// Each create hands out one reference owned by the caller (src/geometry.rs
+// releases it with noesis_base_component_release). Assigning a geometry to a
+// Path's Data takes Noesis's own reference, so the caller's handle can be
+// released afterwards.
 //
-// Read-back getters re-read from the LIVE Noesis object. GetBounds() /
-// GetRenderBounds() prove a real path was built (a no-op constructor yields empty
-// bounds), figure/segment/child counts prove collection wiring crossed the FFI,
-// and CombinedGeometry mode / FillRule prove enum round-trips. A stubbed
-// implementation fails the tests in tests/geometry.rs.
+// Integer getters return -1 when the argument is not the expected type.
 
 #include "noesis_shim.h"
 
@@ -51,9 +44,7 @@
 
 namespace {
 
-// Hand a freshly-created (refcount-1) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller. The local Ptr that produced the
-// object releases its own reference on scope exit, leaving the caller's +1.
+// Adds the caller's reference; the creating Ptr releases its own at scope exit.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -143,9 +134,9 @@ extern "C" int32_t noesis_stream_geometry_get_fill_rule(void* geometry) {
     return static_cast<int32_t>(g->GetFillRule());
 }
 
-// Open() returns a StreamGeometryContext by value that keeps a Ptr to the
-// geometry alive; copy it onto the heap so the Rust handle can drive it across
-// the ABI, then flush (Close) or free (destroy) it.
+// Open() returns the context by value; it is copied to the heap for the Rust
+// handle. Free it with either _context_close (commits the figures) or
+// _context_destroy, not both.
 extern "C" void* noesis_stream_geometry_open(void* geometry) {
     auto* g = cast<Noesis::StreamGeometry>(geometry);
     if (!g) return nullptr;
@@ -413,7 +404,6 @@ extern "C" bool noesis_arc_segment_get(void* segment, float out_point[2], float 
 
 namespace {
 
-// Build a Noesis::Point vector from a flat (x, y) float array.
 std::vector<Noesis::Point> make_points(const float* points, uint32_t num_points) {
     std::vector<Noesis::Point> pts;
     if (points && num_points) {

@@ -1,19 +1,18 @@
-//! `Registered::register_font` smoke test. Verifies eager `RegisterFont`
-//! triggers `open_font` without `ScanFolder` (which caches after one call;
-//! faces absent at scan time are invisible forever without eager register).
+//! `register_font` on the provider guard calls `open_font` without relying on
+//! `scan_folder`. Noesis caches a folder scan after the first call, so a face
+//! missing at scan time is otherwise never found.
 //!
-//! Requires `NOESIS_SDK_DIR` (`Data/Fonts/Bitter-Regular.ttf` is read at test time).
+//! Reads `Data/Fonts/Bitter-Regular.ttf` from `NOESIS_SDK_DIR`.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use noesis_runtime::font_provider::{FontProvider, set_font_provider};
 
-// Records open_font pairs; scan_folder returns nothing, so opens only
-// accumulate if RegisterFont triggers open_font outside the scan loop.
+// scan_folder registers nothing, so any open_font call comes from RegisterFont.
 struct ObservedProvider {
     bytes: std::collections::HashMap<(String, String), Vec<u8>>,
-    opens: Arc<Mutex<Vec<(String, String)>>>, // shared with test body
+    opens: Arc<Mutex<Vec<(String, String)>>>,
     #[allow(dead_code)]
     scans: Arc<Mutex<Vec<String>>>,
     // keeps the most recently opened bytes alive across the &[u8] borrow
@@ -26,7 +25,6 @@ impl FontProvider for ObservedProvider {
     }
 
     fn scan_folder(&mut self, folder_uri: &str, _register: &mut dyn FnMut(&str)) {
-        // deliberately empty: proves eager RegisterFont works without a healthy scan_folder
         self.scans.lock().unwrap().push(folder_uri.to_string());
     }
 

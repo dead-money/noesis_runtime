@@ -1,7 +1,6 @@
-//! Regression test for the `PropertyDefault::String` silent-drop bug: a custom
-//! dependency property registered with a string default must read that default
-//! back THROUGH Noesis on a freshly-created instance (previously the borrow
-//! path computed the pointer then discarded it, so the C++ "" default applied).
+//! A custom string dependency property registered with
+//! `PropertyDefault::String` reads that default back through Noesis on a fresh
+//! instance, rather than the type default `""`.
 
 use noesis_runtime::classes::{
     ClassBuilder, Instance, PropertyChangeHandler, PropertyDefault, PropertyValue,
@@ -38,13 +37,12 @@ fn custom_dp_string_default() {
         let inst = reg.create_instance().expect("create_instance");
         let h = inst.handle();
 
-        // The string default must survive registration and read back unchanged.
         assert_eq!(
             h.get_string(titled).as_deref(),
             Some("hello"),
             "string DP default was silently dropped"
         );
-        // A type-default (no default) reads back as the empty string.
+        // `PropertyDefault::None` falls back to the type default.
         assert_eq!(
             h.get_string(empty).as_deref(),
             Some(""),

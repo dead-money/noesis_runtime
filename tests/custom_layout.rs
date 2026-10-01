@@ -1,10 +1,9 @@
 //! Layout participation for a Rust-backed `Panel`.
 //!
-//! Registers a `Panel` whose `MeasureOverride` returns a fixed size (150×80)
-//! and whose `ArrangeOverride` stacks children vertically. After a real layout
-//! pass it asserts `ActualWidth`/`ActualHeight` equal the Rust measure result
-//! (stubbing the trampoline would yield 0), children were arranged by Rust, and
-//! both callbacks fired.
+//! The `Panel`'s `MeasureOverride` returns a fixed 150x80 and its
+//! `ArrangeOverride` stacks children vertically. After a layout pass the panel's
+//! `ActualWidth`/`ActualHeight` must equal the Rust measure result, the children
+//! must be arranged, and both callbacks must have fired.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -32,14 +31,13 @@ struct StackLayout {
 impl LayoutHandler for StackLayout {
     fn measure(&self, instance: Instance, _available: Size) -> Size {
         self.counters.measures.fetch_add(1, Ordering::SeqCst);
-        // Measure every child with unbounded space so DesiredSize is known.
         let n = instance.layout_child_count();
         for i in 0..n {
             if let Some(child) = instance.layout_child(i) {
                 child.measure(Size::new(f32::INFINITY, f32::INFINITY));
             }
         }
-        // Deliberately fixed: discriminates a stubbed trampoline.
+        // Fixed so the test can tell this result from Noesis's own.
         Size::new(150.0, 80.0)
     }
 

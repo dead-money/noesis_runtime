@@ -1,30 +1,10 @@
-// Code-built bindings + Rust value converters.
+// Code-built bindings, Rust value converters, and primitive boxing.
 //
-// Two cooperating pieces that close the gap between "bindings authored in
-// XAML" and "bindings + conversion logic driven from Rust":
-//
-//   * RustValueConverter : Noesis::BaseValueConverter. A trampoline whose
-//     TryConvert / TryConvertBack forward into a Rust vtable. Binding values
-//     cross the FFI as boxed `BaseComponent*` (the same boxing the rest of the
-//     data-binding bridge uses); the Rust side unboxes the input with the
-//     noesis_unbox_* helpers below and boxes its result with noesis_box_*.
-//     Lifetime: the converter is an ordinary BaseComponent, so Noesis's
-//     intrusive refcount runs the
-//     destructor (and the donated Rust free handler) exactly once after the
-//     last reference drops (which may be a Binding holding the converter alive
-//     well past the Rust handle being dropped).
-//
-//   * Binding construction + BindingOperations::SetBinding: `new Binding(path)`
-//     plus setters for the common knobs (Source, ElementName, Mode, Converter,
-//     ConverterParameter, StringFormat, FallbackValue, UpdateSourceTrigger,
-//     RelativeSource Self) and a wiring entrypoint that resolves the target DP
-//     by name and calls BindingOperations::SetBinding. This is the code path
-//     that mirrors what XAML `{Binding ...}` authoring does.
-//
-// Plus value boxing/unboxing helpers (bool/int32/double) so Rust can move
-// primitive values across as BaseComponent*, the currency every binding /
-// converter speaks. `noesis_box_string` already lives in
-// noesis_collections.cpp; the string *unbox* helper is here next to its peers.
+// RustValueConverter forwards TryConvert / TryConvertBack into a Rust vtable.
+// Values cross as boxed BaseComponent*; Rust unboxes with noesis_unbox_* and
+// boxes results with noesis_box_* (noesis_box_string is in
+// noesis_collections.cpp). The converter frees its Rust box when the last
+// reference drops, which may be a Binding that outlives the Rust handle.
 
 #include "noesis_shim.h"
 
@@ -53,9 +33,8 @@
 
 namespace {
 
-// Hand a freshly-created (or borrowed) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller. Safe on a refcount-1 `new`'d object (bumps to 2,
-// balanced when the local Ptr that produced it releases) or a borrowed object.
+// Returns `c` with a +1 owned by the caller. The producing local Ptr releases
+// its own reference.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -71,9 +50,7 @@ public:
         : mVtable(*vt), mUserdata(userdata), mFree(free_handler) {}
 
     ~RustValueConverter() {
-        // Donated ownership: drop the Rust handler box exactly once, when the
-        // final BaseComponent reference goes away. Null first so a (currently
-        // impossible) re-entrant teardown can't double-free.
+        // Null first so a re-entrant teardown can't double-free.
         void* ud = mUserdata;
         mUserdata = nullptr;
         if (mFree && ud) {
@@ -81,10 +58,9 @@ public:
         }
     }
 
-    // From IValueConverter (via BaseValueConverter). `value` / `parameter` are
-    // borrowed boxed BaseComponent* (may be null). The Rust callback writes a
-    // +1-owned BaseComponent* into `out` (ownership transfers to us) and returns
-    // true; returning false signals UnsetValue (use FallbackValue / default).
+    // `value` / `parameter` are borrowed and may be null. The Rust callback
+    // writes a +1 BaseComponent* into `out` and returns true; false means
+    // UnsetValue (FallbackValue or default applies).
     bool TryConvert(Noesis::BaseComponent* value, const Noesis::Type* targetType,
                     Noesis::BaseComponent* parameter,
                     Noesis::Ptr<Noesis::BaseComponent>& result) override {
@@ -110,9 +86,7 @@ private:
         bool ok = fn(mUserdata, value, static_cast<const void*>(targetType), parameter, &out);
         if (!ok) return false;
         if (out) {
-            // Adopt the +1 reference transferred from Rust (the `Ptr<T>(T&)`
-            // constructor takes ownership without an extra AddReference, the
-            // same adopt idiom used for `*new T` elsewhere in this shim).
+            // Ptr<T>(T&) adopts Rust's +1 without AddReference.
             result = Noesis::Ptr<Noesis::BaseComponent>(*static_cast<Noesis::BaseComponent*>(out));
         } else {
             result.Reset();
@@ -186,8 +160,7 @@ extern "C" bool noesis_unbox_u64(void* boxed, uint64_t* out) {
     return true;
 }
 
-// Borrowed (no +1) view of a boxed string's bytes, valid while `boxed` is alive.
-// NULL if `boxed` is not a BoxedValue<String>.
+// Borrowed, valid while `boxed` is alive. Null if `boxed` is not a boxed String.
 extern "C" const char* noesis_unbox_string(void* boxed) {
     if (!boxed) return nullptr;
     auto* b = static_cast<Noesis::BaseComponent*>(boxed);
@@ -203,10 +176,8 @@ extern "C" void* noesis_value_converter_create(
     void* userdata,
     noesis_value_converter_free_fn free_handler) {
     if (!vt) return nullptr;
-    // BaseComponent starts at refcount 1. That initial reference IS the
-    // caller's +1, balanced by noesis_value_converter_destroy. A Binding
-    // that later stores the converter (SetConverter) takes its own ref, so the
-    // handler box outlives our destroy until that ref also drops.
+    // Initial refcount of 1 is the caller's +1, balanced by
+    // noesis_value_converter_destroy.
     auto* conv = new RustValueConverter(vt, userdata, free_handler);
     return static_cast<Noesis::BaseComponent*>(conv);
 }
@@ -219,8 +190,8 @@ extern "C" void noesis_value_converter_destroy(void* converter) {
 // ── Binding construction ────────────────────────────────────────────────────
 
 extern "C" void* noesis_binding_create(const char* path) {
-    // new Binding starts at refcount 1 (the caller's +1), balanced by
-    // noesis_binding_destroy. SetBinding takes its own reference.
+    // Initial refcount of 1 is the caller's +1, balanced by
+    // noesis_binding_destroy.
     auto* b = path ? new Noesis::Binding(path) : new Noesis::Binding();
     return static_cast<Noesis::BaseComponent*>(b);
 }
@@ -280,11 +251,8 @@ extern "C" void noesis_binding_set_relative_source_self(void* binding) {
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetSelf());
 }
 
-// FindAncestor: resolve `type_name` through the reflection registry, then build
-// a `RelativeSource(FindAncestor, type, level)`. The ancestor type must already
-// be registered with Reflection (referencing it from XAML forces registration);
-// an unknown name fails gracefully (no-op, returns false) rather than crashing.
-// `level` is the 1-based ancestor index (0 is coerced to 1, the nearest match).
+// `type_name` must already be registered with reflection; an unknown name
+// returns false. `level` is 1-based; 0 is treated as 1 (nearest match).
 extern "C" bool noesis_binding_set_relative_source_find_ancestor(
     void* binding, const char* type_name, uint32_t level) {
     Noesis::Binding* b = as_binding(binding);
@@ -297,24 +265,17 @@ extern "C" bool noesis_binding_set_relative_source_find_ancestor(
     if (!type) return false;
 
     const int lvl = level == 0 ? 1 : static_cast<int>(level);
-    // new RelativeSource starts at refcount 1; the local Ptr adopts that and
-    // releases on scope exit. SetRelativeSource takes its own reference.
     Noesis::Ptr<Noesis::RelativeSource> rs = *new Noesis::RelativeSource(
         Noesis::RelativeSourceMode_FindAncestor, type, lvl);
     b->SetRelativeSource(rs.GetPtr());
     return true;
 }
 
-// PreviousData: bind to the previous item in a data-bound collection (the
-// idiom behind delta columns). Uses the shared static RelativeSource singleton.
 extern "C" void noesis_binding_set_relative_source_previous_data(void* binding) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetPreviousData());
 }
 
-// TemplatedParent: bind to the control a ControlTemplate is applied to (the
-// code-built equivalent of `{Binding RelativeSource={RelativeSource
-// TemplatedParent}}`). Shared static singleton.
 extern "C" void noesis_binding_set_relative_source_templated_parent(void* binding) {
     Noesis::Binding* b = as_binding(binding);
     if (b) b->SetRelativeSource(Noesis::RelativeSource::GetTemplatedParent());
@@ -322,13 +283,10 @@ extern "C" void noesis_binding_set_relative_source_templated_parent(void* bindin
 
 // ── BindingExpression inspection ─────────────────────────────────────────────
 
-// Borrowed BindingExpression* for the binding on `element`'s `dp_name` property,
-// via BindingOperations::GetBindingExpression. The expression is OWNED by the
-// target object: the caller must NOT release it, and it is valid only while the
-// binding stays live on that property. Returns NULL if `element` is not a
-// DependencyObject, the DP name is unknown, or no binding is set on it. The
-// pointer is returned as the BaseBindingExpression base (upcast) so the
-// update entrypoints below can call the virtuals uniformly.
+// Borrowed; owned by the target and valid while the binding stays on that
+// property. Returned as BaseBindingExpression* (the update entry points below
+// cast back to that). Null if `element` is not a DependencyObject, the DP is
+// unknown, or no binding is set.
 extern "C" void* noesis_get_binding_expression(void* element, const char* dp_name) {
     if (!element || !dp_name) return nullptr;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
@@ -339,21 +297,17 @@ extern "C" void* noesis_get_binding_expression(void* element, const char* dp_nam
         Noesis::FindDependencyProperty(d->GetClassType(), Noesis::Symbol(dp_name));
     if (!dp) return nullptr;
 
-    // Implicit upcast BindingExpression* -> BaseBindingExpression* (adjusts the
-    // pointer for the compiler); borrowed, no AddReference.
     Noesis::BaseBindingExpression* be = Noesis::BindingOperations::GetBindingExpression(d, dp);
     return be;
 }
 
-// Force a source -> target data transfer (re-pull the source value).
 extern "C" void noesis_binding_expression_update_target(void* expr) {
     if (!expr) return;
     static_cast<Noesis::BaseBindingExpression*>(expr)->UpdateTarget();
 }
 
-// Push the current target value back to the source. No-op (per Noesis) unless
-// the binding's Mode is TwoWay / OneWayToSource. This commits a binding
-// whose UpdateSourceTrigger is Explicit.
+// No-op unless Mode is TwoWay / OneWayToSource. Commits an Explicit
+// UpdateSourceTrigger.
 extern "C" void noesis_binding_expression_update_source(void* expr) {
     if (!expr) return;
     static_cast<Noesis::BaseBindingExpression*>(expr)->UpdateSource();
@@ -375,10 +329,8 @@ extern "C" bool noesis_set_binding(void* element, const char* dp_name, void* bin
     return true;
 }
 
-// Remove any binding on `element`'s `dp_name`, mirroring `noesis_set_binding`.
-// The DP reverts to default/local-value precedence. True when no binding is
-// present (ClearBinding no-ops), so callers need no bound-ness tracking; false
-// only when the element/DP can't be resolved.
+// True also when no binding was set; false only when the element or DP can't
+// be resolved.
 extern "C" bool noesis_clear_binding(void* element, const char* dp_name) {
     if (!element || !dp_name) return false;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
@@ -393,8 +345,10 @@ extern "C" bool noesis_clear_binding(void* element, const char* dp_name) {
     return true;
 }
 
-// ── ResourceDictionary insertion (so XAML {StaticResource} can reach a Rust
-//    converter / value) ─────────────────────────────────────────────────────
+// ── ResourceDictionary insertion ────────────────────────────────────────────
+//
+// Lets XAML {StaticResource} reach a Rust-created converter or value. Creates
+// the element's dictionary if it has none.
 
 extern "C" bool noesis_framework_element_add_resource(
     void* element, const char* key, void* object) {
@@ -409,7 +363,6 @@ extern "C" bool noesis_framework_element_add_resource(
         fe->SetResources(created.GetPtr());
         res = created.GetPtr();
     }
-    // Add takes a borrowed value and stores its own reference.
     res->Add(key, static_cast<Noesis::BaseComponent*>(object));
     return true;
 }

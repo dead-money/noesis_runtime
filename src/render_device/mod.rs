@@ -1,20 +1,17 @@
-//! Implement a custom GPU backend for Noesis by writing a Rust `Noesis::RenderDevice`.
+//! Render Noesis through your own GPU backend.
 //!
-//! Reach for this module when you want Noesis to render through your own
-//! graphics API instead of a bundled backend: implement the [`RenderDevice`]
-//! trait, then hand it to [`register`] to wire it up across the C ABI.
+//! Implement [`RenderDevice`] for your graphics API, pass it to [`register`],
+//! and keep the returned [`Registered`] guard alive while any view renders with
+//! it. Bind it to a view with
+//! [`Renderer::init`](crate::view::Renderer::init). Noesis then drives the
+//! trait's frame protocol: texture uploads, offscreen render-target passes, and
+//! onscreen batches.
 //!
-//! The pieces, in dependency order:
-//!
-//! - [`types`]: `#[repr(C)]` mirrors of the public Noesis types in
-//!   `Include/NsRender/RenderDevice.h`. These are the ABI surface and their
-//!   layouts are checked against the C++ headers at compile time.
-//! - [`device`]: the [`RenderDevice`] trait your device impl satisfies, plus
-//!   its handle / desc / binding plain-data types.
-//! - [`ffi`]: Rust mirrors of the C ABI types in `cpp/noesis_shim.h`, plus the
-//!   `extern "C"` declarations for the factory and helpers.
-//! - [`vtable`]: the `extern "C"` trampolines and the [`register`] entry point
-//!   that owns the boxed impl and the C++ `RustRenderDevice` handle.
+//! - [`device`]: the [`RenderDevice`] trait and the handle and descriptor types
+//!   passed through it.
+//! - [`types`]: the data Noesis hands the device (batches, shader and render
+//!   state, tiles, device caps), laid out to match Noesis's
+//!   `NsRender/RenderDevice.h`.
 
 pub mod device;
 // Not part of the stable API; no semver guarantees.

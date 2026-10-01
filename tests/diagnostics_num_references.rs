@@ -1,7 +1,7 @@
 //! `FrameworkElement::num_references` (`BaseRefCounted::GetNumReferences`).
 //!
-//! The absolute refcount is a Noesis internal, so the test pins deltas:
-//! a live handle reports `>= 1`; `clone_ref` bumps it `+1`; dropping the clone drops it `-1`.
+//! The absolute refcount is a Noesis internal, so the test checks deltas: a live
+//! handle reports `>= 1`, `clone_ref` adds one, and dropping the clone removes it.
 
 use noesis_runtime::view::FrameworkElement;
 
@@ -36,7 +36,6 @@ fn num_references_tracks_add_and_release() {
             base + 1,
             "clone_ref must bump the count by exactly 1 ({base} -> {after_clone})"
         );
-        // The clone observes the same shared count.
         assert_eq!(
             clone.num_references(),
             after_clone,

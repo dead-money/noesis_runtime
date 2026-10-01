@@ -1,10 +1,10 @@
-//! Spike-Bench: for a 200-row bound object list, where does the cost of a
-//! single-row mutation live: in the FFI marshalling we do from Rust (the
-//! "Apply" phase), or in Noesis-side container re-realization during the
-//! `view.update` "Drive" phase?
+//! For a 200-row bound object list, where does the cost of a single-row
+//! mutation live: in the FFI marshalling we do from Rust (the "Apply" phase),
+//! or in Noesis-side container re-realization during the `view.update` "Drive"
+//! phase?
 //!
 //! Three strategies mutate ONE row of an otherwise-stable 200-row list:
-//!   (a) Reset:    `clear()` + re-push all 200 (the current rebuild path).
+//!   (a) Reset:    `clear()` + re-push all 200.
 //!   (b) DP set:   one in-place `ClassInstance` DP write (no collection change).
 //!   (c) Granular: one `remove_at` + one `insert_component` (Remove + Add).
 //!
@@ -15,8 +15,8 @@
 //! (`allocated_memory_accum`) across Drive, so container churn shows up as
 //! allocated bytes.
 //!
-//! This is a measurement spike, not a pass/fail gate: it asserts only that the
-//! list stayed consistent, and prints the numbers the design decision needs.
+//! This is a measurement, not a pass/fail gate: it asserts only that the list
+//! stayed consistent, and prints the timings and allocation deltas.
 
 use std::time::Instant;
 
@@ -109,7 +109,7 @@ fn spike_bench_single_row_mutation_costs() {
             "non-virtualizing panel should realize all {ROWS} containers"
         );
 
-        // ---- (a) Reset: clear + re-push all 200 -----------------------------
+        // (a) Reset
         let mut reset = Phase {
             apply_us: 0.0,
             drive_us: 0.0,
@@ -131,7 +131,7 @@ fn spike_bench_single_row_mutation_costs() {
         }
         assert_eq!(list.realized_item_count(), Some(ROWS));
 
-        // ---- (b) DP set: one in-place ClassInstance write -------------------
+        // (b) DP set
         let mut dp = Phase {
             apply_us: 0.0,
             drive_us: 0.0,
@@ -153,7 +153,7 @@ fn spike_bench_single_row_mutation_costs() {
         }
         assert_eq!(list.realized_item_count(), Some(ROWS));
 
-        // ---- (c) Granular: one remove + one insert (Remove + Add) -----------
+        // (c) Granular
         let mut gran = Phase {
             apply_us: 0.0,
             drive_us: 0.0,

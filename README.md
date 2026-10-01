@@ -14,16 +14,16 @@ This crate links against the [Noesis Native SDK](https://www.noesisengine.com/),
 
 This release targets **Noesis Native SDK 3.2.13**. The C ABI shim is compiled against that version's headers and checks key struct sizes at build time, so a different SDK version may fail to build or link. Match it unless you've verified a newer release.
 
-Set `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to apply your license. Without them the runtime works for a while, then blanks the view with a "Trial expired" message.
+Apply your license with `noesis_runtime::set_license(name, key)` before `init()`. Without it the runtime works for a while, then blanks the view with a "Trial expired" message.
 
 ## Quick start
 
 ```toml
 [dependencies]
-noesis_runtime = "0.9"
+noesis_runtime = "0.12"
 ```
 
-The crate is on crates.io, but it still links the Noesis SDK at build time. You need `NOESIS_SDK_DIR` set (see above) for it to compile.
+The crate still links the Noesis SDK at build time, so `NOESIS_SDK_DIR` must be set for it to compile.
 
 ```rust
 use noesis_runtime::view::{FrameworkElement, View};
@@ -39,6 +39,7 @@ impl XamlProvider for MyXaml {
 }
 
 // Once per process.
+noesis_runtime::set_license(&license_name, &license_key);
 noesis_runtime::init();
 
 // Install the provider. The returned guard owns the registration;
@@ -55,7 +56,7 @@ view.activate();
 loop {
     // Forward input to view.mouse_*, view.key_*, view.touch_*
     let _changed = view.update(time_seconds);
-    // Your renderer drives view.renderer().
+    // Render through view.renderer() with your registered RenderDevice.
 }
 
 noesis_runtime::shutdown();
@@ -107,14 +108,12 @@ let _registration = MarkupExtensionRegistration::from_closure(
 
 ## How it works
 
-- **Hand-written C ABI, no bindgen.** Noesis's C++ API (templates, intrusive `Ptr<T>`, pure-virtual hierarchies) is a poor fit for bindgen, so the binding is a narrow C ABI hand-written in `cpp/noesis_shim.{h,cpp}` and mirrored in `src/ffi.rs`. Noesis types stay opaque on the Rust side; only `#[repr(C)]` POD structs cross the boundary, and each one's size is checked at compile time, so an SDK update that reshapes a struct fails the build instead of producing garbage.
-- **RAII registration guards.** Every "install something global" call (`set_xaml_provider`, `subscribe_click`, `register_class`) hands back a guard that clears the registration when dropped. Drop order matters; the per-module docs spell out the contract.
-- **Custom controls via trampoline subclasses.** The shim's `RustContentControl` and `RustMarkupExtension` report a synthetic `TypeClass` per name and forward virtuals like `OnPropertyChanged` and `ProvideValue` to your Rust callback, the same shape Noesis's own C# and Unity bindings use.
-- **Single-threaded.** Noesis isn't thread-safe. The view, renderer, and input pump all run on one rendering thread. The guards are `Send`, so you can move resources between threads, but the calls themselves stay on that thread.
+- **Hand-written C ABI, no bindgen.** Noesis's C++ API (templates, intrusive `Ptr<T>`, pure-virtual hierarchies) is a poor fit for bindgen, so the binding is a narrow C ABI hand-written in `cpp/noesis_shim.{h,cpp}` and mirrored in `src/ffi.rs`. Noesis types stay opaque on the Rust side and only `#[repr(C)]` POD structs cross the boundary. Struct sizes and enum values are checked against the SDK with compile-time asserts, so an SDK update that reshapes one fails the build instead of producing garbage.
+- **RAII registration guards.** Every call that installs something global (`set_xaml_provider`, `subscribe_click`, `ClassBuilder::register`) returns a guard that clears the registration when dropped. Drop every guard and handle before `shutdown()`.
+- **Custom classes via trampoline subclasses.** The shim has one C++ subclass per supported base (`RustContentControl`, `RustPanel`, and so on, plus `RustMarkupExtension`). Each reports a synthetic type per registered name and forwards virtuals like `OnPropertyChanged` and `ProvideValue` to your Rust handler.
+- **Thread-affine.** Noesis isn't thread-safe. Call into a view, its elements, and its renderer from the one thread that drives it. Handles are `Send` but not `Sync`: you can move them to that thread, not share them across threads.
 
-Custom pixel shaders (`BrushShader` / `ShaderEffect`) are out of scope. They need compiled shader bytecode and a live render device to do anything, which the crate's headless FFI surface can't provide. The `Batch::pixel_shader` pointer round-trips through the render device, but there's no way to author one here.
-
-For the rest of what the SDK can't do, or does differently from WPF, see [SDK limitations](./LIMITATIONS.md).
+Custom pixel shaders (`ShaderEffect` / `BrushShader`) aren't wrapped. The render device receives a batch's `pixel_shader` pointer, but there's no way to author one from Rust. For this and the rest of what the SDK can't do, or does differently from WPF, see [SDK limitations](./LIMITATIONS.md).
 
 ## Building
 
@@ -126,20 +125,18 @@ cargo test
 
 On Windows, point `NOESIS_SDK_DIR` at the unzipped **win** SDK and build with the MSVC toolchain. The build script links `Noesis.lib` from `Lib/windows_x86_64/` and copies `Noesis.dll` from `Bin/windows_x86_64/` next to the test and example binaries, so `cargo test` runs without extra setup. To run a binary from elsewhere, put that `Bin/` directory on `PATH` or keep `Noesis.dll` beside the `.exe`.
 
-Optionally apply your license credentials (see above):
+Most tests pass `NOESIS_LICENSE_NAME` and `NOESIS_LICENSE_KEY` to `set_license` when both are set:
 
 ```sh
 export NOESIS_LICENSE_NAME=...
 export NOESIS_LICENSE_KEY=...
 ```
 
-`tests/lifecycle.rs` calls `init`, `version`, and `shutdown` and checks for a non-empty version string. Building with `--features test-utils` unlocks `tests/render_device.rs`, the full render device regression test.
+`--features test-utils` compiles the shim's test entry points and enables the tests that need them, including `tests/render_device.rs`, which drives a mock `RenderDevice` through a full frame.
 
-## Licensing
+## License
 
-Source in this repository is © 2026 Dead Money LLC and is distributed under the [MIT License](./LICENSE). Everything under `cpp/`, `src/`, and `tests/` is original work. No Noesis SDK code is vendored or translated; it's only `#include`'d at compile time from `NOESIS_SDK_DIR`.
-
-The Noesis Native SDK is not part of this repository and is not redistributed here. You obtain it from Noesis Technologies under their EULA. Use and distribution of any binary you build that links against the SDK is governed by that EULA, not by the MIT License above.
+This crate is [MIT](./LICENSE). It contains no Noesis SDK code. Binaries that link the SDK are also subject to the Noesis EULA.
 
 ## Acknowledgements
 

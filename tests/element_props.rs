@@ -62,11 +62,9 @@ fn element_props_round_trip() {
 
         let content = view.content().expect("View::content returned None");
 
-        // Noesis lays out eagerly on content()/set_size, so actual_width() may
-        // already be non-zero before update(0.0); cap-check rather than assert zero.
+        // Noesis may lay out before update(), so ActualWidth can already be set.
         let mut sized = content.find_name("Sized").expect("Sized not found");
         if let Some(w) = sized.actual_width() {
-            // Never larger than the declared Width for a non-stretched element.
             assert!(
                 w <= 120.0,
                 "ActualWidth pre-update should not exceed Width, got {w}"
@@ -111,7 +109,7 @@ fn element_props_round_trip() {
             "XAML Focusable=\"True\" mismatch",
         );
 
-        // Every ordinal tested; catches an off-by-one in the variant ↔ integer mapping.
+        // Every ordinal, to catch an off-by-one in the variant mapping.
         let haligns = [
             (0, HAlign::Left),
             (1, HAlign::Center),
@@ -143,7 +141,7 @@ fn element_props_round_trip() {
             assert_eq!(v as i32, ord, "VAlign discriminant drifted from ordinal");
         }
 
-        // 0.5 and 0.25 are exactly representable in f32, so exact equality is valid here.
+        // Every value set below is exact in f32.
         assert!(sized.set_width(256.0), "set_width failed");
         assert_eq!(sized.width(), Some(256.0), "Width did not round-trip");
 
@@ -179,7 +177,6 @@ fn element_props_round_trip() {
             "Focusable did not round-trip to false",
         );
 
-        // No pointer equality is exposed for Tag, so presence/absence is the strongest check.
         let anchor = content.find_name("Anchor").expect("Anchor not found");
         assert!(
             aligned.tag().is_none(),
@@ -191,7 +188,7 @@ fn element_props_round_trip() {
             "Tag should resolve to a component after set_tag",
         );
 
-        let mut root = content; // the View content root hosts the namescope
+        let mut root = content;
         assert!(
             root.find_name("Dynamic").is_none(),
             "fresh key must not resolve before registration",
@@ -239,8 +236,7 @@ fn element_props_round_trip() {
             "two elements from the same view should share a thread id",
         );
 
-        // FrameworkElement is Send but NOT Sync, so we move (not share) ownership to
-        // a second thread to confirm check_access() returns false on a non-owner thread.
+        // FrameworkElement is Send but not Sync, so move it to the other thread.
         let (root, off_access) = std::thread::spawn(move || {
             let access = root.check_access();
             (root, access)

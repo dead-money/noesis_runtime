@@ -85,7 +85,7 @@ fn custom_dp_metadata() {
         let inst = reg.create_instance().expect("create_instance");
         let h = inst.handle();
 
-        // COERCION: read back through Noesis.
+        // Coercion.
         h.set_float(clamped, 999.0);
         assert_eq!(h.get_float(clamped), Some(100.0), "coerce upper clamp");
         h.set_float(clamped, -5.0);
@@ -94,7 +94,7 @@ fn custom_dp_metadata() {
         assert_eq!(h.get_float(clamped), Some(42.0), "coerce passthrough");
         assert!(*log.calls.lock().unwrap() >= 3, "coerce handler never ran");
 
-        // READ-ONLY: ordinary setter is a no-op; key-path setter works.
+        // Read-only: the ordinary setter is a no-op; the key-path setter writes.
         h.set_int32(ro, 5); // ordinary path: rejected
         assert_eq!(
             h.get_int32(ro),

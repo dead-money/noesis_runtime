@@ -1,8 +1,5 @@
-//! Render-device FFI surface: Rust mirrors of the C ABI types declared in
-//! `cpp/noesis_shim.h`, plus extern decls for the factory and helpers.
-//!
-//! Lifecycle FFI lives at the top of the crate in `crate::ffi`; this module
-//! is render-device-specific.
+//! Render-device C ABI: mirrors of the types in `cpp/noesis_shim.h` and the
+//! `extern "C"` declarations for the device factory and its helpers.
 
 use core::mem::{align_of, size_of};
 use std::os::raw::{c_char, c_void};
@@ -10,8 +7,9 @@ use std::os::raw::{c_char, c_void};
 use crate::render_device::device::TextureBinding;
 use crate::render_device::types::DeviceCaps;
 
-/// Mirror of `noesis_texture_binding`. `handle == 0` is reserved invalid;
-/// the trampoline panics on zero on the way back up to a Rust [`TextureHandle`].
+/// Mirror of `noesis_texture_binding`. `handle == 0` is reserved: the shim
+/// treats it as an inert texture that never calls back into the device, and it
+/// has no [`TextureHandle`] equivalent.
 ///
 /// [`TextureHandle`]: crate::render_device::TextureHandle
 #[repr(C)]
@@ -27,9 +25,6 @@ pub struct TextureBindingFfi {
 }
 
 impl From<TextureBinding> for TextureBindingFfi {
-    /// Lower a Rust [`TextureBinding`] to its C-ABI mirror. Centralising the
-    /// field copy keeps a silently-swapped field from compiling: every call
-    /// site goes through this one mapping.
     fn from(b: TextureBinding) -> Self {
         Self {
             handle: b.handle.0.get(),
@@ -184,10 +179,9 @@ unsafe extern "C" {
 // for the C++ build.
 #[cfg(feature = "test-utils")]
 unsafe extern "C" {
-    /// Drive the C++ device through one representative frame (caps query,
-    /// texture create + update, render target create, offscreen + onscreen
-    /// passes with map/draw/unmap, RT clone) then let every `Ptr<>` die so
-    /// `drop_texture` / `drop_render_target` fire on the way out. Used by
-    /// `tests/render_device.rs` to assert the recorded op sequence.
+    /// Drives the device through one representative frame (caps query,
+    /// texture create and update, render-target create and clone, offscreen and
+    /// onscreen passes), then releases every resource so `drop_texture` and
+    /// `drop_render_target` fire.
     pub fn noesis_test_run_frame_scenario(device: *mut c_void);
 }

@@ -1,9 +1,8 @@
-//! Routing test for scoped font providers: verifies each of the four setters
-//! (`SetSchemeFontProvider` / `SetAssemblyFontProvider` / `SetSchemeAssemblyFontProvider`)
-//! routes to a distinct Noesis call. A compile-only test can't catch a wiring swap.
+//! Scoped font providers: the providers installed by the global, scheme,
+//! assembly, and scheme+assembly setters each see only the font folders in
+//! their scope.
 //!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test font_scoped_providers -- --nocapture`
+//! Reads `Data/Fonts/Bitter-Regular.ttf` from `NOESIS_SDK_DIR`.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -27,7 +26,7 @@ const FONT_XAML: &str = r##"<StackPanel xmlns="http://schemas.microsoft.com/winf
   <TextBlock x:Name="TbGlobal"   Text="DDD" FontFamily="Fonts/#Bitter"/>
 </StackPanel>"##;
 
-// Logs (label, op, folder_uri) triples for scan_folder/open_font calls.
+// Logs (label, op, folder_uri) for each scan_folder / open_font call.
 struct FontRecorder {
     label: &'static str,
     bytes: Vec<u8>,
@@ -119,8 +118,6 @@ fn font_scoped_providers_route_by_scheme_and_assembly() {
                 .any(|(l, _, f)| *l == "both" && f.contains("Skin")),
             "scheme+assembly provider was not asked for the Skin font folder; log = {entries:?}"
         );
-        // The global provider gets the unscoped "Fonts" folder (no scheme/asm
-        // token). Identify it by label + the absence of any scoped token.
         assert!(
             entries
                 .iter()

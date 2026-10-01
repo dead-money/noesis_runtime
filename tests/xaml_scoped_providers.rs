@@ -84,8 +84,8 @@ fn scoped_providers_route_by_scheme_and_assembly() {
             },
         );
 
-        // Routes through the third distinct Noesis call (SetSchemeAssemblyXamlProvider),
-        // so a mis-wired setter the other two providers would not catch is caught here.
+        // Separate Noesis entry point (SetSchemeAssemblyXamlProvider), so a
+        // mis-wired setter here would not show up through the other two.
         let _both = set_scheme_assembly_xaml_provider(
             "packs",
             "Skin",

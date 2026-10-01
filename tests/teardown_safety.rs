@@ -81,9 +81,8 @@ fn class_handler_drops_when_last_instance_dies_not_at_unregister() {
             .expect("find_name ProbeInstance");
         drop(probe);
 
-        // Drop registration before view. Previously segfaulted: ClassRegistration::drop
-        // freed the handler box while the View still owned an instance whose destructor
-        // fired a callback into that box.
+        // Drop registration before view. The View still owns an instance whose
+        // destructor calls into the handler box, so the box must outlive it.
         drop(registration);
 
         // Handler must still be alive: View holds an instance, keeping ClassData

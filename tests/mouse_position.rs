@@ -1,5 +1,5 @@
-//! `FrameworkElement::mouse_position()`: drive `View::mouse_move` to a known
-//! coordinate and verify the element-local position crosses the FFI correctly.
+//! `FrameworkElement::mouse_position` reports the element-local position after
+//! `View::mouse_move`.
 
 use std::collections::HashMap;
 
@@ -44,7 +44,6 @@ fn framework_element_mouse_position() {
         let _registered = noesis_runtime::xaml_provider::set_xaml_provider(InMem { bytes });
 
         let element = FrameworkElement::load("scene.xaml").expect("scene load");
-        // Keep an owning handle before the element is moved into the view.
         let root = element.clone_ref();
 
         let mut view = View::create(element);
@@ -52,8 +51,7 @@ fn framework_element_mouse_position() {
         view.activate();
         assert!(view.update(0.0), "first update builds the render tree");
 
-        // Pump a second update after mouse_move so the Mouse subsystem records
-        // the position; mouse_position() reads stale without it.
+        // mouse_position() is stale until the next update.
         let _ = view.mouse_move(50, 60);
         let _ = view.update(0.016);
 

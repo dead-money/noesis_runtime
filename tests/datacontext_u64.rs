@@ -1,15 +1,12 @@
-//! `u64` row identity on bound view models + the `DataContext` accessor that
-//! recovers it for per-row event routing. One Noesis lifecycle covers three
-//! checks:
+//! `u64` row ids on bound view models, recovered through
+//! `FrameworkElement::data_context_u64`:
 //!
-//!   1. A `ClassInstance` (the `ClassBuilder` row object) carries a real `uint64`
-//!      DP: `set_u64` / `get_u64` round-trip a full 64-bit value.
-//!   2. `noesis_element_datacontext_get_u64` (via `FrameworkElement::
-//!      data_context_u64`) reads that DP off the element's bound `DataContext`.
-//!   3. The same accessor reads a `uint64` off a plain-VM (`PlainInstance`)
-//!      `DataContext`, whose field is a boxed `BoxedValue<uint64_t>`.
+//! 1. A `ClassInstance` `uint64` DP round-trips a full 64-bit value through
+//!    `set_u64` / `get_u64`.
+//! 2. `data_context_u64` reads that DP off the element's bound `DataContext`.
+//! 3. It also reads a boxed `uint64` field off a `PlainInstance` `DataContext`.
 //!
-//! `0xDEAD_BEEF_0000_0001` is chosen so a truncation to 32 bits would be caught.
+//! `ROW_ID` has high bits set so a truncation to 32 bits fails.
 
 use noesis_runtime::classes::{ClassBuilder, Instance, PropertyChangeHandler, PropertyValue};
 use noesis_runtime::ffi::{ClassBase, PropType};
@@ -23,8 +20,6 @@ const BORDER_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Name="Root"/>"##;
 
-// A no-op change handler: this test drives DPs directly, it doesn't observe
-// callbacks.
 struct Noop;
 impl PropertyChangeHandler for Noop {
     fn on_changed(&self, _instance: Instance, _prop_index: u32, _value: PropertyValue<'_>) {}
@@ -40,7 +35,7 @@ fn datacontext_u64() {
     }
     noesis_runtime::init();
 
-    // ── 1 + 2: ClassInstance with a real uint64 DP ──────────────────────────
+    // Cases 1 and 2: ClassInstance.
     {
         let mut builder = ClassBuilder::new("DmTest.U64Row", ClassBase::ContentControl, Noop);
         let row_id = builder.add_property("RowId", PropType::UInt64);
@@ -58,8 +53,6 @@ fn datacontext_u64() {
             "set_u64 / get_u64 round-trips the full 64-bit value"
         );
 
-        // Bind it as an element's DataContext and recover the id via the
-        // borrowed-DataContext accessor (the per-row event-routing path).
         let mut element = FrameworkElement::parse(BORDER_XAML).expect("parse Border");
         assert!(element.set_data_context(&inst), "set_data_context");
 
@@ -68,7 +61,6 @@ fn datacontext_u64() {
             Some(ROW_ID),
             "data_context_u64 reads the uint64 DP off the bound row object"
         );
-        // A field that doesn't exist (or isn't uint64) yields None.
         assert_eq!(element.data_context_u64("Missing"), None);
 
         // Release the element's DataContext ref before the instance / reg drop.
@@ -78,7 +70,7 @@ fn datacontext_u64() {
         drop(reg);
     }
 
-    // ── 3: plain-VM DataContext (boxed uint64) ──────────────────────────────
+    // Case 3: plain-VM DataContext.
     {
         let mut builder = PlainVmBuilder::new("DmTest.U64PlainRow");
         let row_id = builder.add_property("RowId", PlainType::U64);

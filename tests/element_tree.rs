@@ -56,7 +56,7 @@ fn element_tree_traversal() {
         let mut view = View::create(element);
         view.set_size(400, 200);
         view.activate();
-        // Layout MUST run before hit_test / actual_width assertions.
+        // Layout must run before hit_test / actual_width.
         assert!(view.update(0.0));
 
         let root = view.content().expect("View::content returned None");
@@ -81,7 +81,6 @@ fn element_tree_traversal() {
             Some("Right"),
             "logical_child(2) name"
         );
-        // Cross-check identity via the independent Width property.
         assert_eq!(lc0.get_f32("Width"), Some(100.0), "Left width");
         assert_eq!(lc1.get_f32("Width"), Some(120.0), "Middle width");
         assert_eq!(lc2.get_f32("Width"), Some(140.0), "Right width");
@@ -91,8 +90,7 @@ fn element_tree_traversal() {
             "logical_child(9999) should be None",
         );
 
-        // A plain Grid inserts no wrapper visuals, so visual count == logical count.
-        // Assert >= first (robust), then the exact equality that holds for a Panel.
+        // A plain Grid inserts no wrapper visuals.
         let vcount = root.visual_children_count();
         assert!(
             vcount >= 3,
@@ -129,8 +127,7 @@ fn element_tree_traversal() {
             "visual_parent(Middle) should be Root",
         );
 
-        // View::create reparents the content under an internal unnamed container,
-        // so the root's logical/visual parent is Some("") rather than None.
+        // View::create reparents the content under an unnamed internal container.
         let root_lp = root
             .logical_parent()
             .expect("root logical_parent is the View's internal container (Some)");
@@ -153,7 +150,6 @@ fn element_tree_traversal() {
             "Middle should have a laid-out width after update()",
         );
 
-        // x[150,270], y[75,125] → Middle.
         let hit = root
             .hit_test(200.0, 100.0)
             .expect("hit_test inside Middle should hit something");
@@ -168,7 +164,7 @@ fn element_tree_traversal() {
             "hit element width cross-check (Middle)",
         );
 
-        // x[0,100], y[0,50] → Left; a second distinct target rules out a stub that returns one fixed element.
+        // A second target rules out a fixed result.
         let hit_left = root
             .hit_test(50.0, 25.0)
             .expect("hit_test inside Left should hit something");
@@ -178,14 +174,12 @@ fn element_tree_traversal() {
             "hit_test(50,25) should land on Left",
         );
 
-        // Empty Grid space (no Background) is not hit-testable → None.
         assert!(
             root.hit_test(120.0, 30.0).is_none(),
             "hit_test on empty space should be None",
         );
 
-        // No ControlTemplate applied, so template_child returns None.
-        // Positive coverage would require theme resources not available in this test context.
+        // Negative only: a templated control needs theme resources this test lacks.
         assert!(
             middle.template_child("PART_DoesNotExist").is_none(),
             "template_child on a non-templated Border should be None",

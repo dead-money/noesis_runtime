@@ -34,9 +34,8 @@ fn build_view(xaml: &str) -> (View, FrameworkElement) {
     bytes.insert("scene.xaml".to_string(), xaml.as_bytes().to_vec());
     let provider = Provider(bytes);
     let _guard = noesis_runtime::xaml_provider::set_xaml_provider(provider);
-    // _guard would otherwise drop at end of scope, but we need it alive for
-    // the load. Hold it across the load by leaking; the next call to
-    // set_xaml_provider replaces it.
+    // Leaked so the provider stays installed after return; the next
+    // set_xaml_provider call replaces it.
     std::mem::forget(_guard);
 
     let element = FrameworkElement::load("scene.xaml")

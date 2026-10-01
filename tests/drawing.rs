@@ -1,6 +1,6 @@
-//! Immediate-mode drawing via `OnRender`: exercises every `DrawingContext` command
-//! in a real render pass and confirms the filled element produces more GPU batches
-//! than an empty baseline.
+//! Immediate-mode drawing via `OnRender`: issues every `DrawingContext` command
+//! in a real render pass and checks the drawing element produces more GPU
+//! batches than an empty baseline.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -34,8 +34,9 @@ struct Signals {
     image_null_rejected: Arc<AtomicBool>,
 }
 
-/// Owns drawing resources so they outlive each `OnRender` call. When `draw` is
-/// false, issues no commands and serves as the baseline that cancels the trial-watermark batches.
+/// Owns drawing resources so they outlive each `OnRender` call. With `draw`
+/// false it issues nothing, giving a baseline that includes the trial-watermark
+/// batches.
 struct PainterRender {
     draw: bool,
     signals: Signals,
@@ -225,8 +226,6 @@ fn on_render_fires_and_draws() {
             painted.image_null_rejected.load(Ordering::SeqCst),
             "DrawImage(null) was not rejected"
         );
-        // The painting element adds real geometry on top of the identical
-        // watermark baseline; a no-op draw fn would leave the counts equal.
         assert!(
             full > baseline,
             "filled draws produced no extra GPU batches (no-op draw fns): \
@@ -237,7 +236,7 @@ fn on_render_fires_and_draws() {
     noesis_runtime::shutdown();
 }
 
-// Minimal RenderDevice stub that counts draw_batch calls, decoupled from any GPU backend.
+// RenderDevice stub that only counts `draw_batch` calls.
 struct CountingDevice {
     next_handle: u64,
     batches: Arc<AtomicU32>,

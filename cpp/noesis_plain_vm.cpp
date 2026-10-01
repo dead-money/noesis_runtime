@@ -1,30 +1,20 @@
-// Plain (non-DependencyObject) view models + MultiBinding.
+// Plain (non-DependencyObject) view models, and MultiBinding.
 //
-// Three cooperating pieces:
+//   * RustPlainVm: a BaseComponent implementing INotifyPropertyChanged that
+//     reports a per-registration synthetic TypeClass. Its properties resolve
+//     through reflection to per-instance boxed values that Rust sets, so
+//     `{Binding Title}` works against it as a DataContext, and Raise()
+//     refreshes bound targets.
 //
-//   * RustPlainVm, a plain `Noesis::BaseComponent` (NOT a DependencyObject)
-//     that implements `INotifyPropertyChanged` and reports a per-registration
-//     synthetic `TypeClass`. Its properties resolve through reflection to
-//     per-instance boxed values that Rust pushes in. This is what makes
-//     `{Binding Title}` work against a Rust view model used as a DataContext,
-//     and, paired with PropertyChanged notifications, what makes a bound UI
-//     target refresh when Rust mutates the model.
+//   * RustPlainProperty: a TypeProperty whose GetComponent / SetComponent read
+//     and write the instance's boxed value store instead of a member offset.
 //
-//   * RustPlainProperty : Noesis::TypeProperty. A custom reflected property
-//     (the NsProp-equivalent) whose accessors (GetComponent / SetComponent)
-//     read/write the owning instance's boxed value store instead of a C++
-//     member offset. This is the "install property accessors that resolve into
-//     Rust" requirement: the value lives in a Rust-controlled store, the
-//     binding engine reaches it purely through reflection.
+//   * RustMultiValueConverter and MultiBinding construction: combine N child
+//     bindings through a Rust converter.
 //
-//   * RustMultiValueConverter : Noesis::BaseMultiValueConverter + MultiBinding
-//     construction. Combine N child Bindings through a Rust converter over an
-//     array of boxed values.
-//
-// Lifetime mirrors the synthetic-class registry in noesis_classes.cpp (refcounted
-// PlainClassData; donated Rust free handler runs once on last release; a shutdown
-// sweep cleans up handler boxes whose instances bypassed teardown). The converter
-// lifetime mirrors RustValueConverter in noesis_binding.cpp.
+// PlainClassData lifetime follows ClassData in noesis_classes.cpp: refcounted,
+// the Rust free handler runs once on last release, and a shutdown sweep frees
+// boxes whose instances were never released.
 
 #include "noesis_shim.h"
 
@@ -68,10 +58,8 @@ struct PlainProp {
     noesis_plain_type  type;
 };
 
-// Per-registered-class state. Refcount + free-handler lifetime model copied
-// verbatim from `ClassData` in noesis_classes.cpp. See that file for the full
-// rationale (deferred free so a property write fired during instance teardown
-// always sees a live `userdata`).
+// Per-registered-class state. The free is deferred to the last release so a
+// property write during instance teardown still sees a live `userdata`.
 struct PlainClassData {
     Noesis::String              name;
     Noesis::Symbol              sym;
@@ -99,11 +87,9 @@ struct PlainClassData {
     }
 };
 
-// Every PlainClassData ever successfully registered, tracked for the shutdown
-// sweep (see noesis_classes_force_free_at_shutdown for the rationale). Unlike the
-// synthetic-control registry in noesis_classes.cpp, plain VMs are never created
-// by name through the Factory (they're instantiated directly from the Rust
-// token), so no Symbol→ClassData lookup map is needed.
+// Every registered PlainClassData, for the shutdown sweep. No Symbol lookup
+// map: instances are created from the Rust token, never by name through the
+// Factory.
 std::mutex                                  g_all_mutex;
 std::vector<PlainClassData*>                g_all;
 
@@ -127,12 +113,11 @@ const Noesis::Type* plain_content_type(noesis_plain_type t) {
 
 // ── RustPlainVm ─────────────────────────────────────────────────────────────
 //
-// Hand-rolled reflection (like RustContentControl): a custom GetClassType so an
-// instance reports its per-registration synthetic TypeClass, while the static
-// "DmNoesis.RustPlainVm" base type carries the INotifyPropertyChanged interface
-// registration (so `DynamicCast<INotifyPropertyChanged*>(vm)` resolves through
-// the synthetic class's base chain. That's how the binding engine discovers the
-// model is observable).
+// Hand-rolled reflection: an instance reports its synthetic TypeClass, while
+// the static "DmNoesis.RustPlainVm" base carries the INotifyPropertyChanged
+// registration. DynamicCast<INotifyPropertyChanged*> resolves through the
+// synthetic class's base chain, which is how bindings see the model as
+// observable.
 
 class RustPlainVm: public Noesis::BaseComponent, public Noesis::INotifyPropertyChanged {
 public:
@@ -156,24 +141,20 @@ public:
 
     PlainClassData* GetClassData() const { return mClassData; }
 
-    // Reflection read: borrow-return the boxed value (the binding takes its own
-    // reference). Null Ptr if unset / out of range.
+    // Null Ptr if unset or out of range.
     Noesis::Ptr<Noesis::BaseComponent> GetBoxed(uint32_t index) const {
         if (index >= mValues.size()) return nullptr;
         return mValues[index];
     }
 
-    // Store a boxed value WITHOUT firing the Rust callback. Used by the Rust
-    // push path (noesis_plain_vm_set_value) and internally by the binding
-    // writeback path (after which we additionally notify Rust).
+    // Does not call on_set and does not raise PropertyChanged.
     bool StoreBoxed(uint32_t index, Noesis::BaseComponent* value) {
         if (index >= mValues.size()) return false;
-        mValues[index] = Noesis::Ptr<Noesis::BaseComponent>(value);  // AddRefs
+        mValues[index] = Noesis::Ptr<Noesis::BaseComponent>(value);
         return true;
     }
 
-    // Reflection write (TwoWay binding pushed a value to the source): store it,
-    // then forward to Rust so the model author observes the UI edit.
+    // A TwoWay binding wrote to the source: store, then tell Rust.
     void SetFromBinding(uint32_t index, Noesis::BaseComponent* value) {
         if (!StoreBoxed(index, value)) return;
         if (mClassData && mClassData->on_set) {
@@ -187,7 +168,6 @@ public:
         }
     }
 
-    // From INotifyPropertyChanged.
     Noesis::PropertyChangedEventHandler& PropertyChanged() override {
         return mPropertyChanged;
     }
@@ -206,8 +186,6 @@ private:
     typedef Noesis::BaseComponent ParentClass;
     friend class Noesis::TypeClassCreator;
     static void StaticFillClassType(Noesis::TypeClassCreator& helper) {
-        // Register the INotifyPropertyChanged interface (with the correct
-        // this-pointer offset) so reflection-driven DynamicCast finds it.
         helper.Impl<RustPlainVm, Noesis::INotifyPropertyChanged>();
     }
 };
@@ -233,12 +211,9 @@ const Noesis::TypeClass* RustPlainVm::GetClassType() const {
 
 // ── RustPlainProperty ───────────────────────────────────────────────────────
 //
-// Custom TypeProperty whose accessors forward to the owning instance's boxed
-// value store. The `ptr` reflection passes is the source object pointer; since
-// RustPlainVm has BaseComponent as its first base (offset 0), it equals the
-// RustPlainVm*. Only the boxed accessors (GetComponent / SetComponent) are
-// exercised by the binding engine for a CLR-style source property; the raw
-// Get/GetContent paths are not used here, so they degrade safely.
+// Reflection passes `ptr` as the source object; BaseComponent is RustPlainVm's
+// first base (offset 0), so it is the RustPlainVm*. Bindings use only
+// GetComponent / SetComponent on a source property.
 
 class RustPlainProperty final: public Noesis::TypeProperty {
 public:
@@ -246,9 +221,7 @@ public:
         : TypeProperty(name, type), mIndex(index) {}
 
     void* GetContent(const void* /*ptr*/) const override {
-        // No stable address for a boxed-store value; the binding uses
-        // GetComponent instead. Returning null keeps any unexpected caller
-        // from reading a bogus offset.
+        // boxed values have no stable address
         return nullptr;
     }
 
@@ -292,8 +265,6 @@ public:
         void* out = nullptr;
         bool ok = mVtable.convert(
             mUserdata,
-            // ArrayRef<BaseComponent*>::Data() is `BaseComponent* const*`, which
-            // is exactly the `void* const*` the Rust vtable expects.
             reinterpret_cast<void* const*>(values.Data()),
             values.Size(),
             static_cast<const void*>(targetType),
@@ -301,6 +272,7 @@ public:
             &out);
         if (!ok) return false;
         if (out) {
+            // adopts the +1 Rust returned
             result = Noesis::Ptr<Noesis::BaseComponent>(*static_cast<Noesis::BaseComponent*>(out));
         } else {
             result.Reset();
@@ -358,8 +330,7 @@ extern "C" uint32_t noesis_plain_vm_register_property(
     void* token, const char* prop_name, uint32_t content_type) {
     if (!token || !prop_name) return UINT32_MAX;
     auto* cd = static_cast<PlainClassData*>(token);
-    // Properties must be fixed before instances exist (instances size their
-    // value store from the property count at BindClassData time).
+    // instances size their value store from the property count at creation
     if (cd->hasInstances) return UINT32_MAX;
 
     auto type = static_cast<noesis_plain_type>(content_type);
@@ -368,7 +339,7 @@ extern "C" uint32_t noesis_plain_vm_register_property(
 
     uint32_t index = static_cast<uint32_t>(cd->properties.size());
     auto* prop = new RustPlainProperty(Noesis::Symbol(prop_name), ct, index);
-    cd->typeClass->AddProperty(prop);  // TypeClass takes ownership
+    cd->typeClass->AddProperty(prop);
     cd->properties.push_back({prop, type});
     return index;
 }
@@ -378,8 +349,8 @@ extern "C" void* noesis_plain_vm_create_instance(void* token) {
     auto* cd = static_cast<PlainClassData*>(token);
     cd->hasInstances = true;
     auto* instance = new RustPlainVm();
-    instance->BindClassData(cd);  // +1 share of cd
-    // `new` started the BaseComponent at refcount 1. That IS the caller's +1.
+    instance->BindClassData(cd);
+    // refcount starts at 1: the caller's reference
     return static_cast<Noesis::BaseComponent*>(instance);
 }
 
@@ -395,7 +366,7 @@ extern "C" void* noesis_plain_vm_get_value(void* instance, uint32_t prop_index) 
     auto* vm = static_cast<RustPlainVm*>(static_cast<Noesis::BaseComponent*>(instance));
     Noesis::Ptr<Noesis::BaseComponent> v = vm->GetBoxed(prop_index);
     if (!v) return nullptr;
-    v->AddReference();  // +1 for the caller
+    v->AddReference();
     return v.GetPtr();
 }
 
@@ -461,7 +432,7 @@ extern "C" bool noesis_multi_binding_add_binding(void* multi_binding, void* bind
     if (!child) return false;
     Noesis::BindingCollection* bindings = mb->GetBindings();
     if (!bindings) return false;
-    bindings->Add(child);  // takes its own reference
+    bindings->Add(child);
     return true;
 }
 

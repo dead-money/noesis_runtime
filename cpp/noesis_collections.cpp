@@ -1,30 +1,14 @@
-// Data-binding bridge: ObservableCollection + boxing + DataContext / ItemsSource
-// wiring.
+// Rust data into XAML: ObservableCollection, string boxing, DataContext and
+// ItemsSource, plus visual/logical tree traversal, hit testing, NameScope,
+// alignment, thread affinity, and CollectionView current-item navigation.
 //
-// This is the "drive XAML from Rust data" surface. Three cooperating pieces:
+// ObservableCollection<BaseComponent> raises CollectionChanged on every
+// mutation, so a bound ItemsControl regenerates its containers. Items are
+// BaseComponent*: boxed values or view-model instances from
+// noesis_classes.cpp.
 //
-//   * ObservableCollection<BaseComponent>: Noesis's concrete observable list.
-//     It already implements INotifyCollectionChanged + INotifyPropertyChanged,
-//     so once it's bound to an ItemsControl.ItemsSource, every Add/Insert/
-//     Remove/Clear from Rust raises CollectionChanged and the control
-//     regenerates its containers. We just expose CRUD over the C ABI.
-//
-//   * Boxing: list items and DataContext values are `BaseComponent*`. The
-//     most common item is a string; `noesis_box_string` wraps a C string
-//     in a `BoxedValue<String>` so a `DataTemplate` with `{Binding}` (the whole
-//     item) renders it. Reference-typed view models (the synthetic classes from
-//     noesis_classes.cpp) are passed through directly.
-//
-//   * DataContext / ItemsSource setters: the two DependencyObject hooks a
-//     binding-driven workflow needs: point an element's DataContext at a Rust
-//     view model, or an ItemsControl's ItemsSource at an ObservableCollection.
-//
-// Bindings themselves are authored in XAML (`{Binding Path}`); this bridge is
-// the runtime plumbing that makes those bindings resolve against Rust-owned
-// data. A synthetic-class instance (a DependencyObject with registered DPs)
-// used as a DataContext is a fully functional binding source: writing a DP
-// from Rust raises the DependencyObject change notification the binding engine
-// observes, so the bound element updates on the next View::Update.
+// Returned component pointers are +1 (release via
+// noesis_base_component_release) unless marked borrowed.
 
 #include "noesis_shim.h"
 
@@ -61,10 +45,8 @@
 
 namespace {
 
-// Hand a freshly-created (or borrowed) BaseComponent out across the C ABI with
-// exactly one reference owned by the caller, balanced by
-// `noesis_base_component_release`. Safe to call on a refcount-0 `new`'d
-// object (bumps 0→1) or on a live borrowed object (bumps N→N+1).
+// Returns `c` with a +1 owned by the caller. When `c` came from a local Ptr,
+// that Ptr releases its own reference.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
     c->AddReference();
@@ -75,9 +57,6 @@ using ObsColl = Noesis::ObservableCollection<Noesis::BaseComponent>;
 
 ObsColl* as_collection(void* p) {
     if (!p) return nullptr;
-    // The collection is created by us as an ObservableCollection<BaseComponent>;
-    // a plain static_cast through BaseComponent is correct, but DynamicCast
-    // keeps us honest if a caller passes the wrong pointer.
     return Noesis::DynamicCast<ObsColl*>(static_cast<Noesis::BaseComponent*>(p));
 }
 
@@ -86,8 +65,7 @@ ObsColl* as_collection(void* p) {
 // ── Boxing ──────────────────────────────────────────────────────────────────
 
 extern "C" void* noesis_box_string(const char* text) {
-    // Box(const char*) copies the bytes into a Noesis::String inside a
-    // BoxedValue<String>; the caller's `text` can go away after this call.
+    // Copies `text`; the caller may free it afterwards.
     Noesis::Ptr<Noesis::BoxedValue> boxed = Noesis::Boxing::Box(text ? text : "");
     return handout(boxed.GetPtr());
 }
@@ -150,8 +128,7 @@ extern "C" int32_t noesis_observable_collection_count(void* collection) {
     return coll ? coll->Count() : -1;
 }
 
-// Borrowed (no +1) pointer to the item at `index`, or null. The collection
-// owns the reference; copy / AddReference if you need to keep it.
+// Borrowed; null when out of range.
 extern "C" void* noesis_observable_collection_get(void* collection, uint32_t index) {
     ObsColl* coll = as_collection(collection);
     if (!coll || index >= (uint32_t)coll->Count()) return nullptr;
@@ -165,13 +142,12 @@ extern "C" bool noesis_framework_element_set_data_context(void* element, void* c
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!fe) return false;
-    // SetDataContext takes a borrowed pointer and stores its own ref; passing
-    // null clears it.
+    // Null clears.
     fe->SetDataContext(static_cast<Noesis::BaseComponent*>(context));
     return true;
 }
 
-// Borrowed (no +1) pointer to the element's current DataContext, or null.
+// Borrowed.
 extern "C" void* noesis_framework_element_get_data_context(void* element) {
     if (!element) return nullptr;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
@@ -179,35 +155,22 @@ extern "C" void* noesis_framework_element_get_data_context(void* element) {
     return fe ? fe->GetDataContext() : nullptr;
 }
 
-// Read a `uint64` field named `prop_name` off `element`'s DataContext, the
-// per-row identity hook for event routing: given a BORROWED event-source element
-// pointer (e.g. `RoutedEventArgs::source`, valid only for the callback), pull the
-// row identity (a packed Entity's bits) straight off the bound row view model
-// without ever re-wrapping the borrowed pointer into an owning handle.
-//
-// `element`'s DataContext is read borrowed (FrameworkElement::GetDataContext does
-// not +1), and so is the row object; nothing here takes or drops a reference.
-// Two row-object shapes are supported, tried in order:
-//   1. A DependencyObject (the synthetic ClassInstance built via ClassBuilder)
-//      carrying a real `uint64` DP — read with the typed GetValue.
-//   2. Any reflected object (the plain-VM PlainInstance) exposing the field as a
-//      CLR-style property whose boxed value is a BoxedValue<uint64_t>.
-// Writes `*out` and returns true only when a uint64 field of that name is found;
-// returns false (leaving `*out` untouched) otherwise.
+// Reads a uint64 field off `element`'s DataContext, e.g. a row id from the
+// borrowed source element of a routed event. Takes no references. Tries a
+// uint64 DP (ClassBuilder instances), then a reflected property boxing a
+// uint64 (plain view models). False, with `*out` untouched, if neither exists.
 extern "C" bool noesis_element_datacontext_get_u64(
     void* element, const char* prop_name, uint64_t* out) {
     if (!element || !prop_name || !out) return false;
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!fe) return false;
-    // Borrowed (no +1): the DataContext is owned by the element / its tree.
     Noesis::BaseComponent* dc = fe->GetDataContext();
     if (!dc) return false;
 
     Noesis::Symbol sym(prop_name, Noesis::Symbol::NullIfNotFound());
     if (sym.IsNull()) return false;
 
-    // 1. DependencyObject + real uint64 DP (the ClassBuilder row object).
     if (auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(dc)) {
         const Noesis::DependencyProperty* dp =
             Noesis::FindDependencyProperty(d->GetClassType(), sym);
@@ -217,9 +180,7 @@ extern "C" bool noesis_element_datacontext_get_u64(
         }
     }
 
-    // 2. Generic reflected (CLR-style) property: boxed BoxedValue<uint64_t>
-    //    (the plain-VM row object). `GetComponent` returns a borrowed/locally
-    //    owned Ptr; unbox before it drops.
+    // Unbox before `boxed` drops.
     if (const auto* tc = Noesis::DynamicCast<const Noesis::TypeClass*>(dc->GetClassType())) {
         if (const Noesis::TypeProperty* prop = tc->FindProperty(sym)) {
             Noesis::Ptr<Noesis::BaseComponent> boxed = prop->GetComponent(dc);
@@ -244,8 +205,7 @@ extern "C" bool noesis_items_control_set_items_source(void* element, void* items
     return true;
 }
 
-// Number of items the ItemsControl currently sees (its `Items` view over the
-// bound ItemsSource). -1 if `element` is not an ItemsControl.
+// Count of the control's Items view. -1 if `element` is not an ItemsControl.
 extern "C" int32_t noesis_items_control_items_count(void* element) {
     if (!element) return -1;
     auto* ic = Noesis::DynamicCast<Noesis::ItemsControl*>(
@@ -255,13 +215,9 @@ extern "C" int32_t noesis_items_control_items_count(void* element) {
     return items ? items->Count() : 0;
 }
 
-// Number of *realized* item containers the generator has materialized. Unlike
-// `items_count` (a live passthrough to the source), this only grows when the
-// generator actually regenerates. For a source mutated after the first
-// layout, that requires INotifyCollectionChanged to have fired and invalidated
-// measure. So a realized count that tracks post-mutation collection size is a
-// genuine proof that change notification reached the control. -1 if `element`
-// is not an ItemsControl.
+// Count of realized item containers. Unlike items_count, this changes only
+// after the generator regenerates, so it shows whether collection-change
+// notification reached the control. -1 if `element` is not an ItemsControl.
 extern "C" int32_t noesis_items_control_realized_count(void* element) {
     if (!element) return -1;
     auto* ic = Noesis::DynamicCast<Noesis::ItemsControl*>(
@@ -280,13 +236,8 @@ extern "C" int32_t noesis_items_control_realized_count(void* element) {
 
 // ── Visual / logical tree traversal ─────────────────────────────────────────
 //
-// VisualTreeHelper operates on `Visual*`. Children may be plain Visuals, not
-// FrameworkElements, so these return raw +1 BaseComponent* handles without
-// null-filtering non-FE nodes (filtering would punch holes in indexed
-// traversal). The Rust `FrameworkElement` handle is just an owned
-// BaseComponent* whose FE-specific methods DynamicCast internally, so handing
-// back a Visual* is fine. All owning returns AddReference() once for the
-// caller (matching `find_name`); the Rust drop releases.
+// Visual children may not be FrameworkElements; they are returned unfiltered
+// so indexed traversal has no holes.
 
 extern "C" uint32_t noesis_visual_children_count(void* element) {
     if (!element) return 0;
@@ -315,8 +266,7 @@ extern "C" void* noesis_visual_parent(void* element) {
     return static_cast<Noesis::BaseComponent*>(parent);
 }
 
-// Hit-test a single point in `element`-local DIPs. Returns the topmost hit
-// Visual* (+1) or null when nothing was hit / `element` is not a Visual.
+// `x`/`y` in `element`-local DIPs. Topmost hit (+1), or null.
 extern "C" void* noesis_visual_hit_test(void* element, float x, float y) {
     if (!element) return nullptr;
     auto* v = Noesis::DynamicCast<Noesis::Visual*>(static_cast<Noesis::BaseComponent*>(element));
@@ -327,12 +277,9 @@ extern "C" void* noesis_visual_hit_test(void* element, float x, float y) {
     return static_cast<Noesis::BaseComponent*>(result.visualHit);
 }
 
-// Filtered hit test: the callback overload of VisualTreeHelper::HitTest. As the
-// tree is walked, `filter` is invoked for each visual (its return selects which
-// branches to descend), and `result` for each hit (its return continues or
-// stops the walk). The visual pointers handed to the callbacks are BORROWED and
-// valid only for that call; Rust AddRef's (via base_component_add_reference) if
-// it wants to keep one. Return codes are the raw Noesis enum values.
+// `filter` picks which branches to descend; `result` sees each hit and may stop
+// the walk. Callback visuals are borrowed for that call only. Return codes are
+// raw HitTestFilterBehavior / HitTestResultBehavior values.
 namespace {
 struct HitTestBridge {
     noesis_hit_filter_fn filter;
@@ -378,9 +325,9 @@ extern "C" void* noesis_framework_element_logical_parent(void* element) {
 }
 
 // ── RenderTransform origin ──────────────────────────────────────────────────
-// UIElement::Get/SetRenderTransformOrigin: the (0..1, 0..1) relative pivot the
-// RenderTransform rotates/scales around. `out_x`/`out_y` are written 0 when the
-// element is not a UIElement; the setter is a no-op then.
+//
+// Relative pivot in 0..1. The getter writes 0 and the setter returns false when
+// `element` is not a UIElement.
 
 extern "C" void noesis_ui_element_get_render_transform_origin(
     void* element, float* out_x, float* out_y)
@@ -408,18 +355,13 @@ extern "C" bool noesis_ui_element_set_render_transform_origin(
 }
 
 // ── Standalone NameScope ────────────────────────────────────────────────────
-// The freestanding NameScope object, distinct from the per-FrameworkElement
-// RegisterName path. All component pointers handed back are +1 (release via
-// noesis_base_component_release).
 
-// Create an empty NameScope (+1).
 extern "C" void* noesis_name_scope_create() {
     Noesis::Ptr<Noesis::NameScope> scope = Noesis::MakePtr<Noesis::NameScope>();
     return scope.GiveOwnership();
 }
 
-// Attached NameScope on `element` (NameScope::GetNameScope), +1, or NULL if the
-// element carries none / is not a DependencyObject.
+// Null if the element has none or is not a DependencyObject.
 extern "C" void* noesis_name_scope_get(void* element) {
     if (!element) return nullptr;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
@@ -431,8 +373,7 @@ extern "C" void* noesis_name_scope_get(void* element) {
     return static_cast<Noesis::BaseComponent*>(scope);
 }
 
-// Attach `scope` (may be NULL to clear) as `element`'s NameScope. Returns false
-// if `element` is not a DependencyObject.
+// Null `scope` clears. False if `element` is not a DependencyObject.
 extern "C" bool noesis_name_scope_set(void* element, void* scope) {
     if (!element) return false;
     auto* d = Noesis::DynamicCast<Noesis::DependencyObject*>(
@@ -442,8 +383,6 @@ extern "C" bool noesis_name_scope_set(void* element, void* scope) {
     return true;
 }
 
-// INameScope operations on a NameScope*. find_name returns +1 or NULL, or NULL
-// if `scope` is not a NameScope.
 extern "C" void* noesis_name_scope_find_name(void* scope, const char* name) {
     if (!scope || !name) return nullptr;
     auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
@@ -479,9 +418,7 @@ extern "C" void noesis_name_scope_update_name(void* scope, const char* name, voi
     s->UpdateName(name, static_cast<Noesis::BaseComponent*>(obj));
 }
 
-// Reverse lookup: the registered name of `obj`, or NULL (also NULL if `scope`
-// is not a NameScope). The returned pointer is owned by the NameScope
-// (borrowed); copy it out before mutating the scope.
+// Borrowed from the scope; copy it before mutating the scope.
 extern "C" const char* noesis_name_scope_find_object(void* scope, void* obj) {
     if (!scope || !obj) return nullptr;
     auto* s = Noesis::DynamicCast<Noesis::NameScope*>(
@@ -490,8 +427,7 @@ extern "C" const char* noesis_name_scope_find_object(void* scope, void* obj) {
     return s->FindObject(static_cast<Noesis::BaseComponent*>(obj));
 }
 
-// Enumerate every (name, object) pair. `cb` receives borrowed pointers valid
-// only for that call. No-op on NULL scope/cb or if `scope` is not a NameScope.
+// `cb` receives pointers borrowed for that call only.
 extern "C" void noesis_name_scope_enum(
     void* scope, noesis_name_scope_enum_fn cb, void* userdata)
 {
@@ -524,9 +460,7 @@ extern "C" void* noesis_logical_child(void* element, uint32_t index) {
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!fe || index >= Noesis::LogicalTreeHelper::GetChildrenCount(fe)) return nullptr;
-    // GetChild returns a Ptr<BaseComponent> already at +1. The local Ptr
-    // releases at scope end, so AddReference() the raw pointer here to leave
-    // the caller a net +1 after the Ptr destructs.
+    // The local Ptr releases at scope end; AddReference leaves the caller +1.
     Noesis::Ptr<Noesis::BaseComponent> child = Noesis::LogicalTreeHelper::GetChild(fe, index);
     if (!child) return nullptr;
     child->AddReference();
@@ -538,8 +472,6 @@ extern "C" void* noesis_framework_element_template_child(void* element, const ch
     auto* fe = Noesis::DynamicCast<Noesis::FrameworkElement*>(
         static_cast<Noesis::BaseComponent*>(element));
     if (!fe) return nullptr;
-    // GetTemplateChild returns a non-owning raw pointer. AddReference() to
-    // hand the caller a +1, matching the rest of this surface.
     Noesis::BaseComponent* child = fe->GetTemplateChild(name);
     if (!child) return nullptr;
     child->AddReference();
@@ -548,11 +480,9 @@ extern "C" void* noesis_framework_element_template_child(void* element, const ch
 
 // ── HorizontalAlignment / VerticalAlignment ─────────────────────────────────
 //
-// A bespoke path: the generic INT32 tag won't match the enum's reflected Type,
-// so go through the FrameworkElement accessors directly. Values mirror
-// `Noesis::HorizontalAlignment` / `VerticalAlignment` (Left/Center/Right/
-// Stretch, Top/Center/Bottom/Stretch; 0..=3). Getters return -1 if `element`
-// is not a FrameworkElement; setters no-op.
+// Enum-typed DPs, so the generic Int32 path can't set them. Values are
+// Left/Center/Right/Stretch and Top/Center/Bottom/Stretch (0..=3). Getters
+// return -1 if `element` is not a FrameworkElement; setters no-op.
 
 extern "C" void noesis_framework_element_set_halign(void* element, int32_t value) {
     if (!element) return;
@@ -588,8 +518,7 @@ extern "C" int32_t noesis_framework_element_get_valign(void* element) {
 
 // ── Thread affinity / DispatcherObject ──────────────────────────────────────
 //
-// Only the affinity queries are exposed: NsGui has no public BeginInvoke
-// surface (cross-thread marshalling would need IView timers).
+// Queries only: NsGui has no public BeginInvoke.
 
 extern "C" bool noesis_dependency_object_check_access(void* obj) {
     if (!obj) return false;
@@ -609,11 +538,8 @@ extern "C" uint32_t noesis_dependency_object_thread_id(void* obj) {
 
 // ── ICollectionView current-item navigation ──────────────────────────────────
 //
-// A CollectionViewSource wraps a source list and lazily produces a
-// CollectionView (an ICollectionView) over it. The view tracks a *current item*,
-// the record-management surface WPF/Noesis controls (Selector etc.) bind to.
-// Sort/filter/group remain a real SDK limitation (no programmatic SortDescription
-// /Filter delegate), so only current-item navigation + Refresh are exposed.
+// Only current-item navigation and Refresh: the SDK has no programmatic
+// SortDescription or Filter delegate.
 
 namespace {
 
@@ -622,16 +548,9 @@ Noesis::CollectionView* as_collection_view(void* p) {
     return Noesis::DynamicCast<Noesis::CollectionView*>(static_cast<Noesis::BaseComponent*>(p));
 }
 
-// Adapter between CollectionView::CurrentChanged() (an EventHandler, i.e.
-// Delegate<void(BaseComponent*, const EventArgs&)>) and the C ABI callback.
-// Holds a +1 ref on the view so the subscription stays valid; `+=` in subscribe
-// is balanced by `-=` in unsubscribe.
-//
-// Ownership + reentrancy mirror the event subscriptions in noesis_events.cpp:
-// the Rust userdata box is donated (freed exactly once, in the destructor, via
-// mFree) and destruction is deferred while a callback is on the dispatch stack,
-// so dropping the subscription from inside its own CurrentChanged callback is
-// safe. Thread-affine to the view-driving thread, so a plain bool suffices.
+// Holds a +1 on the view and owns the Rust userdata box (freed in the
+// destructor). Deletion is deferred while a callback is on the stack, so Rust
+// may unsubscribe from inside its own callback. View thread only, no atomics.
 class RustCurrentChangedHandler {
 public:
     RustCurrentChangedHandler(noesis_collection_view_changed_fn cb, void* userdata,
@@ -651,15 +570,13 @@ public:
     void OnChanged(Noesis::BaseComponent* /*sender*/, const Noesis::EventArgs& /*args*/) {
         mDispatchDepth++;
         if (mCb) mCb(mUserdata);
-        // Only the outermost dispatch frame may delete (the callback may re-raise
-        // CurrentChanged and re-enter this method).
+        // Outermost frame only: the callback may re-raise CurrentChanged.
         if (--mDispatchDepth == 0 && mPendingDelete) {
-            delete this;  // deferred teardown from an unsubscribe during dispatch
+            delete this;
         }
     }
 
-    // True => a callback is on the stack, so deletion was deferred (OnChanged's
-    // outermost frame deletes); the caller must NOT delete.
+    // True: OnChanged's outermost frame deletes; the caller must not.
     bool deferDeleteIfDispatching() {
         if (mDispatchDepth > 0) {
             mPendingDelete = true;
@@ -674,22 +591,19 @@ private:
     noesis_collection_view_changed_fn mCb;
     void* mUserdata;
     noesis_subscription_free_fn mFree;
-    Noesis::CollectionView* mView;  // raw + manual AddRef/Release, see ctor/dtor.
+    Noesis::CollectionView* mView;
     uint32_t mDispatchDepth = 0;
     bool mPendingDelete = false;
 };
 
 }  // namespace
 
-// Create an empty CollectionViewSource (+1 ref for the caller).
 extern "C" void* noesis_collection_view_source_create(void) {
     Noesis::Ptr<Noesis::CollectionViewSource> cvs = *new Noesis::CollectionViewSource();
     return handout(cvs.GetPtr());
 }
 
-// Point the source at `source` (a borrowed list, e.g. an ObservableCollection);
-// the CollectionViewSource (re)builds its view. Pass null to clear. false if
-// `cvs` is not a CollectionViewSource.
+// `source` is borrowed; null clears.
 extern "C" bool noesis_collection_view_source_set_source(void* cvs, void* source) {
     auto* s = Noesis::DynamicCast<Noesis::CollectionViewSource*>(
         static_cast<Noesis::BaseComponent*>(cvs));
@@ -698,15 +612,9 @@ extern "C" bool noesis_collection_view_source_set_source(void* cvs, void* source
     return true;
 }
 
-// +1-owned (AddRef'd) CollectionView currently associated with `cvs`
-// (CollectionViewSource::GetView), or null if `cvs` is not a CollectionViewSource
-// / has no source. Set a Source first.
-//
-// A CollectionViewSource only eagerly materializes its ViewProperty once it is
-// hosted (XAML-parsed / initialized in a tree); a standalone code-built one
-// leaves GetView() null. So when GetView() is null we build a CollectionView
-// directly over the source list (which is exactly what the hosted path would
-// produce). The current-item navigation surface is identical either way.
+// Null if `cvs` has no list source. A code-built CollectionViewSource that was
+// never hosted in a tree leaves GetView() null, so a CollectionView is built
+// over the source list instead; navigation behaves the same.
 extern "C" void* noesis_collection_view_source_get_view(void* cvs) {
     auto* s = Noesis::DynamicCast<Noesis::CollectionViewSource*>(
         static_cast<Noesis::BaseComponent*>(cvs));
@@ -718,20 +626,18 @@ extern "C" void* noesis_collection_view_source_get_view(void* cvs) {
     return cv.GiveOwnership();
 }
 
-// Number of records in the view, or -1 if `view` is not a CollectionView.
+// -1 if `view` is not a CollectionView.
 extern "C" int32_t noesis_collection_view_count(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->Count() : -1;
 }
 
-// Ordinal position of the CurrentItem, or INT32_MIN if not a CollectionView.
-// (Noesis uses -1 for "before first" and Count for "after last".)
+// -1 is before first, Count is after last; INT32_MIN if not a CollectionView.
 extern "C" int32_t noesis_collection_view_current_position(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     return cv ? cv->CurrentPosition() : INT32_MIN;
 }
 
-// +1-owned (AddRef'd) CurrentItem, or null if there is none / not a view.
 extern "C" void* noesis_collection_view_current_item(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     if (!cv) return nullptr;
@@ -774,15 +680,13 @@ extern "C" bool noesis_collection_view_move_current_to_position(void* view, int3
     return cv ? cv->MoveCurrentToPosition(position) : false;
 }
 
-// Recreate the view (ICollectionView::Refresh).
 extern "C" void noesis_collection_view_refresh(void* view) {
     Noesis::CollectionView* cv = as_collection_view(view);
     if (cv) cv->Refresh();
 }
 
-// Subscribe `cb` to the view's CurrentChanged event. Returns an opaque handler
-// token (release via noesis_collection_view_unsubscribe_current_changed), or
-// null on a non-CollectionView handle / null cb.
+// Returns a token for noesis_collection_view_unsubscribe_current_changed, or
+// null if `view` is not a CollectionView or `cb` is null.
 extern "C" void* noesis_collection_view_subscribe_current_changed(
     void* view, noesis_collection_view_changed_fn cb, void* userdata,
     noesis_subscription_free_fn free_handler) {

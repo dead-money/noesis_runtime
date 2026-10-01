@@ -36,12 +36,8 @@ extern "C" void noesis_set_log_handler(noesis_log_fn cb, void* userdata)
     Noesis::SetLogHandler(cb ? log_trampoline : nullptr);
 }
 
-// ── Inspector / hot-reload toggles + queries ────────────────────────────────
-//
-// All GUI:: free calls. The Disable* trio MUST run before GUI::Init (i.e.
-// before noesis_init); the query + pump are runtime calls. On a Release
-// dylib the Inspector is compiled out, so these degrade to no-ops /
-// always-false. See the header for the full reality check.
+// The Disable* calls only take effect before noesis_init. Release SDK builds
+// compile the Inspector out, so these are no-ops / always-false there.
 
 extern "C" void noesis_disable_hot_reload(void)
 {
@@ -73,20 +69,16 @@ extern "C" void noesis_init(void)
     Noesis::Init();
 }
 
-// Forward declarations for the per-subsystem shutdown sweeps. Defined in
-// noesis_classes.cpp / noesis_markup.cpp respectively.
+// Defined in noesis_classes.cpp, noesis_markup.cpp and noesis_plain_vm.cpp.
 extern "C" void noesis_classes_force_free_at_shutdown(void);
 extern "C" void noesis_markup_extensions_force_free_at_shutdown(void);
 extern "C" void noesis_plain_vm_force_free_at_shutdown(void);
 
 extern "C" void noesis_shutdown(void)
 {
-    // Order matters: Noesis::Shutdown must run first to destroy every
-    // live DependencyObject (which fires their refcount-driven Release
-    // calls into our trampolines, naturally freeing most handler boxes).
-    // The sweeps then defensively free any handler boxes whose owning
-    // instances bypassed normal teardown, a belt-and-suspenders for
-    // orphaned-View paths that never `drop`-ed before shutdown.
+    // Noesis::Shutdown first: destroying the remaining objects frees most
+    // handler boxes through the normal release path. The sweeps then free
+    // boxes whose instances were never released (e.g. a leaked View).
     Noesis::Shutdown();
     noesis_classes_force_free_at_shutdown();
     noesis_markup_extensions_force_free_at_shutdown();

@@ -1,8 +1,5 @@
-//! `find_name` + `subscribe_click` integration: loads a Button XAML, subscribes
-//! a Rust click callback, drives a synthetic click, asserts the callback fires once.
-//!
-//! Run with `NOESIS_SDK_DIR` set:
-//!   `cargo test -p noesis_runtime --test events -- --nocapture`
+//! `find_name` and `subscribe_click`: a synthetic click on a Button fires the
+//! Rust callback exactly once.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -46,7 +43,7 @@ fn click_event_fires_callback() {
     let counter = Arc::new(AtomicU32::new(0));
 
     {
-        // Every owning wrapper must drop before shutdown().
+        // Every owning wrapper drops before shutdown().
         let mut bytes = HashMap::new();
         bytes.insert("scene.xaml".to_string(), BUTTON_XAML.as_bytes().to_vec());
         let provider = InMem { bytes };
@@ -55,9 +52,9 @@ fn click_event_fires_callback() {
         let element =
             FrameworkElement::load("scene.xaml").expect("load_xaml returned None for scene.xaml");
 
-        // Tests both paths: pre-view (raw element) and post-view via
-        // View::content(). Post-view is the plugin's pattern: View::create
-        // consumes the element, so subscriptions must wire after.
+        // find_name works both before View::create and after, via
+        // View::content(). The view consumes the element, so subscriptions are
+        // usually wired after.
         let pre_view = element
             .find_name("MyButton")
             .expect("pre-view find_name returned None");
@@ -90,7 +87,7 @@ fn click_event_fires_callback() {
         );
         drop(grid_handle);
 
-        // first Update builds the render tree; hit-testing needs it
+        // The first update builds the render tree that hit testing needs.
         assert!(view.update(0.0), "first Update should report change");
 
         let _ = view.mouse_move(100, 100);
@@ -100,7 +97,7 @@ fn click_event_fires_callback() {
         let _ = view.mouse_button_up(100, 100, MouseButton::Left);
         let _ = view.update(0.048);
 
-        // drop before view: C++ -= must happen while the button is still alive
+        // Unsubscribe while the button is still alive.
         drop(click_sub);
         view.deactivate();
         drop(view);

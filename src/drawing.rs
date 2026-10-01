@@ -1,29 +1,17 @@
-//! Immediate-mode drawing via `DrawingContext`.
+//! Immediate-mode drawing from a custom element's render callback.
 //!
-//! In Noesis 3.2.13 a [`DrawingContext`] has a private constructor (friend
-//! `UIElement`) and is delivered ONLY to `UIElement::OnRender`. There is no
-//! public `DrawingVisual`/`RenderOpen` and no `Drawing`/`DrawingGroup` object
-//! model. So immediate-mode drawing is reachable exactly one way: override
-//! `OnRender` on a custom element. This module provides:
+//! Noesis hands out a `DrawingContext` only to `UIElement::OnRender`; it has
+//! no `DrawingVisual` or `Drawing` object model. To draw, register a custom
+//! class with a [`RenderHandler`](crate::classes::RenderHandler) via
+//! [`ClassBuilder::set_render`](crate::classes::ClassBuilder::set_render). The
+//! handler receives a [`DrawingContext`] for the duration of the call.
 //!
-//! * [`Pen`]: a code-built `Noesis::Pen` (brush + thickness + line caps /
-//!   join), the stroke descriptor several draw calls need. Owning handle with a
-//!   `+1` reference released on [`Drop`], like the brushes in [`crate::brushes`].
-//!   Read-back getters ([`Pen::thickness`], [`Pen::line_caps`], ...) re-read the
-//!   live object.
-//! * [`DrawingContext::draw_geometry`] / [`DrawingContext::push_clip`] take any
-//!   [`Geometry`]. The code-built geometry types
-//!   ([`RectangleGeometry`], [`PathGeometry`](crate::geometry::PathGeometry),
-//!   [`EllipseGeometry`](crate::geometry::EllipseGeometry), ...) live in
-//!   [`crate::geometry`]; the trait and `RectangleGeometry` are re-exported here
-//!   for convenience.
-//! * [`DrawingContext`]: a **borrowed** handle over the `DrawingContext*`
-//!   handed to a [`crate::classes::RenderHandler`]. Valid only for the duration
-//!   of the render callback; the draw / push / pop methods forward straight into
-//!   Noesis.
-//!
-//! Wire a render handler with
-//! [`ClassBuilder::set_render`](crate::classes::ClassBuilder::set_render).
+//! * [`DrawingContext`] draws lines, rectangles, ellipses, geometry, text,
+//!   meshes, and images, and pushes clips, transforms, and blending modes.
+//! * [`Pen`] describes a stroke: brush, thickness, caps, joins, and dashes.
+//! * Geometry types live in [`crate::geometry`]; [`Geometry`] and
+//!   [`RectangleGeometry`] are re-exported here, along with [`PenLineCap`] and
+//!   [`PenLineJoin`] from [`crate::shapes`].
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -41,14 +29,12 @@ use crate::ffi::{
     noesis_pen_set_dash_style, noesis_pen_set_line_caps, noesis_pen_set_line_join,
     noesis_pen_set_thickness,
 };
-// Canonical types live in `geometry`; re-exported so the draw / clip calls here
-// resolve them without an extra import.
 pub use crate::geometry::{Geometry, RectangleGeometry};
 pub use crate::shapes::{PenLineCap, PenLineJoin};
 use crate::transforms::Transform;
 
-/// How drawn content is mixed with what's behind it. Mirrors
-/// `Noesis::BlendingMode`.
+/// How drawn content combines with what is already behind it. Used with
+/// [`DrawingContext::push_blending_mode`].
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -59,10 +45,12 @@ pub enum BlendingMode {
     Additive = 3,
 }
 
-// ── Pen ──────────────────────────────────────────────────────────────────────
-
-/// A code-built `Noesis::Pen`: the stroke (outline) descriptor (a [`Brush`] +
-/// thickness + line caps / join) that the `Draw*` calls stroke with.
+/// A `Noesis::Pen`: how [`DrawingContext`] strokes outlines. Combines a
+/// [`Brush`], a thickness, line caps and join, and an optional dash pattern.
+///
+/// Getters read the live Noesis object. Setters return `false` only if the
+/// handle fails its type check, which doesn't happen for a live `Pen`. Holds
+/// one reference, released on drop.
 pub struct Pen {
     ptr: NonNull<c_void>,
 }
@@ -71,9 +59,8 @@ pub struct Pen {
 unsafe impl Send for Pen {}
 
 impl Pen {
-    /// Create a pen of `thickness` painted by `brush` (any [`Brush`]). Noesis
-    /// takes its own reference to the brush, so the brush handle may be dropped
-    /// afterwards.
+    /// Create a pen of `thickness` DIPs painted with `brush`. The pen keeps its
+    /// own reference to the brush, so you can drop the brush handle.
     ///
     /// # Panics
     ///
@@ -89,7 +76,8 @@ impl Pen {
         }
     }
 
-    /// Create a pen of `thickness` with no brush set yet.
+    /// Create a pen of `thickness` DIPs with no brush. It strokes nothing until
+    /// you call [`Self::set_brush`].
     ///
     /// # Panics
     ///
@@ -103,21 +91,21 @@ impl Pen {
         }
     }
 
-    /// Raw `Noesis::Pen*`. Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::Pen*`, valid while `self` is alive.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Point the pen at `brush` (Noesis takes its own reference).
+    /// Paint the stroke with `brush`. The pen keeps its own reference to it.
     #[must_use = "a false return means the property was not set (unknown name / type mismatch / read-only)"]
     pub fn set_brush(&mut self, brush: &dyn Brush) -> bool {
         // SAFETY: self.ptr is a live Pen*; brush_raw() is a live Brush*.
         unsafe { noesis_pen_set_brush(self.ptr.as_ptr(), brush.brush_raw()) }
     }
 
-    /// Borrowed `Noesis::Brush*` currently set on the pen, or `None`. The
-    /// pointer has no `+1` reference; do not release it.
+    /// The pen's brush as a borrowed `Noesis::Brush*`, or `None`. Don't
+    /// release it.
     #[must_use]
     pub fn brush(&self) -> Option<NonNull<c_void>> {
         // SAFETY: self.ptr is a live Pen*; the returned pointer is borrowed.
@@ -132,7 +120,7 @@ impl Pen {
         unsafe { noesis_pen_set_thickness(self.ptr.as_ptr(), thickness) }
     }
 
-    /// Read the stroke thickness back from the live object.
+    /// The stroke thickness, in DIPs.
     #[must_use]
     pub fn thickness(&self) -> f32 {
         let mut out = 0.0f32;
@@ -150,7 +138,7 @@ impl Pen {
         }
     }
 
-    /// Read `(start, end, dash)` line caps back from the live object.
+    /// The `(start, end, dash)` line caps.
     #[must_use]
     pub fn line_caps(&self) -> Option<(PenLineCap, PenLineCap, PenLineCap)> {
         let mut out = [0i32; 3];
@@ -173,7 +161,7 @@ impl Pen {
         unsafe { noesis_pen_set_line_join(self.ptr.as_ptr(), join as i32, miter_limit) }
     }
 
-    /// Read `(join, miter_limit)` back from the live object.
+    /// The `(join, miter_limit)`.
     #[must_use]
     pub fn line_join(&self) -> Option<(PenLineJoin, f32)> {
         let mut join = 0i32;
@@ -183,16 +171,9 @@ impl Pen {
         ok.then(|| (join_from_i32(join), miter))
     }
 
-    /// Set a typed dash pattern on this pen, building a `Noesis::DashStyle` from
-    /// `dashes` (alternating dash / gap lengths, in multiples of the pen
-    /// thickness) and `offset` (how far into the pattern the stroke begins).
-    /// Passing an empty `dashes` slice clears the dash style, restoring a solid
-    /// stroke.
-    ///
-    /// This is the typed `&[f32]` companion to the shape stroke-dash string path
-    /// ([`Shape::set_stroke_dash_array`](crate::shapes::Shape::set_stroke_dash_array)):
-    /// here the lengths cross the FFI as a `f32` array and Noesis's
-    /// space-separated `DashStyle.Dashes` string is built natively.
+    /// Set the dash pattern. `dashes` alternates dash and gap lengths, in
+    /// multiples of the pen thickness; `offset` is how far into the pattern the
+    /// stroke starts. An empty `dashes` restores a solid stroke.
     pub fn set_dash_style(&mut self, dashes: &[f32], offset: f32) -> bool {
         let count = u32::try_from(dashes.len()).unwrap_or(u32::MAX);
         // SAFETY: self.ptr is a live Pen*; `dashes`/`count` describe a valid
@@ -200,8 +181,7 @@ impl Pen {
         unsafe { noesis_pen_set_dash_style(self.ptr.as_ptr(), dashes.as_ptr(), count, offset) }
     }
 
-    /// Read the dash `offset` back from the live object, or `None` if no dash
-    /// style is set (a solid stroke).
+    /// The dash offset, or `None` for a solid stroke.
     #[must_use]
     pub fn dash_offset(&self) -> Option<f32> {
         let mut out = 0.0f32;
@@ -210,9 +190,8 @@ impl Pen {
         ok.then_some(out)
     }
 
-    /// Read the dash pattern back from the live object as a typed `Vec<f32>`,
-    /// re-parsed from Noesis's `DashStyle.Dashes` string. `None` if no dash
-    /// style is set.
+    /// The dash pattern, or `None` for a solid stroke. Parsed from Noesis's
+    /// string form, so values may differ from what you set by float rounding.
     #[must_use]
     pub fn dashes(&self) -> Option<Vec<f32>> {
         // SAFETY: self.ptr is a live Pen*; the returned pointer (if non-null) is
@@ -257,30 +236,28 @@ fn join_from_i32(v: i32) -> PenLineJoin {
     }
 }
 
-// ── DrawingContext ───────────────────────────────────────────────────────────
-
-/// A **borrowed** drawing context, valid only for the duration of a
-/// [`crate::classes::RenderHandler::render`] callback. Issues immediate-mode
-/// draw / push / pop commands straight into Noesis. Do not store it past the
-/// callback; the underlying `Noesis::DrawingContext*` is owned by the element's
-/// render pass.
+/// The drawing surface passed to
+/// [`RenderHandler::render`](crate::classes::RenderHandler::render), valid only
+/// during that call.
 ///
-/// Coordinates are in DIPs in the element's local space. A null `brush` (`None`)
-/// fills nothing; a null `pen` (`None`) strokes nothing, matching Noesis's own
-/// behaviour, so passing both `None` draws nothing.
+/// Coordinates are DIPs in the element's local space; rectangles are
+/// `[x, y, width, height]`. A `None` brush fills nothing and a `None` pen
+/// strokes nothing. Each `push_*` must be matched by a [`Self::pop`].
+///
+/// Methods return `false` when an argument fails its type check (e.g. a null
+/// image); with live handles from this crate they return `true`.
 pub struct DrawingContext<'a> {
     ptr: NonNull<c_void>,
     _marker: PhantomData<&'a ()>,
 }
 
 impl DrawingContext<'_> {
-    /// Wrap a borrowed `Noesis::DrawingContext*` received via the FFI render
-    /// callback.
+    /// Wrap a raw `Noesis::DrawingContext*`.
     ///
     /// # Safety
     ///
-    /// `ptr` must be the non-null context pointer delivered to the render
-    /// callback; it is borrowed and valid only for that call.
+    /// `ptr` must be a live `DrawingContext*` from a render callback, and the
+    /// result must not outlive that callback.
     #[must_use]
     pub unsafe fn from_raw(ptr: NonNull<c_void>) -> Self {
         Self {
@@ -289,19 +266,19 @@ impl DrawingContext<'_> {
         }
     }
 
-    /// Raw `Noesis::DrawingContext*`. Borrowed for the lifetime of `self`.
+    /// Raw `Noesis::DrawingContext*`, valid during the render callback.
     #[must_use]
     pub fn raw(&self) -> *mut c_void {
         self.ptr.as_ptr()
     }
 
-    /// Draw a line between two points with `pen`.
+    /// Stroke a line from `p0` to `p1`.
     pub fn draw_line(&self, pen: &Pen, p0: (f32, f32), p1: (f32, f32)) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; pen.raw() is a live Pen*.
         unsafe { noesis_drawing_draw_line(self.ptr.as_ptr(), pen.raw(), p0.0, p0.1, p1.0, p1.1) }
     }
 
-    /// Fill and/or stroke a rectangle `[x, y, w, h]`.
+    /// Fill and/or stroke a rectangle.
     pub fn draw_rectangle(
         &self,
         brush: Option<&dyn Brush>,
@@ -323,8 +300,7 @@ impl DrawingContext<'_> {
         }
     }
 
-    /// Fill and/or stroke a rounded rectangle `[x, y, w, h]` with corner radii
-    /// `(r_x, r_y)`.
+    /// Fill and/or stroke a rectangle with corner radii `r_x` and `r_y`.
     pub fn draw_rounded_rectangle(
         &self,
         brush: Option<&dyn Brush>,
@@ -349,8 +325,7 @@ impl DrawingContext<'_> {
         }
     }
 
-    /// Fill and/or stroke an ellipse centered at `(cx, cy)` with radii
-    /// `(r_x, r_y)`.
+    /// Fill and/or stroke an ellipse at `center` with radii `r_x` and `r_y`.
     pub fn draw_ellipse(
         &self,
         brush: Option<&dyn Brush>,
@@ -391,10 +366,8 @@ impl DrawingContext<'_> {
         }
     }
 
-    /// Draw a [`FormattedText`](crate::formatted_text::FormattedText) into the
-    /// bounds rect `[x, y, w, h]`. The text's foreground brush is baked into the
-    /// `FormattedText` at construction, so there is no brush argument here.
-    /// Returns `false` only if the context cast fails.
+    /// Draw [`FormattedText`](crate::formatted_text::FormattedText) inside
+    /// `bounds`. The text carries its own brush.
     pub fn draw_text(
         &self,
         formatted_text: &crate::formatted_text::FormattedText,
@@ -414,21 +387,20 @@ impl DrawingContext<'_> {
         }
     }
 
-    /// Fill a [`MeshData`](crate::mesh::MeshData) with an optional `brush`
-    /// (`None` paints nothing). Returns `false` if the context cast fails.
+    /// Fill a [`MeshData`](crate::mesh::MeshData) with `brush`.
     pub fn draw_mesh(&self, brush: Option<&dyn Brush>, mesh: &crate::mesh::MeshData) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; mesh.raw() is a live
         // MeshData*; the brush pointer (or null) is live for the borrow.
         unsafe { noesis_drawing_draw_mesh(self.ptr.as_ptr(), brush_ptr(brush), mesh.raw()) }
     }
 
-    /// Draw a borrowed `Noesis::ImageSource*` into `[x, y, w, h]`. Returns
-    /// `false` if `image_source` is null / not an `ImageSource`.
+    /// Draw an image stretched to `rect`. Returns `false` if `image_source` is
+    /// null or not an `ImageSource`.
     ///
     /// # Safety
     ///
-    /// `image_source` must be a live `Noesis::ImageSource*` (e.g. from
-    /// [`FrameworkElement::get_component`](crate::view::FrameworkElement::get_component)).
+    /// `image_source` must be null or a live `Noesis::BaseComponent*`, e.g. from
+    /// [`FrameworkElement::get_component`](crate::view::FrameworkElement::get_component).
     pub unsafe fn draw_image(&self, image_source: *mut c_void, rect: [f32; 4]) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; `image_source` per contract.
         unsafe {
@@ -443,25 +415,25 @@ impl DrawingContext<'_> {
         }
     }
 
-    /// Pop the last `push_*` operation off the context.
+    /// Undo the most recent `push_*`.
     pub fn pop(&self) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*.
         unsafe { noesis_drawing_pop(self.ptr.as_ptr()) }
     }
 
-    /// Push a clip [`Geometry`]; pair with [`Self::pop`].
+    /// Clip later drawing to `geometry` until the matching [`Self::pop`].
     pub fn push_clip(&self, geometry: &dyn Geometry) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; geometry_raw() is live.
         unsafe { noesis_drawing_push_clip(self.ptr.as_ptr(), geometry.geometry_raw()) }
     }
 
-    /// Push a [`Transform`]; pair with [`Self::pop`].
+    /// Apply `transform` to later drawing until the matching [`Self::pop`].
     pub fn push_transform(&self, transform: &dyn Transform) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; transform_raw() is live.
         unsafe { noesis_drawing_push_transform(self.ptr.as_ptr(), transform.transform_raw()) }
     }
 
-    /// Push a [`BlendingMode`]; pair with [`Self::pop`].
+    /// Blend later drawing with `mode` until the matching [`Self::pop`].
     pub fn push_blending_mode(&self, mode: BlendingMode) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; the ordinal matches Noesis.
         unsafe { noesis_drawing_push_blending_mode(self.ptr.as_ptr(), mode as i32) }

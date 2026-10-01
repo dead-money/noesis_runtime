@@ -1,9 +1,8 @@
 //! Integration tests for `get_xaml_dependencies` and `load_xaml_component`.
 //!
-//! `get_xaml_dependencies` is exercised with a XAML whose dependencies are
-//! fully predictable so the C++ trampoline and int→enum mapping are both
-//! load-bearing. `load_xaml_component` is exercised with a bare
-//! `<ResourceDictionary>` that `FrameworkElement::load` would reject.
+//! `get_xaml_dependencies` runs on a XAML with one dependency of each kind,
+//! so every `XamlDependencyKind` variant is asserted. `load_xaml_component`
+//! runs on a bare `<ResourceDictionary>`, which `FrameworkElement::load` rejects.
 
 use std::collections::HashMap;
 
@@ -103,7 +102,6 @@ fn xaml_dependencies_and_typed_load() {
             uc.uri
         );
 
-        // Malformed XAML → no dependencies, no crash.
         let none = get_xaml_dependencies(b"this is not xaml @@@ <<<", "");
         assert!(
             none.is_empty(),
@@ -132,7 +130,6 @@ fn xaml_dependencies_and_typed_load() {
         );
         drop(loaded);
 
-        // Unknown URI → None.
         assert!(
             load_xaml_component("missing.xaml").is_none(),
             "load_xaml_component must return None for a URI the provider does not know"
