@@ -26,7 +26,7 @@ cargo release minor --execute
 
 It bumps the version, stamps `CHANGELOG.md`, commits, tags `vX.Y.Z`, and
 pushes. The tag triggers `release.yml` on the SDK runner, which tests and
-publishes through crates.io Trusted Publishing; there's no token to manage.
+publishes through crates.io Trusted Publishing.
 Afterward, check the crate page and the docs.rs build.
 
 Keep `## [Unreleased]` in `CHANGELOG.md` current as PRs land.
