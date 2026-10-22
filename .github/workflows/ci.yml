@@ -12,6 +12,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  # The SDK jobs (all-features clippy and tests, and crates.io releases) run in
+  # the private dead-money/noesis-ci repo, because the self-hosted SDK runner
+  # takes no jobs from public repos. See RELEASING.md.
+
   # No SDK needed, so this runs on hosted runners, including for fork PRs.
   fmt:
     name: fmt
@@ -61,31 +65,3 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --no-default-features -- -D warnings
-
-  # Needs the Noesis SDK, which only the self-hosted runner has. Fork PRs are
-  # skipped so untrusted code never runs there.
-  build-test:
-    name: build • clippy • test
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, noesis-sdk]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          # Keep target/ for incremental builds.
-          clean: false
-
-      # Runners may have other SDK versions installed; pin the one the crate targets.
-      - name: Verify Noesis SDK version
-        run: |
-          grep -Fxq "3.2.13 (r17073)" "$NOESIS_SDK_DIR/version.txt" || {
-            echo "::error::Runner '$RUNNER_NAME' has an unexpected Noesis SDK at $NOESIS_SDK_DIR:"
-            cat "$NOESIS_SDK_DIR/version.txt"
-            exit 1
-          }
-
-      - name: cargo clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: cargo test
-        run: cargo test --all-features

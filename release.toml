@@ -1,5 +1,6 @@
 # cargo-release: bumps, stamps CHANGELOG.md, commits, tags vX.Y.Z, and pushes.
-# The tag triggers release.yml, which publishes; nothing publishes from here.
+# The tag triggers the release in dead-money/noesis-ci; nothing publishes
+# from here.
 
 publish = false
 tag = true
