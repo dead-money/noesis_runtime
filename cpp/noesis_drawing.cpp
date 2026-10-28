@@ -253,15 +253,12 @@ extern "C" bool noesis_drawing_draw_geometry(void* context, void* brush, void* p
     return true;
 }
 
-// Draws a FormattedText (cpp/noesis_formatted_text.cpp) into the bounds
-// {x, y, w, h}. No brush argument: the foreground is baked into the
-// FormattedText.
-extern "C" bool noesis_drawing_draw_text(void* context, void* formatted_text, float x, float y,
-                                            float w, float h) {
+// The foreground and layout are carried by FormattedText.
+extern "C" bool noesis_drawing_draw_text(void* context, void* formatted_text, float x, float y) {
     auto* dc = cast<Noesis::DrawingContext>(context);
     auto* ft = cast<Noesis::FormattedText>(formatted_text);
     if (!dc || !ft) return false;
-    dc->DrawText(ft, rect_xywh(x, y, w, h));
+    dc->DrawText(ft, Noesis::Point(x, y));
     return true;
 }
 

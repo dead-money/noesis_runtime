@@ -56,7 +56,7 @@ impl RenderHandler for MeshRender {
         let mut ok = true;
         ok &= ctx.draw_mesh(Some(&self.brush), &self.mesh);
         // No font provider, so no glyphs; only the call's success is checked.
-        ok &= ctx.draw_text(&self.text, [0.0, 0.0, 100.0, 80.0]);
+        ok &= ctx.draw_text(&self.text, [0.0, 0.0]);
         self.signals.all_draws_ok.store(ok, Ordering::SeqCst);
     }
 }

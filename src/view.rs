@@ -734,9 +734,8 @@ impl FrameworkElement {
         self.set_prop(name, PropType::Int32, (&value as *const i32).cast())
     }
 
-    /// Set a `UInt32` dependency property by name. Noesis declares several
-    /// integer DPs as `uint32_t` (notably the `Grid.Row` / `Grid.Column`
-    /// family). The `Int32` tag rejects those, so reach for this instead.
+    /// Set a `UInt32` dependency property by name. The tag must match the
+    /// property's declared type; signed properties require [`Self::set_i32`].
     ///
     /// # Panics
     ///
@@ -1499,11 +1498,9 @@ impl FrameworkElement {
             .then_some(out)
     }
 
-    /// Set a `UInt32` attached property. The `uint32_t` counterpart to
-    /// [`set_attached_i32`](Self::set_attached_i32), needed for the
-    /// `Grid.Row` / `Grid.Column` / `Grid.RowSpan` / `Grid.ColumnSpan` family,
-    /// which Noesis declares as `uint32_t`. `false` on unknown owner /
-    /// property, tag mismatch, or read-only.
+    /// Set a `UInt32` attached property. Returns `false` on unknown owner /
+    /// property, tag mismatch, or read-only. Grid indices are signed and use
+    /// [`Self::set_attached_i32`].
     ///
     /// # Panics
     ///
@@ -1513,8 +1510,8 @@ impl FrameworkElement {
         self.set_attached(owner, prop, PropType::UInt32, (&v as *const u32).cast())
     }
 
-    /// Read a `UInt32` attached property (e.g. `Grid` / `Row`). `None` on
-    /// unknown owner / property or tag mismatch.
+    /// Read a `UInt32` attached property. `None` on unknown owner / property
+    /// or tag mismatch.
     ///
     /// # Panics
     ///

@@ -5,15 +5,49 @@
 use std::ffi::c_void;
 
 use noesis_runtime::imaging::{
-    BitmapImage, BitmapSource, CroppedBitmap, DynamicTextureSource, Int32Rect, TextureSource,
+    BitmapImage, BitmapSource, CroppedBitmap, DynamicTextureSource, Int32Rect,
+    TextureRendererCallbacks, TextureSource,
 };
 
 // Render-thread callback; sets the flag if it ever runs.
-unsafe extern "C" fn never_called(_device: *mut c_void, _user: *mut c_void) -> *mut c_void {
+unsafe extern "C" fn never_called(_width: u32, _height: u32, _user: *mut c_void) -> *mut c_void {
     if !_user.is_null() {
         unsafe { *_user.cast::<u32>() = 1 };
     }
     core::ptr::null_mut()
+}
+
+unsafe extern "C" fn init(_device: *mut c_void, _user: *mut c_void) {}
+unsafe extern "C" fn shutdown(_user: *mut c_void) {}
+
+#[cfg(feature = "test-utils")]
+fn check_renderer_lifecycle() {
+    unsafe extern "C" fn record_init(_device: *mut c_void, user: *mut c_void) {
+        unsafe { &mut *user.cast::<Vec<(u32, u32)>>() }.push((0, 0));
+    }
+    unsafe extern "C" fn record_render(width: u32, height: u32, user: *mut c_void) -> *mut c_void {
+        unsafe { &mut *user.cast::<Vec<(u32, u32)>>() }.push((width, height));
+        core::ptr::null_mut()
+    }
+    unsafe extern "C" fn record_shutdown(user: *mut c_void) {
+        unsafe { &mut *user.cast::<Vec<(u32, u32)>>() }.push((1, 1));
+    }
+    let mut events: Vec<(u32, u32)> = Vec::new();
+    // SAFETY: callbacks use the live event buffer only during this synchronous call.
+    unsafe {
+        noesis_runtime::ffi::noesis_test_texture_renderer_lifecycle(
+            TextureRendererCallbacks {
+                init: record_init,
+                render: record_render,
+                shutdown: record_shutdown,
+            },
+            (&raw mut events).cast(),
+        );
+    }
+    assert_eq!(
+        events,
+        [(0, 0), (64, 48), (1, 1), (0, 0), (128, 96), (1, 1)]
+    );
 }
 
 #[test]
@@ -25,6 +59,9 @@ fn imaging_family_round_trip() {
         noesis_runtime::set_license(&name, &key);
     }
     noesis_runtime::init();
+
+    #[cfg(feature = "test-utils")]
+    check_renderer_lifecycle();
 
     {
         let texture_source = TextureSource::new();
@@ -111,7 +148,16 @@ fn imaging_family_round_trip() {
 
         let mut flag: u32 = 0;
         let mut dyn_src = unsafe {
-            DynamicTextureSource::new(64, 48, never_called, (&raw mut flag).cast::<c_void>())
+            DynamicTextureSource::new(
+                64,
+                48,
+                TextureRendererCallbacks {
+                    init,
+                    render: never_called,
+                    shutdown,
+                },
+                (&raw mut flag).cast::<c_void>(),
+            )
         };
         assert_eq!(
             dyn_src.pixel_size(),
@@ -119,6 +165,7 @@ fn imaging_family_round_trip() {
             "DynamicTextureSource reports its construction dims"
         );
         assert!(dyn_src.resize(128, 96), "DynamicTextureSource resize");
+        assert!(dyn_src.update(), "DynamicTextureSource update");
         assert_eq!(
             dyn_src.pixel_size(),
             (128, 96),

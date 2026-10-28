@@ -2327,15 +2327,16 @@ const char* noesis_bitmap_image_get_uri_source(void* image);
 bool noesis_bitmap_source_get_pixel_size(void* source, int32_t* width, int32_t* height);
 bool noesis_bitmap_source_get_dpi(void* source, float* dpi_x, float* dpi_y);
 
-// DynamicTextureSource. `callback` is pointer-ABI-compatible with
-// Noesis::DynamicTextureSource::TextureRenderCallback
-// (Texture* (*)(RenderDevice*, void*)); it is invoked from the render thread, so
-// it only fires under a live RenderDevice render pass. create returns null if
-// `callback` is null.
-typedef void* (*noesis_texture_render_callback)(void* device, void* user);
+// DynamicTextureSource renderer lifecycle. The callbacks run on the render thread.
+typedef struct noesis_texture_renderer_callbacks {
+    void (*init)(void* device, void* user);
+    void* (*render)(uint32_t width, uint32_t height, void* user);
+    void (*shutdown)(void* user);
+} noesis_texture_renderer_callbacks;
 void* noesis_dynamic_texture_source_create(uint32_t width, uint32_t height,
-                                              noesis_texture_render_callback callback,
+                                              noesis_texture_renderer_callbacks callbacks,
                                               void* user);
+bool noesis_dynamic_texture_source_update(void* source);
 bool noesis_dynamic_texture_source_resize(void* source, uint32_t width, uint32_t height);
 bool noesis_dynamic_texture_source_get_pixel_size(void* source, uint32_t* width,
                                                      uint32_t* height);
@@ -2465,12 +2466,10 @@ bool noesis_drawing_draw_rounded_rectangle(void* context, void* brush, void* pen
 bool noesis_drawing_draw_ellipse(void* context, void* brush, void* pen,
                                     float cx, float cy, float rX, float rY);
 bool noesis_drawing_draw_geometry(void* context, void* brush, void* pen, void* geometry);
-// Draw a wrapped FormattedText (noesis_formatted_text_*) into the bounds rect
-// {x, y, w, h}. The brush/foreground is baked into the FormattedText, so there
-// is no brush argument. Returns false if `formatted_text` is null / not a
-// FormattedText.
+// Draw FormattedText at an origin; its layout and foreground are already set.
+// Returns false if `formatted_text` is null / not a FormattedText.
 bool noesis_drawing_draw_text(void* context, void* formatted_text,
-                                 float x, float y, float w, float h);
+                                 float x, float y);
 // Fill a MeshData (noesis_mesh_data_*) with `brush` (null ⇒ paints nothing).
 // Returns false if `mesh` is null / not a MeshData.
 bool noesis_drawing_draw_mesh(void* context, void* brush, void* mesh);

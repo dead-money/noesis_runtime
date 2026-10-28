@@ -182,6 +182,6 @@ unsafe extern "C" {
     /// Drives the device through one representative frame (caps query,
     /// texture create and update, render-target create and clone, offscreen and
     /// onscreen passes), then releases every resource so `drop_texture` and
-    /// `drop_render_target` fire.
-    pub fn noesis_test_run_frame_scenario(device: *mut c_void);
+    /// `drop_render_target` fire. Returns the native capability flags in field order.
+    pub fn noesis_test_run_frame_scenario(device: *mut c_void) -> u32;
 }

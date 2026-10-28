@@ -44,7 +44,7 @@ Noesis::FormattedText* cast(void* p) {
 // resolved through the font fallback chain). `weight`/`stretch`/`style` are the
 // NsGui/FontProperties.h enum ordinals; `font_size` is in DIPs. The remaining
 // arguments mirror the ctor constraints: `flow_direction` (FlowDirection),
-// `max_width`/`max_height` (negative ⇒ unconstrained / FLT_MAX), `line_height`
+// negative dimensions select auto-sizing (width 0, height FLT_MAX), `line_height`
 // (0 ⇒ natural), `text_alignment` (TextAlignment), `text_trimming`
 // (TextTrimming). `foreground` is an optional [r,g,b,a]; null ⇒ opaque black.
 // Returns a +1 FormattedText* (release with noesis_base_component_release).
@@ -61,7 +61,7 @@ extern "C" void* noesis_formatted_text_create(
                            : Noesis::Color(0.0f, 0.0f, 0.0f, 1.0f);
     Noesis::Ptr<Noesis::SolidColorBrush> brush = *new Noesis::SolidColorBrush(fg);
 
-    float mw = max_width < 0.0f ? FLT_MAX : max_width;
+    float mw = max_width < 0.0f ? 0.0f : max_width;
     float mh = max_height < 0.0f ? FLT_MAX : max_height;
 
     Noesis::Ptr<Noesis::FormattedText> ft = *new Noesis::FormattedText(
@@ -138,7 +138,7 @@ extern "C" bool noesis_formatted_text_measure(void* ft, int32_t alignment, int32
                                                  float* out_h) {
     auto* f = cast(ft);
     if (!f) return false;
-    float mw = max_width < 0.0f ? FLT_MAX : max_width;
+    float mw = max_width < 0.0f ? 0.0f : max_width;
     float mh = max_height < 0.0f ? FLT_MAX : max_height;
     Noesis::Size s = f->Measure(
         static_cast<Noesis::TextAlignment>(alignment), static_cast<Noesis::TextWrapping>(wrapping),

@@ -366,12 +366,12 @@ impl DrawingContext<'_> {
         }
     }
 
-    /// Draw [`FormattedText`](crate::formatted_text::FormattedText) inside
-    /// `bounds`. The text carries its own brush.
+    /// Draw [`FormattedText`](crate::formatted_text::FormattedText) at `origin`.
+    /// The text carries its own layout and brush.
     pub fn draw_text(
         &self,
         formatted_text: &crate::formatted_text::FormattedText,
-        bounds: [f32; 4],
+        origin: [f32; 2],
     ) -> bool {
         // SAFETY: self.ptr is a live DrawingContext*; raw() is a live
         // FormattedText* borrowed for the call.
@@ -379,10 +379,8 @@ impl DrawingContext<'_> {
             noesis_drawing_draw_text(
                 self.ptr.as_ptr(),
                 formatted_text.raw(),
-                bounds[0],
-                bounds[1],
-                bounds[2],
-                bounds[3],
+                origin[0],
+                origin[1],
             )
         }
     }

@@ -6,6 +6,23 @@ pre-1.0, any `0.x` release may contain breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** targets Noesis Native SDK 4.0.1 (r18228); the build rejects a
+  different SDK. `DeviceCaps` is four one-byte booleans; `center_pixel_offset`
+  is removed. Native and Rust layouts check every capability offset.
+- **Breaking:** `DrawingContext::draw_text` takes an origin instead of bounds.
+- **Breaking:** `DynamicTextureSource::new` takes `TextureRendererCallbacks`
+  with init, render and shutdown lifecycle hooks. Call `update()` to request
+  new contents; rendering receives the current pixel dimensions.
+- Grid attached indices use signed Int32 properties in Noesis 4.0.1.
+- Namescope construction and SVG parsing use the 4.0.1 native APIs.
+
+### Fixed
+
+- Formatted text uses the 4.0.1 auto-width convention, keeping drawing bounds
+  finite so text does not suppress preceding custom mesh draws.
+
 ## [0.13.0] - 2026-10-01
 
 ### Added
@@ -172,7 +189,8 @@ Renderer, implementing a `RenderDevice` against your own GPU, and writing
 Rust-backed custom controls and markup extensions. The surface is considered
 near-final ahead of a 1.0 that commits to stability.
 
-[Unreleased]: https://github.com/dead-money/noesis_runtime/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/dead-money/noesis_runtime/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/dead-money/noesis_runtime/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/dead-money/noesis_runtime/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/dead-money/noesis_runtime/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/dead-money/noesis_runtime/compare/v0.10.0...v0.11.0

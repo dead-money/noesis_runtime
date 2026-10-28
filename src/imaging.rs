@@ -15,24 +15,25 @@
 //!   defaults until a texture provider loads the image.
 //! - [`TextureSource::texture`] is `None` until you bind a `Noesis::Texture*`,
 //!   which only a render device can create.
-//! - The [`DynamicTextureSource`] callback runs on the render thread, only
-//!   while a view showing the source is rendered.
+//! - [`DynamicTextureSource::update`] requests new contents on the render thread.
 
 use core::ptr::NonNull;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 
 use crate::ffi::{
-    TextureRenderCallback, noesis_base_component_release, noesis_bitmap_image_create,
-    noesis_bitmap_image_get_uri_source, noesis_bitmap_image_set_uri_source,
-    noesis_bitmap_source_get_dpi, noesis_bitmap_source_get_pixel_size,
-    noesis_cropped_bitmap_create, noesis_cropped_bitmap_get_source,
-    noesis_cropped_bitmap_get_source_rect, noesis_cropped_bitmap_set_source,
-    noesis_cropped_bitmap_set_source_rect, noesis_dynamic_texture_source_create,
-    noesis_dynamic_texture_source_get_pixel_size, noesis_dynamic_texture_source_resize,
+    noesis_base_component_release, noesis_bitmap_image_create, noesis_bitmap_image_get_uri_source,
+    noesis_bitmap_image_set_uri_source, noesis_bitmap_source_get_dpi,
+    noesis_bitmap_source_get_pixel_size, noesis_cropped_bitmap_create,
+    noesis_cropped_bitmap_get_source, noesis_cropped_bitmap_get_source_rect,
+    noesis_cropped_bitmap_set_source, noesis_cropped_bitmap_set_source_rect,
+    noesis_dynamic_texture_source_create, noesis_dynamic_texture_source_get_pixel_size,
+    noesis_dynamic_texture_source_resize, noesis_dynamic_texture_source_update,
     noesis_texture_source_create, noesis_texture_source_get_texture,
     noesis_texture_source_set_texture,
 };
+
+pub use crate::ffi::TextureRendererCallbacks;
 
 /// An integer pixel rectangle. An all-zero rect means "empty", which a
 /// [`CroppedBitmap`] treats as the whole source image.
@@ -369,8 +370,8 @@ impl BitmapSource for BitmapImage {
     }
 }
 
-/// An image source whose texture a callback supplies each frame on the render
-/// thread, for video and other content that changes every frame.
+/// An image source backed by a render-thread renderer. Call [`Self::update`]
+/// when new contents are needed, such as a new video frame.
 pub struct DynamicTextureSource {
     ptr: NonNull<c_void>,
 }
@@ -378,12 +379,12 @@ pub struct DynamicTextureSource {
 base_component_handle!(DynamicTextureSource);
 
 impl DynamicTextureSource {
-    /// Creates a `width` x `height` pixel source driven by `callback`. `user`
-    /// is passed back to the callback unchanged.
+    /// Creates a `width` x `height` pixel source driven by `callbacks`. `user`
+    /// is passed to each callback unchanged.
     ///
-    /// The callback receives a borrowed `Noesis::RenderDevice*` and returns a
-    /// borrowed `Noesis::Texture*`, or null. It runs on the render thread, only
-    /// while a view showing this source is rendered.
+    /// Initialization, rendering and shutdown run on the render thread. Device
+    /// detach/attach calls shutdown/init again. Rendering receives the current
+    /// pixel dimensions and returns a borrowed `Noesis::Texture*`, or null.
     ///
     /// # Panics
     ///
@@ -391,22 +392,27 @@ impl DynamicTextureSource {
     ///
     /// # Safety
     ///
-    /// `callback` must return a `Texture*` valid for the device it is given, and
-    /// `user` must stay valid, and safe to use from the render thread, for as
-    /// long as this source can be rendered.
+    /// Callbacks must not unwind. Rendering must return a texture valid for the
+    /// attached device. `user` must remain valid for all render-thread calls,
+    /// including shutdown after any views using this source release their proxies.
     #[must_use]
     pub unsafe fn new(
         width: u32,
         height: u32,
-        callback: TextureRenderCallback,
+        callbacks: TextureRendererCallbacks,
         user: *mut c_void,
     ) -> Self {
-        // SAFETY: per contract; the C side reinterprets the fn pointer to the
-        // Noesis TextureRenderCallback and stores `user`.
-        let ptr = unsafe { noesis_dynamic_texture_source_create(width, height, callback, user) };
+        // SAFETY: the C side copies the callbacks and stores `user` per contract.
+        let ptr = unsafe { noesis_dynamic_texture_source_create(width, height, callbacks, user) };
         Self {
             ptr: NonNull::new(ptr).expect("noesis_dynamic_texture_source_create returned null"),
         }
+    }
+
+    /// Requests new texture contents on the render thread.
+    pub fn update(&mut self) -> bool {
+        // SAFETY: self.ptr is a live DynamicTextureSource*.
+        unsafe { noesis_dynamic_texture_source_update(self.ptr.as_ptr()) }
     }
 
     /// Resizes the dynamic texture. Returns `false` only if this
