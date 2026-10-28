@@ -43,6 +43,7 @@ const SCENE_XAML: &str = r##"<?xml version="1.0" encoding="utf-8"?>
        viewport) is absent and scrolling is inert. Supply a minimal one. -->
   <ScrollViewer x:Name="Scroll" Width="200" Height="200"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                IsSmoothScrollingEnabled="False"
                 VerticalScrollBarVisibility="Visible"
                 HorizontalScrollBarVisibility="Disabled">
     <ScrollViewer.Template>
@@ -88,9 +89,10 @@ fn approx(a: f32, b: f32) -> bool {
 }
 
 // Scroll commands apply on subsequent layout passes; pump a few frames.
-fn pump(view: &mut View) {
-    for i in 0..8 {
-        view.update(f64::from(i) * 0.016);
+fn pump(view: &mut View, time: &mut f64) {
+    for _ in 0..8 {
+        *time += 0.016;
+        view.update(*time);
     }
 }
 
@@ -111,6 +113,7 @@ fn controls_s8_remainder_round_trips() {
 
         let element = FrameworkElement::load("scene.xaml").expect("load scene.xaml");
         let mut view = View::create(element);
+        let mut time = 0.0;
         view.set_size(600, 400);
         view.activate();
         assert!(view.update(0.0), "initial layout");
@@ -320,7 +323,7 @@ fn controls_s8_remainder_round_trips() {
         );
 
         let mut scroll = root.find_name("Scroll").expect("find Scroll");
-        pump(&mut view);
+        pump(&mut view, &mut time);
         assert_eq!(scroll.vertical_offset(), Some(0.0), "starts at top");
         let scrollable = scroll.scrollable_height().expect("scrollable_height");
         assert!(
@@ -331,7 +334,7 @@ fn controls_s8_remainder_round_trips() {
         assert!(scroll.viewport_width().is_some(), "ViewportWidth present");
 
         assert!(scroll.page_down(), "PageDown");
-        pump(&mut view);
+        pump(&mut view, &mut time);
         let after_page = scroll.vertical_offset().expect("offset after PageDown");
         assert!(
             after_page > 0.0,
@@ -339,7 +342,7 @@ fn controls_s8_remainder_round_trips() {
         );
 
         assert!(scroll.line_down(), "LineDown");
-        pump(&mut view);
+        pump(&mut view, &mut time);
         let after_line = scroll.vertical_offset().expect("offset after LineDown");
         assert!(
             after_line >= after_page,
@@ -347,14 +350,14 @@ fn controls_s8_remainder_round_trips() {
         );
 
         assert!(scroll.scroll_to_bottom(), "ScrollToBottom");
-        pump(&mut view);
+        pump(&mut view, &mut time);
         assert!(
             approx(scroll.vertical_offset().unwrap(), scrollable),
             "ScrollToBottom lands at the scrollable extent",
         );
 
         assert!(scroll.scroll_to_top(), "ScrollToTop");
-        pump(&mut view);
+        pump(&mut view, &mut time);
         assert!(
             approx(scroll.vertical_offset().unwrap(), 0.0),
             "ScrollToTop lands back at 0",
