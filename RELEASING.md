@@ -15,7 +15,7 @@ The SDK jobs run in the private
 [`dead-money/noesis-ci`](https://github.com/dead-money/noesis-ci) repo on the
 self-hosted runner (label `noesis-sdk`), which takes no jobs from public repos.
 Every 15 minutes it polls this repo and runs all-features clippy and
-tests on each new `main` commit, and the release for each new `v*` tag. Results
+tests on each new `main` commit, and validates each new `v*` tag. Results
 show in that repo's Actions tab, not as checks here, so PRs merge on the hosted
 checks alone.
 
@@ -34,8 +34,23 @@ cargo release minor --execute
 ```
 
 It bumps the version, stamps `CHANGELOG.md`, commits, tags `vX.Y.Z`, and
-pushes. Within 15 minutes noesis-ci notices the tag and runs its `release.yml`
-on the SDK runner, which tests and publishes through crates.io Trusted Publishing.
-Afterward, check the crate page and the docs.rs build.
+pushes. The private `dead-money/noesis-ci` poller validates the tag on the SDK runner.
+Run its `poll.yml` manually to start immediately. After that run succeeds,
+confirm the exact tag SHA and dispatch this repository's `release.yml`:
+
+```sh
+tag=vX.Y.Z
+sha=$(git rev-parse "$tag^{commit}")
+gh workflow run release.yml --repo dead-money/noesis_runtime --ref main \
+  -f tag="$tag" -f sha="$sha" \
+  -f sdk_run="https://github.com/dead-money/noesis-ci/actions/runs/<successful-run-id>"
+```
+
+The release operator must check the private run succeeded for this exact source;
+the public workflow records that URL and checks tag identity, but cannot read
+private CI results itself. Publishing runs on a hosted runner with `--no-verify`
+because the native build and tests already passed on the SDK runner. The trusted
+publisher is `dead-money/noesis_runtime`, workflow `release.yml`, no environment.
+Afterward, check the crate pages and docs.rs builds.
 
 Keep `## [Unreleased]` in `CHANGELOG.md` current as PRs land.
