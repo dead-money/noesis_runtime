@@ -6,21 +6,31 @@
 
 Rust bindings for the [Noesis GUI Native SDK](https://www.noesisengine.com/), which brings XAML-driven UI to game engines. You load `.xaml` scenes, drive the View and renderer, implement a `RenderDevice` against your own GPU, and write Rust-backed custom controls and markup extensions that XAML can use by name.
 
-The crate is renderer-agnostic. It's built for Dead Money's own game projects and was mostly written by AI agents under human direction.
+The crate is renderer-agnostic.
 
 ## You need a Noesis license
 
 This crate links against the [Noesis Native SDK](https://www.noesisengine.com/), closed-source commercial software from Noesis Technologies S.L. We don't redistribute it. Buy it separately and point `NOESIS_SDK_DIR` at your install; the build script reads it at compile time and links the Noesis library for the matching platform target.
 
-This release targets **Noesis Native SDK 3.2.13**. The C ABI shim is compiled against that version's headers and checks key struct sizes at build time, so a different SDK version may fail to build or link. Match it unless you've verified a newer release.
+This release targets **Noesis Native SDK 4.0.1 (r18228)**. The build checks the SDK version and the render-device ABI before compiling the shim.
 
 Apply your license with `noesis_runtime::set_license(name, key)` before `init()`. Without it the runtime works for a while, then blanks the view with a "Trial expired" message.
+
+## Version compatibility
+
+| noesis_runtime | Noesis Native SDK |
+|----------------|-------------------|
+| 0.14 | 4.0.1 (r18228) |
+| 0.13 | 3.2.13 (r17073) |
+
+The SDK version applies to both the native shim and the render-device types
+exposed without `shim`. Use a matching crate line when another host loads Noesis.
 
 ## Quick start
 
 ```toml
 [dependencies]
-noesis_runtime = "0.13"
+noesis_runtime = "0.14"
 ```
 
 The crate still links the Noesis SDK at build time, so `NOESIS_SDK_DIR` must be set for it to compile.
@@ -112,25 +122,27 @@ The default `shim` feature compiles the C++ shim and links Noesis. Turn it off t
 
 ```toml
 [dependencies]
-noesis_runtime = { version = "0.13", default-features = false }
+noesis_runtime = { version = "0.14", default-features = false }
 ```
 
 That build needs no `NOESIS_SDK_DIR`, compiles no C++, and links no Noesis library. It's for a render device driven by a host that loads Noesis some other way, such as the managed (C#) SDK. Such a host creates the textures, so it maps a batch's texture pointers to handles itself; `register` and the `Batch::*_handle` methods need the shim.
 
-## How it works
+## Ownership and threads
 
-- **Hand-written C ABI, no bindgen.** Noesis's C++ API (templates, intrusive `Ptr<T>`, pure-virtual hierarchies) is a poor fit for bindgen, so the binding is a narrow C ABI hand-written in `cpp/noesis_shim.{h,cpp}` and mirrored in `src/ffi.rs`. Noesis types stay opaque on the Rust side and only `#[repr(C)]` POD structs cross the boundary. Struct sizes and enum values are checked against the SDK with compile-time asserts, so an SDK update that reshapes one fails the build instead of producing garbage.
-- **RAII registration guards.** Every call that installs something global (`set_xaml_provider`, `subscribe_click`, `ClassBuilder::register`) returns a guard that clears the registration when dropped. Drop every guard and handle before `shutdown()`.
-- **Custom classes via trampoline subclasses.** The shim has one C++ subclass per supported base (`RustContentControl`, `RustPanel`, and so on, plus `RustMarkupExtension`). Each reports a synthetic type per registered name and forwards virtuals like `OnPropertyChanged` and `ProvideValue` to your Rust handler.
-- **Thread-affine.** Noesis isn't thread-safe. Call into a view, its elements, and its renderer from the one thread that drives it. Handles are `Send` but not `Sync`: you can move them to that thread, not share them across threads.
+Keep registration guards alive while their callbacks are needed, and drop all
+guards and Noesis handles before `shutdown()`. Drive a view, its elements and
+its renderer from one thread. Handles are `Send` but not `Sync`.
 
-Custom pixel shaders (`ShaderEffect` / `BrushShader`) aren't wrapped. The render device receives a batch's `pixel_shader` pointer, but there's no way to author one from Rust. For this and the rest of what the SDK can't do, or does differently from WPF, see [SDK limitations](./LIMITATIONS.md).
+See [SDK limitations](./LIMITATIONS.md) for unsupported APIs and differences
+from WPF.
 
 ## Building
 
+The 4.0.1 download retains `4.0.0` in its archive filename.
+
 ```sh
-unzip NoesisGUI-NativeSDK-linux-3.2.13-Indie.zip -d ~/sdks/noesis-3.2.13
-export NOESIS_SDK_DIR=~/sdks/noesis-3.2.13
+unzip NoesisGUI-NativeSDK-linux-4.0.0-Indie.zip -d ~/sdks/noesis-4.0.1
+export NOESIS_SDK_DIR=~/sdks/noesis-4.0.1
 cargo test
 ```
 

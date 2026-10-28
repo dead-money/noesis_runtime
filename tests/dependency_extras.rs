@@ -88,27 +88,26 @@ fn dependency_extras() {
             "Panel.ZIndex should now be 1",
         );
 
-        // Grid.Row/Column are uint32_t in Noesis (not int32_t), so only the
-        // UInt32 tag reaches them.
+        // Grid attached indices are signed integers in Noesis 4.0.1.
         assert_eq!(
-            row_child.get_attached_u32("Grid", "Row"),
+            row_child.get_attached_i32("Grid", "Row"),
             Some(2),
-            "Grid.Row should read back the XAML value 2 via the UInt32 tag",
+            "Grid.Row should read back the XAML value 2 via the Int32 tag",
         );
         assert!(
-            row_child.set_attached_u32("Grid", "Row", 1),
-            "set Grid.Row=1 via UInt32 tag should succeed",
+            row_child.set_attached_i32("Grid", "Row", 1),
+            "set Grid.Row=1 via Int32 tag should succeed",
         );
         assert_eq!(
-            row_child.get_attached_u32("Grid", "Row"),
+            row_child.get_attached_i32("Grid", "Row"),
             Some(1),
             "Grid.Row should now be 1",
         );
 
         assert_eq!(
-            row_child.get_attached_i32("Grid", "Row"),
+            row_child.get_attached_u32("Grid", "Row"),
             None,
-            "Grid.Row is uint32 in Noesis; the Int32 FFI tag must reject it",
+            "Grid.Row is int32 in Noesis; the UInt32 FFI tag must reject it",
         );
 
         assert_eq!(

@@ -14,8 +14,16 @@
 #include <NsRender/Texture.h>
 
 #include <cstdint>
+#include <cstddef>
 #include <utility>
 #include <vector>
+
+static_assert(sizeof(Noesis::DeviceCaps) == 4, "DeviceCaps size drift");
+static_assert(alignof(Noesis::DeviceCaps) == 1, "DeviceCaps alignment drift");
+static_assert(offsetof(Noesis::DeviceCaps, linearRendering) == 0, "DeviceCaps linearRendering offset");
+static_assert(offsetof(Noesis::DeviceCaps, subpixelRendering) == 1, "DeviceCaps subpixelRendering offset");
+static_assert(offsetof(Noesis::DeviceCaps, depthRangeZeroToOne) == 2, "DeviceCaps depthRangeZeroToOne offset");
+static_assert(offsetof(Noesis::DeviceCaps, clipSpaceYInverted) == 3, "DeviceCaps clipSpaceYInverted offset");
 
 namespace {
 
@@ -335,10 +343,14 @@ extern "C" uint64_t noesis_render_target_get_handle(const void* surface) {
 
 // Calls every RenderDevice virtual once in frame-protocol order, then lets the
 // Ptr<>s die so drop_texture / drop_render_target fire in a known order.
-extern "C" void noesis_test_run_frame_scenario(void* device_ptr) {
+extern "C" uint32_t noesis_test_run_frame_scenario(void* device_ptr) {
     auto* device = static_cast<RustRenderDevice*>(device_ptr);
 
-    (void)device->GetCaps();
+    const auto& caps = device->GetCaps();
+    uint32_t flags = uint32_t(caps.linearRendering)
+        | (uint32_t(caps.subpixelRendering) << 1)
+        | (uint32_t(caps.depthRangeZeroToOne) << 2)
+        | (uint32_t(caps.clipSpaceYInverted) << 3);
 
     static const uint32_t pixels4x4_rgba8[16] = {
         0xff0000ff, 0xff00ff00, 0xffff0000, 0xffffffff,
@@ -412,6 +424,7 @@ extern "C" void noesis_test_run_frame_scenario(void* device_ptr) {
     //   rt           → drop_render_target(main)  + drop_texture(main resolve)
     //   t_dynamic    → drop_texture(dynamic)
     //   t_immutable  → drop_texture(immutable)
+    return flags;
 }
 
 #endif  // NOESIS_TEST_UTILS

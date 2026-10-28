@@ -4,6 +4,7 @@ use std::path::PathBuf;
 fn main() {
     println!("cargo:rerun-if-env-changed=NOESIS_SDK_DIR");
     println!("cargo:rerun-if-env-changed=DOCS_RS");
+    println!("cargo:rerun-if-changed=noesis-sdk-version.txt");
 
     // Every cpp/*.cpp is a shim source, sorted for a deterministic build.
     // Watching the directory catches added or removed sources.
@@ -35,6 +36,14 @@ fn main() {
         )
     });
     let sdk = PathBuf::from(&sdk_dir);
+    let expected = include_str!("noesis-sdk-version.txt").trim();
+    let actual = std::fs::read_to_string(sdk.join("version.txt"))
+        .expect("NOESIS_SDK_DIR must contain version.txt");
+    assert!(
+        actual.lines().any(|line| line.trim() == expected),
+        "Expected Noesis SDK {expected} at {}",
+        sdk.display()
+    );
     let include = sdk.join("Include");
     assert!(
         include.is_dir(),

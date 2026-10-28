@@ -27,6 +27,22 @@
 
 namespace {
 
+class CallbackTextureRenderer final : public Noesis::DynamicTextureSource::Renderer {
+public:
+    CallbackTextureRenderer(noesis_texture_renderer_callbacks callbacks, void* user)
+        : mCallbacks(callbacks), mUser(user) {}
+
+    void Init(Noesis::RenderDevice* device) override { mCallbacks.init(device, mUser); }
+    Noesis::Texture* Render(uint32_t width, uint32_t height) override {
+        return static_cast<Noesis::Texture*>(mCallbacks.render(width, height, mUser));
+    }
+    void Shutdown() override { mCallbacks.shutdown(mUser); }
+
+private:
+    noesis_texture_renderer_callbacks mCallbacks;
+    void* mUser;
+};
+
 // Adds the caller's reference; the creating Ptr releases its own at scope exit.
 void* handout(Noesis::BaseComponent* c) {
     if (!c) return nullptr;
@@ -165,18 +181,34 @@ extern "C" bool noesis_bitmap_source_get_dpi(void* source, float* dpi_x, float* 
 
 // ── DynamicTextureSource ─────────────────────────────────────────────────────
 
-// `callback` has the ABI of DynamicTextureSource::TextureRenderCallback
-// (Texture* (*)(RenderDevice*, void*)). Noesis calls it on the render thread,
-// so it fires only during a RenderDevice render pass. Returns null if
-// `callback` is null.
 extern "C" void* noesis_dynamic_texture_source_create(
-    uint32_t width, uint32_t height, noesis_texture_render_callback callback, void* user) {
-    if (!callback) return nullptr;
-    auto cb = reinterpret_cast<Noesis::DynamicTextureSource::TextureRenderCallback>(callback);
+    uint32_t width, uint32_t height, noesis_texture_renderer_callbacks callbacks, void* user) {
+    if (!callbacks.init || !callbacks.render || !callbacks.shutdown) return nullptr;
+    auto renderer = Noesis::MakePtr<CallbackTextureRenderer>(callbacks, user);
     Noesis::Ptr<Noesis::DynamicTextureSource> s =
-        *new Noesis::DynamicTextureSource(width, height, cb, user);
+        *new Noesis::DynamicTextureSource(width, height, renderer.GetPtr());
     return handout(s.GetPtr());
 }
+
+extern "C" bool noesis_dynamic_texture_source_update(void* source) {
+    auto* s = cast<Noesis::DynamicTextureSource>(source);
+    if (!s) return false;
+    s->Update();
+    return true;
+}
+
+#ifdef NOESIS_TEST_UTILS
+extern "C" void noesis_test_texture_renderer_lifecycle(
+    noesis_texture_renderer_callbacks callbacks, void* user) {
+    auto renderer = Noesis::MakePtr<CallbackTextureRenderer>(callbacks, user);
+    renderer->Init(nullptr);
+    renderer->Render(64, 48);
+    renderer->DetachDevice();
+    renderer->AttachDevice(nullptr);
+    renderer->Render(128, 96);
+    renderer->Shutdown();
+}
+#endif
 
 extern "C" bool noesis_dynamic_texture_source_resize(void* source, uint32_t width,
                                                        uint32_t height) {

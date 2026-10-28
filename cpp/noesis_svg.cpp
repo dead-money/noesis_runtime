@@ -14,6 +14,8 @@
 #include <NsDrawing/SVGPath.h>
 #include <NsGui/SVG.h>
 #include <NsMath/Transform.h>
+#include <cstring>
+#include <limits>
 
 namespace {
 
@@ -113,8 +115,10 @@ extern "C" bool noesis_svg_path_stroke_contains(void* path, float x, float y, fl
 // shapes. Release with noesis_svg_image_destroy.
 extern "C" void* noesis_svg_image_parse(const char* svg) {
     if (!svg) return nullptr;
+    auto length = std::strlen(svg);
+    if (length > std::numeric_limits<uint32_t>::max()) return nullptr;
     Noesis::SVG::Image* image = new Noesis::SVG::Image();
-    Noesis::SVG::Parse(svg, *image);
+    Noesis::SVG::Parse(svg, static_cast<uint32_t>(length), *image);
     return image;
 }
 

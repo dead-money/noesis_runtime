@@ -17,7 +17,7 @@
 
 #![allow(clippy::enum_variant_names)] // mirroring Noesis-side names verbatim
 
-use core::mem::{align_of, size_of};
+use core::mem::{align_of, offset_of, size_of};
 use std::os::raw::c_void;
 
 /// Pixel layout of a texture you create for the render device.
@@ -532,8 +532,6 @@ pub const SIZE_FOR_TYPE: [u8; VERTEX_ATTR_TYPE_COUNT] = [4, 8, 16, 4, 8];
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct DeviceCaps {
-    /// Offset from a pixel's top-left corner to its center, in pixels.
-    pub center_pixel_offset: f32,
     /// Render in linear space: internal textures and offscreens are sRGB,
     /// vertex colors arrive in sRGB, and writes to the target are linear.
     pub linear_rendering: bool,
@@ -549,7 +547,6 @@ impl Default for DeviceCaps {
     fn default() -> Self {
         // Must match the C++ member initializers; depth_range_zero_to_one is true there.
         Self {
-            center_pixel_offset: 0.0,
             linear_rendering: false,
             subpixel_rendering: false,
             depth_range_zero_to_one: true,
@@ -769,8 +766,12 @@ const _: () = assert!(align_of::<SamplerState>() == 1);
 const _: () = assert!(size_of::<RenderState>() == 1);
 const _: () = assert!(align_of::<RenderState>() == 1);
 
-const _: () = assert!(size_of::<DeviceCaps>() == 8);
-const _: () = assert!(align_of::<DeviceCaps>() == 4);
+const _: () = assert!(size_of::<DeviceCaps>() == 4);
+const _: () = assert!(align_of::<DeviceCaps>() == 1);
+const _: () = assert!(offset_of!(DeviceCaps, linear_rendering) == 0);
+const _: () = assert!(offset_of!(DeviceCaps, subpixel_rendering) == 1);
+const _: () = assert!(offset_of!(DeviceCaps, depth_range_zero_to_one) == 2);
+const _: () = assert!(offset_of!(DeviceCaps, clip_space_y_inverted) == 3);
 
 const _: () = assert!(size_of::<Tile>() == 16);
 const _: () = assert!(align_of::<Tile>() == 4);

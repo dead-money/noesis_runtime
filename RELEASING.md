@@ -19,8 +19,9 @@ tests on each new `main` commit, and the release for each new `v*` tag. Results
 show in that repo's Actions tab, not as checks here, so PRs merge on the hosted
 checks alone.
 
-The noesis-ci workflows check the runner's SDK version against the pinned one
-(`3.2.13 (r17073)`). Update the pins there when upgrading the SDK.
+The noesis-ci workflows select and validate the SDK from
+`noesis-sdk-version.txt`. Update that pin and install the matching SDK on the
+runner when upgrading. Older tags without a pin keep the 3.2.13 default.
 
 ## Cutting a release
 

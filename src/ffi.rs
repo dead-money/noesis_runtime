@@ -1624,14 +1624,26 @@ unsafe extern "C" {
     pub fn noesis_svg_image_shape_fill_type(image: *mut c_void, index: u32) -> i32;
 }
 
-/// Render callback for a `DynamicTextureSource`. ABI-compatible with
-/// `Noesis::DynamicTextureSource::TextureRenderCallback`
-/// (`Texture* (*)(RenderDevice*, void*)`). Runs on the render thread during a
-/// live render pass. `device` is a borrowed `Noesis::RenderDevice*`; `user` is
-/// the pointer passed to [`noesis_dynamic_texture_source_create`]. Returns a
-/// borrowed `Noesis::Texture*`, or null.
-pub type TextureRenderCallback =
-    unsafe extern "C" fn(device: *mut c_void, user: *mut c_void) -> *mut c_void;
+/// Render-thread lifecycle for a [`crate::imaging::DynamicTextureSource`].
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TextureRendererCallbacks {
+    /// Receives a borrowed `Noesis::RenderDevice*` when the device attaches.
+    pub init: unsafe extern "C" fn(device: *mut c_void, user: *mut c_void),
+    /// Produces a borrowed `Noesis::Texture*` (or null) for the requested size.
+    pub render: unsafe extern "C" fn(width: u32, height: u32, user: *mut c_void) -> *mut c_void,
+    /// Releases device resources when the device detaches or rendering ends.
+    pub shutdown: unsafe extern "C" fn(user: *mut c_void),
+}
+
+#[cfg(feature = "test-utils")]
+unsafe extern "C" {
+    /// Exercises renderer init/render/shutdown and device detach/attach forwarding.
+    pub fn noesis_test_texture_renderer_lifecycle(
+        callbacks: TextureRendererCallbacks,
+        user: *mut c_void,
+    );
+}
 
 // ImageSource / BitmapSource family. Each `*_create` returns a `+1`-owned
 // `BaseComponent*` that the owning wrapper releases on Drop.
@@ -1681,9 +1693,10 @@ unsafe extern "C" {
     pub fn noesis_dynamic_texture_source_create(
         width: u32,
         height: u32,
-        callback: TextureRenderCallback,
+        callbacks: TextureRendererCallbacks,
         user: *mut c_void,
     ) -> *mut c_void;
+    pub fn noesis_dynamic_texture_source_update(source: *mut c_void) -> bool;
     pub fn noesis_dynamic_texture_source_resize(
         source: *mut c_void,
         width: u32,
@@ -1865,8 +1878,6 @@ unsafe extern "C" {
         formatted_text: *mut c_void,
         x: f32,
         y: f32,
-        w: f32,
-        h: f32,
     ) -> bool;
     pub fn noesis_drawing_draw_mesh(
         context: *mut c_void,

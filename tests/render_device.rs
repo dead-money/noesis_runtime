@@ -107,7 +107,12 @@ impl RenderDevice for MockDevice {
 
     fn caps(&self) -> DeviceCaps {
         self.push(Op::GetCaps);
-        DeviceCaps::default()
+        DeviceCaps {
+            linear_rendering: true,
+            subpixel_rendering: false,
+            depth_range_zero_to_one: true,
+            clip_space_y_inverted: true,
+        }
     }
 
     fn create_texture(&mut self, desc: TextureDesc<'_>) -> TextureBinding {
@@ -276,7 +281,11 @@ fn frame_scenario_records_expected_op_sequence() {
 
     // SAFETY: registered.raw() points to a live Noesis::RenderDevice* that
     // remains valid until `drop(registered)` below.
-    unsafe { noesis_test_run_frame_scenario(registered.raw()) };
+    let flags = unsafe { noesis_test_run_frame_scenario(registered.raw()) };
+    assert_eq!(
+        flags, 0b1101,
+        "native Noesis must read the Rust capability flags"
+    );
 
     // Tear down the device. The scenario already dropped its Ptr<>s, so this
     // releases our +1 reference and finalises the C++ instance.

@@ -357,7 +357,7 @@ extern "C" bool noesis_ui_element_set_render_transform_origin(
 // ── Standalone NameScope ────────────────────────────────────────────────────
 
 extern "C" void* noesis_name_scope_create() {
-    Noesis::Ptr<Noesis::NameScope> scope = Noesis::MakePtr<Noesis::NameScope>();
+    Noesis::Ptr<Noesis::NameScope> scope = Noesis::MakePtr<Noesis::NameScope>(nullptr);
     return scope.GiveOwnership();
 }
 
